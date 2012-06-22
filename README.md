@@ -21,7 +21,7 @@ Download and install the [Playbook Dev Tools][pbdevtools]. Remember where you pu
 
 Download this repository, then unpack and cd into it. Then:
 
-    ./build.sh -b /absolute/path/to/playbook/sdk/bbpb-sdk
+    ./build.sh -b /absolute/path/to/playbook/sdk/bbndk/
 
 This will download gcc from the QNX Community site at [Foundry27][foundry27], then use the playbook dev tools to cross compile gcc targeting the playbook. Then everything will be zipped up into a .zip archive (the playbook doesn't have tar or gzip), and a local ruby webserver will launch and you'll see a message that tells you how to get the binaries onto your playbook. You're looking for something like this:
 
