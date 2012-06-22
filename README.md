@@ -17,7 +17,7 @@ This tool will use the blackberry cross compiler to build gcc for the playbook. 
 
 ## Install Directions
 
-Download and install the [Blackberry Native SDK][pbdevtools]. Remember where you put them.
+Download and install the [Blackberry Native SDK][pbdevtools]. Remember where you installed it.
 
 Download this repository to your desktop somewhere, then unpack and cd into it. Then:
 
