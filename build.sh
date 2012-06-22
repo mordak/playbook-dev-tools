@@ -141,7 +141,7 @@ then
   cd $DESTDIR/$DESTDIR
   # link stuff to where the compiler will find it
   if [ ! -e ./armle-v7 ]; then
-    mv ../../bbpb-sdk/target/qnx6/armle-v7 .
+    mv $DESTDIR/$BBTOOLS/target/qnx6/armle-v7 .
   fi
   if [ ! -e lib ]; then
     ln -s ./armle-v7/lib ./lib
