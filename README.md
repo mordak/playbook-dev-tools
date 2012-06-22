@@ -44,7 +44,7 @@ If something goes wrong during the compiling / building phase, after fixing it y
 
 where TASK is one of [fetch | patch | build | install | bundle | deploy].
 
-If you don't get a shell with your .profile processed, launch a login shell:
+On the playbook, if you don't get a shell with your .profile processed, launch a login shell:
 
     sh -l
 
