@@ -44,11 +44,11 @@ If something goes wrong during the compiling / building phase, after fixing it y
 
 where TASK is one of [fetch | patch | build | install | bundle | deploy].
 
-When launching BG shell you do not get a login shell by default, so in order to process your .profile and fix your $PATH, you will need to launch a login shell
+If you don't get a shell with your .profile processed, launch a login shell:
 
     sh -l
 
-The BG shell author says that getting a login shell by default should be coming in an update very soon, which will be nice. The playbook also ships with ksh (but not bash), so you could use ksh instead of sh.
+The playbook also ships with ksh (but not bash), so you could use ksh instead of sh.
 
 ## Uninstalling
 
@@ -62,7 +62,7 @@ Alternately, I imagine that just unstalling the shell application from the playb
 
 ## Bugs
 
-This will build a staticly linked gcc, since the dynamically linked version made the playbook ldd angry. Any hints on how to sort this out would be welcome.
+This will build a statically linked gcc, since the dynamically linked version made the playbook ldd angry. Any hints on how to sort this out would be welcome.
 
 We are not yet building g++, as this failed with a namespace issue in strings.h - I am sure this is fixable, I just haven't got it yet.
 
