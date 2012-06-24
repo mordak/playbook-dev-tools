@@ -1,4 +1,4 @@
-PATH="$HOME/bin:$PATH"
+PATH="$HOME/bin:$HOME/usr/pkg/bin:$HOME/usr/pkg/sbin:$PATH"
 MANPATH="$HOME/man:$MANPATH"
 LD_LIBRARY_PATH="$HOME/lib:$LD_LIBRARY_PATH"
 MAKEFLAGS="-I$HOME/include"
