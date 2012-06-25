@@ -38,7 +38,7 @@ Once you have installed everything on the playbook, you can shut down the ruby w
 
 ## Tips
 
-Each package is contained in its own directory, with its own build script. You can execute these build scripts on their own, so if something goes wrong during the compiling / building phase, you can cd into the relevant direcotyr and, after fixing the problem, you can tell the build.sh script to pick up where it left off by passing the appropriate task, so:
+Each package is contained in its own directory, with its own build script. You can execute these build scripts on their own, so if something goes wrong during the compiling / building phase, you can cd into the relevant directory and, after fixing the problem, you can tell the build.sh script to pick up where it left off by passing the appropriate task, so:
 
     ./build.sh -t TASK
 
