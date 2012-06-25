@@ -25,7 +25,7 @@ OPTIONS:
    -h      Show this message
    -b      The absolute path to your bbpb-sdk folder [/abs/path/tp/bbpb-sdk]
    -l      The login you use for the QNX Foundry27 site, if you have one [user@host]
-   -t      The build task to start at: [gcc | coreutils | make | grep]
+   -t      The build task to start at: [gcc | coreutils | make | grep | bundle | deploy]
 EOF
 }
 

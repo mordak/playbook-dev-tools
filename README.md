@@ -3,11 +3,11 @@ playbook-dev-tools
 
 ## What's this
 
-This is a set of scripts that will download, compile, and deploy gcc to the Blackberry Playbook. No rooting required.
+This is a set of scripts that will download, compile, and deploy gcc and some other tools to the Blackberry Playbook. No rooting required.
 
 ## What you need
 
-You need an install of the [Blackberry Native SDK][pbdevtools]. You're looking for the native C/C++ tools. I used the Native SDK 2.0.1 on OS X 10.6.8 while developing this package. In addition to the native sdk tools, you will need svn, curl and ruby. These are installed by default on OS X, and most everywhere else, so you should be okay.
+You need an install of the [Blackberry Native SDK][pbdevtools]. You're looking for the native C/C++ tools. I used the Native SDK 2.0.1 on OS X 10.6.8 while developing this package. In addition to the native sdk tools, you will need svn, curl, tar, gzip, bzip2 and ruby. These are installed by default on OS X, and most everywhere else, so you should be okay.
 
 On the playbook itself, you'll need a shell application. I used [BG Shell][bgshell]. It's free.
 
@@ -23,7 +23,7 @@ Download this repository to your desktop somewhere, then unpack and cd into it. 
 
     ./build.sh -b /absolute/path/to/native/sdk/bbndk/
 
-This will download gcc from the QNX Community site at [Foundry27][foundry27], then use the native sdk tools to cross compile gcc targeting the playbook. Then everything will be zipped up into a .zip archive (the playbook doesn't have tar or gzip), and a local ruby webserver will launch and you'll see a message that tells you how to get the binaries onto your playbook. You're looking for something like this:
+This will download gcc from the QNX Community site at [Foundry27][foundry27], then use the native sdk tools to cross compile gcc targeting the playbook. Then everything will be zipped up into a .zip archive (the playbook doesn't have tar or gzip). The same thing happens for coreutils, make and grep. Then a local ruby webserver will launch and you'll see a message that tells you how to get the binaries onto your playbook. You're looking for something like this:
 
     ---- Direct your playbook browser to: http://192.168.0.121:8888/pbinstall.sh
     ---- Save the file, then in the playbook shell, execute: sh /accounts/1000/shared/downloads/pbinstall.sh
@@ -38,11 +38,11 @@ Once you have installed everything on the playbook, you can shut down the ruby w
 
 ## Tips
 
-If something goes wrong during the compiling / building phase, after fixing it you can tell the build.sh script to pick up where it left off by passing the appropriate task, so:
+Each package is contained in its own directory, with its own build script. You can execute these build scripts on their own, so if something goes wrong during the compiling / building phase, you can cd into the relevant direcotyr and, after fixing the problem, you can tell the build.sh script to pick up where it left off by passing the appropriate task, so:
 
     ./build.sh -t TASK
 
-where TASK is one of [fetch | patch | build | install | bundle | deploy].
+where TASK is one of [fetch | patch | build | install | bundle]. The top level build.sh has a deploy task that you can use to relaunch the local ruby webserver.
 
 On the playbook, if you don't get a shell with your .profile processed, launch a login shell:
 
@@ -65,6 +65,8 @@ Alternately, I imagine that just unstalling the shell application from the playb
 This will build a statically linked gcc, since the dynamically linked version made the playbook ldd angry. Any hints on how to sort this out would be welcome.
 
 We are not yet building g++, as this failed with a namespace issue in strings.h - I am sure this is fixable, I just haven't got it yet.
+
+It is quite possible that some of the binaries from coreutils don't work right, let me know if you find one and I will try to sort it out. 
 
 ## Thanks
 

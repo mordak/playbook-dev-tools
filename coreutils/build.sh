@@ -23,7 +23,7 @@ Run this to fetch, patch, build, bundle and deploy gcc for the playbook.
 OPTIONS:
    -h      Show this message
    -b      The absolute path to your bbpb-sdk folder [/abs/path/tp/bbpb-sdk]
-   -t      The build task to start at: [fetch | patch | build | install | bundle | deploy]
+   -t      The build task to start at: [fetch | patch | build | install | bundle]
 EOF
 }
 
