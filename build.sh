@@ -12,7 +12,7 @@ BBTOOLS=
 LOGIN="guest --password \"\""
 MYIP=`ruby -rsocket -e 'p IPSocket.getaddress(Socket.gethostname)' | tr -d \"`
 URL="http://$MYIP:8888"
-TASK=fetch
+TASK=gcc
 
 usage()
 {
@@ -25,7 +25,7 @@ OPTIONS:
    -h      Show this message
    -b      The absolute path to your bbpb-sdk folder [/abs/path/tp/bbpb-sdk]
    -l      The login you use for the QNX Foundry27 site, if you have one [user@host]
-   -t      The build task to start at: [fetch | patch | build | install | bundle | deploy]
+   -t      The build task to start at: [gcc | coreutils | make | grep]
 EOF
 }
 
@@ -64,111 +64,52 @@ fi
 PBBUILDDIR=$PWD
 DESTDIR="$PBBUILDDIR/pbhome"
 mkdir -p "$DESTDIR"
-BUILDDIR="$PBBUILDDIR/mkgcc"
-mkdir -p "$BUILDDIR"
 ZIPFILE="$PBBUILDDIR/pbhome.zip"
 
 # Set up the environment
 source $BBTOOLS/bbndk-env.sh 
 
 # Pull down the right tools
-if [ "$TASK" == "fetch" ] 
+if [ "$TASK" == "gcc" ] 
 then
-  # blow away previous downloads
-  rm -rf gcc
-  # fetch
-  echo "Fetching gcc sources"
-  svn checkout --username $LOGIN http://community.qnx.com/svn/repos/core-dev-tools/tools/binutils/branches/650_release
-  mv 650_release binutils
-  svn checkout --username $LOGIN http://community.qnx.com/svn/repos/core-dev-tools/tools/gcc/branches/650_release
-  mv 650_release gcc
-  curl -O http://gnu.mirror.iweb.com/gnu/gmp/gmp-4.3.2.tar.bz2
-  curl -O http://gnu.mirror.iweb.com/gnu/mpfr/mpfr-2.4.2.tar.bz2
-
-  # Unpack and organize
-  echo "Unpacking"
-  mv binutils gcc/
-  mv gmp-4.3.2.tar.bz2 gcc/
-  mv mpfr-2.4.2.tar.bz2 gcc/
+  echo "Building GCC"
   cd gcc
-  tar -xjf gmp-4.3.2.tar.bz2 
-  tar -xjf mpfr-2.4.2.tar.bz2 
-  mv gmp-4.3.2 gmp
-  mv mpfr-2.4.2 mpfr
- 
+  ./build.sh
   cd "$PBBUILDDIR"
-  TASK=patch
+  TASK=coreutils
 fi
 
-if [ "$TASK" == "patch" ] 
+if [ "$TASK" == "coreutils" ] 
 then
-  echo "Patching .. "
-  # No patches yet.. 
+  echo "Building coreutils"
+  cd coreutils
+  ./build.sh
   cd $PBBUILDDIR
-  TASK=build
+  TASK=make
 fi
 
-if [ "$TASK" == "build" ] 
+if [ "$TASK" == "make" ] 
 then
-  echo "Building"
-
-  cd "$BUILDDIR"
-  # clean up if we have a previous build
-  if [ -e "Makefile" ]; then
-    make distclean
-  fi
-  # configure gcc
-  ../gcc/configure --host=arm-unknown-nto-qnx6.5.0eabi --build=x86_64-apple-darwin --srcdir=../gcc --build=x86_64-apple-darwin --host=arm-unknown-nto-qnx6.5.0eabi --enable-cheaders=c --with-as=ntoarm-as --with-ld=ntoarm-ld --with-sysroot=$BBTOOLS/target/qnx6/ --disable-werror --libdir=$BBTOOLS/target/qnx6/armle-v7/lib --libexecdir=$BBTOOLS/target/qnx6/armle-v7/usr/lib --target=arm-unknown-nto-qnx6.5.0eabi --prefix=$DESTDIR --exec-prefix=$DESTDIR --with-local-prefix=$BBTOOLS/target/qnx6/usr --enable-languages=c --enable-threads=posix --disable-nls --disable-libssp --disable-tls --disable-libstdcxx-pch --enable-libmudflap --enable-__cxa_atexit --with-gxx-include-dir=$BBTOOLS/target/qnx6/usr/include/c++/4.4.2 --enable-multilib --disable-shared CC=arm-unknown-nto-qnx6.5.0eabi-gcc LDFLAGS='-Wl,-s ' AUTOMAKE=: AUTOCONF=: AUTOHEADER=: AUTORECONF=: ACLOCAL=:
-
-  make
-  TASK=install
+  echo "Building make"
+  cd make
+  ./build.sh
+  cd "$PBBUILDDIR"
+  TASK=grep
 fi
   
-if [ "$TASK" == "install" ] 
+if [ "$TASK" == "grep" ] 
 then
-  cd $BUILDDIR
-  make DESTDIR=$DESTDIR install
+  echo "Building grep"
+  cd grep
+  ./build.sh
+  cd "$PBBUILDDIR"
   TASK=bundle
 fi
 
-if [ "$TASK" == "bundle" ] 
+if [ "$TASK" == "bundle" ]
 then
-  # remove previous bundle
-  if [ -e "$ZIPFILE" ]; then
-    rm "$ZIPFILE"
-  fi
-  echo "Bundling"
-  cd $DESTDIR/$DESTDIR
-  # link stuff to where the compiler will find it
-  if [ ! -e ./armle-v7 ]; then
-    mv $DESTDIR/$BBTOOLS/target/qnx6/armle-v7 .
-  fi
-  if [ ! -e lib ]; then
-    ln -s ./armle-v7/lib ./lib
-  fi
-  if [ ! -e usr ]; then
-    ln -s ./armle-v7/usr ./usr
-  fi
-  cd bin
-  if [ ! -e cc1 ]; then
-    ln -s ../armle-v7/usr/lib/gcc/arm-unknown-nto-qnx6.5.0eabi/4.4.2/cc1 ./cc1
-  fi
-  # Someday we may have cc1plus too. 
-  #if [ ! -e cc1plus ]; then
-  #  ln -s ../armle-v7/usr/lib/gcc/arm-unknown-nto-qnx6.5.0eabi/4.4.2/cc1plus ./cc1plus
-  #fi
-  if [ ! -e collect2 ]; then
-    ln -s ../armle-v7/usr/lib/gcc/arm-unknown-nto-qnx6.5.0eabi/4.4.2/collect2 ./collect2
-  fi
-  cd ..
-  zip -r -y "$ZIPFILE" *
-  
-  cd "$BBTOOLS"
-  zip -r -u -y "$ZIPFILE" target/qnx6/armle-v7 target/qnx6/etc target/qnx6/usr/include
-
-  # Set up the environment for the target system
+  cd "$PBBUILDDIR"
   echo "Setting up target .profile"
-  cd $PBBUILDDIR
   cp profile .profile
   zip -u "$ZIPFILE" .profile
   zip -u "$ZIPFILE" uninstall.sh 
