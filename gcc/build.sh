@@ -9,8 +9,6 @@
 set -e
 
 LOGIN="guest --password \"\""
-MYIP=`ruby -rsocket -e 'p IPSocket.getaddress(Socket.gethostname)' | tr -d \"`
-URL="http://$MYIP:8888"
 TASK=fetch
 
 usage()
@@ -133,13 +131,6 @@ then
   echo "Bundling"
   cd $DESTDIR
   # link stuff to where the compiler will find it
-  #if [ ! -e ./armle-v7 ]; then
-  #  mkdir armle-v7
-  #  cd armle-v7
-  #  ln -s ./lib ../lib
-  #  ln -s ./usr ../usr
-  #  cd ..
-  #fi
   cd bin
   if [ ! -e cc1 ]; then
     ln -s ../libexec/gcc/arm-unknown-nto-qnx6.5.0eabi/4.4.2/cc1 ./cc1
