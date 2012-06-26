@@ -1,0 +1,16 @@
+--- src/sdiff.c.orig	2012-06-26 16:34:23.000000000 -0600
++++ src/sdiff.c	2012-06-26 16:36:55.000000000 -0600
+@@ -41,6 +41,13 @@
+ #define AUTHORS \
+   proper_name ("Thomas Lord")
+ 
++/* QNX doesn't have SA_RESTART, so we set it to zero
++ * which should cause exits instead of resume
++ * when we are interrupted. This may be a poor solution. */
++#ifndef SA_RESTART
++#define SA_RESTART 0
++#endif
++
+ /* Size of chunks read from files which must be parsed into lines.  */
+ #define SDIFF_BUFSIZE ((size_t) 65536)
+ 

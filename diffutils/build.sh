@@ -8,8 +8,10 @@
 
 set -e
 
-DISTVER="coreutils-8.13"
-DISTFILES="http://ftp.gnu.org/gnu/coreutils/coreutils-8.13.tar.gz"
+DISTVER="diffutils-3.2"
+DISTSUFFIX="tar.gz"
+DISTFILES="http://ftp.gnu.org/gnu/diffutils/$DISTVER.$DISTSUFFIX"
+UNPACKCOMD="tar -xzf"
 
 TASK=fetch
 
@@ -70,7 +72,7 @@ then
 
   # Unpack and organize
   echo "Unpacking"
-  tar -xzf $DISTVER.tar.gz
+  $UNPACKCOMD $DISTVER.$DISTSUFFIX
  
   TASK=patch
 fi
@@ -78,9 +80,10 @@ fi
 if [ "$TASK" == "patch" ] 
 then
   echo "Patching .. "
-  cd "$BUILDDIR"
-  # Patch out a failure for listing file systems
-  patch < ../patches/configure.diff
+  # Work around the lack of SA_RESTART on QNX
+  cd $BUILDDIR
+  patch -p0 < ../patches/lib.cmpbuf.c.diff
+  patch -p0 < ../patches/src.sdiff.c.diff
   TASK=build
 fi
 
@@ -93,14 +96,13 @@ then
     make distclean
   fi
   # configure 
-  ./configure --host=arm-unknown-nto-qnx6.5.0eabi --build=x86_64-apple-darwin --target=arm-unknown-nto-qnx6.5.0eabi --prefix="$DESTDIR" --enable-threads=posix --disable-nls CC=arm-unknown-nto-qnx6.5.0eabi-gcc --enable-no-install-program=mknod,stat,uname,ls
+  ./configure --host=arm-unknown-nto-qnx6.5.0eabi --build=x86_64-apple-darwin --target=arm-unknown-nto-qnx6.5.0eabi --prefix="$DESTDIR" --disable-nls CC=arm-unknown-nto-qnx6.5.0eabi-gcc
   make
   TASK=install
 fi
   
 if [ "$TASK" == "install" ] 
 then
-  echo "Installing"
   cd "$BUILDDIR"
   make install
   TASK=bundle

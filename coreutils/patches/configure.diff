@@ -1,0 +1,12 @@
+--- configure.orig	2012-06-24 20:10:53.000000000 -0600
++++ configure	2012-06-24 20:11:31.000000000 -0600
+@@ -36680,7 +36680,8 @@
+ fi
+ 
+ if test -z "$ac_list_mounted_fs"; then
+-  as_fn_error $? "could not determine how to read list of mounted file systems" "$LINENO" 5
++  echo "Could not determine how to read list of filesystems"
++  #as_fn_error $? "could not determine how to read list of mounted file systems" "$LINENO" 5
+   # FIXME -- no need to abort building the whole package
+   # Can't build mountlist.c or anything that needs its functions
+ fi

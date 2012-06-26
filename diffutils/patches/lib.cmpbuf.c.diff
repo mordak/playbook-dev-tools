@@ -1,0 +1,13 @@
+--- lib/cmpbuf.c.orig	2012-06-26 16:32:50.000000000 -0600
++++ lib/cmpbuf.c	2012-06-26 16:33:36.000000000 -0600
+@@ -28,6 +28,10 @@
+ #include "cmpbuf.h"
+ #include "intprops.h"
+ 
++#ifndef SA_RESTART
++#define SA_RESTART 0
++#endif
++
+ #ifndef SSIZE_MAX
+ # define SSIZE_MAX TYPE_MAXIMUM (ssize_t)
+ #endif
