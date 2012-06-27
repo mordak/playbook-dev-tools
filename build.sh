@@ -103,6 +103,24 @@ then
   cd grep
   ./build.sh
   cd "$PBBUILDDIR"
+  TASK=diffutils
+fi
+
+if [ "$TASK" == "diffutils" ] 
+then
+  echo "Building diffutils"
+  cd diffutils
+  ./build.sh
+  cd "$PBBUILDDIR"
+  TASK=gzip
+fi
+
+if [ "$TASK" == "gzip" ] 
+then
+  echo "Building gzip"
+  cd gzip
+  ./build.sh
+  cd "$PBBUILDDIR"
   TASK=bundle
 fi
 
