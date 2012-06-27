@@ -9,7 +9,7 @@
 set -e
 
 LOGIN="guest --password \"\""
-TASK=fetch
+TASK=patch
 
 usage()
 {

@@ -1,0 +1,40 @@
+# Build libgcc.a with different options.  With gas, build pic libraries
+# as well no floating point
+
+FPBIT = fp-bit.c
+DPBIT = dp-bit.c
+
+dp-bit.c: $(srcdir)/config/fp-bit.c
+	cat $(srcdir)/config/fp-bit.c > dp-bit.c
+
+fp-bit.c: $(srcdir)/config/fp-bit.c
+	echo '#define FLOAT' > fp-bit.c
+	cat $(srcdir)/config/fp-bit.c >> fp-bit.c
+
+T_CPPFLAGS=-DTARGET_ALIAS=\"$(target_alias)\"
+
+CRTSTUFF_T_CFLAGS = -msdata=none -fno-omit-frame-pointer -fpic -DCRTSTUFFS_O
+TARGET_LIBGCC2_CFLAGS = -fexceptions
+
+# Don't run fixproto or fixinc
+STMP_FIXPROTO =
+STMP_FIXINC =
+
+# Use unwind-dw2-fde
+LIB2ADDEH = $(srcdir)/unwind-dw2.c $(srcdir)/unwind-dw2-fde.c \
+  $(srcdir)/unwind-sjlj.c $(srcdir)/unwind-c.c
+LIB2ADDEHDEP = unwind.inc unwind-dw2-fde.h
+
+MULTILIB_OPTIONS = fpic me500v2
+MULTILIB_DIRNAMES = pic spe 
+MULTILIB_MATCHES = fpic=shared
+
+EXTRA_MULTILIB_PARTS = crtbegin.o crtend.o
+
+LIBGCC = stmp-multilib
+INSTALL_LIBGCC = install-multilib
+
+LIB2FUNCS_EXTRA=tramp.S
+
+tramp.S: $(srcdir)/config/rs6000/tramp.asm
+	cat $(srcdir)/config/rs6000/tramp.asm > tramp.S

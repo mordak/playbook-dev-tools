@@ -1,0 +1,134 @@
+srcdir=${PWD}/..
+nto_target=${PWD##*-}
+host_target=${PWD##*/}
+qnx_target_version=6.5.0
+
+if [ ${nto_target} != ntomulti ]; then
+  cpu_string=`echo ${nto_target} | sed 's/nto//'`
+  if [ $cpu_string = x86 ]; then
+    cpu_string=i486
+  fi
+  if [ $cpu_string = armeabi ]; then
+    nto_target=ntoarm
+    cpu_string=arm
+    os_variant=eabi
+  fi
+  tmpstring=`echo ${cpu_string}-nto-qnx${qnx_target_version}${os_variant}`
+  target=`${srcdir}/config.sub ${tmpstring}`
+else
+  target=`${srcdir}/config.sub ${nto_target}`
+fi
+
+targets="i686-pc-linux-gnu i686-pc-cygwin arm-unknown-nto-qnx${qnx_target_version} mips-unknown-nto-qnx${qnx_target_version} powerpc-unknown-nto-qnx${qnx_target_version} sh-unknown-nto-qnx${qnx_target_version} i486-pc-nto-qnx${qnx_target_version}"
+
+function hook_preconfigure {
+	case ${nto_target} in
+	ntomulti)
+		multitargets=--enable-targets=$(echo ${targets} | tr ' ' ',')
+		;;
+	esac
+
+        case ${SYSNAME} in
+        nto)
+                case "${nto_target}" in
+                nto*)   TOOL_PATH=${TOOL_PATH:-${QNX_HOST:-/usr/qnx650/host/qnx6/x86}}
+			execdir=${TOOL_PATH}/usr ;;
+                *)      execdir=/usr/qnx650/host/qnx6/x86/usr ;;
+                esac
+                ;;
+        solaris)
+                host_cpu=$(uname -p)
+                case ${host_cpu} in
+        i[34567]86) host_cpu=x86 ;;
+                esac
+                execdir=/opt/qnx650/host/solaris/${host_cpu}/usr
+                ;;
+        linux)
+		configure_opts="${configure_opts} --build=i686-pc-linux-gnu"
+		case  $host_target in 
+		nto*) 
+			configure_opts="${configure_opts} --host=i486-pc-nto-qnx6.5.0" 
+			execdir=/usr/qnx650/host/qnx6/x86/usr/ 
+		;;
+		
+		linux*)
+                host_cpu=$(uname -m)
+                case ${host_cpu} in
+			i[34567]86) host_cpu=x86 ;;
+			esac
+			execdir=/opt/qnx650/host/linux/${host_cpu}/usr
+		;;
+		win32*) 
+			configure_opts="${configure_opts} --host=i386-mingw32msvc"
+			execdir=/c/qnx650/host/win32/x86/usr
+                ;;
+		esac
+	;;
+        win32)
+                execdir=/cygdrive/c/qnx650/host/win32/x86/usr
+                ;;
+        *)
+                echo "Don't have config for ${SYSNAME}"
+                exit 1
+                ;;
+        esac
+
+
+	configure_opts="${configure_opts} --with-sysroot=$QNX_TARGET"
+	configure_opts="${configure_opts} --disable-werror"
+	configure_opts="${configure_opts} --disable-shared"
+	configure_opts="${configure_opts} --disable-nls"
+	configure_opts="${configure_opts} --prefix=${execdir}"
+	configure_opts="${configure_opts} --exec-prefix=${execdir}"
+	configure_opts="${configure_opts} --with-local-prefix=${execdir}"
+	configure_opts="${configure_opts} ${multitargets}"
+	configure_opts="${configure_opts} --target=${target}"
+	configure_opts="${configure_opts} --srcdir=${srcdir}"
+	case ${target} in
+	*nto-qnx*)
+		configure_opts="${configure_opts} --program-prefix=${target}-" ;;
+        esac
+	configure_opts="${configure_opts} --program-suffix=${BINUTILS_SUFFIX}"
+	configure_opts="${configure_opts} --with-bugurl=http://www.qnx.com/support/bugreports"
+	export CC="${make_CC}"
+	export CFLAGS="-O2 -Wall"
+}
+
+function hook_premake {
+	# DO NOT REMOVE THE FOLLOWING LINE!!!!
+	# Without inttypes.h, alignments get screwed up 
+	# as a result of a compiler bug. 
+	export CFLAGS="-O2 -Wp,-idirafter -Wp,$QNX_TARGET/usr/include -Wp,-include -Wp,$QNX_TARGET/usr/include/inttypes.h"
+
+	make_CC="env QCC_CONF_PATH=$QCC_CONF_PATH QNX_TARGET=$QNX_TARGET ${make_CC}"
+
+	strip_r_switch;
+}
+
+
+function hook_pinfo {
+	cd binutils
+	gen_pinfo -e -nsize ${nto_target}-size usr/bin LICE=GPL USE="%1>%C --help" DESCRIPTION="GNU size" "FINFO=0 0 0775"
+	gen_pinfo -e -nobjdump ${nto_target}-objdump usr/bin LICE=GPL USE="%1>%C --help" DESCRIPTION="GNU objdump" "FINFO=0 0 0775"
+	gen_pinfo -e -nar ${nto_target}-ar usr/bin LICE=GPL USE="%1>%C --help" DESCRIPTION="GNU ar" "FINFO=0 0 1775"
+	gen_pinfo -e -nranlib ${nto_target}-ranlib usr/bin LICE=GPL USE="%1>%C --help" DESCRIPTION="GNU ranlib" "FINFO=0 0 1775"
+	gen_pinfo -e -nstrings ${nto_target}-strings usr/bin LICE=GPL USE="%1>%C --help" DESCRIPTION="GNU strings" "FINFO=0 0 0775"
+	gen_pinfo -e -nobjcopy ${nto_target}-objcopy usr/bin LICE=GPL USE="%1>%C --help" DESCRIPTION="GNU objcopy" "FINFO=0 0 0775"
+	gen_pinfo -e -nstrip-new ${nto_target}-strip usr/bin LICE=GPL USE="%1>%C --help" DESCRIPTION="GNU strip" "FINFO=0 0 0775"
+	gen_pinfo -e -naddr2line ${nto_target}-addr2line usr/bin LICE=GPL USE="%1>%C --help" DESCRIPTION="GNU addr2line" "FINFO=0 0 0775"
+	gen_pinfo -e -nnm-new ${nto_target}-nm usr/bin LICE=GPL USE="%1>%C --help" DESCRIPTION="GNU nm" "FINFO=0 0 0775"
+	gen_pinfo -e -ncxxfilt ${nto_target}-c++filt usr/bin LICE=GPL USE="%1>%C --help" DESCRIPTION="GNU c++filt" "FINFO=0 0 0775"
+	gen_pinfo -e -nreadelf ${nto_target}-readelf usr/bin LICE=GPL USE="%1>%C --help" DESCRIPTION="GNU readelf" "FINFO=0 0 0775"
+	cd ../gprof
+	gen_pinfo -e -ngprof ${nto_target}-gprof usr/bin LICE=GPL USE="%1>%C --help" DESCRIPTION="GNU profiler" "FINFO=0 0 0775"
+
+	if [ ${nto_target} != ntomulti ]; then
+		cd ../gas
+		gen_pinfo -e -nas-new ${nto_target}-as usr/bin LICE=GPL USE="%1>%C --help" DESCRIPTION="GNU assembler" "FINFO=0 0 1775"
+		cd ../ld
+		gen_pinfo -e -nld-new ${nto_target}-ld usr/bin LICE=GPL USE="%1>%C --help" DESCRIPTION="GNU linker" "FINFO=0 0 1775"
+		cd ..
+	fi
+
+}
+

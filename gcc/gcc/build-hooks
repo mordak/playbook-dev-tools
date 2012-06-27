@@ -1,0 +1,163 @@
+srcdir=${PWD}/..
+targ_root=${PWD}
+
+gcc_version=$(cat ../gcc/BASE-VER)
+
+qnx_target_version=6.5.0
+nto_target=${PWD##*-}
+host_target=${PWD##*/}
+cpu_string=`echo ${nto_target} | sed 's/nto//'`
+if [ $cpu_string = x86 ]; then
+cpu_string=i486
+fi
+if [ $cpu_string = armeabi ]; then
+nto_target=ntoarm
+cpu_string=arm
+os_variant=eabi
+fi
+tmpstring=`echo ${cpu_string}-nto-qnx${qnx_target_version}${os_variant}`
+target=`${srcdir}/config.sub ${tmpstring}`
+basedir='/usr'
+
+STACKSIZE=${STACKSIZE:-4096000}
+
+case ${SYSNAME} in
+nto)
+	make_CC="gcc"
+	;;
+win32)
+	QNXSDK_HOST_LDFLAGS="-Wl,--stack=$STACKSIZE"
+	;;
+esac
+
+export LDFLAGS="-Wl,-s $QNXSDK_HOST_LDFLAGS"
+
+function hook_preconfigure {
+	case ${SYSNAME} in
+	nto)
+		case "${target}" in
+		*nto-qnx*)	TOOL_PATH=${TOOL_PATH:-${QNX_HOST:-/usr/qnx650/host/qnx6/x86}}
+				basedir=${TOOL_PATH}/usr ;;
+		*)		basedir=/usr/qnx650/host/qnx6/x86/usr ;;
+		esac
+		;;
+	solaris)
+		host_cpu=$(uname -p)
+		case ${host_cpu} in
+        i[34567]86) host_cpu=x86;;
+		esac
+		basedir=${QNX_HOST:-/usr/qnx650/host/solaris/${host_cpu}/usr}
+		;;
+	linux)
+		configure_opts="${configure_opts} --build=i686-pc-linux-gnu"
+		case "${host_target}" in
+			win32-*) 	
+			configure_opts="${configure_opts} --host=i386-mingw32msvc"
+			basedir=/c/qnx650/host/win32/x86/usr
+			qnxtarget=/c/qnx650/target/qnx6/
+			;;
+			nto-*)
+			configure_opts="${configure_opts} --host=i486-pc-nto-qnx6.5.0"
+			basedir=/usr/qnx650/host/qnx6/x86/usr
+			qnxtarget=/usr/qnx650/target/qnx6
+				
+			;;
+			linux-*)
+				host_cpu=$(uname -m)
+				case ${host_cpu} in
+			i[34567]86) host_cpu=x86 ;;
+				esac
+				basedir=/opt/qnx650/host/linux/x86/usr
+				qnxtarget=/opt/qnx650/target/qnx6
+			
+			;;
+		esac ;;
+	win32)
+		tooldir=${QNX_HOST:-c:/qnx650/host/win32/x86}
+		basedir=${tooldir}/usr
+		;;
+	*)
+		echo "Don't have config for ${SYSNAME}"
+		exit 1
+		;;
+	esac
+
+	case ${target} in
+	*nto-qnx*)	
+		configure_opts="${configure_opts} --enable-cheaders=c"
+		configure_opts="${configure_opts} --with-as=${nto_target}-as"
+		configure_opts="${configure_opts} --with-ld=${nto_target}-ld"
+	esac 
+
+	configure_opts="${configure_opts} --with-sysroot=$QNX_TARGET/"
+	configure_opts="${configure_opts} --disable-werror"
+ 	configure_opts="${configure_opts} --libdir=${basedir}/lib"
+	configure_opts="${configure_opts} --libexecdir=${basedir}/lib"
+	configure_opts="${configure_opts} --target=${target}"
+	configure_opts="${configure_opts} --srcdir=${srcdir}"
+	configure_opts="${configure_opts} --prefix=${basedir}"
+	configure_opts="${configure_opts} --exec-prefix=${basedir}"
+	configure_opts="${configure_opts} --with-local-prefix=${basedir}"
+	configure_opts="${configure_opts} --enable-languages=c++"
+	configure_opts="${configure_opts} --enable-threads=posix"
+	configure_opts="${configure_opts} --disable-nls"
+	configure_opts="${configure_opts} --disable-libssp"
+	configure_opts="${configure_opts} --disable-tls"
+	configure_opts="${configure_opts} --disable-libstdcxx-pch"
+	configure_opts="${configure_opts} --enable-libmudflap"
+	configure_opts="${configure_opts} --enable-__cxa_atexit"
+	configure_opts="${configure_opts} --with-gxx-include-dir=${qnxtarget}/usr/include/c++/$gcc_version"
+	configure_opts="${configure_opts} --enable-multilib"
+	configure_opts="${configure_opts} --with-bugurl=http://www.qnx.com"
+	if test "${target}" = "mips-unknown-nto-qnx6.5.0"; then
+		configure_opts="${configure_opts} --disable-shared"
+		configure_opts="${configure_opts} --disable-fixed-point"
+	else
+		configure_opts="${configure_opts} --enable-shared"
+	fi
+
+	# The cross compilation of libgcc.a and libstdc++ require system headers
+	# from the next version of Neutrino while gcc itself should be compiled
+	# against the currently released version. This symlink puts the system
+	# headers in a location already referenced by the makefiles for libgcc
+	# and libstd++. This location is where gcc would like to see headers
+	# but we aren't currently using it. Thus the symlink is safe for now.
+
+	if test "${SYSNAME}" = "nto"; then
+		if test -n "${USE_ROOT_nto}"; then 
+			op ln -sP ${USE_ROOT_nto}/usr/include ${basedir}/${target}/include
+		fi
+	fi	
+}
+
+function hook_premake {
+	strip_r_switch
+	make_opts="CFLAGS+=-O2"
+
+}
+
+function hook_postmake {
+	if [ ${TARGET_SYSNAME} = nto ]; then
+		ldrel -L -S $STACKSIZE gcc/cc1
+		ldrel -L -S $STACKSIZE gcc/cc1plus
+		echo "${nto_target}-objcopy${binutils_version} --weaken ${target}/pic/libstdc++-v3/libsupc++/.libs/libsupc++.a ${target}/pic/libstdc++-v3/libsupc++/.libs/libcxa.a"
+		${nto_target}-objcopy${binutils_version} --weaken ${target}/pic/libstdc++-v3/libsupc++/.libs/libsupc++.a ${target}/pic/libstdc++-v3/libsupc++/.libs/libcxa.a
+		# If we are mips weaken the be variant
+		case ${nto_target} in
+		ntomips)
+			echo "${nto_target}-objcopy${binutils_version} --weaken ${target}/pic/be/libstdc++-v3/libsupc++/.libs/libsupc++.a ${target}/pic/be/libstdc++-v3/libsupc++/.libs/libcxa.a"
+			${nto_target}-objcopy${binutils_version} --weaken ${target}/pic/be/libstdc++-v3/libsupc++/.libs/libsupc++.a ${target}/pic/be/libstdc++-v3/libsupc++/.libs/libcxa.a
+			;;	
+		esac
+	fi
+}
+
+function hook_pinfo {
+	case ${SYSNAME} in
+	win32)	exe_suffix=".exe" 	;;
+	*)	exe_suffix=""		;;
+	esac
+
+	# Executables
+}
+
