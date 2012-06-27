@@ -12,7 +12,7 @@ BBTOOLS=
 LOGIN="guest --password \"\""
 MYIP=`ruby -rsocket -e 'p IPSocket.getaddress(Socket.gethostname)' | tr -d \"`
 URL="http://$MYIP:8888"
-TASK=gcc
+TASK=all
 
 usage()
 {
@@ -33,7 +33,7 @@ mkdir -p conf
 
 while getopts "b:l:t:h" OPTION
 do
-  case "$OPTION" in 
+  case "$OPTION" in
     h) usage; exit 1;;
     b) echo "$OPTARG" > conf/bbtools;;
     l) echo "$OPTARG" > conf/login;;
@@ -48,14 +48,14 @@ if [ -e "conf/login" ]; then
 fi
 
 
-if [[ -z $BBTOOLS ]] || [[ -z $LOGIN ]] 
+if [[ -z $BBTOOLS ]] || [[ -z $LOGIN ]]
 then
   usage
   exit 1
 fi
 
 # test the existence of the bbndk-env file
-if [ ! -e "$BBTOOLS/bbndk-env.sh" ] 
+if [ ! -e "$BBTOOLS/bbndk-env.sh" ]
 then
   echo "Cannot source $BBTOOLS/bbndk-env.sh. Pass -b [path] to specify."
   exit 1
@@ -67,61 +67,29 @@ mkdir -p "$DESTDIR"
 ZIPFILE="$PBBUILDDIR/pbhome.zip"
 
 # Set up the environment
-source $BBTOOLS/bbndk-env.sh 
+source $BBTOOLS/bbndk-env.sh
 
-# Pull down the right tools
-if [ "$TASK" == "gcc" ] 
+if [ "$TASK" == "all" ]
 then
-  echo "Building GCC"
-  cd gcc
-  ./build.sh
-  cd "$PBBUILDDIR"
-  TASK=coreutils
-fi
-
-if [ "$TASK" == "coreutils" ] 
-then
-  echo "Building coreutils"
-  cd coreutils
-  ./build.sh
-  cd $PBBUILDDIR
-  TASK=make
-fi
-
-if [ "$TASK" == "make" ] 
-then
-  echo "Building make"
-  cd make
-  ./build.sh
-  cd "$PBBUILDDIR"
-  TASK=grep
-fi
-  
-if [ "$TASK" == "grep" ] 
-then
-  echo "Building grep"
-  cd grep
-  ./build.sh
-  cd "$PBBUILDDIR"
-  TASK=diffutils
-fi
-
-if [ "$TASK" == "diffutils" ] 
-then
-  echo "Building diffutils"
-  cd diffutils
-  ./build.sh
-  cd "$PBBUILDDIR"
-  TASK=gzip
-fi
-
-if [ "$TASK" == "gzip" ] 
-then
-  echo "Building gzip"
-  cd gzip
-  ./build.sh
-  cd "$PBBUILDDIR"
+  for afile in *
+  do
+    if [ -d "$afile" ] && [ -e "$afile/build.sh" ]
+    then
+      echo "Building $afile"
+      cd "$afile"
+      ./build.sh
+      cd "$PBBUILDDIR"
+    fi
+  done
   TASK=bundle
+else
+  if [ -e "$TASK/build.sh" ]
+  then
+    echo "Building $TASK"
+    cd "$TASK"
+    ./build.sh
+    cd "$PBBUILDDIR"
+  fi
 fi
 
 if [ "$TASK" == "bundle" ]
@@ -130,11 +98,11 @@ then
   echo "Setting up target .profile"
   cp profile .profile
   zip -u "$ZIPFILE" .profile
-  zip -u "$ZIPFILE" uninstall.sh 
+  zip -u "$ZIPFILE" uninstall.sh
   TASK=deploy
 fi
 
-if [ "$TASK" == "deploy" ] 
+if [ "$TASK" == "deploy" ]
 then
   cd "$PBBUILDDIR"
   cat pbinstallhead.sh > pbinstall.sh
