@@ -8,6 +8,7 @@
 
 set -e
 
+ALLPROGS="gcc coreutils diffutils grep make gzip patch tar"
 BBTOOLS=
 LOGIN="guest --password \"\""
 MYIP=`ruby -rsocket -e 'p IPSocket.getaddress(Socket.gethostname)' | tr -d \"`
@@ -71,7 +72,7 @@ source $BBTOOLS/bbndk-env.sh
 
 if [ "$TASK" == "all" ]
 then
-  for afile in *
+  for afile in $ALLPROGS
   do
     if [ -d "$afile" ] && [ -e "$afile/build.sh" ]
     then
@@ -97,8 +98,8 @@ then
   cd "$PBBUILDDIR"
   echo "Setting up target .profile"
   cp profile .profile
-  zip -u "$ZIPFILE" .profile
-  zip -u "$ZIPFILE" uninstall.sh
+  zip -u "$ZIPFILE" .profile || true
+  zip -u "$ZIPFILE" uninstall.sh || true
   TASK=deploy
 fi
 

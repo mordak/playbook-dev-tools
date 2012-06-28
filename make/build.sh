@@ -18,7 +18,7 @@ usage()
 cat << EOF
 usage: $0 options
 
-Run this to fetch, patch, build, bundle and deploy gcc for the playbook.
+Run this to fetch, patch, build, bundle and deploy $DISTVER for the playbook.
 
 OPTIONS:
    -h      Show this message

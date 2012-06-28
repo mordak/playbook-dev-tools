@@ -8,8 +8,11 @@
 
 set -e
 
-DISTVER="grep-2.9"
-DISTFILES="http://ftp.gnu.org/gnu/grep/grep-2.9.tar.gz"
+DISTVER="bzip2-1.0.6"
+DISTSUFFIX="tar.gz"
+DISTFILES="http://bzip.org/1.0.6/bzip2-1.0.6.tar.gz"
+UNPACKCOMD="tar -xzf"
+TARGETFILE="bzip2.install.sh"
 
 TASK=fetch
 
@@ -18,7 +21,7 @@ usage()
 cat << EOF
 usage: $0 options
 
-Run this to fetch, patch, build, bundle and deploy $DISTVER for the playbook.
+Run this to install a script that will fetch, build and install $DISTVER on the playbook.
 
 OPTIONS:
    -h      Show this message
@@ -29,7 +32,7 @@ EOF
 
 while getopts "b:l:t:h" OPTION
 do
-  case "$OPTION" in 
+  case "$OPTION" in
     h) usage; exit 1;;
     b) echo "$OPTARG" > ../conf/bbtools;;
     t) TASK="$OPTARG";;
@@ -39,14 +42,14 @@ if [ -e "../conf/bbtools" ]; then
   BBTOOLS=`cat ../conf/bbtools`
 fi
 
-if [[ -z $BBTOOLS ]]  
+if [[ -z $BBTOOLS ]]
 then
   usage
   exit 1
 fi
 
 # test the existence of the bbndk-env file
-if [ ! -e "$BBTOOLS/bbndk-env.sh" ] 
+if [ ! -e "$BBTOOLS/bbndk-env.sh" ]
 then
   echo "Cannot source $BBTOOLS/bbndk-env.sh. Pass -b [path] to specify."
   exit 1
@@ -59,51 +62,42 @@ ZIPFILE="$PBBUILDDIR/../pbhome.zip"
 BUILDDIR="$PBBUILDDIR/$DISTVER"
 
 # Set up the environment
-source $BBTOOLS/bbndk-env.sh 
+source $BBTOOLS/bbndk-env.sh
 
 # Pull down the right tools
-if [ "$TASK" == "fetch" ] 
+if [ "$TASK" == "fetch" ]
 then
   # fetch
-  echo "Fetching sources"
-  curl -O $DISTFILES
-
-  # Unpack and organize
-  echo "Unpacking"
-  tar -xzf $DISTVER.tar.gz
- 
   TASK=patch
 fi
 
-if [ "$TASK" == "patch" ] 
+if [ "$TASK" == "patch" ]
 then
-  echo "Patching .. "
-  # No patches yet.. 
   TASK=build
 fi
 
-if [ "$TASK" == "build" ] 
+if [ "$TASK" == "build" ]
 then
-  echo "Building"
-  cd "$BUILDDIR"
-  # clean up if we have a previous build
-  if [ -e "Makefile" ]; then
-    make distclean
-  fi
-  # configure 
-  ./configure --host=arm-unknown-nto-qnx6.5.0eabi --build=x86_64-apple-darwin --target=arm-unknown-nto-qnx6.5.0eabi --prefix="$DESTDIR" --disable-nls --enable-threads=posix CC=arm-unknown-nto-qnx6.5.0eabi-gcc
-  make
+  echo "#!/bin/sh"                        >  $TARGETFILE
+  echo "pwget $DISTFILES"                 >> $TARGETFILE
+  echo "$UNPACKCOMD $DISTVER.$DISTSUFFIX" >> $TARGETFILE
+  echo "cd $DISTVER"                      >> $TARGETFILE
+  echo "make"                             >> $TARGETFILE
+  echo "make install PREFIX=\$HOME"       >> $TARGETFILE
+  echo "cd .."                            >> $TARGETFILE
+  echo "rm -rf $DISTVER*"                 >> $TARGETFILE
+  echo "rm \$HOME/bin/$TARGETFILE"        >> $TARGETFILE
+  chmod +x $TARGETFILE
   TASK=install
 fi
-  
-if [ "$TASK" == "install" ] 
+
+if [ "$TASK" == "install" ]
 then
-  cd "$BUILDDIR"
-  make install
+  cp $TARGETFILE "$DESTDIR/bin/$TARGETFILE"
   TASK=bundle
 fi
 
-if [ "$TASK" == "bundle" ] 
+if [ "$TASK" == "bundle" ]
 then
   echo "Bundling"
   cd $DESTDIR
