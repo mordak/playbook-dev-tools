@@ -14,7 +14,8 @@ LOGIN="guest --password \"\""
 MYIP=`ruby -rsocket -e 'p IPSocket.getaddress(Socket.gethostname)' | tr -d \"`
 URL="http://$MYIP:8888"
 TASK=all
-
+SUBTASKFLAG=
+SUBTASK=
 usage()
 {
 cat << EOF
@@ -26,19 +27,21 @@ OPTIONS:
    -h      Show this message
    -b      The absolute path to your bbpb-sdk folder [/abs/path/tp/bbpb-sdk]
    -l      The login you use for the QNX Foundry27 site, if you have one [user@host]
-   -t      The build task to start at: [gcc | coreutils | make | grep | bundle | deploy]
+   -t      The build task to perform: [ <packagename> | bundle | deploy]
+   -s      The task to pass to each package [fetch | patch | build | install | bundle]
 EOF
 }
 
 mkdir -p conf
 
-while getopts "b:l:t:h" OPTION
+while getopts "b:l:t:hs:" OPTION
 do
   case "$OPTION" in
     h) usage; exit 1;;
     b) echo "$OPTARG" > conf/bbtools;;
     l) echo "$OPTARG" > conf/login;;
     t) TASK="$OPTARG";;
+    s) SUBTASK="$OPTARG"; SUBTASKFLAG="-t";;
   esac
 done
 if [ -e "conf/bbtools" ]; then
@@ -78,7 +81,7 @@ then
     then
       echo "Building $afile"
       cd "$afile"
-      ./build.sh
+      ./build.sh $SUBTASKFLAG $SUBTASK
       cd "$PBBUILDDIR"
     fi
   done
