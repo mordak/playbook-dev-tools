@@ -12,7 +12,6 @@ DISTVER="bzip2-1.0.6"
 DISTSUFFIX="tar.gz"
 DISTFILES="http://bzip.org/1.0.6/bzip2-1.0.6.tar.gz"
 UNPACKCOMD="tar -xzf"
-TARGETFILE="bzip2.install.sh"
 
 TASK=fetch
 
@@ -21,7 +20,7 @@ usage()
 cat << EOF
 usage: $0 options
 
-Run this to install a script that will fetch, build and install $DISTVER on the playbook.
+Run this to fetch, patch, build, bundle and deploy $DISTVER for the playbook.
 
 OPTIONS:
    -h      Show this message
@@ -68,32 +67,41 @@ source $BBTOOLS/bbndk-env.sh
 if [ "$TASK" == "fetch" ]
 then
   # fetch
+  echo "Fetching sources"
+  curl -O $DISTFILES
+
+  # Unpack and organize
+  echo "Unpacking"
+  $UNPACKCOMD $DISTVER.$DISTSUFFIX
+
   TASK=patch
 fi
 
 if [ "$TASK" == "patch" ]
 then
+  echo "Patching .. "
+  cd "$BUILDDIR"
+  patch -p0 < ../patches/makefile.diff
   TASK=build
 fi
 
 if [ "$TASK" == "build" ]
 then
-  echo "#!/bin/sh"                        >  $TARGETFILE
-  echo "pwget $DISTFILES"                 >> $TARGETFILE
-  echo "$UNPACKCOMD $DISTVER.$DISTSUFFIX" >> $TARGETFILE
-  echo "cd $DISTVER"                      >> $TARGETFILE
-  echo "make"                             >> $TARGETFILE
-  echo "make install PREFIX=\$HOME"       >> $TARGETFILE
-  echo "cd .."                            >> $TARGETFILE
-  echo "rm -rf $DISTVER*"                 >> $TARGETFILE
-  echo "rm \$HOME/bin/$TARGETFILE"        >> $TARGETFILE
-  chmod +x $TARGETFILE
+  echo "Building"
+  cd "$BUILDDIR"
+  # clean up if we have a previous build
+  if [ -e "Makefile" ]; then
+    make distclean
+  fi
+  # configure
+  make
   TASK=install
 fi
 
 if [ "$TASK" == "install" ]
 then
-  cp $TARGETFILE "$DESTDIR/bin/$TARGETFILE"
+  cd "$BUILDDIR"
+  make install PREFIX="$DESTDIR"
   TASK=bundle
 fi
 
