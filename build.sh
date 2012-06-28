@@ -8,7 +8,7 @@
 
 set -e
 
-ALLPROGS="gcc coreutils diffutils grep make gzip patch tar"
+ALLPROGS="gcc coreutils diffutils grep make gzip patch tar bzip2"
 BBTOOLS=
 LOGIN="guest --password \"\""
 MYIP=`ruby -rsocket -e 'p IPSocket.getaddress(Socket.gethostname)' | tr -d \"`
