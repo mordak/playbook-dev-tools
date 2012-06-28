@@ -101,7 +101,6 @@ if [ "$TASK" == "bundle" ]
 then
   echo "Bundling"
   cd $DESTDIR
-  # link stuff to where the compiler will find it
   zip -r -y -u "$ZIPFILE" *
 fi
 
