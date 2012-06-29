@@ -103,10 +103,10 @@ then
   cd "$BUILDDIR"
   make install PREFIX="$DESTDIR"
  	cd "$DESTDIR/bin"
-	ln -s -f bzgrep bzegrep
-	ln -s -f bzgrep bzfgrep
-	ln -s -f bzmore bzless
-	ln -s -f bzdiff bzcmp
+  ln -s -f bzgrep bzegrep
+  ln -s -f bzgrep bzfgrep
+  ln -s -f bzmore bzless
+  ln -s -f bzdiff bzcmp
 
   TASK=bundle
 fi

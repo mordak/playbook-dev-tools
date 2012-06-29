@@ -12,7 +12,6 @@ ALLPROGS="gcc coreutils diffutils grep make gzip patch tar bzip2"
 BBTOOLS=
 LOGIN="guest --password \"\""
 MYIP=`ruby -rsocket -e 'p IPSocket.getaddress(Socket.gethostname)' | tr -d \"`
-URL="http://$MYIP:8888"
 TASK=all
 SUBTASKFLAG=
 SUBTASK=
@@ -26,6 +25,7 @@ Run this to fetch, patch, build, bundle and deploy gcc for the playbook.
 OPTIONS:
    -h      Show this message
    -b      The absolute path to your bbpb-sdk folder [/abs/path/tp/bbpb-sdk]
+   -i      The IP address of this machine
    -l      The login you use for the QNX Foundry27 site, if you have one [user@host]
    -t      The build task to perform: [ <packagename> | bundle | deploy]
    -s      The task to pass to each package [fetch | patch | build | install | bundle]
@@ -34,11 +34,12 @@ EOF
 
 mkdir -p conf
 
-while getopts "b:l:t:hs:" OPTION
+while getopts "b:i:l:t:hs:" OPTION
 do
   case "$OPTION" in
     h) usage; exit 1;;
     b) echo "$OPTARG" > conf/bbtools;;
+    i) echo "$OPTARG" > conf/ip;;
     l) echo "$OPTARG" > conf/login;;
     t) TASK="$OPTARG";;
     s) SUBTASK="$OPTARG"; SUBTASKFLAG="-t";;
@@ -50,7 +51,11 @@ fi
 if [ -e "conf/login" ]; then
   LOGIN=`cat conf/login`
 fi
+if [ -e "conf/ip" ]; then
+  MYIP=`cat conf/ip`
+fi
 
+URL="http://$MYIP:8888"
 
 if [[ -z $BBTOOLS ]] || [[ -z $LOGIN ]]
 then
