@@ -23,7 +23,7 @@ Download this repository to your desktop somewhere, then unpack and cd into it. 
 
     ./build.sh -b /absolute/path/to/native/sdk/bbndk/
 
-This will download gcc from the QNX Community site at [Foundry27][foundry27], then use the native sdk tools to cross compile gcc targeting the playbook. Then everything will be zipped up into a .zip archive (the playbook doesn't have tar or gzip). The same thing happens for coreutils, make and grep. Then a local ruby webserver will launch and you'll see a message that tells you how to get the binaries onto your playbook. You're looking for something like this:
+This will use the native sdk tools to cross compile the bundled gcc targeting the playbook. Then everything will be zipped up into a .zip archive (the playbook doesn't have tar or gzip). The same thing happens for coreutils, make, grep, etc. Then a local ruby webserver will launch and you'll see a message that tells you how to get the binaries onto your playbook. You're looking for something like this:
 
     ---- Direct your playbook browser to: http://192.168.0.121:8888/pbinstall.sh
     ---- Save the file, then in the playbook shell, execute: sh /accounts/1000/shared/downloads/pbinstall.sh
@@ -37,6 +37,14 @@ And this will pull down the playbook gcc binaries, and unzip/install them into t
 Once you have installed everything on the playbook, you can shut down the ruby webserver on your desktop machine with ^C.
 
 ## Tips
+
+This package includes a mirror of the gcc source from the QNX Community site at [Foundry27][foundry27]. If you pass the gcc/build.sh the fetch task, it will check out a fresh copy via svn. You shouldn't need to do this, but it's there if you need it.
+
+If your local machine has multiple interfaces and you want to specify which one the playbook should fetch the binaries from (we try to guess by default, but may guess wrong), you can pass the -i flag to the top build.sh to specify which IP address the playbook should talk to:
+
+    ./build.sh -b /absolute/path/to/native/sdk/bbndk/ -i 192.168.1.7
+
+All of the parameters you pass to the build scripts are cached in the conf/ directory, so you should only need to specify -b or -i the first time. Specifying these flags again will overwrite the cached values.
 
 Each package is contained in its own directory, with its own build script. You can execute these build scripts on their own, so if something goes wrong during the compiling / building phase, you can cd into the relevant directory and, after fixing the problem, you can tell the build.sh script to pick up where it left off by passing the appropriate task, so:
 
@@ -66,7 +74,7 @@ This will build a statically linked gcc, since the dynamically linked version ma
 
 We are not yet building g++, as this failed with a namespace issue in strings.h - I am sure this is fixable, I just haven't got it yet.
 
-It is quite possible that some of the binaries from coreutils don't work right, let me know if you find one and I will try to sort it out. 
+It is quite possible that some of the binaries from coreutils don't work right, let me know if you find one and I will try to sort it out.
 
 ## Thanks
 
