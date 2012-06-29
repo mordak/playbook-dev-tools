@@ -44,6 +44,8 @@ If your local machine has multiple interfaces and you want to specify which one 
 
     ./build.sh -b /absolute/path/to/native/sdk/bbndk/ -i 192.168.1.7
 
+If you have already built everything and then discover that we guessed the wrong IP, you can just run the deploy task and it will fix the pbinstall.sh script for the playbook and serve it up with the right IP: `./build.sh -i my.good.ip.address -t deploy`
+
 All of the parameters you pass to the build scripts are cached in the conf/ directory, so you should only need to specify -b or -i the first time. Specifying these flags again will overwrite the cached values.
 
 Each package is contained in its own directory, with its own build script. You can execute these build scripts on their own, so if something goes wrong during the compiling / building phase, you can cd into the relevant directory and, after fixing the problem, you can tell the build.sh script to pick up where it left off by passing the appropriate task, so:
