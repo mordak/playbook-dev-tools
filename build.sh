@@ -8,7 +8,7 @@
 
 set -e
 
-ALLPROGS="gcc coreutils diffutils grep make gzip patch tar bzip2"
+ALLPROGS="gcc coreutils diffutils grep make gzip patch tar bzip2 bison"
 BBTOOLS=
 LOGIN="guest --password \"\""
 MYIP=`ruby -rsocket -e 'p IPSocket.getaddress(Socket.gethostname)' | tr -d \"`
@@ -114,10 +114,10 @@ fi
 if [ "$TASK" == "deploy" ]
 then
   cd "$PBBUILDDIR"
-  cat pbinstallhead.sh > pbinstall.sh
+  cat pbinstallhead.sh                    > pbinstall.sh
   echo "./bin/pwget \"$URL/pbhome.zip\""  >> pbinstall.sh
   echo "unzip pbhome.zip"                 >> pbinstall.sh
-  echo "sh -l"                            >> pbinstall.sh
+  cat profile                             >> pbinstall.sh
   echo "---- Direct your Playbook browser to: $URL/pbinstall.sh"
   echo "---- Save the file, then in the Playbook shell, execute: sh /accounts/1000/shared/downloads/pbinstall.sh"
   ./localserver.rb

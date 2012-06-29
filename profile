@@ -1,5 +1,5 @@
-PATH="$HOME/bin:$HOME/usr/pkg/bin:$HOME/usr/pkg/sbin:$PATH"
-MANPATH="$HOME/man:$MANPATH"
+PATH="$HOME/bin:$HOME/sbin:$HOME/usr/pkg/bin:$HOME/usr/pkg/sbin:$PATH"
+MANPATH="$HOME/man:$HOME/share/man:$MANPATH"
 LD_LIBRARY_PATH="$HOME/lib:$LD_LIBRARY_PATH"
 MAKEFLAGS="-I$HOME/include"
 
