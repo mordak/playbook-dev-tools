@@ -9,7 +9,7 @@
 set -e
 
 DISTVER="bison-2.5.1"
-DISTSUFFIX="tar.gz"  # so much for bootstrapping..
+DISTSUFFIX="tar.gz"  
 DISTFILES="http://ftp.gnu.org/gnu/bison/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 
