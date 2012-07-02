@@ -1,0 +1,13 @@
+--- gettext-tools/gnulib-lib/canonicalize-lgpl.c.orig	2010-05-24 03:42:36.000000000 -0600
++++ gettext-tools/gnulib-lib/canonicalize-lgpl.c	2012-07-01 13:45:17.000000000 -0600
+@@ -75,6 +75,10 @@
+ # define DOUBLE_SLASH_IS_DISTINCT_ROOT 0
+ #endif
+ 
++/* undef lstat from rpl_lstat */
++#undef lstat
++
++
+ #if !FUNC_REALPATH_WORKS || defined _LIBC
+ /* Return the canonical absolute name of file NAME.  A canonical name
+    does not contain any `.', `..' components nor any repeated path

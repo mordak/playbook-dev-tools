@@ -1,0 +1,22 @@
+--- find/fstype.c.orig	2012-07-01 17:31:03.000000000 -0600
++++ find/fstype.c	2012-07-01 17:32:32.000000000 -0600
+@@ -175,7 +175,9 @@
+ static struct mount_entry *
+ must_read_fs_list (bool need_fs_type)
+ {
+-  struct mount_entry *entries = read_file_system_list (need_fs_type);
++  /* Oh what a terrible terrible hack */
++  struct mount_entry *entries;
++  /* struct mount_entry *entries = read_file_system_list (need_fs_type); */
+   if (NULL == entries)
+     {
+       /* We cannot determine for sure which file we were trying to
+@@ -297,7 +299,7 @@
+    * result of this operation.   If we can't get the fs list
+    * but we never need the information, there is no need to fail.
+    */
+-  for (entry = entries = read_file_system_list (false);
++  for (entry = entries = must_read_fs_list (false);
+        entry;
+        entry = entry->me_next)
+     {

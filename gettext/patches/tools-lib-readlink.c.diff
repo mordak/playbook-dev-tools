@@ -1,0 +1,18 @@
+--- gettext-tools/gnulib-lib/readlink.c.orig	2010-05-24 03:42:46.000000000 -0600
++++ gettext-tools/gnulib-lib/readlink.c	2012-07-01 13:43:31.000000000 -0600
+@@ -19,10 +19,15 @@
+ /* Specification.  */
+ #include <unistd.h>
+ 
++
+ #include <errno.h>
+ #include <string.h>
+ #include <sys/stat.h>
+ 
++/* undef stat from rpl_stat */
++#undef stat
++
++
+ #if !HAVE_READLINK
+ 
+ /* readlink() substitute for systems that don't have a readlink() function,

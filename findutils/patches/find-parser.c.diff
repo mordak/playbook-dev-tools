@@ -1,0 +1,12 @@
+--- find/parser.c.orig	2012-07-01 17:33:05.000000000 -0600
++++ find/parser.c	2012-07-01 17:36:26.000000000 -0600
+@@ -1071,7 +1071,8 @@
+     }
+   else
+     {
+-      const struct mount_entry *entries = read_file_system_list(false);
++      /* Hack it out to just fail */
++      const struct mount_entry *entries = NULL;
+       if (entries)
+ 	{
+ 	  const struct mount_entry *entry;
