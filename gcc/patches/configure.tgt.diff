@@ -1,0 +1,11 @@
+--- configure.tgt.orig	2012-07-13 12:53:12.000000000 -0400
++++ configure.tgt	2012-07-13 11:10:39.000000000 -0400
+@@ -118,7 +118,7 @@
+   arm-*-uclinux*)			fmt=elf  em=linux ;;
+   arm-*-netbsdelf*)                 	fmt=elf  em=nbsd ;;
+   arm-*-*n*bsd*)			fmt=aout em=nbsd ;;
+-  arm-*-nto*)				fmt=elf ;;
++  arm-*-nto*)				fmt=elf need_libm=yes ;;
+   arm-epoc-pe | thumb-epoc-pe)		fmt=coff em=epoc-pe ;;
+   arm-wince-pe | arm-*-wince)		fmt=coff em=wince-pe ;;
+   arm-*-pe | thumb-*-pe)		fmt=coff em=pe ;;
