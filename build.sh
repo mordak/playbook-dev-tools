@@ -11,7 +11,6 @@ set -e
 ALLPROGS="gcc coreutils diffutils grep make gzip patch tar bzip2 bison gettext findutils"
 BBTOOLS=
 LOGIN="guest --password \"\""
-MYIP=`ruby -rsocket -e 'p IPSocket.getaddress(Socket.gethostname)' | tr -d \"`
 TASK=all
 SUBTASKFLAG=
 SUBTASK=
@@ -54,8 +53,6 @@ fi
 if [ -e "conf/ip" ]; then
   MYIP=`cat conf/ip`
 fi
-
-URL="http://$MYIP:8888"
 
 if [[ -z $BBTOOLS ]] || [[ -z $LOGIN ]]
 then
@@ -113,6 +110,25 @@ fi
 
 if [ "$TASK" == "deploy" ]
 then
+  IPS=( `ifconfig | grep "inet " | awk '{print $2}'` )
+  NUMOFIPS=${#IPS[@]}
+  if [ $NUMOFIPS -gt 1 ]; then
+    j=-1
+    while [ $j -eq -1 ]; do
+      echo "Please choose on which IP we'll be listening to download requests from PlayBook:"
+      for (( i=0;i<$NUMOFIPS;i++)); do echo $i\) ${IPS[$i]}; done
+      echo -n Your choice:
+      read j
+      if [ $j -lt 0 ] ; then j=-1; fi
+      let i=$NUMOFIPS-1
+      if [ $j -gt $i ] ; then j=-1; fi
+    done
+  else
+    j=0
+  fi
+  MYIP=${IPS[$j]}
+  URL="http://$MYIP:8888"
+
   cd "$PBBUILDDIR"
   cat pbinstallhead.sh                    > pbinstall.sh
   echo "./bin/pwget \"$URL/pbhome.zip\""  >> pbinstall.sh
