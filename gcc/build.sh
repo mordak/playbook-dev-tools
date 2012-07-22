@@ -9,7 +9,7 @@
 set -e
 
 LOGIN="guest --password \"\""
-TASK=patch
+TASK=build
 
 usage()
 {
@@ -28,7 +28,7 @@ EOF
 
 while getopts "b:l:t:h" OPTION
 do
-  case "$OPTION" in 
+  case "$OPTION" in
     h) usage; exit 1;;
     b) echo "$OPTARG" > ../conf/bbtools;;
     l) echo "$OPTARG" > ../conf/login;;
@@ -43,14 +43,14 @@ if [ -e "../conf/login" ]; then
 fi
 
 
-if [[ -z $BBTOOLS ]] || [[ -z $LOGIN ]] 
+if [[ -z $BBTOOLS ]] || [[ -z $LOGIN ]]
 then
   usage
   exit 1
 fi
 
 # test the existence of the bbndk-env file
-if [ ! -e "$BBTOOLS/bbndk-env.sh" ] 
+if [ ! -e "$BBTOOLS/bbndk-env.sh" ]
 then
   echo "Cannot source $BBTOOLS/bbndk-env.sh. Pass -b [path] to specify."
   exit 1
@@ -64,10 +64,10 @@ mkdir -p "$BUILDDIR"
 ZIPFILE="$PBBUILDDIR/../pbhome.zip"
 
 # Set up the environment
-source $BBTOOLS/bbndk-env.sh 
+source $BBTOOLS/bbndk-env.sh
 
 # Pull down the right tools
-if [ "$TASK" == "fetch" ] 
+if [ "$TASK" == "fetch" ]
 then
   # blow away previous downloads
   rm -rf gcc
@@ -86,24 +86,24 @@ then
   mv gmp-4.3.2.tar.bz2 gcc/
   mv mpfr-2.4.2.tar.bz2 gcc/
   cd gcc
-  tar -xjf gmp-4.3.2.tar.bz2 
-  tar -xjf mpfr-2.4.2.tar.bz2 
+  tar -xjf gmp-4.3.2.tar.bz2
+  tar -xjf mpfr-2.4.2.tar.bz2
   mv gmp-4.3.2 gmp
   mv mpfr-2.4.2 mpfr
- 
+
   cd "$PBBUILDDIR"
   TASK=patch
 fi
 
-if [ "$TASK" == "patch" ] 
+if [ "$TASK" == "patch" ]
 then
   echo "Patching .. "
-  # No patches yet.. 
   cd $PBBUILDDIR
+  patch -p0 < patches/binutils-gas-configure.tgt.diff
   TASK=build
 fi
 
-if [ "$TASK" == "build" ] 
+if [ "$TASK" == "build" ]
 then
   echo "Building"
 
@@ -113,20 +113,44 @@ then
     make distclean
   fi
   # configure gcc
-  ../gcc/configure --host=arm-unknown-nto-qnx6.5.0eabi --build=x86_64-apple-darwin --srcdir=../gcc --enable-cheaders=c --with-as=ntoarm-as --with-ld=ntoarm-ld --with-sysroot=$BBTOOLS/target/qnx6/ --disable-werror --target=arm-unknown-nto-qnx6.5.0eabi --prefix=$DESTDIR --exec-prefix=$DESTDIR --enable-languages=c --enable-threads=posix --disable-nls --disable-libssp --disable-tls --disable-libstdcxx-pch --enable-libmudflap --enable-__cxa_atexit --with-gxx-include-dir=$BBTOOLS/target/qnx6/usr/include/c++/4.4.2 --enable-multilib --disable-shared CC=arm-unknown-nto-qnx6.5.0eabi-gcc LDFLAGS='-Wl,-s ' AUTOMAKE=: AUTOCONF=: AUTOHEADER=: AUTORECONF=: ACLOCAL=:
+  ../gcc/configure --host=arm-unknown-nto-qnx6.5.0eabi \
+                   --build=x86_64-apple-darwin \
+                   --srcdir=../gcc \
+                   --enable-cheaders=c \
+                   --with-as=ntoarm-as \
+                   --with-ld=ntoarm-ld \
+                   --with-sysroot=$BBTOOLS/target/qnx6/ \
+                   --disable-werror \
+                   --target=arm-unknown-nto-qnx6.5.0eabi \
+                   --prefix=$DESTDIR \
+                   --exec-prefix=$DESTDIR \
+                   --enable-languages=c \
+                   --enable-threads=posix \
+                   --disable-nls \
+                   --disable-libssp \
+                   --disable-tls \
+                   --disable-libstdcxx-pch \
+                   --enable-libmudflap \
+                   --enable-__cxa_atexit \
+                   --with-gxx-include-dir=$BBTOOLS/target/qnx6/usr/include/c++/4.4.2 \
+                   --enable-multilib \
+                   --enable-shared \
+                   CC=arm-unknown-nto-qnx6.5.0eabi-gcc \
+                   LDFLAGS='-Wl,-s ' \
+                   AUTOMAKE=: AUTOCONF=: AUTOHEADER=: AUTORECONF=: ACLOCAL=:
 
   make
   TASK=install
 fi
-  
-if [ "$TASK" == "install" ] 
+
+if [ "$TASK" == "install" ]
 then
   cd $BUILDDIR
   make install
   TASK=bundle
 fi
 
-if [ "$TASK" == "bundle" ] 
+if [ "$TASK" == "bundle" ]
 then
   echo "Bundling"
   cd $DESTDIR
@@ -135,7 +159,7 @@ then
   if [ ! -e cc1 ]; then
     ln -s ../libexec/gcc/arm-unknown-nto-qnx6.5.0eabi/4.4.2/cc1 ./cc1
   fi
-  # Someday we may have cc1plus too. 
+  # Someday we may have cc1plus too.
   #if [ ! -e cc1plus ]; then
   #  ln -s ../libexec/gcc/arm-unknown-nto-qnx6.5.0eabi/4.4.2/cc1plus ./cc1plus
   #fi
@@ -144,7 +168,7 @@ then
   fi
   cd ..
   zip -r -y "$ZIPFILE" *
-  
+
   cd "$BBTOOLS"
   zip -r -u -y "$ZIPFILE" target/qnx6/armle-v7 target/qnx6/etc target/qnx6/usr/include
 fi

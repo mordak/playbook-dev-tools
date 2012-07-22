@@ -40,25 +40,13 @@ Once you have installed everything on the playbook, you can shut down the ruby w
 
 This package includes a mirror of the gcc source from the QNX Community site at [Foundry27][foundry27]. If you pass the gcc/build.sh the fetch task, it will check out a fresh copy via svn. You shouldn't need to do this, but it's there if you need it.
 
-If your local machine has multiple interfaces and you want to specify which one the playbook should fetch the binaries from (we try to guess by default, but may guess wrong), you can pass the -i flag to the top build.sh to specify which IP address the playbook should talk to:
-
-    ./build.sh -b /absolute/path/to/native/sdk/bbndk/ -i 192.168.1.7
-
-If you have already built everything and then discover that we guessed the wrong IP, you can just run the deploy task and it will fix the pbinstall.sh script for the playbook and serve it up with the right IP: `./build.sh -i my.good.ip.address -t deploy`
-
-All of the parameters you pass to the build scripts are cached in the conf/ directory, so you should only need to specify -b or -i the first time. Specifying these flags again will overwrite the cached values.
+All of the parameters you pass to the build scripts are cached in the conf/ directory, so you should only need to specify -b the first time. Specifying these flags again will overwrite the cached values.
 
 Each package is contained in its own directory, with its own build script. You can execute these build scripts on their own, so if something goes wrong during the compiling / building phase, you can cd into the relevant directory and, after fixing the problem, you can tell the build.sh script to pick up where it left off by passing the appropriate task, so:
 
     ./build.sh -t TASK
 
 where TASK is one of [fetch | patch | build | install | bundle]. The top level build.sh has a deploy task that you can use to relaunch the local ruby webserver.
-
-On the playbook, if you don't get a shell with your .profile processed, launch a login shell:
-
-    sh -l
-
-The playbook also ships with ksh (but not bash), so you could use ksh instead of sh.
 
 ## Uninstalling
 
@@ -72,15 +60,15 @@ Alternately, I imagine that just unstalling the shell application from the playb
 
 ## Bugs
 
-This will build a statically linked gcc, since the dynamically linked version made the playbook ldd angry. Any hints on how to sort this out would be welcome.
-
 We are not yet building g++, as this failed with a namespace issue in strings.h - I am sure this is fixable, I just haven't got it yet.
 
-It is quite possible that some of the binaries from coreutils don't work right, let me know if you find one and I will try to sort it out.
+It is quite possible that some of the binaries don't work quite right, due to the patches I've applied to get the packages to compile. If you find one that's broken, let me know and I'll try to sort it out. 
 
 ## Thanks
 
 Thanks to the folks at RIM/QNX/Foundry27 for doing the heavy lifting on porting gcc to QNX, and making their repo available for free. Building the mainline gcc for the playbook was hard, but building the Foundry27 version was pretty straightforward.
+
+Thanks to BGmot for contributions making the shared gcc build work, and the ip choosing bits.
 
 ## Future Work
 

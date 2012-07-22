@@ -14,6 +14,7 @@ LOGIN="guest --password \"\""
 TASK=all
 SUBTASKFLAG=
 SUBTASK=
+MYIP=
 usage()
 {
 cat << EOF
@@ -24,7 +25,7 @@ Run this to fetch, patch, build, bundle and deploy gcc for the playbook.
 OPTIONS:
    -h      Show this message
    -b      The absolute path to your bbpb-sdk folder [/abs/path/tp/bbpb-sdk]
-   -i      The IP address of this machine
+   -i      The IP address of this machine (will prompt if not specified)
    -l      The login you use for the QNX Foundry27 site, if you have one [user@host]
    -t      The build task to perform: [ <packagename> | bundle | deploy]
    -s      The task to pass to each package [fetch | patch | build | install | bundle]
@@ -110,23 +111,27 @@ fi
 
 if [ "$TASK" == "deploy" ]
 then
-  IPS=( `ifconfig | grep "inet " | awk '{print $2}'` )
-  NUMOFIPS=${#IPS[@]}
-  if [ $NUMOFIPS -gt 1 ]; then
-    j=-1
-    while [ $j -eq -1 ]; do
-      echo "Please choose on which IP we'll be listening to download requests from PlayBook:"
-      for (( i=0;i<$NUMOFIPS;i++)); do echo $i\) ${IPS[$i]}; done
-      echo -n Your choice:
-      read j
-      if [ $j -lt 0 ] ; then j=-1; fi
-      let i=$NUMOFIPS-1
-      if [ $j -gt $i ] ; then j=-1; fi
-    done
-  else
-    j=0
+  if [ -z $MYIP ]
+  then 
+    IPS=( `ifconfig | grep "inet " | awk '{print $2}'` )
+    NUMOFIPS=${#IPS[@]}
+    if [ $NUMOFIPS -gt 1 ]; then
+      j=-1
+      while [ $j -eq -1 ]; do
+        echo "Please choose on which IP we'll be listening to download requests from PlayBook:"
+        for (( i=0;i<$NUMOFIPS;i++)); do echo $i\) ${IPS[$i]}; done
+        echo -n Your choice:
+        read j
+        if [ $j -lt 0 ] ; then j=-1; fi
+        let i=$NUMOFIPS-1
+        if [ $j -gt $i ] ; then j=-1; fi
+      done
+    else
+      j=0
+    fi
+    MYIP=${IPS[$j]}
+    echo "$MYIP" > conf/ip
   fi
-  MYIP=${IPS[$j]}
   URL="http://$MYIP:8888"
 
   cd "$PBBUILDDIR"
