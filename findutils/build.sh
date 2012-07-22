@@ -68,9 +68,10 @@ if [ "$TASK" == "fetch" ]
 then
   # fetch
   echo "Fetching sources"
+  rm -rf findutils
   #curl -O $DISTFILES
   git clone git://git.sv.gnu.org/findutils
-  cd "BUILDDIR"
+  cd "$BUILDDIR"
   rm -rf gnulib
   ./import-gnulib.sh
 
