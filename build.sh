@@ -8,100 +8,23 @@
 
 set -e
 
-ALLPROGS="gcc coreutils diffutils grep make gzip patch tar bzip2 bison gettext findutils"
-BBTOOLS=
-LOGIN="guest --password \"\""
-TASK=all
-SUBTASKFLAG=
-SUBTASK=
-MYIP=
-usage()
-{
-cat << EOF
-usage: $0 options
+source lib.sh
 
-Run this to fetch, patch, build, bundle and deploy gcc for the playbook.
+ALLPROGS="gcc coreutils diffutils grep make gzip patch tar bzip2 bison gettext findutils pkgsrc"
 
-OPTIONS:
-   -h      Show this message
-   -b      The absolute path to your bbpb-sdk folder [/abs/path/tp/bbpb-sdk]
-   -i      The IP address of this machine (will prompt if not specified)
-   -l      The login you use for the QNX Foundry27 site, if you have one [user@host]
-   -t      The build task to perform: [ <packagename> | bundle | deploy]
-   -s      The task to pass to each package [fetch | patch | build | install | bundle]
-EOF
-}
+TASK=bootstrap
 
-mkdir -p conf
+init "$@"
 
-while getopts "b:i:l:t:hs:" OPTION
-do
-  case "$OPTION" in
-    h) usage; exit 1;;
-    b) echo "$OPTARG" > conf/bbtools;;
-    i) echo "$OPTARG" > conf/ip;;
-    l) echo "$OPTARG" > conf/login;;
-    t) TASK="$OPTARG";;
-    s) SUBTASK="$OPTARG"; SUBTASKFLAG="-t";;
-  esac
-done
-if [ -e "conf/bbtools" ]; then
-  BBTOOLS=`cat conf/bbtools`
-fi
-if [ -e "conf/login" ]; then
-  LOGIN=`cat conf/login`
-fi
-if [ -e "conf/ip" ]; then
-  MYIP=`cat conf/ip`
-fi
-
-if [[ -z $BBTOOLS ]] || [[ -z $LOGIN ]]
+if [ "$TASK" == "bootstrap" ]
 then
-  usage
-  exit 1
-fi
-
-# test the existence of the bbndk-env file
-if [ ! -e "$BBTOOLS/bbndk-env.sh" ]
-then
-  echo "Cannot source $BBTOOLS/bbndk-env.sh. Pass -b [path] to specify."
-  exit 1
-fi
-
-PBBUILDDIR=$PWD
-DESTDIR="$PBBUILDDIR/pbhome"
-mkdir -p "$DESTDIR"
-ZIPFILE="$PBBUILDDIR/pbhome.zip"
-
-# Set up the environment
-source $BBTOOLS/bbndk-env.sh
-
-if [ "$TASK" == "all" ]
-then
-  for afile in $ALLPROGS
-  do
-    if [ -d "$afile" ] && [ -e "$afile/build.sh" ]
-    then
-      echo "Building $afile"
-      cd "$afile"
-      ./build.sh $SUBTASKFLAG $SUBTASK
-      cd "$PBBUILDDIR"
-    fi
-  done
+  bootstrap
   TASK=bundle
-else
-  if [ -e "$TASK/build.sh" ]
-  then
-    echo "Building $TASK"
-    cd "$TASK"
-    ./build.sh
-    cd "$PBBUILDDIR"
-  fi
 fi
 
 if [ "$TASK" == "bundle" ]
 then
-  cd "$PBBUILDDIR"
+  cd "$ROOTDIR"
   echo "Setting up target .profile"
   cp profile .profile
   zip -u "$ZIPFILE" .profile || true
@@ -111,30 +34,7 @@ fi
 
 if [ "$TASK" == "deploy" ]
 then
-  if [ -z $MYIP ]
-  then 
-    IPS=( `ifconfig | grep "inet " | awk '{print $2}'` )
-    NUMOFIPS=${#IPS[@]}
-    if [ $NUMOFIPS -gt 1 ]; then
-      j=-1
-      while [ $j -eq -1 ]; do
-        echo "Please choose on which IP we'll be listening to download requests from PlayBook:"
-        for (( i=0;i<$NUMOFIPS;i++)); do echo $i\) ${IPS[$i]}; done
-        echo -n Your choice:
-        read j
-        if [ $j -lt 0 ] ; then j=-1; fi
-        let i=$NUMOFIPS-1
-        if [ $j -gt $i ] ; then j=-1; fi
-      done
-    else
-      j=0
-    fi
-    MYIP=${IPS[$j]}
-    echo "$MYIP" > conf/ip
-  fi
-  URL="http://$MYIP:8888"
-
-  cd "$PBBUILDDIR"
+  cd "$ROOTDIR"
   cat pbinstallhead.sh                    > pbinstall.sh
   echo "./bin/pwget \"$URL/pbhome.zip\""  >> pbinstall.sh
   echo "unzip pbhome.zip"                 >> pbinstall.sh

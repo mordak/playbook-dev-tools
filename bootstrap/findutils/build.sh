@@ -7,120 +7,43 @@
 
 
 set -e
-
-DISTVER="findutils"
-# DISTSUFFIX="tar.gz"
-# DISTFILES="http://ftp.gnu.org/gnu/findutils/$DISTVER.$DISTSUFFIX"
-# UNPACKCOMD="tar -xzf"
-
+source ../../lib.sh
 TASK=fetch
 
-usage()
-{
-cat << EOF
-usage: $0 options
+DISTVER="findutils"
+FINDUTILS_GITVER=003c8e6e3734c35c8a5d639528548181f0fada7f
+GNULIB_GITVER=372ef2a0e94ec6ee85b5fc4bab763154ec11420d
 
-Run this to fetch, patch, build, bundle and deploy $DISTVER for the playbook.
+CONFIGURE_CMD="./configure 
+                --host=arm-unknown-nto-qnx6.5.0eabi 
+                --build=x86_64-apple-darwin 
+                --target=arm-unknown-nto-qnx6.5.0eabi 
+                --prefix=$DESTDIR 
+                --disable-nls 
+                CC=arm-unknown-nto-qnx6.5.0eabi-gcc
+                "
 
-OPTIONS:
-   -h      Show this message
-   -b      The absolute path to your bbpb-sdk folder [/abs/path/tp/bbpb-sdk]
-   -t      The build task to start at: [fetch | patch | build | install | bundle]
-EOF
-}
-
-while getopts "b:l:t:h" OPTION
-do
-  case "$OPTION" in
-    h) usage; exit 1;;
-    b) echo "$OPTARG" > ../conf/bbtools;;
-    t) TASK="$OPTARG";;
-  esac
-done
-if [ -e "../conf/bbtools" ]; then
-  BBTOOLS=`cat ../conf/bbtools`
-fi
-
-if [[ -z $BBTOOLS ]]
-then
-  usage
-  exit 1
-fi
-
-# test the existence of the bbndk-env file
-if [ ! -e "$BBTOOLS/bbndk-env.sh" ]
-then
-  echo "Cannot source $BBTOOLS/bbndk-env.sh. Pass -b [path] to specify."
-  exit 1
-fi
-
-PBBUILDDIR=$PWD
-DESTDIR="$PBBUILDDIR/../pbhome"
-mkdir -p "$DESTDIR"
-ZIPFILE="$PBBUILDDIR/../pbhome.zip"
-BUILDDIR="$PBBUILDDIR/$DISTVER"
-
-# Set up the environment
-source $BBTOOLS/bbndk-env.sh
-
-# Pull down the right tools
+package_init "$@"
 if [ "$TASK" == "fetch" ]
 then
-  # fetch
-  echo "Fetching sources"
-  rm -rf findutils
-  #curl -O $DISTFILES
-  git clone git://git.sv.gnu.org/findutils
-  cd "$BUILDDIR"
+  cd "$WORKROOT"
+  # delete old version
+  rm -rf "$DISTVER"
+  git clone git://git.sv.gnu.org/findutils $DISTVER
+  cd $DISTVER
+  git checkout $FINDUTILS_GITVER
+  cd "$WORKDIR"
   rm -rf gnulib
-  ./import-gnulib.sh
-
-  # Unpack and organize
-  #echo "Unpacking"
-  #$UNPACKCOMD $DISTVER.$DISTSUFFIX
-
+  git clone git://git.savannah.gnu.org/gnulib.git gnulib-git
+  cd gnulib-git
+  git checkout $GNULIB_GITVER
+  cd ..
+  ./import-gnulib.sh -d gnulib-git
   TASK=patch
 fi
-
-if [ "$TASK" == "patch" ]
-then
-  echo "Patching .. "
-  cd "$BUILDDIR"
-  # patch new configure
-  patch -p0 < ../patches/autoconf-configure.diff
-  patch -p0 < ../patches/find-fstype.c.diff
-  patch -p0 < ../patches/find-parser.c.diff
-  TASK=build
-fi
-
-if [ "$TASK" == "build" ]
-then
-  echo "Building"
-  cd "$BUILDDIR"
-  # clean up if we have a previous build
-  if [ -e "Makefile" ]; then
-    make distclean
-  fi
-
-  # configure
-  ./configure --host=arm-unknown-nto-qnx6.5.0eabi --build=x86_64-apple-darwin --target=arm-unknown-nto-qnx6.5.0eabi --prefix="$DESTDIR" --disable-nls CC=arm-unknown-nto-qnx6.5.0eabi-gcc
-
-  make
-  TASK=install
-fi
-
-if [ "$TASK" == "install" ]
-then
-  cd "$BUILDDIR"
-  make install
-  TASK=bundle
-fi
-
-if [ "$TASK" == "bundle" ]
-then
-  echo "Bundling"
-  cd $DESTDIR
-  zip -r -y -u "$ZIPFILE" *
-fi
+package_patch
+package_build
+package_install
+package_bundle
 
 

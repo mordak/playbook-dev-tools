@@ -1,0 +1,10 @@
+--- groff-1.19.2/src/libs/libgroff/relocate.cpp.orig	2012-07-28 08:21:43.000000000 -0400
++++ groff-1.19.2/src/libs/libgroff/relocate.cpp	2012-07-28 08:22:15.000000000 -0400
+@@ -40,6 +40,7 @@
+ #endif
+ 
+ extern "C" const char *program_name;
++extern "C" char *realpath(const char *__file_name, char *__resolved_name);
+ 
+ // The prefix (parent directory) corresponding to the binary.
+ char *curr_prefix = 0;

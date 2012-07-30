@@ -7,70 +7,18 @@
 
 
 set -e
-
-LOGIN="guest --password \"\""
+source ../../lib.sh
 TASK=build
 
-usage()
-{
-cat << EOF
-usage: $0 options
+DISTVER="gcc"
 
-Run this to fetch, patch, build, bundle and deploy gcc for the playbook.
+package_init "$@"
 
-OPTIONS:
-   -h      Show this message
-   -b      The absolute path to your bbpb-sdk folder [/abs/path/tp/bbpb-sdk]
-   -l      The login you use for the QNX Foundry27 site, if you have one [user@host]
-   -t      The build task to start at: [fetch | patch | build | install | bundle]
-EOF
-}
-
-while getopts "b:l:t:h" OPTION
-do
-  case "$OPTION" in
-    h) usage; exit 1;;
-    b) echo "$OPTARG" > ../conf/bbtools;;
-    l) echo "$OPTARG" > ../conf/login;;
-    t) TASK="$OPTARG";;
-  esac
-done
-if [ -e "../conf/bbtools" ]; then
-  BBTOOLS=`cat ../conf/bbtools`
-fi
-if [ -e "../conf/login" ]; then
-  LOGIN=`cat ../conf/login`
-fi
-
-
-if [[ -z $BBTOOLS ]] || [[ -z $LOGIN ]]
-then
-  usage
-  exit 1
-fi
-
-# test the existence of the bbndk-env file
-if [ ! -e "$BBTOOLS/bbndk-env.sh" ]
-then
-  echo "Cannot source $BBTOOLS/bbndk-env.sh. Pass -b [path] to specify."
-  exit 1
-fi
-
-PBBUILDDIR=$PWD
-DESTDIR="$PBBUILDDIR/../pbhome"
-mkdir -p "$DESTDIR"
-BUILDDIR="$PBBUILDDIR/mkgcc"
-mkdir -p "$BUILDDIR"
-ZIPFILE="$PBBUILDDIR/../pbhome.zip"
-
-# Set up the environment
-source $BBTOOLS/bbndk-env.sh
-
-# Pull down the right tools
 if [ "$TASK" == "fetch" ]
 then
-  # blow away previous downloads
-  rm -rf gcc
+  cd "$EXECDIR"
+  # move aside previous downloads
+  mv gcc gcc-old || true
   # fetch
   echo "Fetching gcc sources"
   svn checkout --username $LOGIN http://community.qnx.com/svn/repos/core-dev-tools/tools/binutils/branches/650_release
@@ -91,86 +39,64 @@ then
   mv gmp-4.3.2 gmp
   mv mpfr-2.4.2 mpfr
 
-  cd "$PBBUILDDIR"
   TASK=patch
 fi
 
 if [ "$TASK" == "patch" ]
 then
   echo "Patching .. "
-  cd $PBBUILDDIR
+  cd "$EXECDIR"
   patch -p0 < patches/binutils-gas-configure.tgt.diff
   TASK=build
 fi
 
-if [ "$TASK" == "build" ]
-then
-  echo "Building"
-
-  cd "$BUILDDIR"
-  # clean up if we have a previous build
-  if [ -e "Makefile" ]; then
-    make distclean
-  fi
-  # configure gcc
-  ../gcc/configure --host=arm-unknown-nto-qnx6.5.0eabi \
-                   --build=x86_64-apple-darwin \
-                   --srcdir=../gcc \
-                   --enable-cheaders=c \
-                   --with-as=ntoarm-as \
-                   --with-ld=ntoarm-ld \
-                   --with-sysroot=$BBTOOLS/target/qnx6/ \
-                   --disable-werror \
-                   --target=arm-unknown-nto-qnx6.5.0eabi \
-                   --prefix=$DESTDIR \
-                   --exec-prefix=$DESTDIR \
-                   --enable-languages=c \
-                   --enable-threads=posix \
-                   --disable-nls \
-                   --disable-libssp \
-                   --disable-tls \
-                   --disable-libstdcxx-pch \
-                   --enable-libmudflap \
-                   --enable-__cxa_atexit \
-                   --with-gxx-include-dir=$BBTOOLS/target/qnx6/usr/include/c++/4.4.2 \
-                   --enable-multilib \
-                   --enable-shared \
-                   CC=arm-unknown-nto-qnx6.5.0eabi-gcc \
-                   LDFLAGS='-Wl,-s ' \
+CONFIGURE_CMD="$EXECDIR/gcc/configure 
+                   --host=arm-unknown-nto-qnx6.5.0eabi 
+                   --build=x86_64-apple-darwin 
+                   --target=arm-unknown-nto-qnx6.5.0eabi 
+                   --srcdir=$EXECDIR/gcc 
+                   --with-as=ntoarm-as 
+                   --with-ld=ntoarm-ld 
+                   --with-sysroot=$BBTOOLS/target/qnx6/ 
+                   --disable-werror 
+                   --prefix=$DESTDIR 
+                   --exec-prefix=$DESTDIR 
+                   --enable-cheaders=c 
+                   --enable-languages=c 
+                   --enable-threads=posix 
+                   --disable-nls 
+                   --disable-libssp 
+                   --disable-tls 
+                   --disable-libstdcxx-pch 
+                   --enable-libmudflap 
+                   --enable-__cxa_atexit 
+                   --with-gxx-include-dir=$BBTOOLS/target/qnx6/usr/include/c++/4.4.2 
+                   --enable-multilib 
+                   --enable-shared 
+                   CC=arm-unknown-nto-qnx6.5.0eabi-gcc 
+                   LDFLAGS='-Wl,-s ' 
                    AUTOMAKE=: AUTOCONF=: AUTOHEADER=: AUTORECONF=: ACLOCAL=:
+                   "
+package_build
+package_install
 
-  make
-  TASK=install
+cd "$DESTDIR/bin"
+# link stuff to where the compiler will find it
+if [ ! -e cc1 ]; then
+  ln -s ../libexec/gcc/arm-unknown-nto-qnx6.5.0eabi/4.4.2/cc1 ./cc1
 fi
-
-if [ "$TASK" == "install" ]
-then
-  cd $BUILDDIR
-  make install
-  TASK=bundle
+# Someday we may have cc1plus too.
+#if [ ! -e cc1plus ]; then
+#  ln -s ../libexec/gcc/arm-unknown-nto-qnx6.5.0eabi/4.4.2/cc1plus ./cc1plus
+#fi
+if [ ! -e collect2 ]; then
+  ln -s ../libexec/gcc/arm-unknown-nto-qnx6.5.0eabi/4.4.2/collect2 ./collect2
 fi
+  
+package_bundle
 
-if [ "$TASK" == "bundle" ]
-then
-  echo "Bundling"
-  cd $DESTDIR
-  # link stuff to where the compiler will find it
-  cd bin
-  if [ ! -e cc1 ]; then
-    ln -s ../libexec/gcc/arm-unknown-nto-qnx6.5.0eabi/4.4.2/cc1 ./cc1
-  fi
-  # Someday we may have cc1plus too.
-  #if [ ! -e cc1plus ]; then
-  #  ln -s ../libexec/gcc/arm-unknown-nto-qnx6.5.0eabi/4.4.2/cc1plus ./cc1plus
-  #fi
-  if [ ! -e collect2 ]; then
-    ln -s ../libexec/gcc/arm-unknown-nto-qnx6.5.0eabi/4.4.2/collect2 ./collect2
-  fi
-  cd ..
-  zip -r -y "$ZIPFILE" *
-
-  cd "$BBTOOLS"
-  zip -r -u -y "$ZIPFILE" target/qnx6/armle-v7 target/qnx6/etc target/qnx6/usr/include
-fi
+# and pack up the system headers, etc
+cd "$BBTOOLS"
+zip -r -u -y "$ZIPFILE" target/qnx6/armle-v7 target/qnx6/etc target/qnx6/usr/include
 
 

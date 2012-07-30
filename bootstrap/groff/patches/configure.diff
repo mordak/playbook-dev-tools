@@ -1,0 +1,23 @@
+--- groff-1.19.2/configure.orig	2005-09-03 10:28:36.000000000 -0400
++++ groff-1.19.2/configure	2012-07-28 08:50:46.000000000 -0400
+@@ -6699,13 +6699,13 @@
+ 
+    echo "$as_me:$LINENO: result: $groff_cv_decl_needed_hypot" >&5
+ echo "${ECHO_T}$groff_cv_decl_needed_hypot" >&6
+-   if test $groff_cv_decl_needed_hypot = yes; then
+-
+-cat >>confdefs.h <<\_ACEOF
+-#define NEED_DECLARATION_HYPOT 1
+-_ACEOF
+-
+-   fi
++#   if test $groff_cv_decl_needed_hypot = yes; then
++#
++#cat >>confdefs.h <<\_ACEOF
++##define NEED_DECLARATION_HYPOT 1
++#_ACEOF
++#
++#   fi
+    ac_ext=c
+ ac_cpp='$CPP $CPPFLAGS'
+ ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'

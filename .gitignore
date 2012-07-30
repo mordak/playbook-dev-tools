@@ -2,3 +2,11 @@
 .svn
 .cvs
 CVS
+work/
+*.tar.gz
+*.tar.bz2
+*.zip
+pbinstall.sh
+.profile
+conf/
+pbhome/
