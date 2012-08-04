@@ -1,0 +1,13 @@
+--- src/glob.c.orig	2012-08-04 08:42:24.000000000 -0400
++++ src/glob.c	2012-08-04 08:42:41.000000000 -0400
+@@ -49,9 +49,7 @@
+ #endif /* USG */
+ #endif /* POSIX or DIRENT or __GNU_LIBRARY__ */
+ 
+-#ifdef __QNX__
+-#define REAL_DIR_ENTRY(dp) (dp->d_stat.st_ino != 0)
+-#elif defined (_POSIX_SOURCE)
++#if defined (_POSIX_SOURCE)
+ /* Posix does not require that the d_ino field be present, and some
+    systems do not provide it. */
+ #define REAL_DIR_ENTRY(dp) 1
