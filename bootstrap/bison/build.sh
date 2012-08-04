@@ -15,13 +15,13 @@ DISTFILES="http://ftp.gnu.org/gnu/bison/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 
 CONFIGURE_CMD="./configure
-                --host=arm-unknown-nto-qnx6.5.0eabi 
-                --build=x86_64-apple-darwin 
-                --target=arm-unknown-nto-qnx6.5.0eabi 
+                --host=$PBHOSTARCH
+                --build=$PBBUILDARCH 
+                --target=$PBTARGETARCH 
                 --prefix=$DESTDIR 
                 --enable-threads=posix 
                 --disable-nls 
-                CC=arm-unknown-nto-qnx6.5.0eabi-gcc"
+                CC=$PBTARGETARCH-gcc"
 
 package_init "$@"
 package_fetch

@@ -16,9 +16,9 @@ DISTFILES="http://ftp.gnu.org/gnu/gettext/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 
 CONFIGURE_CMD="./configure 
-              --host=arm-unknown-nto-qnx6.5.0eabi 
-              --build=x86_64-apple-darwin 
-              --target=arm-unknown-nto-qnx6.5.0eabi 
+              --host=$PBHOSTARCH
+              --build=$PBBUILDARCH
+              --target=$PBTARGETARCH
               --prefix=$DESTDIR 
               --disable-nls 
               --enable-threads=posix 
@@ -32,7 +32,7 @@ CONFIGURE_CMD="./configure
               --without-git 
               --without-cvs 
               --without-emacs 
-              CC=arm-unknown-nto-qnx6.5.0eabi-gcc 
+              CC=$PBTARGETARCH-gcc 
               ac_cv_prog_AWK=/usr/bin/awk 
               ac_cv_path_GREP=/usr/bin/grep 
               ac_cv_path_SED=/usr/bin/sed

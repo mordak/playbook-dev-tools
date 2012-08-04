@@ -15,12 +15,12 @@ FINDUTILS_GITVER=003c8e6e3734c35c8a5d639528548181f0fada7f
 GNULIB_GITVER=372ef2a0e94ec6ee85b5fc4bab763154ec11420d
 
 CONFIGURE_CMD="./configure 
-                --host=arm-unknown-nto-qnx6.5.0eabi 
-                --build=x86_64-apple-darwin 
-                --target=arm-unknown-nto-qnx6.5.0eabi 
+                --host=$PBHOSTARCH
+                --build=$PBBUILDARCH 
+                --target=$PBTARGETARCH 
                 --prefix=$DESTDIR 
                 --disable-nls 
-                CC=arm-unknown-nto-qnx6.5.0eabi-gcc
+                CC=$PBTARGETARCH-gcc
                 "
 
 package_init "$@"

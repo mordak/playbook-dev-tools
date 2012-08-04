@@ -10,7 +10,6 @@ set -e
 
 source lib.sh
 
-ALLPROGS="gcc coreutils diffutils grep make gzip patch tar bzip2 bison gettext findutils pkgsrc"
 
 TASK=bootstrap
 

@@ -51,9 +51,9 @@ then
 fi
 
 CONFIGURE_CMD="$EXECDIR/gcc/configure 
-                   --host=arm-unknown-nto-qnx6.5.0eabi 
-                   --build=x86_64-apple-darwin 
-                   --target=arm-unknown-nto-qnx6.5.0eabi 
+                   --host=$PBHOSTARCH 
+                   --build=$PBBUILDARCH 
+                   --target=$PBTARGETARCH 
                    --srcdir=$EXECDIR/gcc 
                    --with-as=ntoarm-as 
                    --with-ld=ntoarm-ld 
@@ -73,7 +73,7 @@ CONFIGURE_CMD="$EXECDIR/gcc/configure
                    --with-gxx-include-dir=$BBTOOLS/target/qnx6/usr/include/c++/4.4.2 
                    --enable-multilib 
                    --enable-shared 
-                   CC=arm-unknown-nto-qnx6.5.0eabi-gcc 
+                   CC=$PBTARGETARCH-gcc 
                    LDFLAGS='-Wl,-s ' 
                    AUTOMAKE=: AUTOCONF=: AUTOHEADER=: AUTORECONF=: ACLOCAL=:
                    "
@@ -83,14 +83,14 @@ package_install
 cd "$DESTDIR/bin"
 # link stuff to where the compiler will find it
 if [ ! -e cc1 ]; then
-  ln -s ../libexec/gcc/arm-unknown-nto-qnx6.5.0eabi/4.4.2/cc1 ./cc1
+  ln -s ../libexec/gcc/$PBTARGETARCH/4.4.2/cc1 ./cc1
 fi
 # Someday we may have cc1plus too.
 #if [ ! -e cc1plus ]; then
-#  ln -s ../libexec/gcc/arm-unknown-nto-qnx6.5.0eabi/4.4.2/cc1plus ./cc1plus
+#  ln -s ../libexec/gcc/$PBTARGETARCH/4.4.2/cc1plus ./cc1plus
 #fi
 if [ ! -e collect2 ]; then
-  ln -s ../libexec/gcc/arm-unknown-nto-qnx6.5.0eabi/4.4.2/collect2 ./collect2
+  ln -s ../libexec/gcc/$PBTARGETARCH/4.4.2/collect2 ./collect2
 fi
   
 package_bundle

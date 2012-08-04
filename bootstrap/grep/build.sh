@@ -17,13 +17,13 @@ DISTFILES="http://ftp.gnu.org/gnu/grep/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 TASK=fetch
 CONFIGURE_CMD="./configure 
-                --host=arm-unknown-nto-qnx6.5.0eabi 
-                --build=x86_64-apple-darwin 
-                --target=arm-unknown-nto-qnx6.5.0eabi 
+                --host=$PBHOSTARCH
+                --build=$PBBUILDARCH 
+                --target=$PBTARGETARCH 
                 --prefix=$DESTDIR 
                 --disable-nls 
                 --enable-threads=posix 
-                CC=arm-unknown-nto-qnx6.5.0eabi-gcc
+                CC=$PBTARGETARCH-gcc
                 "
 
 package_init "$@"

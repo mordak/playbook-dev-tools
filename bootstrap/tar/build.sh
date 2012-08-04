@@ -15,12 +15,12 @@ DISTSUFFIX="tar.gz"  # so much for bootstrapping..
 DISTFILES="http://ftp.gnu.org/gnu/tar/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 CONFIGURE_CMD="./configure 
-                --host=arm-unknown-nto-qnx6.5.0eabi 
-                --build=x86_64-apple-darwin 
-                --target=arm-unknown-nto-qnx6.5.0eabi 
+                --host=$PBHOSTARCH
+                --build=$PBBUILDARCH 
+                --target=$PBTARGETARCH 
                 --prefix=$DESTDIR 
                 --disable-nls 
-                CC=arm-unknown-nto-qnx6.5.0eabi-gcc 
+                CC=$PBTARGETARCH-gcc 
                 LIBS=-lsocket
                 "
 package_init "$@"

@@ -15,12 +15,12 @@ DISTSUFFIX="tar.bz2"
 DISTFILES="http://ftp.gnu.org/gnu/make/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xjf"
 CONFIGURE_CMD="./configure 
-                --host=arm-unknown-nto-qnx6.5.0eabi 
-                --build=x86_64-apple-darwin 
-                --target=arm-unknown-nto-qnx6.5.0eabi 
+                --host=$PBHOSTARCH
+                --build=$PBBUILDARCH 
+                --target=$PBTARGETARCH 
                 --prefix=$DESTDIR 
                 --disable-nls 
-                CC=arm-unknown-nto-qnx6.5.0eabi-gcc
+                CC=$PBTARGETARCH-gcc
                 "
 
 package_init "$@"

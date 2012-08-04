@@ -1,5 +1,8 @@
 # common functions for the build tools
 
+PBHOSTARCH=arm-unknown-nto-qnx6.5.0eabi
+PBBUILDARCH=x86_64-apple-darwin
+PBTARGETARCH=arm-unknown-nto-qnx6.5.0eabi
 
 usage()
 {
@@ -130,8 +133,10 @@ function init()
 
 function bootstrap()
 {
+  ALLPROGS="gcc coreutils diffutils grep make patch gzip bzip2 tar bison gettext findutils groff man"
+
   cd "$BOOTSTRAPDIR"
-  for dir in $BOOTSTRAPDIR/*
+  for dir in $ALLPROGS
   do
     if [ -d "$dir" ] && [ -e "$dir/build.sh" ]
     then
