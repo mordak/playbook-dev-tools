@@ -16,9 +16,10 @@ DISTFILES="http://primates.ximian.com/~flucifredi/man/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 
 CONFIGURE_CMD="CC=$PBTARGETARCH-gcc
-                BUILD_CC=/usr/bin/gcc 
-                ./configure 
+                BUILD_CC=/usr/bin/gcc
+                ./configure
                 -prefix=$DESTDIR
+                -compatibility_mode_for_colored_groff
                 "
 
 package_init "$@"
@@ -26,5 +27,7 @@ package_fetch
 package_patch
 package_build
 package_install
+# overwrite the generated man.conf with our own
+cp $EXECDIR/man.conf $DESTDIR/lib/man.conf
 package_bundle
 
