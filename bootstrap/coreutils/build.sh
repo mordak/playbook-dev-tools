@@ -22,7 +22,7 @@ CONFIGURE_CMD="./configure
                 --prefix=$DESTDIR 
                 --enable-threads=posix 
                 --disable-nls 
-                --enable-no-install-program=mknod,stat,uname,ls
+                --enable-no-install-program=mknod,stat,uname
                 CC=$PBTARGETARCH-gcc 
                 "
 package_init "$@"
