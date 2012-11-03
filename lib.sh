@@ -197,7 +197,7 @@ if [ "$TASK" == "fetch" ]
 then
   cd "$WORKROOT"
   echo "Fetching sources"
-  curl -O $DISTFILES
+  curl -fkSLO $DISTFILES
 
   # Unpack and organize
   echo "Unpacking"
