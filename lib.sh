@@ -55,7 +55,7 @@ function source_bbtools()
     echo "Cannot source $BBTOOLS/bbndk-env.sh. Pass -b [path] to specify."
     exit 1
   fi
-  
+
   # and source
   source "$BBTOOLS/bbndk-env.sh"
 
@@ -97,6 +97,15 @@ function get_myip()
   URL="http://$MYIP:8888"
 }
 
+function init_confdir()
+{
+  mkdir -p conf
+  # cache the root directory if we haven't yet
+  if [ ! -e "conf/rootdir" ]; then
+    echo "$PWD" > conf/rootdir
+  fi
+}
+
 function configure_dirs()
 {
   # we are either the root build.sh, or a subdir
@@ -105,8 +114,8 @@ function configure_dirs()
   elif [ -e ../../conf ]; then
     ROOTDIR=`cat ../../conf/rootdir`
   else
-    echo "Cannot find conf/rootdir. Aborting."
-    exit 1
+    # first run
+    init_confdir
   fi
   DESTDIR="$ROOTDIR/pbhome"
   mkdir -p "$DESTDIR"
@@ -114,16 +123,12 @@ function configure_dirs()
   WORKROOT="$ROOTDIR/work"
   mkdir -p "$WORKROOT"
   BOOTSTRAPDIR="$ROOTDIR/bootstrap"
-  
+
 }
 
 function init()
 {
-  mkdir -p conf
-  # cache the root directory if we haven't yet
-  if [ ! -e "conf/rootdir" ]; then
-    echo "$PWD" > conf/rootdir
-  fi
+  init_confdir
   process_args "$@"
   configure_dirs
   source_bbtools
@@ -213,7 +218,7 @@ then
   echo "Patching .. "
   cd "$WORKDIR"
   PATCHLEVEL=$1
-  if [ -z $1 ]; then  
+  if [ -z $1 ]; then
     PATCHLEVEL=0
   fi
   if [ -e "$EXECDIR/patches" ]; then
@@ -249,7 +254,7 @@ function package_install()
 if [ "$TASK" == "install" ]
 then
   cd "$WORKDIR"
-  make install 
+  make install
   TASK=bundle
 fi
 }
