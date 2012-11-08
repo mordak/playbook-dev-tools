@@ -116,6 +116,7 @@ function configure_dirs()
   else
     # first run
     init_confdir
+    ROOTDIR=`cat conf/rootdir`
   fi
   DESTDIR="$ROOTDIR/pbhome"
   mkdir -p "$DESTDIR"
