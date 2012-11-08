@@ -97,6 +97,6 @@ package_bundle
 
 # and pack up the system headers, etc
 cd "$BBTOOLS"
-zip -r -u -y "$ZIPFILE" target/qnx6/armle-v7 target/qnx6/etc target/qnx6/usr/include
+zip -r -u -y "$ZIPFILE" target/qnx6/armle-v7 target/qnx6/etc target/qnx6/usr/include || true
 
 

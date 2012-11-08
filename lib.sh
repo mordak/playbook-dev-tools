@@ -16,7 +16,7 @@ OPTIONS:
    -b      The absolute path to your BB Playbook SDK folder [/abs/path/tp/bbpb-sdk]
    -i      The IP address of this machine (will prompt if not specified)
    -l      The login you use for the QNX Foundry27 site, if you have one [user@host]
-   -t      The build task to perform: [ <packagename> | bundle | deploy]
+   -t      The build task to perform: [ bootstrap | bundle | deploy]
    -s      The task to pass to each package [fetch | patch | build | install | bundle]
 EOF
 }
@@ -266,7 +266,7 @@ if [ "$TASK" == "bundle" ]
 then
   echo "Bundling"
   cd "$DESTDIR"
-  zip -r -y -u "$ZIPFILE" *
+  zip -r -y -u "$ZIPFILE" * || true
 fi
 }
 

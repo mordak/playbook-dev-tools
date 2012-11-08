@@ -7,7 +7,7 @@ This is a set of scripts that will download, compile, and deploy gcc and some ot
 
 ## What you need
 
-You need an install of the [Blackberry Native SDK][pbdevtools]. You're looking for the native C/C++ tools. I used the Native SDK 2.0.1 on OS X 10.6.8 while developing this package. In addition to the native sdk tools, you will need svn, curl, tar, gzip, bzip2 and ruby. These are installed by default on OS X, and most everywhere else, so you should be okay.
+You need an install of the [Blackberry Native SDK][pbdevtools]. You're looking for the native C/C++ tools. I used the Native SDK 2.1.0 on OS X 10.6.8 while developing this package. In addition to the native sdk tools, you will need svn, curl, tar, gzip, bzip2 and ruby. These are installed by default on OS X, and most everywhere else, so you should be okay.
 
 On the playbook itself, you'll need a shell application. I used [BG Shell][bgshell]. It's free.
 
@@ -72,7 +72,7 @@ Thanks to BGmot for contributions making the shared gcc build work, and the ip c
 
 ## Future Work
 
-Getting the QNX port of NetBSD's pkgsrc installed on the playbook, and from there filling out the commands available in the shell. Ideally, I would like a normal unix environment on the playbook, which would make a nice little workstation.
+Getting some kind of package manager running on the playbook. I've experimented with the QNX port of NetBSD's pkgsrc, but it doesn't work well on the playbook because of the way App 'users' are done. Ideally, I would like a normal unix environment on the playbook, which would make a nice little workstation.
 
 ## Disclaimer
 
