@@ -28,8 +28,14 @@ package_fetch
 package_patch
 package_build
 package_install
+
 # remove the absolute path from the yacc wrapper
-sed -i '' 's/'\''.*bison'\''/'\''bison'\''/'  "$DESTDIR/bin/yacc"
+sed -i='' 's/'\''.*bison'\''/'\''bison'\''/'  "$DESTDIR/bin/yacc"
+if [ -e "$DESTDIR/bin/yacc=" ]; then
+  # clean up after sed backup file
+  rm "$DESTDIR/bin/yacc="
+fi
+
 package_bundle
 
 
