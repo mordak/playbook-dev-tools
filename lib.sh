@@ -245,7 +245,7 @@ then
   fi
   # configure
   eval $CONFIGURE_CMD
-  make
+  eval $MAKE_PREFIX make
   TASK=install
 fi
 }

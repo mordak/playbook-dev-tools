@@ -15,9 +15,12 @@ PATH="$QNX_HOST/usr/bin:$PATH"
 
 export QNX_TARGET QNX_HOST QNX_CONFIGURATION MAKEFLAGS LD_LIBRARY_PATH PATH
 
-alias man='man -C "$HOME/lib/man.conf"'
-alias ls='ls --color=auto'
-
 GROFF_FONT_PATH="$HOME/share/groff/1.19.2/font:$HOME/share/groff/site-font"
 GROFF_TMAC_PATH="$HOME/share/groff/1.19.2/tmac:$HOME/share/groff/site-tmac"
 export GROFF_FONT_PATH GROFF_TMAC_PATH
+
+MAGIC="$HOME/share/misc/magic.mgc"
+export MAGIC
+
+alias man='man -C "$HOME/lib/man.conf"'
+alias ls='ls --color=auto'
