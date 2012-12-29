@@ -139,7 +139,7 @@ function init()
 
 function bootstrap()
 {
-  ALLPROGS="gcc coreutils diffutils grep make patch gzip bzip2 tar bison gettext findutils groff man file"
+  ALLPROGS="gcc coreutils diffutils grep make patch gzip bzip2 tar bison gettext findutils groff man file gdbm yaml ruby"
 
   cd "$BOOTSTRAPDIR"
   for dir in $ALLPROGS
