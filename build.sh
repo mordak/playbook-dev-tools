@@ -27,8 +27,8 @@ then
   echo "Setting up target .profile"
   cp profile .profile
   zip -u "$ZIPFILE" .profile || true
-  zip -u "$ZIPFILE" uninstall.sh || true
-  TASK=deploy
+  #zip -u "$ZIPFILE" uninstall.sh || true
+  #TASK=deploy
 fi
 
 if [ "$TASK" == "deploy" ]
