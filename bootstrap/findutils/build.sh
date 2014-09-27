@@ -38,7 +38,9 @@ then
   cd gnulib-git
   git checkout $GNULIB_GITVER
   cd ..
+  sed -i.orig '/AM_C_PROTOTYPES/d' $WORKDIR/configure.ac
   ./import-gnulib.sh -d gnulib-git
+  sed -i.orig 's/\(.*\) -z \("$ac_list_mounted_fs.*\)/\1 -n \2/' configure
   TASK=patch
 fi
 package_patch
