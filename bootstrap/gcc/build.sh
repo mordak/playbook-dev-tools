@@ -50,7 +50,7 @@ if [ "$TASK" == "patch" ]
 then
   echo "Patching .. "
   cd "$EXECDIR"
-  patch -p0 < patches/binutils-gas-configure.tgt.diff
+  #patch -p0 < patches/binutils-gas-configure.tgt.diff
   TASK=build
 fi
 
@@ -66,7 +66,7 @@ CONFIGURE_CMD="$EXECDIR/gcc/configure
                    --prefix=$DESTDIR 
                    --exec-prefix=$DESTDIR 
                    --enable-cheaders=c 
-                   --enable-languages=c 
+                   --enable-languages=c++ 
                    --enable-threads=posix 
                    --disable-nls 
                    --disable-libssp 
