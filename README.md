@@ -7,7 +7,7 @@ This is a set of scripts that will download, compile, and deploy gcc and some ot
 
 ## What you need
 
-You need an install of the [Blackberry Native SDK][pbdevtools]. You're looking for the native C/C++ tools. I used the Native SDK 2.1.0 on OS X 10.6.8 while developing this package. In addition to the native sdk tools, you will need svn, curl, tar, gzip, bzip2 and ruby. These are installed by default on OS X, and most everywhere else, so you should be okay.
+You need an install of the [Blackberry Native SDK][pbdevtools]. You're looking for the native C/C++ tools. I used the Native SDK 2.1.0 on OS X 10.6.8 while developing this package. In addition to the native sdk tools, you will need svn, curl, tar, gzip, bzip2 and ruby. These are installed by default on OS X, and most everywhere else, so you should be okay. For building of findutils you'll need gettext, autoconf and automake packages installed. Prior to building groff or man on OS X, set LC_ALL=C in your shell.
 
 On the playbook itself, you'll need a shell application. I used [BG Shell][bgshell]. It's free.
 
