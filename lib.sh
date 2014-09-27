@@ -50,14 +50,15 @@ function source_bbtools()
   fi
 
   # test the existence of the bbndk-env file
-  if [ ! -e "$BBTOOLS/bbndk-env.sh" ]
+  if ! ls $BBTOOLS/bbndk-env*.sh >/dev/null 2>&1
   then
     echo "Cannot source $BBTOOLS/bbndk-env.sh. Pass -b [path] to specify."
     exit 1
   fi
 
   # and source
-  source "$BBTOOLS/bbndk-env.sh"
+  source $BBTOOLS/bbndk-env*.sh
+  TARGETNAME=`basename $BBTOOLS/target*`
 
 }
 
