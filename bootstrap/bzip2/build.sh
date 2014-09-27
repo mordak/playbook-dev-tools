@@ -16,7 +16,7 @@ DISTFILES="http://bzip.org/1.0.6/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 
 # No configure, just make
-CONFIGURE_CMD=""
+CONFIGURE_CMD="make CC=$PBTARGETARCH-gcc AR=$PBTARGETARCH-ar RANLIB=$PBTARGETARCH-ranlib"
 
 package_init "$@"
 package_fetch
