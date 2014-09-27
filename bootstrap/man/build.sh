@@ -12,7 +12,7 @@ TASK=fetch
 
 DISTVER="man-1.6g"
 DISTSUFFIX="tar.gz"
-DISTFILES="http://primates.ximian.com/~flucifredi/man/$DISTVER.$DISTSUFFIX"
+DISTFILES="http://ibiblio.org/pub/Linux/apps/doctools/man/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 
 CONFIGURE_CMD="CC=$PBTARGETARCH-gcc

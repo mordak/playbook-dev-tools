@@ -25,8 +25,8 @@ then
   mv binutils-2.22 binutils
   svn checkout --username $LOGIN http://community.qnx.com/svn/repos/core-dev-tools/tools/gcc/branches/gcc_4_6_ndk_branch
   mv gcc_4_6_ndk_branch gcc
-  curl -O http://gnu.mirror.iweb.com/gnu/gmp/gmp-4.3.2.tar.bz2
-  curl -O http://gnu.mirror.iweb.com/gnu/mpfr/mpfr-2.4.2.tar.bz2
+  curl -O http://ftp.gnu.org/gnu/gmp/gmp-4.3.2.tar.bz2
+  curl -O http://ftp.gnu.org/gnu/mpfr/mpfr-2.4.2.tar.bz2
   curl -O http://ftp.gnu.org/gnu/mpc/mpc-1.0.2.tar.gz
 
   # Unpack and organize
