@@ -66,6 +66,9 @@ CONFIGURE_CMD="$EXECDIR/gcc/configure
                    --disable-werror 
                    --prefix=$DESTDIR 
                    --exec-prefix=$DESTDIR 
+                   --libdir=$DESTDIR/lib
+                   --libexecdir=$DESTDIR/lib
+                   --with-local-prefix=$DESTDIR
                    --enable-cheaders=c 
                    --enable-languages=c++ 
                    --enable-threads=posix 
@@ -75,7 +78,7 @@ CONFIGURE_CMD="$EXECDIR/gcc/configure
                    --disable-libstdcxx-pch 
                    --enable-libmudflap 
                    --enable-__cxa_atexit 
-                   --with-gxx-include-dir=$QNX_TARGET/usr/include/c++/4.6.3 
+                   --with-gxx-include-dir=$DESTDIR/$TARGETNAME/qnx6/usr/include/c++/4.6.3 
                    --enable-multilib 
                    --enable-shared 
                    --enable-gnu-indirect-function 
@@ -102,6 +105,6 @@ package_bundle
 
 # and pack up the system headers, etc
 cd "$BBTOOLS"
-zip -r -u -y "$ZIPFILE" $TARGETNAME/qnx6/armle-v7 $TARGETNAME/qnx6/etc $TARGETNAME/qnx6/usr/include || true
+zip -r -u -y "$ZIPFILE" $TARGETNAME/qnx6/armle-v7/lib $TARGETNAME/qnx6/usr/include || true
 
 

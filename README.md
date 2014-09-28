@@ -60,8 +60,6 @@ Alternately, I imagine that just unstalling the shell application from the playb
 
 ## Bugs
 
-We are not yet building g++, as this failed with a namespace issue in strings.h - I am sure this is fixable, I just haven't got it yet.
-
 It is quite possible that some of the binaries don't work quite right, due to the patches I've applied to get the packages to compile. If you find one that's broken, let me know and I'll try to sort it out. 
 
 ## Thanks
