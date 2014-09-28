@@ -51,6 +51,7 @@ then
   echo "Patching .. "
   cd "$EXECDIR"
   #patch -p0 < patches/binutils-gas-configure.tgt.diff
+  patch -p0 < patches/g++-fix.diff
   TASK=build
 fi
 
@@ -61,7 +62,7 @@ CONFIGURE_CMD="$EXECDIR/gcc/configure
                    --srcdir=$EXECDIR/gcc 
                    --with-as=ntoarm-as 
                    --with-ld=ntoarm-ld 
-                   --with-sysroot=$BBTOOLS/$TARGETNAME/qnx6/ 
+                   --with-sysroot=$QNX_TARGET 
                    --disable-werror 
                    --prefix=$DESTDIR 
                    --exec-prefix=$DESTDIR 
@@ -74,7 +75,7 @@ CONFIGURE_CMD="$EXECDIR/gcc/configure
                    --disable-libstdcxx-pch 
                    --enable-libmudflap 
                    --enable-__cxa_atexit 
-                   --with-gxx-include-dir=$BBTOOLS/$TARGETNAME/qnx6/usr/include/c++/4.6.3 
+                   --with-gxx-include-dir=$QNX_TARGET/usr/include/c++/4.6.3 
                    --enable-multilib 
                    --enable-shared 
                    --enable-gnu-indirect-function 

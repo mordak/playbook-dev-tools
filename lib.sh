@@ -58,7 +58,7 @@ function source_bbtools()
 
   # and source
   source $BBTOOLS/bbndk-env*.sh
-  TARGETNAME=`basename $BBTOOLS/target*`
+  TARGETNAME=`basename $(dirname $QNX_TARGET)`
 
 }
 
@@ -110,9 +110,9 @@ function init_confdir()
 function configure_dirs()
 {
   # we are either the root build.sh, or a subdir
-  if [ -e conf ]; then
+  if [ -e "conf/rootdir" ]; then
     ROOTDIR=`cat conf/rootdir`
-  elif [ -e ../../conf ]; then
+  elif [ -e ../../conf/rootdir ]; then
     ROOTDIR=`cat ../../conf/rootdir`
   else
     # first run
@@ -240,10 +240,10 @@ then
   echo "Building"
   cd "$WORKDIR"
   # clean up if we have a previous build
-  if [ -e "Makefile" ]; then
-    make clean || true
-    make distclean || true
-  fi
+  #if [ -e "Makefile" ]; then
+  #  make clean || true
+  #  make distclean || true
+  #fi
   # configure
   eval $CONFIGURE_CMD
   eval $MAKE_PREFIX make
