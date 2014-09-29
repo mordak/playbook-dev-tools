@@ -25,8 +25,10 @@ if [ "$TASK" == "bundle" ]
 then
   cd "$ROOTDIR"
   echo "Setting up target .profile"
-  cp profile .profile
-  zip -u "$ZIPFILE" .profile || true
+  echo "export NATIVE_TOOLS=/accounts/devuser/tools" > env.sh
+  echo "QNX_TARGET=\$NATIVE_TOOLS/$TARGETNAME/qnx6" >> env.sh
+  cat profile >> env.sh
+  zip -u "$ZIPFILE" env.sh || true
   #zip -u "$ZIPFILE" uninstall.sh || true
   #TASK=deploy
 fi

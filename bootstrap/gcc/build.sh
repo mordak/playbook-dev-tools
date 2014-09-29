@@ -100,6 +100,9 @@ fi
 if [ ! -e collect2 ]; then
   ln -s ../libexec/gcc/$PBTARGETARCH/4.6.3/collect2 ./collect2
 fi
+
+# these are broken
+rm -rf $DESTDIR/$TARGETNAME/qnx6/usr/include
   
 package_bundle
 
