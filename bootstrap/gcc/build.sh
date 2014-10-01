@@ -108,6 +108,6 @@ package_bundle
 
 # and pack up the system headers, etc
 cd "$BBTOOLS"
-zip -r -u -y "$ZIPFILE" $TARGETNAME/qnx6/armle-v7/lib $TARGETNAME/qnx6/usr/include || true
+zip -r -u -y "$ZIPFILE" $TARGETNAME/qnx6/armle-v7/usr/lib/liblzma.so $TARGETNAME/qnx6/armle-v7/lib $TARGETNAME/qnx6/usr/include || true
 
 
