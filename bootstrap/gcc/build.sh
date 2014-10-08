@@ -89,18 +89,6 @@ CONFIGURE_CMD="$EXECDIR/gcc/configure
 package_build
 package_install
 
-cd "$DESTDIR/bin"
-# link stuff to where the compiler will find it
-if [ ! -e cc1 ]; then
-  ln -s ../libexec/gcc/$PBTARGETARCH/4.6.3/cc1 ./cc1
-fi
-if [ ! -e cc1plus ]; then
-  ln -s ../libexec/gcc/$PBTARGETARCH/4.6.3/cc1plus ./cc1plus
-fi
-if [ ! -e collect2 ]; then
-  ln -s ../libexec/gcc/$PBTARGETARCH/4.6.3/collect2 ./collect2
-fi
-
 # these are broken
 rm -rf $DESTDIR/$TARGETNAME/qnx6/usr/include
   
