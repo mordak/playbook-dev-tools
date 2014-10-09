@@ -68,10 +68,6 @@ Thanks to the folks at RIM/QNX/Foundry27 for doing the heavy lifting on porting 
 
 Thanks to BGmot for contributions making the shared gcc build work, and the ip choosing bits.
 
-## Future Work
-
-Getting some kind of package manager running on the playbook. I've experimented with the QNX port of NetBSD's pkgsrc, but it doesn't work well on the playbook because of the way App 'users' are done. Ideally, I would like a normal unix environment on the playbook, which would make a nice little workstation.
-
 ## Disclaimer
 
 This software is provided with no warranty of any kind, may not do what you want, and may not work for you. By installing a compiler onto your playbook, you may be empowered to make a mess of it - use at your own risk.
