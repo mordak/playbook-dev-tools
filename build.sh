@@ -28,7 +28,7 @@ then
   echo "export NATIVE_TOOLS=/accounts/devuser/tools" > env.sh
   echo "QNX_TARGET=\$NATIVE_TOOLS/$TARGETNAME/qnx6" >> env.sh
   cat profile >> env.sh
-  zip -u "$ZIPFILE" env.sh || true
+  zip -u "$ZIPFILE" env.sh qconf-override.mk || true
   #zip -u "$ZIPFILE" uninstall.sh || true
   #TASK=deploy
 fi

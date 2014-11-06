@@ -89,6 +89,10 @@ CONFIGURE_CMD="$EXECDIR/gcc/configure
 package_build
 package_install
 
+cd "$DESTDIR/bin"
+# escape pkgsrc jail
+ln -s ./gcc ./gcc.pkgsrc
+
 # these are broken
 rm -rf $DESTDIR/$TARGETNAME/qnx6/usr/include
   
