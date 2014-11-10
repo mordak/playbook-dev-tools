@@ -140,7 +140,7 @@ function init()
 
 function bootstrap()
 {
-  ALLPROGS="gcc coreutils diffutils grep make patch gzip bzip2 tar bison gettext findutils groff man file"
+  ALLPROGS="gcc coreutils diffutils grep make patch gzip bzip2 bison gettext findutils groff man file"
 
   cd "$BOOTSTRAPDIR"
   for dir in $ALLPROGS
