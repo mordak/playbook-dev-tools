@@ -11,7 +11,7 @@ TASK=fetch
 
 DISTVER="groff-1.19.2"
 DISTSUFFIX="tar.gz"
-DISTFILES="http://ftp.gnu.org/gnu/groff/$DISTVER.$DISTSUFFIX"
+DISTFILES="http://ftp.gnu.org/gnu/groff/old/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 CONFIGURE_CMD="./configure 
                 --host=$PBHOSTARCH
