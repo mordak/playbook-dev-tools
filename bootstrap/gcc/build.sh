@@ -66,8 +66,8 @@ CONFIGURE_CMD="$EXECDIR/gcc/configure
                    --disable-werror 
                    --prefix=$DESTDIR 
                    --exec-prefix=$DESTDIR 
-                   --libdir=$DESTDIR/lib
-                   --libexecdir=$DESTDIR/lib
+                   --libdir=$DESTDIR/$TARGETNAME/qnx6/armle-v7/lib
+                   --libexecdir=$DESTDIR/$TARGETNAME/qnx6/armle-v7/lib
                    --with-local-prefix=$DESTDIR
                    --enable-cheaders=c 
                    --enable-languages=c++ 
@@ -95,13 +95,15 @@ ln -s ./gcc ./gcc.pkgsrc
 
 # these are broken
 rm -rf $DESTDIR/$TARGETNAME/qnx6/usr/include
-# sorry for clobbering, but it fixes pcre building, it also not fixed in the native set
+# sorry for clobbering, but it fixes pcre building, it also not fixed in generated native set
 sed -i.orig '/_GLIBCXX_ATOMIC_BUILTINS_4/d' $TARGETNAME/qnx6/usr/include/c++/4.6.3/$PBTARGETARCH/bits/c++config.h
   
 package_bundle
 
 # and pack up the system headers, etc
 cd "$BBTOOLS"
-zip -r -u -y "$ZIPFILE" $TARGETNAME/qnx6/armle-v7/usr/lib/liblzma.so $TARGETNAME/qnx6/armle-v7/lib $TARGETNAME/qnx6/usr/include || true
+zip -r -u -y "$ZIPFILE" \
+  $TARGETNAME/qnx6/armle-v7/usr/lib/liblzma.so $TARGETNAME/qnx6/armle-v7/usr/lib/libnbutil.so \
+  $TARGETNAME/qnx6/armle-v7/lib $TARGETNAME/qnx6/usr/include || true
 
 
