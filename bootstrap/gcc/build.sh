@@ -66,8 +66,8 @@ CONFIGURE_CMD="$EXECDIR/gcc/configure
                    --disable-werror 
                    --prefix=$DESTDIR 
                    --exec-prefix=$DESTDIR 
-                   --libdir=$DESTDIR/$TARGETNAME/qnx6/armle-v7/lib
-                   --libexecdir=$DESTDIR/$TARGETNAME/qnx6/armle-v7/lib
+                   --libdir=$DESTDIR/lib
+                   --libexecdir=$DESTDIR/lib
                    --with-local-prefix=$DESTDIR
                    --enable-cheaders=c 
                    --enable-languages=c++ 
@@ -103,7 +103,7 @@ package_bundle
 # and pack up the system headers, etc
 cd "$BBTOOLS"
 zip -r -u -y "$ZIPFILE" \
-  $TARGETNAME/qnx6/armle-v7/usr/lib/liblzma.so $TARGETNAME/qnx6/armle-v7/usr/lib/libnbutil.so \
+  $TARGETNAME/qnx6/armle-v7/usr/lib/liblzma.so.5 $TARGETNAME/qnx6/armle-v7/usr/lib/libnbutil.so.1 \
   $TARGETNAME/qnx6/armle-v7/lib $TARGETNAME/qnx6/usr/include || true
 
 
