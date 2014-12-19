@@ -97,6 +97,7 @@ ln -s ./gcc ./gcc.pkgsrc
 rm -rf $DESTDIR/$TARGETNAME/qnx6/usr/include
 # sorry for clobbering, but it fixes pcre building, it also not fixed in generated native set
 sed -i.orig '/_GLIBCXX_ATOMIC_BUILTINS_4/d' $BBTOOLS/$TARGETNAME/qnx6/usr/include/c++/4.6.3/$PBTARGETARCH/bits/c++config.h
+cp $EXECDIR/ldd $DESTDIR/bin/
   
 package_bundle
 
