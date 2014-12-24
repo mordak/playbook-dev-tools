@@ -9,4 +9,6 @@ work/
 pbinstall.sh
 .profile
 conf/
+conf/ip
 pbhome/
+env.sh
