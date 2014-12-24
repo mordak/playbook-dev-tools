@@ -6,7 +6,7 @@
 --                                                                          --
 --                                   S p e c                                --
 --                                                                          --
---            Copyright (C) 2009, Free Software Foundation, Inc.            --
+--            Copyright (C) 2008-2010, Free Software Foundation, Inc.       --
 --                                                                          --
 -- GNARL is free software;  you can redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -29,21 +29,26 @@
 --  This package provides vxworks specific support functions needed
 --  by System.OS_Interface.
 
---  This is the VxWorks 5 version of this package
+--  This is the VxWorks 5 and VxWorks MILS version of this package
 
 with Interfaces.C;
 
 package System.VxWorks.Ext is
    pragma Preelaborate;
 
+   subtype SEM_ID is Long_Integer;
+   --  typedef struct semaphore *SEM_ID;
+
+   type sigset_t is mod 2 ** Interfaces.C.long'Size;
+
    type t_id is new Long_Integer;
+
    subtype int is Interfaces.C.int;
 
-   function Task_Cont (tid : t_id) return int;
-   pragma Import (C, Task_Cont, "taskResume");
+   type Interrupt_Handler is access procedure (parameter : System.Address);
+   pragma Convention (C, Interrupt_Handler);
 
-   function Task_Stop (tid : t_id) return int;
-   pragma Import (C, Task_Stop, "taskSuspend");
+   type Interrupt_Vector is new System.Address;
 
    function Int_Lock return int;
    pragma Import (C, Int_Lock, "intLock");
@@ -51,13 +56,44 @@ package System.VxWorks.Ext is
    function Int_Unlock return int;
    pragma Import (C, Int_Unlock, "intUnlock");
 
+   function Interrupt_Connect
+     (Vector    : Interrupt_Vector;
+      Handler   : Interrupt_Handler;
+      Parameter : System.Address := System.Null_Address) return int;
+   pragma Import (C, Interrupt_Connect, "intConnect");
+
+   function Interrupt_Context return int;
+   pragma Import (C, Interrupt_Context, "intContext");
+
+   function Interrupt_Number_To_Vector
+     (intNum : int) return Interrupt_Vector;
+   pragma Import (C, Interrupt_Number_To_Vector, "__gnat_inum_to_ivec");
+
+   function semDelete (Sem : SEM_ID) return int;
+   pragma Import (C, semDelete, "semDelete");
+
+   function Task_Cont (tid : t_id) return int;
+   pragma Import (C, Task_Cont, "taskResume");
+
+   function Task_Stop (tid : t_id) return int;
+   pragma Import (C, Task_Stop, "taskSuspend");
+
    function kill (pid : t_id; sig : int) return int;
    pragma Import (C, kill, "kill");
+
+   function getpid return t_id;
+   pragma Import (C, getpid, "taskIdSelf");
 
    function Set_Time_Slice (ticks : int) return int;
    pragma Import (C, Set_Time_Slice, "kernelTimeSlice");
 
-   function getpid return t_id;
-   pragma Import (C, getpid, "taskIdSelf");
+   --------------------------------
+   -- Processor Affinity for SMP --
+   --------------------------------
+
+   function taskCpuAffinitySet (tid : t_id; CPU : int) return int;
+   pragma Convention (C, taskCpuAffinitySet);
+   --  For SMP run-times set the CPU affinity.
+   --  For uniprocessor systems return ERROR status.
 
 end System.VxWorks.Ext;

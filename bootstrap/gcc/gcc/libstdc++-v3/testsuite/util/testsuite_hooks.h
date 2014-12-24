@@ -1,7 +1,8 @@
 // -*- C++ -*-
 // Utility subroutines for the C++ library testsuite. 
 //
-// Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+// Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
+// 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -34,8 +35,8 @@
 //   limit in megabytes (a floating-point number).  If _GLIBCXX_RES_LIMITS is
 //   not #defined before including this header, then no limiting is attempted.
 //
-// 3)  counter
-//   This is a POD with a static data member, gnu_counting_struct::count,
+// 3)  object_counter
+//   This is a POD with a static data member, object_counter::count,
 //   which starts at zero, increments on instance construction, and decrements
 //   on instance destruction.  "assert_count(n)" can be called to VERIFY()
 //   that the count equals N.
@@ -59,7 +60,7 @@
 # include <cassert>
 # define VERIFY(fn) assert(fn)
 #else
-# define VERIFY(fn) test &= (fn)
+# define VERIFY(fn) test &= bool(fn)
 #endif
 
 #ifdef _GLIBCXX_HAVE_UNISTD_H
@@ -135,19 +136,19 @@ namespace __gnu_test
   run_tests_wrapped_env(const char*, const char*, const func_callback&);
 
   // Counting.
-  struct counter
+  struct object_counter
   {
-    // Specifically and glaringly-obviously marked 'signed' so that when
-    // COUNT mistakenly goes negative, we can track the patterns of
-    // deletions more easily.
+    // Specifically and glaringly-obviously marked 'signed' so that
+    // when COUNT mistakenly goes negative, we can track the patterns
+    // of deletions more easily.
     typedef  signed int     size_type;
     static size_type   count;
-    counter() { ++count; }
-    counter (const counter&) { ++count; }
-    ~counter() { --count; }
+    object_counter() { ++count; }
+    object_counter (const object_counter&) { ++count; }
+    ~object_counter() { --count; }
   };
   
-#define assert_count(n)   VERIFY(__gnu_test::counter::count == n)
+#define assert_count(n)   VERIFY(__gnu_test::object_counter::count == n)
   
   // A (static) class for counting copy constructors and possibly throwing an
   // exception on a desired count.
@@ -270,11 +271,6 @@ namespace __gnu_test
     int
     id() const { return id_; }
 
-  private:
-    int   id_;
-    const bool  throw_on_copy_;
-
-  public:
     static void
     reset()
     {
@@ -283,23 +279,19 @@ namespace __gnu_test
       destructor::reset();
     }
 
-    // for backwards-compatibility
-    static int
-    copyCount() 
-    { return copy_constructor::count(); }
-
-    // for backwards-compatibility
-    static int
-    dtorCount() 
-    { return destructor::count(); }
-
   private:
+    int   id_;
+    const bool  throw_on_copy_;
     static int next_id_;
   };
 
   inline bool
   operator==(const copy_tracker& lhs, const copy_tracker& rhs)
   { return lhs.id() == rhs.id(); }
+
+  inline bool
+  operator<(const copy_tracker& lhs, const copy_tracker& rhs)
+  { return lhs.id() < rhs.id(); }
 
   // Class for checking required type conversions, implicit and
   // explicit for given library data structures. 

@@ -38,19 +38,19 @@ package Uname is
    -- Unit Name Conventions --
    ---------------------------
 
-   --  Units are associated with a unique ASCII name as follows. First we
-   --  have the fully expanded name of the unit, with lower case letters
-   --  (except for the use of upper case letters for encoding upper half
-   --  and wide characters, as described in Namet), and periods. Following
-   --  this is one of the following suffixes:
+   --  Units are associated with a unique ASCII name as follows. First we have
+   --  the fully expanded name of the unit, with lower case letters (except
+   --  for the use of upper case letters for encoding upper half and wide
+   --  characters, as described in Namet), and periods. Following this is one
+   --  of the following suffixes:
 
    --    %s  for package/subprogram/generic declarations (specs)
    --    %b  for package/subprogram/generic bodies and subunits
 
    --  Unit names are stored in the names table, and referred to by the
-   --  corresponding Name_Id values. The subtype Unit_Name, which is a
-   --  synonym for Name_Id, is used to indicate that a Name_Id value that
-   --  holds a unit name (as defined above) is expected.
+   --  corresponding Name_Id values. The type Unit_Name_Type, derived from
+   --  Name_Id, is used to indicate that a Name_Id value that holds a unit name
+   --  (as defined above) is expected.
 
    --  Note: as far as possible the conventions for unit names are encapsulated
    --  in this package. The one exception is that package Fname, which provides
@@ -144,11 +144,11 @@ package Uname is
    function New_Child
      (Old  : Unit_Name_Type;
       Newp : Unit_Name_Type) return Unit_Name_Type;
-   --   Old is a child unit name (for either a body or spec). Newp is the
-   --   unit name of the actual parent (this may be different from the
-   --   parent in old). The returned unit name is formed by taking the
-   --   parent name from Newp and the child unit name from Old, with the
-   --   result being a body or spec depending on Old. For example:
+   --   Old is a child unit name (for either a body or spec). Newp is the unit
+   --   name of the actual parent (this may be different from the parent in
+   --   old). The returned unit name is formed by taking the parent name from
+   --   Newp and the child unit name from Old, with the result being a body or
+   --   spec depending on Old. For example:
    --
    --     Old    = A.B.C (body)
    --     Newp   = A.R (spec)

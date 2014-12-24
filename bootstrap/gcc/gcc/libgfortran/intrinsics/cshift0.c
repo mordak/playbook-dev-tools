@@ -1,8 +1,8 @@
 /* Generic implementation of the CSHIFT intrinsic
-   Copyright 2003, 2005, 2006, 2007, 2009 Free Software Foundation, Inc.
+   Copyright 2003, 2005, 2006, 2007, 2010 Free Software Foundation, Inc.
    Contributed by Feng Wang <wf_cs@yahoo.com>
 
-This file is part of the GNU Fortran 95 runtime library (libgfortran).
+This file is part of the GNU Fortran runtime library (libgfortran).
 
 Libgfortran is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public
@@ -66,27 +66,33 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
       ret->dtype = array->dtype;
       for (i = 0; i < GFC_DESCRIPTOR_RANK (array); i++)
         {
-          ret->dim[i].lbound = 0;
-          ret->dim[i].ubound = array->dim[i].ubound - array->dim[i].lbound;
+	  index_type ub, str;
+
+          ub = GFC_DESCRIPTOR_EXTENT(array,i) - 1;
 
           if (i == 0)
-            ret->dim[i].stride = 1;
+            str = 1;
           else
-            ret->dim[i].stride = (ret->dim[i-1].ubound + 1)
-				 * ret->dim[i-1].stride;
+            str = GFC_DESCRIPTOR_EXTENT(ret,i-1) *
+	      GFC_DESCRIPTOR_STRIDE(ret,i-1);
+
+	  GFC_DIMENSION_SET(ret->dim[i], 0, ub, str);
         }
 
       if (arraysize > 0)
 	ret->data = internal_malloc_size (size * arraysize);
       else
-	{
-	  ret->data = internal_malloc_size (1);
-	  return;
-	}
+	ret->data = internal_malloc_size (1);
     }
-  
+  else if (unlikely (compile_options.bounds_check))
+    {
+      bounds_equal_extents ((array_t *) ret, (array_t *) array,
+				 "return value", "CSHIFT");
+    }
+
   if (arraysize == 0)
     return;
+
   type_size = GFC_DTYPE_TYPE_SIZE (array);
 
   switch(type_size)
@@ -128,18 +134,26 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
       cshift0_r8 ((gfc_array_r8 *)ret, (gfc_array_r8 *) array, shift, which);
       return;
 
-#ifdef HAVE_GFC_REAL_10
+/* FIXME: This here is a hack, which will have to be removed when
+   the array descriptor is reworked.  Currently, we don't store the
+   kind value for the type, but only the size.  Because on targets with
+   __float128, we have sizeof(logn double) == sizeof(__float128),
+   we cannot discriminate here and have to fall back to the generic
+   handling (which is suboptimal).  */
+#if !defined(GFC_REAL_16_IS_FLOAT128)
+# ifdef HAVE_GFC_REAL_10
     case GFC_DTYPE_REAL_10:
       cshift0_r10 ((gfc_array_r10 *)ret, (gfc_array_r10 *) array, shift,
 		   which);
       return;
-#endif
+# endif
 
-#ifdef HAVE_GFC_REAL_16
+# ifdef HAVE_GFC_REAL_16
     case GFC_DTYPE_REAL_16:
       cshift0_r16 ((gfc_array_r16 *)ret, (gfc_array_r16 *) array, shift,
 		   which);
       return;
+# endif
 #endif
 
     case GFC_DTYPE_COMPLEX_4:
@@ -150,18 +164,26 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
       cshift0_c8 ((gfc_array_c8 *)ret, (gfc_array_c8 *) array, shift, which);
       return;
 
-#ifdef HAVE_GFC_COMPLEX_10
+/* FIXME: This here is a hack, which will have to be removed when
+   the array descriptor is reworked.  Currently, we don't store the
+   kind value for the type, but only the size.  Because on targets with
+   __float128, we have sizeof(logn double) == sizeof(__float128),
+   we cannot discriminate here and have to fall back to the generic
+   handling (which is suboptimal).  */
+#if !defined(GFC_REAL_16_IS_FLOAT128)
+# ifdef HAVE_GFC_COMPLEX_10
     case GFC_DTYPE_COMPLEX_10:
       cshift0_c10 ((gfc_array_c10 *)ret, (gfc_array_c10 *) array, shift,
 		   which);
       return;
-#endif
+# endif
 
-#ifdef HAVE_GFC_COMPLEX_16
+# ifdef HAVE_GFC_COMPLEX_16
     case GFC_DTYPE_COMPLEX_16:
       cshift0_c16 ((gfc_array_c16 *)ret, (gfc_array_c16 *) array, shift,
 		   which);
       return;
+# endif
 #endif
 
     default:
@@ -212,7 +234,7 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
 
 	  cshift0_c4 ((gfc_array_c4 *) ret, (gfc_array_c4 *) array, shift,
 		      which);
-	      return;
+	  return;
 	}
       else
 	{
@@ -236,7 +258,7 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
 
 	  cshift0_c8 ((gfc_array_c8 *) ret, (gfc_array_c8 *) array, shift,
 		      which);
-	      return;
+	  return;
 	}
       else
 	{
@@ -278,20 +300,20 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
     {
       if (dim == which)
         {
-          roffset = ret->dim[dim].stride * size;
+          roffset = GFC_DESCRIPTOR_STRIDE_BYTES(ret,dim);
           if (roffset == 0)
             roffset = size;
-          soffset = array->dim[dim].stride * size;
+          soffset = GFC_DESCRIPTOR_STRIDE_BYTES(array,dim);
           if (soffset == 0)
             soffset = size;
-          len = array->dim[dim].ubound + 1 - array->dim[dim].lbound;
+          len = GFC_DESCRIPTOR_EXTENT(array,dim);
         }
       else
         {
           count[n] = 0;
-          extent[n] = array->dim[dim].ubound + 1 - array->dim[dim].lbound;
-          rstride[n] = ret->dim[dim].stride * size;
-          sstride[n] = array->dim[dim].stride * size;
+          extent[n] = GFC_DESCRIPTOR_EXTENT(array,dim);
+          rstride[n] = GFC_DESCRIPTOR_STRIDE_BYTES(ret,dim);
+          sstride[n] = GFC_DESCRIPTOR_STRIDE_BYTES(array,dim);
           n++;
         }
     }

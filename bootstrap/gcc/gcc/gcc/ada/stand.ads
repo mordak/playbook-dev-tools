@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -34,13 +34,6 @@
 --  or by calling Stand.Tree_Read.
 
 with Types; use Types;
-
---  Do we really need the with of Namet?
-
-pragma Warnings (Off);
-with Namet; use Namet;
-pragma Elaborate_All (Namet);
-pragma Warnings (On);
 
 package Stand is
 
@@ -420,9 +413,9 @@ package Stand is
 
    Universal_Real : Entity_Id;
    --  Entity for universal real type. The bounds of this type correspond to
-   --  to the largest supported real type (i.e. Long_Long_Real). It is the
+   --  to the largest supported real type (i.e. Long_Long_Float). It is the
    --  type used for runtime calculations in type universal real. Note that
-   --  this type is always IEEE format, even if Long_Long_Real is Vax_Float
+   --  this type is always IEEE format, even if Long_Long_Float is Vax_Float
    --  (and in that case the bounds don't correspond exactly).
 
    Universal_Fixed : Entity_Id;

@@ -1,6 +1,7 @@
 /* tc-sparc.c -- Assemble for the SPARC
    Copyright 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008
+   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
+   2011
    Free Software Foundation, Inc.
    This file is part of GAS, the GNU Assembler.
 
@@ -75,7 +76,15 @@ static int default_arch_size;
 /* The currently selected v9 memory model.  Currently only used for
    ELF.  */
 static enum { MM_TSO, MM_PSO, MM_RMO } sparc_memory_model = MM_RMO;
+
+#ifndef TE_SOLARIS
+/* Bitmask of instruction types seen so far, used to populate the
+   GNU attributes section with hwcap information.  */
+static int hwcap_seen;
 #endif
+#endif
+
+static int hwcap_allowed;
 
 static int architecture_requested;
 static int warn_on_bump;
@@ -224,23 +233,38 @@ static struct sparc_arch {
   int default_arch_size;
   /* Allowable arg to -A?  */
   int user_option_p;
+  int hwcap_allowed;
 } sparc_arch_table[] = {
-  { "v6", "v6", v6, 0, 1 },
-  { "v7", "v7", v7, 0, 1 },
-  { "v8", "v8", v8, 32, 1 },
-  { "sparclet", "sparclet", sparclet, 32, 1 },
-  { "sparclite", "sparclite", sparclite, 32, 1 },
-  { "sparc86x", "sparclite", sparc86x, 32, 1 },
-  { "v8plus", "v9", v9, 0, 1 },
-  { "v8plusa", "v9a", v9, 0, 1 },
-  { "v8plusb", "v9b", v9, 0, 1 },
-  { "v9", "v9", v9, 0, 1 },
-  { "v9a", "v9a", v9, 0, 1 },
-  { "v9b", "v9b", v9, 0, 1 },
+  { "v6", "v6", v6, 0, 1, 0 },
+  { "v7", "v7", v7, 0, 1, 0 },
+  { "v8", "v8", v8, 32, 1, F_MUL32|F_DIV32|F_FSMULD },
+  { "v8a", "v8", v8, 32, 1, F_MUL32|F_DIV32|F_FSMULD },
+  { "sparc", "v9", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_V8PLUS },
+  { "sparcvis", "v9a", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_VIS },
+  { "sparcvis2", "v9b", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_VIS|F_VIS2 },
+  { "sparcfmaf", "v9b", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_VIS|F_VIS2|F_FMAF },
+  { "sparcima", "v9b", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_VIS|F_VIS2|F_FMAF|F_IMA },
+  { "sparcvis3", "v9b", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_VIS|F_VIS2|F_FMAF|F_VIS3|F_HPC },
+  { "sparcvis3r", "v9b", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_VIS|F_VIS2|F_FMAF|F_VIS3|F_HPC|F_RANDOM|F_TRANS|F_FJFMAU },
+  { "sparclet", "sparclet", sparclet, 32, 1, F_MUL32|F_DIV32|F_FSMULD },
+  { "sparclite", "sparclite", sparclite, 32, 1, F_MUL32|F_DIV32|F_FSMULD },
+  { "sparc86x", "sparclite", sparc86x, 32, 1, F_MUL32|F_DIV32|F_FSMULD },
+  { "v8plus", "v9", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_V8PLUS },
+  { "v8plusa", "v9a", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_V8PLUS|F_VIS },
+  { "v8plusb", "v9b", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_V8PLUS|F_VIS|F_VIS2 },
+  { "v8plusc", "v9b", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_V8PLUS|F_VIS|F_VIS2|F_ASI_BLK_INIT },
+  { "v8plusd", "v9b", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_V8PLUS|F_VIS|F_VIS2|F_ASI_BLK_INIT|F_FMAF|F_VIS3|F_HPC },
+  { "v8plusv", "v9b", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_V8PLUS|F_VIS|F_VIS2|F_ASI_BLK_INIT|F_FMAF|F_VIS3|F_HPC|F_RANDOM|F_TRANS|F_FJFMAU|F_IMA|F_ASI_CACHE_SPARING },
+  { "v9", "v9", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC },
+  { "v9a", "v9a", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_VIS },
+  { "v9b", "v9b", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_VIS|F_VIS2 },
+  { "v9c", "v9b", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_VIS|F_VIS2|F_ASI_BLK_INIT },
+  { "v9d", "v9b", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_VIS|F_VIS2|F_ASI_BLK_INIT|F_FMAF|F_VIS3|F_HPC },
+  { "v9v", "v9b", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_VIS|F_VIS2|F_ASI_BLK_INIT|F_FMAF|F_VIS3|F_HPC|F_RANDOM|F_TRANS|F_FJFMAU|F_IMA|F_ASI_CACHE_SPARING },
   /* This exists to allow configure.in/Makefile.in to pass one
      value to specify both the default machine and default word size.  */
-  { "v9-64", "v9", v9, 64, 0 },
-  { NULL, NULL, v8, 0, 0 }
+  { "v9-64", "v9", v9, 64, 0, F_MUL32|F_DIV32|F_FSMULD|F_POPC },
+  { NULL, NULL, v8, 0, 0, 0 }
 };
 
 /* Variant of default_arch */
@@ -480,7 +504,10 @@ md_parse_option (int c, char *arg)
 	if (opcode_arch == SPARC_OPCODE_ARCH_BAD)
 	  as_fatal (_("Bad opcode table, broken assembler."));
 
-	max_architecture = opcode_arch;
+	if (!architecture_requested
+	    || opcode_arch > max_architecture)
+	  max_architecture = opcode_arch;
+	hwcap_allowed |= sa->hwcap_allowed;
 	architecture_requested = 1;
       }
       break;
@@ -542,6 +569,10 @@ md_parse_option (int c, char *arg)
 	  as_fatal (_("No compiled in support for %d bit object file format"),
 		    sparc_arch_size);
 	free (list);
+
+	if (sparc_arch_size == 64
+	    && max_architecture < SPARC_OPCODE_ARCH_V9)
+	  max_architecture = SPARC_OPCODE_ARCH_V9;
       }
       break;
 
@@ -769,6 +800,7 @@ struct priv_reg_entry v9a_asr_table[] =
   {"pcr", 16},
   {"gsr", 19},
   {"dcr", 18},
+  {"cps", 28},
   {"clear_softint", 21},
   {"", -1},			/* End marker.  */
 };
@@ -910,6 +942,48 @@ sparc_md_end (void)
       default: break;
       }
   bfd_set_arch_mach (stdoutput, bfd_arch_sparc, mach);
+
+#if defined(OBJ_ELF) && !defined(TE_SOLARIS)
+  if (hwcap_seen)
+    {
+      int bits = 0;
+
+      if (hwcap_seen & F_MUL32)
+	bits |= ELF_SPARC_HWCAP_MUL32;
+      if (hwcap_seen & F_DIV32)
+	bits |= ELF_SPARC_HWCAP_DIV32;
+      if (hwcap_seen & F_FSMULD)
+	bits |= ELF_SPARC_HWCAP_FSMULD;
+      if (hwcap_seen & F_V8PLUS)
+	bits |= ELF_SPARC_HWCAP_V8PLUS;
+      if (hwcap_seen & F_POPC)
+	bits |= ELF_SPARC_HWCAP_POPC;
+      if (hwcap_seen & F_VIS)
+	bits |= ELF_SPARC_HWCAP_VIS;
+      if (hwcap_seen & F_VIS2)
+	bits |= ELF_SPARC_HWCAP_VIS2;
+      if (hwcap_seen & F_ASI_BLK_INIT)
+	bits |= ELF_SPARC_HWCAP_ASI_BLK_INIT;
+      if (hwcap_seen & F_FMAF)
+	bits |= ELF_SPARC_HWCAP_FMAF;
+      if (hwcap_seen & F_VIS3)
+	bits |= ELF_SPARC_HWCAP_VIS3;
+      if (hwcap_seen & F_HPC)
+	bits |= ELF_SPARC_HWCAP_HPC;
+      if (hwcap_seen & F_RANDOM)
+	bits |= ELF_SPARC_HWCAP_RANDOM;
+      if (hwcap_seen & F_TRANS)
+	bits |= ELF_SPARC_HWCAP_TRANS;
+      if (hwcap_seen & F_FJFMAU)
+	bits |= ELF_SPARC_HWCAP_FJFMAU;
+      if (hwcap_seen & F_IMA)
+	bits |= ELF_SPARC_HWCAP_IMA;
+      if (hwcap_seen & F_ASI_CACHE_SPARING)
+	bits |= ELF_SPARC_HWCAP_ASI_CACHE_SPARING;
+
+      bfd_elf_add_obj_attr_int (stdoutput, OBJ_ATTR_GNU, Tag_GNU_Sparc_HWCAPS, bits);
+    }
+#endif
 }
 
 /* Return non-zero if VAL is in the range -(MAX+1) to MAX.  */
@@ -1352,7 +1426,7 @@ md_assemble (char *str)
 	   The workaround is to add an fmovs of the destination register to
 	   itself just after the instruction.  This was true on machines
 	   with Weitek 1165 float chips, such as the Sun-4/260 and /280.  */
-	assert (the_insn.reloc == BFD_RELOC_NONE);
+	gas_assert (the_insn.reloc == BFD_RELOC_NONE);
 	the_insn.opcode = FMOVS_INSN | rd | RD (rd);
 	output_insn (insn, &the_insn);
 	return;
@@ -1361,6 +1435,44 @@ md_assemble (char *str)
     default:
       as_fatal (_("failed special case insn sanity check"));
     }
+}
+
+static const char *
+get_hwcap_name (int mask)
+{
+  if (mask & F_MUL32)
+    return "mul32";
+  if (mask & F_DIV32)
+    return "div32";
+  if (mask & F_FSMULD)
+    return "fsmuld";
+  if (mask & F_V8PLUS)
+    return "v8plus";
+  if (mask & F_POPC)
+    return "popc";
+  if (mask & F_VIS)
+    return "vis";
+  if (mask & F_VIS2)
+    return "vis2";
+  if (mask & F_ASI_BLK_INIT)
+    return "ASIBlkInit";
+  if (mask & F_FMAF)
+    return "fmaf";
+  if (mask & F_VIS3)
+    return "vis3";
+  if (mask & F_HPC)
+    return "hpc";
+  if (mask & F_RANDOM)
+    return "random";
+  if (mask & F_TRANS)
+    return "trans";
+  if (mask & F_FJFMAU)
+    return "fjfmau";
+  if (mask & F_IMA)
+    return "ima";
+  if (mask & F_ASI_CACHE_SPARING)
+    return "cspare";
+  return "UNKNOWN";
 }
 
 /* Subroutine of md_assemble to do the actual parsing.  */
@@ -1442,15 +1554,15 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 		  {
 		    while (*s == '#')
 		      {
-			int mask;
+			int jmask;
 
 			if (! parse_keyword_arg (sparc_encode_membar, &s,
-						 &mask))
+						 &jmask))
 			  {
 			    error_message = _(": invalid membar mask name");
 			    goto error;
 			  }
-			kmask |= mask;
+			kmask |= jmask;
 			while (*s == ' ')
 			  ++s;
 			if (*s == '|' || *s == '+')
@@ -2132,6 +2244,9 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 	    case 'B':
 	    case 'R':
 
+	    case '4':
+	    case '5':
+
 	    case 'g':
 	    case 'H':
 	    case 'J':
@@ -2149,6 +2264,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 
 		    if ((*args == 'v'
 			 || *args == 'B'
+			 || *args == '5'
 			 || *args == 'H')
 			&& (mask & 1))
 		      {
@@ -2210,6 +2326,11 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 		    opcode |= RS2 (mask);
 		    continue;
 
+		  case '4':
+		  case '5':
+		    opcode |= RS3 (mask);
+		    continue;
+
 		  case 'g':
 		  case 'H':
 		  case 'J':
@@ -2225,6 +2346,14 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 	      if (strncmp (s, "%fsr", 4) == 0)
 		{
 		  s += 4;
+		  continue;
+		}
+	      break;
+
+	    case '(':
+	      if (strncmp (s, "%efsr", 5) == 0)
+		{
+		  s += 5;
 		  continue;
 		}
 	      break;
@@ -2386,8 +2515,10 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 		  {
 		    if (s1[-2] == '%' && s1[-3] == '+')
 		      s1 -= 3;
-		    else if (strchr ("goli0123456789", s1[-2]) && s1[-3] == '%' && s1[-4] == '+')
+		    else if (strchr ("golir0123456789", s1[-2]) && s1[-3] == '%' && s1[-4] == '+')
 		      s1 -= 4;
+		    else if (s1[-3] == 'r' && s1[-4] == '%' && s1[-5] == '+')
+		      s1 -= 5;
 		    else
 		      s1 = NULL;
 		    if (s1)
@@ -2719,7 +2850,12 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 	{
 	  /* We have a match.  Now see if the architecture is OK.  */
 	  int needed_arch_mask = insn->architecture;
+	  int hwcaps = insn->flags & F_HWCAP_MASK;
 
+#if defined(OBJ_ELF) && !defined(TE_SOLARIS)
+	  if (hwcaps)
+		  hwcap_seen |= hwcaps;
+#endif
 	  if (v9_arg_p)
 	    {
 	      needed_arch_mask &=
@@ -2741,7 +2877,7 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 		sparc_ffs (SPARC_OPCODE_SUPPORTED (max_architecture)
 			   & needed_arch_mask);
 
-	      assert (needed_architecture <= SPARC_OPCODE_ARCH_MAX);
+	      gas_assert (needed_architecture <= SPARC_OPCODE_ARCH_MAX);
 	      if (warn_on_bump
 		  && needed_architecture > warn_after_architecture)
 		{
@@ -2785,6 +2921,17 @@ sparc_ip (char *str, const struct sparc_opcode **pinsn)
 	      as_tsktsk (_(" (Requires %s; requested architecture is %s.)"),
 			 required_archs,
 			 sparc_opcode_archs[max_architecture].name);
+	      return special_case;
+	    }
+
+	  /* Make sure the the hwcaps used by the instruction are
+	     currently enabled.  */
+	  if (hwcaps & ~hwcap_allowed)
+	    {
+	      const char *hwcap_name = get_hwcap_name(hwcaps & ~hwcap_allowed);
+
+	      as_bad (_("Hardware capability \"%s\" not enabled for \"%s\"."),
+		      hwcap_name, str);
 	      return special_case;
 	    }
 	} /* If no match.  */
@@ -2886,36 +3033,36 @@ get_expression (char *str)
 /* Subroutine of md_assemble to output one insn.  */
 
 static void
-output_insn (const struct sparc_opcode *insn, struct sparc_it *the_insn)
+output_insn (const struct sparc_opcode *insn, struct sparc_it *theinsn)
 {
   char *toP = frag_more (4);
 
   /* Put out the opcode.  */
   if (INSN_BIG_ENDIAN)
-    number_to_chars_bigendian (toP, (valueT) the_insn->opcode, 4);
+    number_to_chars_bigendian (toP, (valueT) theinsn->opcode, 4);
   else
-    number_to_chars_littleendian (toP, (valueT) the_insn->opcode, 4);
+    number_to_chars_littleendian (toP, (valueT) theinsn->opcode, 4);
 
   /* Put out the symbol-dependent stuff.  */
-  if (the_insn->reloc != BFD_RELOC_NONE)
+  if (theinsn->reloc != BFD_RELOC_NONE)
     {
       fixS *fixP =  fix_new_exp (frag_now,	/* Which frag.  */
 				 (toP - frag_now->fr_literal),	/* Where.  */
 				 4,		/* Size.  */
-				 &the_insn->exp,
-				 the_insn->pcrel,
-				 the_insn->reloc);
+				 &theinsn->exp,
+				 theinsn->pcrel,
+				 theinsn->reloc);
       /* Turn off overflow checking in fixup_segment.  We'll do our
 	 own overflow checking in md_apply_fix.  This is necessary because
 	 the insn size is 4 and fixup_segment will signal an overflow for
 	 large 8 byte quantities.  */
       fixP->fx_no_overflow = 1;
-      if (the_insn->reloc == BFD_RELOC_SPARC_OLO10)
-	fixP->tc_fix_data = the_insn->exp2.X_add_number;
+      if (theinsn->reloc == BFD_RELOC_SPARC_OLO10)
+	fixP->tc_fix_data = theinsn->exp2.X_add_number;
     }
 
   last_insn = insn;
-  last_opcode = the_insn->opcode;
+  last_opcode = theinsn->opcode;
 
 #ifdef OBJ_ELF
   dwarf2_emit_insn (4);
@@ -2955,7 +3102,7 @@ md_apply_fix (fixS *fixP, valueT *valP, segT segment ATTRIBUTE_UNUSED)
   offsetT val = * (offsetT *) valP;
   long insn;
 
-  assert (fixP->fx_r_type < BFD_RELOC_UNUSED);
+  gas_assert (fixP->fx_r_type < BFD_RELOC_UNUSED);
 
   fixP->fx_addnumber = val;	/* Remember value for emit_reloc.  */
 
@@ -3768,9 +3915,9 @@ s_reserve (int ignore ATTRIBUTE_UNUSED)
     }
   else
     {
-      as_warn ("Ignoring attempt to re-define symbol %s",
+      as_warn (_("Ignoring attempt to re-define symbol %s"),
 	       S_GET_NAME (symbolP));
-    }				/* if not redefining.  */
+    }
 
   demand_empty_rest_of_line ();
 }
@@ -3865,7 +4012,6 @@ s_common (int ignore ATTRIBUTE_UNUSED)
 	{
 	  segT old_sec;
 	  int old_subsec;
-	  char *p;
 	  int align;
 
 	  old_sec = now_seg;
@@ -4178,7 +4324,6 @@ void
 sparc_cons_align (int nbytes)
 {
   int nalign;
-  char *p;
 
   /* Only do this if we are enforcing aligned data.  */
   if (! enforce_aligned_data)
@@ -4192,7 +4337,7 @@ sparc_cons_align (int nbytes)
   if (nalign == 0)
     return;
 
-  assert (nalign > 0);
+  gas_assert (nalign > 0);
 
   if (now_seg == absolute_section)
     {
@@ -4201,8 +4346,8 @@ sparc_cons_align (int nbytes)
       return;
     }
 
-  p = frag_var (rs_align_test, 1, 1, (relax_substateT) 0,
-		(symbolS *) NULL, (offsetT) nalign, (char *) NULL);
+  frag_var (rs_align_test, 1, 1, (relax_substateT) 0,
+	    (symbolS *) NULL, (offsetT) nalign, (char *) NULL);
 
   record_alignment (now_seg, nalign);
 }

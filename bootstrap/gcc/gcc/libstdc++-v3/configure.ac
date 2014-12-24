@@ -1,6 +1,6 @@
 # Process this file with autoreconf to produce a configure script.
 
-AC_PREREQ(2.59)
+AC_PREREQ(2.64)
 AC_INIT(package-unused, version-unused,, libstdc++)
 AC_CONFIG_SRCDIR(src/ios.cc)
 AC_CONFIG_HEADER(config.h)
@@ -10,10 +10,6 @@ AC_CONFIG_HEADER(config.h)
 # keeping the changes in LD private, export them just because LD is
 # exported.  Only used at the end of this file.
 ### am handles this now?  ORIGINAL_LD_FOR_MULTILIBS=$LD
-
-# For libtool versioning info, format is CURRENT:REVISION:AGE
-libtool_VERSION=6:13:0
-AC_SUBST(libtool_VERSION)
 
 # Find the rest of the source tree framework.
 AM_ENABLE_MULTILIB(, ..)
@@ -72,13 +68,23 @@ fi
 #  foreign:  we don't follow the normal rules for GNU packages (no COPYING
 #            file in the top srcdir, etc, etc), so stop complaining.
 #  no-dependencies:  turns off auto dependency generation (just for now)
+#  no-dist:  we don't want 'dist' and related rules.
 #  -Wall:  turns on all automake warnings...
 #  -Wno-portability:  ...except this one, since GNU make is now required.
-AM_INIT_AUTOMAKE([1.9.3 no-define foreign no-dependencies -Wall -Wno-portability -Wno-override])
+AM_INIT_AUTOMAKE([1.9.3 no-define foreign no-dependencies no-dist -Wall -Wno-portability -Wno-override])
 AH_TEMPLATE(PACKAGE, [Name of package])
 AH_TEMPLATE(VERSION, [Version number of package])
 
-# Runs configure.host, finds CC, CXX, and assorted other critical bits.  Sets
+# -fno-builtin must be present here so that a non-conflicting form of
+# std::exit can be guessed by AC_PROG_CXX, and used in later tests.
+
+save_CXXFLAGS="$CXXFLAGS"
+CXXFLAGS="$CXXFLAGS -fno-builtin"
+AC_PROG_CC
+AC_PROG_CXX
+CXXFLAGS="$save_CXXFLAGS"
+
+# Runs configure.host, and assorted other critical bits.  Sets
 # up critical shell variables.
 GLIBCXX_CONFIGURE
 
@@ -86,8 +92,12 @@ if test "x${with_newlib}" != "xyes"; then
   AC_LIBTOOL_DLOPEN
 fi
 AM_PROG_LIBTOOL
+ACX_LT_HOST_FLAGS
 AC_SUBST(enable_shared)
 AC_SUBST(enable_static)
+
+# Eliminate -lstdc++ addition to postdeps for cross compiles.
+postdeps_CXX=`echo " $postdeps_CXX " | sed 's, -lstdc++ ,,g'`
 
 # Possibly disable most of the library.
 ## TODO: Consider skipping unncessary tests altogether in this case, rather
@@ -99,6 +109,7 @@ GLIBCXX_ENABLE_SJLJ_EXCEPTIONS
 GLIBCXX_ENABLE_PCH($is_hosted)
 GLIBCXX_ENABLE_THREADS
 GLIBCXX_ENABLE_ATOMIC_BUILTINS
+GLIBCXX_ENABLE_DECIMAL_FLOAT
 
 # Checks for compiler support that doesn't require linking.
 GLIBCXX_CHECK_COMPILER_FEATURES
@@ -117,6 +128,7 @@ GLIBCXX_ENABLE_DEBUG([no])
 GLIBCXX_ENABLE_PARALLEL([yes])
 GLIBCXX_ENABLE_CXX_FLAGS
 GLIBCXX_ENABLE_FULLY_DYNAMIC_STRING([no])
+GLIBCXX_ENABLE_EXTERN_TEMPLATE([yes])
 
 # Checks for operating systems support that doesn't require linking.
 GLIBCXX_CHECK_SYSTEM_ERROR
@@ -139,8 +151,8 @@ GLIBCXX_CHECK_WRITEV
 # For C99 support to TR1.
 GLIBCXX_CHECK_C99_TR1
 
-# For common values of EOF, SEEK_CUR, SEEK_END.
-GLIBCXX_CHECK_STDIO_MACROS
+# For the EOF, SEEK_CUR, and SEEK_END integer constants.
+GLIBCXX_COMPUTE_STDIO_INTEGER_CONSTANTS
 
 # For gettimeofday support.
 GLIBCXX_CHECK_GETTIMEOFDAY
@@ -155,8 +167,8 @@ GLIBCXX_CHECK_GTHREADS
 AC_LC_MESSAGES
 
 # Check for available headers.
-AC_CHECK_HEADERS([endian.h float.h fp.h ieeefp.h inttypes.h locale.h \
-machine/endian.h machine/param.h nan.h stdint.h stdlib.h string.h \
+AC_CHECK_HEADERS([endian.h execinfo.h float.h fp.h ieeefp.h inttypes.h \
+locale.h machine/endian.h machine/param.h nan.h stdint.h stdlib.h string.h \
 strings.h sys/ipc.h sys/isa_defs.h sys/machine.h sys/param.h \
 sys/resource.h sys/sem.h sys/stat.h sys/time.h sys/types.h unistd.h \
 wchar.h wctype.h])
@@ -217,7 +229,7 @@ else
     AC_DEFINE(HAVE_HYPOT)
 
     # GLIBCXX_CHECK_STDLIB_SUPPORT
-    AC_DEFINE(HAVE_STRTOF)        
+    AC_DEFINE(HAVE_STRTOF)
 
     AC_DEFINE(HAVE_ACOSF)
     AC_DEFINE(HAVE_ASINF)
@@ -287,6 +299,8 @@ GCC_HEADER_STDINT(include/gstdint.h)
 
 # This depends on GLIBCXX CHECK_LINKER_FEATURES, but without it assumes no.
 GLIBCXX_ENABLE_SYMVERS([yes])
+AC_SUBST(libtool_VERSION)
+
 GLIBCXX_ENABLE_VISIBILITY([yes])
 
 ac_ldbl_compat=no
@@ -312,6 +326,58 @@ GLIBCXX_CONDITIONAL(GLIBCXX_LDBL_COMPAT, test $ac_ldbl_compat = yes)
 # This depends on GLIBCXX_ENABLE_SYMVERS and GLIBCXX_IS_NATIVE.
 GLIBCXX_CONFIGURE_TESTSUITE
 
+# Define documentation rules conditionally.
+
+# See if makeinfo has been installed and is modern enough
+# that we can use it.
+ACX_CHECK_PROG_VER([MAKEINFO], [makeinfo], [--version],
+		   [GNU texinfo.* \([0-9][0-9.]*\)],
+		   [4.[4-9]*|4.[1-9][0-9]*|[5-9]*|[1-9][0-9]*])
+AM_CONDITIONAL(BUILD_INFO, test $gcc_cv_prog_makeinfo_modern = "yes")
+
+# Check for doxygen
+AC_CHECK_PROG([DOXYGEN], doxygen, yes, no)
+AC_CHECK_PROG([DOT], dot, yes, no)
+
+# Check for docbook
+AC_CHECK_PROG([XSLTPROC], xsltproc, yes, no)
+AC_CHECK_PROG([XMLLINT], xmllint, yes, no)
+GLIBCXX_CONFIGURE_DOCBOOK
+
+# Check for xml/html dependencies.
+AM_CONDITIONAL(BUILD_XML,
+	       test $ac_cv_prog_DOXYGEN = "yes" &&
+	       test $ac_cv_prog_DOT = "yes" &&
+	       test $ac_cv_prog_XSLTPROC = "yes" &&
+	       test $ac_cv_prog_XMLLINT = "yes" &&
+	       test $glibcxx_stylesheets = "yes")
+
+AM_CONDITIONAL(BUILD_HTML,
+	       test $ac_cv_prog_DOXYGEN = "yes" &&
+	       test $ac_cv_prog_DOT = "yes" &&
+	       test $ac_cv_prog_XSLTPROC = "yes" &&
+	       test $ac_cv_prog_XMLLINT = "yes" &&
+	       test $glibcxx_stylesheets = "yes")
+
+# Check for man dependencies.
+AM_CONDITIONAL(BUILD_MAN,
+	       test $ac_cv_prog_DOXYGEN = "yes" &&
+	       test $ac_cv_prog_DOT = "yes")
+
+# Check for pdf/epub dependencies.
+AC_CHECK_PROG([DBLATEX], dblatex, yes, no)
+AC_CHECK_PROG([PDFLATEX], pdflatex, yes, no)
+AM_CONDITIONAL(BUILD_PDF,
+	       test $ac_cv_prog_DBLATEX = "yes" &&
+	       test $ac_cv_prog_PDFLATEX = "yes")
+
+AC_CHECK_PROG([RUBY], ruby, yes, no)
+AC_CHECK_PROG([DBTOEPUB], dbtoepub, yes, no)
+AM_CONDITIONAL(BUILD_EPUB,
+	       test $ac_cv_prog_RUBY = "yes" &&
+	       test $ac_cv_prog_DBTOEPUB = "yes")
+
+
 # Propagate the target-specific source directories through the build chain.
 ATOMICITY_SRCDIR=config/${atomicity_dir}
 ATOMIC_WORD_SRCDIR=config/${atomic_word_dir}
@@ -333,7 +399,7 @@ AC_SUBST(ERROR_CONSTANTS_SRCDIR)
 #AC_SUBST(GLIBCXX_IS_NATIVE)
 #AM_CONDITIONAL(CANADIAN, test $CANADIAN = yes)
 GLIBCXX_EVALUATE_CONDITIONALS
- 
+
 AC_CACHE_SAVE
 
 if test ${multilib} = yes; then
@@ -359,45 +425,33 @@ AC_SUBST(LIBSUPCXX_PICFLAGS)
 dnl In autoconf 2.5x, AC_OUTPUT is replaced by four AC_CONFIG_* macros,
 dnl which can all be called multiple times as needed, plus one (different)
 dnl AC_OUTPUT macro.  This one lists the files to be created:
-AC_CONFIG_FILES( \
-  Makefile \
-  AC_FOREACH([DIR], glibcxx_SUBDIRS, [DIR/Makefile ])
-  )
+AC_CONFIG_FILES(Makefile)
 AC_CONFIG_FILES([scripts/testsuite_flags],[chmod +x scripts/testsuite_flags])
+AC_CONFIG_FILES([scripts/extract_symvers],[chmod +x scripts/extract_symvers])
 
-dnl These commands are run at the end of config.status:
-AC_CONFIG_COMMANDS([default],
-[if test -n "$CONFIG_FILES"; then
-   # Multilibs need MULTISUBDIR defined correctly in certain makefiles so
-   # that multilib installs will end up installed in the correct place.
-   # The testsuite needs it for multilib-aware ABI baseline files.
-   # To work around this not being passed down from config-ml.in ->
-   # srcdir/Makefile.am -> srcdir/{src,libsupc++,...}/Makefile.am, manually
-   # append it here.  Only modify Makefiles that have just been created.
-   #
-   # Also, get rid of this simulated-VPATH thing that automake does.
-   cat > vpsed << \_EOF
+# Multilibs need MULTISUBDIR defined correctly in certain makefiles so
+# that multilib installs will end up installed in the correct place.
+# The testsuite needs it for multilib-aware ABI baseline files.
+# To work around this not being passed down from config-ml.in ->
+# srcdir/Makefile.am -> srcdir/{src,libsupc++,...}/Makefile.am, manually
+# append it here.  Only modify Makefiles that have just been created.
+#
+# Also, get rid of this simulated-VPATH thing that automake does.
+AC_CONFIG_FILES(AC_FOREACH([DIR], glibcxx_SUBDIRS, [DIR/Makefile ]),
+  [cat > vpsed$$ << \_EOF
 s!`test -f '$<' || echo '$(srcdir)/'`!!
 _EOF
-   for i in $SUBDIRS; do
-    case $CONFIG_FILES in
-     *${i}/Makefile*)
-       #echo "Adding MULTISUBDIR to $i/Makefile"
-       sed -f vpsed $i/Makefile > tmp
-       grep '^MULTISUBDIR =' Makefile >> tmp
-       mv tmp $i/Makefile
-       ;;
-    esac
-   done
-   rm vpsed
- fi
- (cd include && ${MAKE-make})
-],
-[
-# Variables needed in config.status (file generation) which aren't already
-# passed by autoconf.
-SUBDIRS="$SUBDIRS"
+   sed -f vpsed$$ $ac_file > tmp$$
+   mv tmp$$ $ac_file
+   rm vpsed$$
+   echo 'MULTISUBDIR =' >> $ac_file
+   ml_norecursion=yes
+   . ${multi_basedir}/config-ml.in
+   AS_UNSET([ml_norecursion])
 ])
+
+AC_CONFIG_COMMANDS([generate-headers],
+  [(cd include && ${MAKE-make} pch_build= )])
 
 dnl And this actually makes things happen:
 AC_OUTPUT

@@ -18,61 +18,12 @@
 // <http://www.gnu.org/licenses/>.
 //
 
+#include "check_construct_destroy.h"
 #include <list>
-#include <iterator>
-#include <testsuite_allocator.h>
-
-using namespace __gnu_test;
 
 int main()
 {
-  typedef std::list<int, tracker_allocator<int> > Container;
-  const int arr10[10] = { 2, 4, 1, 7, 3, 8, 10, 5, 9, 6 };
-  bool ok = true;
-
-  tracker_allocator_counter::reset();
-  {
-    Container c;
-    ok = check_construct_destroy("empty container", 0, 0) && ok;
-  }
-  ok = check_construct_destroy("empty container", 0, 0) && ok;
-
-
-  tracker_allocator_counter::reset();
-  {
-    Container c(arr10, arr10 + 10);
-    ok = check_construct_destroy("Construct from range", 10, 0) && ok;
-  }
-  ok = check_construct_destroy("Construct from range", 10, 10) && ok;
-
-  {
-    Container c(arr10, arr10 + 10);
-    tracker_allocator_counter::reset();
-    c.insert(c.begin(), arr10[0]);
-    ok = check_construct_destroy("Insert element", 1, 0) && ok;
-  }
-  ok = check_construct_destroy("Insert element", 1, 11) && ok;
-
-  {
-    Container c(arr10, arr10 + 10);
-    tracker_allocator_counter::reset();
-    Container::iterator i5 = c.begin();
-    std::advance(i5, 5);
-    c.insert(i5, arr10, arr10+3);
-    ok = check_construct_destroy("Insert short range", 3, 0) && ok;
-  }
-  ok = check_construct_destroy("Insert short range", 3, 13) && ok;
-
-  {
-    Container c(arr10, arr10 + 10);
-    tracker_allocator_counter::reset();
-    Container::iterator i7 = c.begin();
-    std::advance(i7, 5);
-    c.insert(i7, arr10, arr10+10);
-    ok = check_construct_destroy("Insert long range", 10, 0) && ok;
-  }
-  ok = check_construct_destroy("Insert long range", 10, 20) && ok;
-
-  return ok ? 0 : 1;
+  typedef __gnu_test::tracker_allocator<int> allocator_type;
+  construct_destroy<std::list<int, allocator_type> >();
+  return 0;
 }
-

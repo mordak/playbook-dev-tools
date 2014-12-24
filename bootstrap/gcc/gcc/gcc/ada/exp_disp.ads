@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -146,7 +146,7 @@ package Exp_Disp is
    --      Snames.adb.
 
    --      Categorize the new PPO name as predefined by adding an entry in
-   --      Is_Predefined_Dispatching_Operation in Exp_Util.adb.
+   --      Is_Predefined_Dispatching_Operation in Exp_Disp.
 
    --      Generate the specification of the new PPO in Make_Predefined_
    --      Primitive_Spec in Exp_Ch3.adb. The Is_Internal flag of the defining
@@ -170,6 +170,9 @@ package Exp_Disp is
    --    Exp_Disp.Default_Prim_Op_Position - indirect use
    --    Exp_Disp.Set_All_DT_Position      - direct   use
 
+   procedure Apply_Tag_Checks (Call_Node : Node_Id);
+   --  Generate checks required on dispatching calls
+
    function Building_Static_DT (Typ : Entity_Id) return Boolean;
    pragma Inline (Building_Static_DT);
    --  Returns true when building statically allocated dispatch tables
@@ -182,6 +185,37 @@ package Exp_Disp is
    --  added to the end of the list of public declarations. In case of package
    --  bodies they are added to the end of the list of declarations of the
    --  package body.
+
+   function Convert_Tag_To_Interface
+     (Typ : Entity_Id; Expr : Node_Id) return Node_Id;
+   pragma Inline (Convert_Tag_To_Interface);
+   --  This function is used in class-wide interface conversions; the expanded
+   --  code generated to convert a tagged object to a class-wide interface type
+   --  involves referencing the tag component containing the secondary dispatch
+   --  table associated with the interface. Given the expression Expr that
+   --  references a tag component, we cannot generate an unchecked conversion
+   --  to leave the expression decorated with the class-wide interface type Typ
+   --  because an unchecked conversion cannot be seen as a no-op. An unchecked
+   --  conversion is conceptually a function call and therefore the RM allows
+   --  the backend to obtain a copy of the value of the actual object and store
+   --  it in some other place (like a register); in such case the interface
+   --  conversion is not equivalent to a displacement of the pointer to the
+   --  interface and any further displacement fails. Although the functionality
+   --  of this function is simple and could be done directly, the purpose of
+   --  this routine is to leave well documented in the sources these
+   --  occurrences.
+
+   --  If Expr is an N_Selected_Component that references a tag generate:
+   --     type ityp is non null access Typ;
+   --     ityp!(Expr'Address).all
+
+   --  if Expr is an N_Function_Call to Ada.Tags.Displace then generate:
+   --     type ityp is non null access Typ;
+   --     ityp!(Expr).all
+
+   function CPP_Num_Prims (Typ : Entity_Id) return Nat;
+   --  Return the number of primitives of the C++ part of the dispatch table.
+   --  For types that are not derivations of CPP types return 0.
 
    procedure Expand_Dispatching_Call (Call_Node : Node_Id);
    --  Expand the call to the operation through the dispatch table and perform
@@ -212,8 +246,16 @@ package Exp_Disp is
    --  Otherwise they are set to the defining identifier and the subprogram
    --  body of the generated thunk.
 
+   function Has_CPP_Constructors (Typ : Entity_Id) return Boolean;
+   --  Returns true if the type has CPP constructors
+
    function Is_Predefined_Dispatching_Operation (E : Entity_Id) return Boolean;
    --  Ada 2005 (AI-251): Determines if E is a predefined primitive operation
+
+   function Is_Predefined_Internal_Operation (E : Entity_Id) return Boolean;
+   --  Similar to the previous one, but excludes stream operations, because
+   --  these may be overridden, and need extra formals, like user-defined
+   --  operations.
 
    function Is_Predefined_Interface_Primitive (E : Entity_Id) return Boolean;
    --  Ada 2005 (AI-345): Returns True if E is one of the predefined primitives
@@ -298,7 +340,7 @@ package Exp_Disp is
    --  Ada 2005 (AI-345): Create and populate the auxiliary table in the TSD
    --  of Typ used for dispatching in asynchronous, conditional and timed
    --  selects. Generate code to set the primitive operation kinds and entry
-   --  indices of primitive operations and primitive wrappers.
+   --  indexes of primitive operations and primitive wrappers.
 
    function Make_Tags (Typ : Entity_Id) return List_Id;
    --  Generate the entities associated with the primary and secondary tags of
@@ -306,29 +348,35 @@ package Exp_Disp is
    --  tagged types this routine imports the forward declaration of the tag
    --  entity, that will be declared and exported by Make_DT.
 
-   procedure Register_Primitive
+   function Register_Primitive
      (Loc     : Source_Ptr;
-      Prim    : Entity_Id;
-      Ins_Nod : Node_Id);
-   --  Register Prim in the corresponding primary or secondary dispatch table.
+      Prim    : Entity_Id) return List_Id;
+   --  Build code to register Prim in the primary or secondary dispatch table.
    --  If Prim is associated with a secondary dispatch table then generate also
    --  its thunk and register it in the associated secondary dispatch table.
    --  In general the dispatch tables are always generated by Make_DT and
    --  Make_Secondary_DT; this routine is only used in two corner cases:
+   --
    --    1) To construct the dispatch table of a tagged type whose parent
    --       is a CPP_Class (see Build_Init_Procedure).
    --    2) To handle late overriding of dispatching operations (see
-   --       Check_Dispatching_Operation).
+   --       Check_Dispatching_Operation and Make_DT).
+   --
+   --  The caller is responsible for inserting the generated code in the
+   --  proper place.
 
    procedure Set_All_DT_Position (Typ : Entity_Id);
    --  Set the DT_Position field for each primitive operation. In the CPP
    --  Class case check that no pragma CPP_Virtual is missing and that the
    --  DT_Position are coherent
 
-   procedure Set_Default_Constructor (Typ : Entity_Id);
-   --  Typ is a CPP_Class type. Create the Init procedure of that type to
-   --  be the default constructor (i.e. the function returning this type,
-   --  having a pragma CPP_Constructor and no parameter)
+   procedure Set_CPP_Constructors (Typ : Entity_Id);
+   --  Typ is a CPP_Class type. Create the Init procedures of that type
+   --  required to handle its default and non-default constructors. The
+   --  functions to which pragma CPP_Constructor is applied in the sources
+   --  are functions returning this type, and having an implicit access to the
+   --  target object in its first argument; such implicit argument is explicit
+   --  in the IP procedures built here.
 
    procedure Set_DTC_Entity_Value
      (Tagged_Type : Entity_Id;

@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -23,6 +23,7 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
+with Aspects;  use Aspects;
 with Atree;    use Atree;
 with Checks;   use Checks;
 with Einfo;    use Einfo;
@@ -39,6 +40,7 @@ with Rtsfind;  use Rtsfind;
 with Sem;      use Sem;
 with Sem_Ch5;  use Sem_Ch5;
 with Sem_Ch8;  use Sem_Ch8;
+with Sem_Ch13; use Sem_Ch13;
 with Sem_Res;  use Sem_Res;
 with Sem_Util; use Sem_Util;
 with Sem_Warn; use Sem_Warn;
@@ -63,6 +65,7 @@ package body Sem_Ch11 is
       Set_Etype                   (Id, Standard_Exception_Type);
       Set_Is_Statically_Allocated (Id);
       Set_Is_Pure                 (Id, PF);
+      Analyze_Aspect_Specifications (N, Id, Aspect_Specifications (N));
    end Analyze_Exception_Declaration;
 
    --------------------------------
@@ -156,7 +159,7 @@ package body Sem_Ch11 is
          return False;
       end Others_Present;
 
-   --  Start processing for Analyze_Exception_Handlers
+   --  Start of processing for Analyze_Exception_Handlers
 
    begin
       Handler := First (L);
@@ -538,6 +541,14 @@ package body Sem_Ch11 is
          end if;
       end if;
 
+      --  Check obsolescent use of Numeric_Error
+
+      if Exception_Name = Standard_Numeric_Error then
+         Check_Restriction (No_Obsolescent_Features, Exception_Id);
+      end if;
+
+      --  Kill last assignment indication
+
       Kill_Current_Values (Last_Assignment_Only => True);
    end Analyze_Raise_Statement;
 
@@ -555,6 +566,46 @@ package body Sem_Ch11 is
    --  field if one is present.
 
    procedure Analyze_Raise_xxx_Error (N : Node_Id) is
+
+      function Same_Expression (C1, C2 : Node_Id) return Boolean;
+      --  It often occurs that two identical raise statements are generated in
+      --  succession (for example when dynamic elaboration checks take place on
+      --  separate expressions in a call). If the two statements are identical
+      --  according to the simple criterion that follows, the raise is
+      --  converted into a null statement.
+
+      ---------------------
+      -- Same_Expression --
+      ---------------------
+
+      function Same_Expression (C1, C2 : Node_Id) return Boolean is
+      begin
+         if No (C1) and then No (C2) then
+            return True;
+
+         elsif Is_Entity_Name (C1) and then Is_Entity_Name (C2) then
+            return Entity (C1) = Entity (C2);
+
+         elsif Nkind (C1) /= Nkind (C2) then
+            return False;
+
+         elsif Nkind (C1) in N_Unary_Op then
+            return Same_Expression (Right_Opnd (C1), Right_Opnd (C2));
+
+         elsif Nkind (C1) in N_Binary_Op then
+            return Same_Expression (Left_Opnd (C1), Left_Opnd (C2))
+              and then Same_Expression (Right_Opnd (C1), Right_Opnd (C2));
+
+         elsif Nkind (C1) = N_Null then
+            return True;
+
+         else
+            return False;
+         end if;
+      end Same_Expression;
+
+   --  Start of processing for Analyze_Raise_xxx_Error
+
    begin
       if No (Etype (N)) then
          Set_Etype (N, Standard_Void_Type);
@@ -573,6 +624,20 @@ package body Sem_Ch11 is
          elsif Entity (Condition (N)) = Standard_False then
             Rewrite (N, Make_Null_Statement (Sloc (N)));
          end if;
+      end if;
+
+      --  Remove duplicate raise statements. Note that the previous one may
+      --  already have been removed as well.
+
+      if not Comes_From_Source (N)
+        and then Nkind (N) /= N_Null_Statement
+        and then Is_List_Member (N)
+        and then Present (Prev (N))
+        and then Nkind (N) = Nkind (Original_Node (Prev (N)))
+        and then Same_Expression
+                   (Condition (N), Condition (Original_Node (Prev (N))))
+      then
+         Rewrite (N, Make_Null_Statement (Sloc (N)));
       end if;
    end Analyze_Raise_xxx_Error;
 

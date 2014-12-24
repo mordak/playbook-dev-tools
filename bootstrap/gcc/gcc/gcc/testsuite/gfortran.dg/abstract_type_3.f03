@@ -1,4 +1,4 @@
-! { dg-do "compile" }
+! { dg-do compile }
 
 ! Abstract Types.
 ! Check for errors when using abstract types in an inappropriate way.
@@ -49,3 +49,4 @@ CONTAINS
   END SUBROUTINE impl
 
 END MODULE m
+! { dg-final { cleanup-modules "m" } }

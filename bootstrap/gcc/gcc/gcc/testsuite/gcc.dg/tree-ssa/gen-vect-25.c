@@ -47,11 +47,13 @@ int main_1 (int n, int *p)
   return 0;
 }
 
-int main (int n)
+static volatile int n = 1;
+
+int main (void)
 {
-  return main_1 (n + 2, &n);
+  return main_1 (n + 2, (int *) &n);
 }
 
-/* { dg-final { scan-tree-dump-times "vectorized 2 loops" 1 "vect" } } */
-/* { dg-final { scan-tree-dump-times "Vectorizing an unaligned access" 0 "vect" } } */
+/* { dg-final { scan-tree-dump-times "vectorized 2 loops" 1 "vect" { target { ! avr-*-* } } } } */
+/* { dg-final { scan-tree-dump-times "Vectorizing an unaligned access" 0 "vect" { target { ! avr-*-* } } } } */
 /* { dg-final { cleanup-tree-dump "vect" } } */

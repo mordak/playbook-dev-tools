@@ -1,8 +1,8 @@
 /* Implementation of the MINLOC intrinsic
-   Copyright 2002, 2007, 2009 Free Software Foundation, Inc.
+   Copyright 2002, 2007, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
-This file is part of the GNU Fortran 95 runtime library (libgfortran).
+This file is part of the GNU Fortran runtime library (libgfortran).
 
 Libgfortran is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public
@@ -58,24 +58,23 @@ minloc1_8_i16 (gfc_array_i8 * const restrict retarray,
   dim = (*pdim) - 1;
   rank = GFC_DESCRIPTOR_RANK (array) - 1;
 
-  len = array->dim[dim].ubound + 1 - array->dim[dim].lbound;
+  len = GFC_DESCRIPTOR_EXTENT(array,dim);
   if (len < 0)
     len = 0;
-  delta = array->dim[dim].stride;
+  delta = GFC_DESCRIPTOR_STRIDE(array,dim);
 
   for (n = 0; n < dim; n++)
     {
-      sstride[n] = array->dim[n].stride;
-      extent[n] = array->dim[n].ubound + 1 - array->dim[n].lbound;
+      sstride[n] = GFC_DESCRIPTOR_STRIDE(array,n);
+      extent[n] = GFC_DESCRIPTOR_EXTENT(array,n);
 
       if (extent[n] < 0)
 	extent[n] = 0;
     }
   for (n = dim; n < rank; n++)
     {
-      sstride[n] = array->dim[n + 1].stride;
-      extent[n] =
-        array->dim[n + 1].ubound + 1 - array->dim[n + 1].lbound;
+      sstride[n] = GFC_DESCRIPTOR_STRIDE(array, n + 1);
+      extent[n] = GFC_DESCRIPTOR_EXTENT(array, n + 1);
 
       if (extent[n] < 0)
 	extent[n] = 0;
@@ -83,33 +82,33 @@ minloc1_8_i16 (gfc_array_i8 * const restrict retarray,
 
   if (retarray->data == NULL)
     {
-      size_t alloc_size;
+      size_t alloc_size, str;
 
       for (n = 0; n < rank; n++)
-        {
-          retarray->dim[n].lbound = 0;
-          retarray->dim[n].ubound = extent[n]-1;
-          if (n == 0)
-            retarray->dim[n].stride = 1;
-          else
-            retarray->dim[n].stride = retarray->dim[n-1].stride * extent[n-1];
-        }
+	{
+	  if (n == 0)
+	    str = 1;
+	  else
+	    str = GFC_DESCRIPTOR_STRIDE(retarray,n-1) * extent[n-1];
+
+	  GFC_DIMENSION_SET(retarray->dim[n], 0, extent[n] - 1, str);
+
+	}
 
       retarray->offset = 0;
       retarray->dtype = (array->dtype & ~GFC_DTYPE_RANK_MASK) | rank;
 
-      alloc_size = sizeof (GFC_INTEGER_8) * retarray->dim[rank-1].stride
+      alloc_size = sizeof (GFC_INTEGER_8) * GFC_DESCRIPTOR_STRIDE(retarray,rank-1)
     		   * extent[rank-1];
 
+      retarray->data = internal_malloc_size (alloc_size);
       if (alloc_size == 0)
 	{
 	  /* Make sure we have a zero-sized array.  */
-	  retarray->dim[0].lbound = 0;
-	  retarray->dim[0].ubound = -1;
+	  GFC_DIMENSION_SET(retarray->dim[0], 0, -1, 1);
 	  return;
+
 	}
-      else
-	retarray->data = internal_malloc_size (alloc_size);
     }
   else
     {
@@ -120,28 +119,16 @@ minloc1_8_i16 (gfc_array_i8 * const restrict retarray,
 		       (long int) rank);
 
       if (unlikely (compile_options.bounds_check))
-	{
-	  for (n=0; n < rank; n++)
-	    {
-	      index_type ret_extent;
-
-	      ret_extent = retarray->dim[n].ubound + 1
-		- retarray->dim[n].lbound;
-	      if (extent[n] != ret_extent)
-		runtime_error ("Incorrect extent in return value of"
-			       " MINLOC intrinsic in dimension %ld:"
-			       " is %ld, should be %ld", (long int) n + 1,
-			       (long int) ret_extent, (long int) extent[n]);
-	    }
-	}
+	bounds_ifunction_return ((array_t *) retarray, extent,
+				 "return value", "MINLOC");
     }
 
   for (n = 0; n < rank; n++)
     {
       count[n] = 0;
-      dstride[n] = retarray->dim[n].stride;
+      dstride[n] = GFC_DESCRIPTOR_STRIDE(retarray,n);
       if (extent[n] <= 0)
-        len = 0;
+	return;
     }
 
   base = array->data;
@@ -155,22 +142,38 @@ minloc1_8_i16 (gfc_array_i8 * const restrict retarray,
       src = base;
       {
 
-  GFC_INTEGER_16 minval;
-  minval = GFC_INTEGER_16_HUGE;
-  result = 0;
-        if (len <= 0)
+	GFC_INTEGER_16 minval;
+#if defined (GFC_INTEGER_16_INFINITY)
+	minval = GFC_INTEGER_16_INFINITY;
+#else
+	minval = GFC_INTEGER_16_HUGE;
+#endif
+	result = 1;
+	if (len <= 0)
 	  *dest = 0;
 	else
 	  {
 	    for (n = 0; n < len; n++, src += delta)
 	      {
 
-  if (*src < minval || !result)
-    {
-      minval = *src;
-      result = (GFC_INTEGER_8)n + 1;
-    }
-          }
+#if defined (GFC_INTEGER_16_QUIET_NAN)
+		if (*src <= minval)
+		  {
+		    minval = *src;
+		    result = (GFC_INTEGER_8)n + 1;
+		    break;
+		  }
+	      }
+	    for (; n < len; n++, src += delta)
+	      {
+#endif
+		if (*src < minval)
+		  {
+		    minval = *src;
+		    result = (GFC_INTEGER_8)n + 1;
+		  }
+	      }
+	    
 	    *dest = result;
 	  }
       }
@@ -180,28 +183,28 @@ minloc1_8_i16 (gfc_array_i8 * const restrict retarray,
       dest += dstride[0];
       n = 0;
       while (count[n] == extent[n])
-        {
-          /* When we get to the end of a dimension, reset it and increment
-             the next dimension.  */
-          count[n] = 0;
-          /* We could precalculate these products, but this is a less
-             frequently used path so probably not worth it.  */
-          base -= sstride[n] * extent[n];
-          dest -= dstride[n] * extent[n];
-          n++;
-          if (n == rank)
-            {
-              /* Break out of the look.  */
+	{
+	  /* When we get to the end of a dimension, reset it and increment
+	     the next dimension.  */
+	  count[n] = 0;
+	  /* We could precalculate these products, but this is a less
+	     frequently used path so probably not worth it.  */
+	  base -= sstride[n] * extent[n];
+	  dest -= dstride[n] * extent[n];
+	  n++;
+	  if (n == rank)
+	    {
+	      /* Break out of the look.  */
 	      continue_loop = 0;
 	      break;
-            }
-          else
-            {
-              count[n]++;
-              base += sstride[n];
-              dest += dstride[n];
-            }
-        }
+	    }
+	  else
+	    {
+	      count[n]++;
+	      base += sstride[n];
+	      dest += dstride[n];
+	    }
+	}
     }
 }
 
@@ -236,7 +239,7 @@ mminloc1_8_i16 (gfc_array_i8 * const restrict retarray,
   dim = (*pdim) - 1;
   rank = GFC_DESCRIPTOR_RANK (array) - 1;
 
-  len = array->dim[dim].ubound + 1 - array->dim[dim].lbound;
+  len = GFC_DESCRIPTOR_EXTENT(array,dim);
   if (len <= 0)
     return;
 
@@ -253,14 +256,14 @@ mminloc1_8_i16 (gfc_array_i8 * const restrict retarray,
   else
     runtime_error ("Funny sized logical array");
 
-  delta = array->dim[dim].stride;
-  mdelta = mask->dim[dim].stride * mask_kind;
+  delta = GFC_DESCRIPTOR_STRIDE(array,dim);
+  mdelta = GFC_DESCRIPTOR_STRIDE_BYTES(mask,dim);
 
   for (n = 0; n < dim; n++)
     {
-      sstride[n] = array->dim[n].stride;
-      mstride[n] = mask->dim[n].stride * mask_kind;
-      extent[n] = array->dim[n].ubound + 1 - array->dim[n].lbound;
+      sstride[n] = GFC_DESCRIPTOR_STRIDE(array,n);
+      mstride[n] = GFC_DESCRIPTOR_STRIDE_BYTES(mask,n);
+      extent[n] = GFC_DESCRIPTOR_EXTENT(array,n);
 
       if (extent[n] < 0)
 	extent[n] = 0;
@@ -268,10 +271,9 @@ mminloc1_8_i16 (gfc_array_i8 * const restrict retarray,
     }
   for (n = dim; n < rank; n++)
     {
-      sstride[n] = array->dim[n + 1].stride;
-      mstride[n] = mask->dim[n + 1].stride * mask_kind;
-      extent[n] =
-        array->dim[n + 1].ubound + 1 - array->dim[n + 1].lbound;
+      sstride[n] = GFC_DESCRIPTOR_STRIDE(array,n + 1);
+      mstride[n] = GFC_DESCRIPTOR_STRIDE_BYTES(mask, n + 1);
+      extent[n] = GFC_DESCRIPTOR_EXTENT(array, n + 1);
 
       if (extent[n] < 0)
 	extent[n] = 0;
@@ -279,19 +281,20 @@ mminloc1_8_i16 (gfc_array_i8 * const restrict retarray,
 
   if (retarray->data == NULL)
     {
-      size_t alloc_size;
+      size_t alloc_size, str;
 
       for (n = 0; n < rank; n++)
-        {
-          retarray->dim[n].lbound = 0;
-          retarray->dim[n].ubound = extent[n]-1;
-          if (n == 0)
-            retarray->dim[n].stride = 1;
-          else
-            retarray->dim[n].stride = retarray->dim[n-1].stride * extent[n-1];
-        }
+	{
+	  if (n == 0)
+	    str = 1;
+	  else
+	    str= GFC_DESCRIPTOR_STRIDE(retarray,n-1) * extent[n-1];
 
-      alloc_size = sizeof (GFC_INTEGER_8) * retarray->dim[rank-1].stride
+	  GFC_DIMENSION_SET(retarray->dim[n], 0, extent[n] - 1, str);
+
+	}
+
+      alloc_size = sizeof (GFC_INTEGER_8) * GFC_DESCRIPTOR_STRIDE(retarray,rank-1)
     		   * extent[rank-1];
 
       retarray->offset = 0;
@@ -300,8 +303,7 @@ mminloc1_8_i16 (gfc_array_i8 * const restrict retarray,
       if (alloc_size == 0)
 	{
 	  /* Make sure we have a zero-sized array.  */
-	  retarray->dim[0].lbound = 0;
-	  retarray->dim[0].ubound = -1;
+	  GFC_DIMENSION_SET(retarray->dim[0], 0, -1, 1);
 	  return;
 	}
       else
@@ -315,39 +317,19 @@ mminloc1_8_i16 (gfc_array_i8 * const restrict retarray,
 
       if (unlikely (compile_options.bounds_check))
 	{
-	  for (n=0; n < rank; n++)
-	    {
-	      index_type ret_extent;
-
-	      ret_extent = retarray->dim[n].ubound + 1
-		- retarray->dim[n].lbound;
-	      if (extent[n] != ret_extent)
-		runtime_error ("Incorrect extent in return value of"
-			       " MINLOC intrinsic in dimension %ld:"
-			       " is %ld, should be %ld", (long int) n + 1,
-			       (long int) ret_extent, (long int) extent[n]);
-	    }
-          for (n=0; n<= rank; n++)
-            {
-              index_type mask_extent, array_extent;
-
-	      array_extent = array->dim[n].ubound + 1 - array->dim[n].lbound;
-	      mask_extent = mask->dim[n].ubound + 1 - mask->dim[n].lbound;
-	      if (array_extent != mask_extent)
-		runtime_error ("Incorrect extent in MASK argument of"
-			       " MINLOC intrinsic in dimension %ld:"
-			       " is %ld, should be %ld", (long int) n + 1,
-			       (long int) mask_extent, (long int) array_extent);
-	    }
+	  bounds_ifunction_return ((array_t *) retarray, extent,
+				   "return value", "MINLOC");
+	  bounds_equal_extents ((array_t *) mask, (array_t *) array,
+	  			"MASK argument", "MINLOC");
 	}
     }
 
   for (n = 0; n < rank; n++)
     {
       count[n] = 0;
-      dstride[n] = retarray->dim[n].stride;
+      dstride[n] = GFC_DESCRIPTOR_STRIDE(retarray,n);
       if (extent[n] <= 0)
-        return;
+	return;
     }
 
   dest = retarray->data;
@@ -362,22 +344,50 @@ mminloc1_8_i16 (gfc_array_i8 * const restrict retarray,
       msrc = mbase;
       {
 
-  GFC_INTEGER_16 minval;
-  minval = GFC_INTEGER_16_HUGE;
-  result = 0;
-        if (len <= 0)
+	GFC_INTEGER_16 minval;
+#if defined (GFC_INTEGER_16_INFINITY)
+	minval = GFC_INTEGER_16_INFINITY;
+#else
+	minval = GFC_INTEGER_16_HUGE;
+#endif
+#if defined (GFC_INTEGER_16_QUIET_NAN)
+	GFC_INTEGER_8 result2 = 0;
+#endif
+	result = 0;
+	if (len <= 0)
 	  *dest = 0;
 	else
 	  {
 	    for (n = 0; n < len; n++, src += delta, msrc += mdelta)
 	      {
 
-  if (*msrc && (*src < minval || !result))
-    {
-      minval = *src;
-      result = (GFC_INTEGER_8)n + 1;
-    }
-              }
+		if (*msrc)
+		  {
+#if defined (GFC_INTEGER_16_QUIET_NAN)
+		    if (!result2)
+		      result2 = (GFC_INTEGER_8)n + 1;
+		    if (*src <= minval)
+#endif
+		      {
+			minval = *src;
+			result = (GFC_INTEGER_8)n + 1;
+			break;
+		      }
+		  }
+	      }
+#if defined (GFC_INTEGER_16_QUIET_NAN)
+	    if (unlikely (n >= len))
+	      result = result2;
+	    else
+#endif
+	    for (; n < len; n++, src += delta, msrc += mdelta)
+	      {
+		if (*msrc && *src < minval)
+		  {
+		    minval = *src;
+		    result = (GFC_INTEGER_8)n + 1;
+		  }
+	      }
 	    *dest = result;
 	  }
       }
@@ -388,30 +398,30 @@ mminloc1_8_i16 (gfc_array_i8 * const restrict retarray,
       dest += dstride[0];
       n = 0;
       while (count[n] == extent[n])
-        {
-          /* When we get to the end of a dimension, reset it and increment
-             the next dimension.  */
-          count[n] = 0;
-          /* We could precalculate these products, but this is a less
-             frequently used path so probably not worth it.  */
-          base -= sstride[n] * extent[n];
-          mbase -= mstride[n] * extent[n];
-          dest -= dstride[n] * extent[n];
-          n++;
-          if (n == rank)
-            {
-              /* Break out of the look.  */
-              base = NULL;
-              break;
-            }
-          else
-            {
-              count[n]++;
-              base += sstride[n];
-              mbase += mstride[n];
-              dest += dstride[n];
-            }
-        }
+	{
+	  /* When we get to the end of a dimension, reset it and increment
+	     the next dimension.  */
+	  count[n] = 0;
+	  /* We could precalculate these products, but this is a less
+	     frequently used path so probably not worth it.  */
+	  base -= sstride[n] * extent[n];
+	  mbase -= mstride[n] * extent[n];
+	  dest -= dstride[n] * extent[n];
+	  n++;
+	  if (n == rank)
+	    {
+	      /* Break out of the look.  */
+	      base = NULL;
+	      break;
+	    }
+	  else
+	    {
+	      count[n]++;
+	      base += sstride[n];
+	      mbase += mstride[n];
+	      dest += dstride[n];
+	    }
+	}
     }
 }
 
@@ -429,7 +439,6 @@ sminloc1_8_i16 (gfc_array_i8 * const restrict retarray,
 {
   index_type count[GFC_MAX_DIMENSIONS];
   index_type extent[GFC_MAX_DIMENSIONS];
-  index_type sstride[GFC_MAX_DIMENSIONS];
   index_type dstride[GFC_MAX_DIMENSIONS];
   GFC_INTEGER_8 * restrict dest;
   index_type rank;
@@ -448,8 +457,7 @@ sminloc1_8_i16 (gfc_array_i8 * const restrict retarray,
 
   for (n = 0; n < dim; n++)
     {
-      sstride[n] = array->dim[n].stride;
-      extent[n] = array->dim[n].ubound + 1 - array->dim[n].lbound;
+      extent[n] = GFC_DESCRIPTOR_EXTENT(array,n);
 
       if (extent[n] <= 0)
 	extent[n] = 0;
@@ -457,39 +465,38 @@ sminloc1_8_i16 (gfc_array_i8 * const restrict retarray,
 
   for (n = dim; n < rank; n++)
     {
-      sstride[n] = array->dim[n + 1].stride;
       extent[n] =
-        array->dim[n + 1].ubound + 1 - array->dim[n + 1].lbound;
+	GFC_DESCRIPTOR_EXTENT(array,n + 1);
 
       if (extent[n] <= 0)
-        extent[n] = 0;
+	extent[n] = 0;
     }
 
   if (retarray->data == NULL)
     {
-      size_t alloc_size;
+      size_t alloc_size, str;
 
       for (n = 0; n < rank; n++)
-        {
-          retarray->dim[n].lbound = 0;
-          retarray->dim[n].ubound = extent[n]-1;
-          if (n == 0)
-            retarray->dim[n].stride = 1;
-          else
-            retarray->dim[n].stride = retarray->dim[n-1].stride * extent[n-1];
-        }
+	{
+	  if (n == 0)
+	    str = 1;
+	  else
+	    str = GFC_DESCRIPTOR_STRIDE(retarray,n-1) * extent[n-1];
+
+	  GFC_DIMENSION_SET(retarray->dim[n], 0, extent[n] - 1, str);
+
+	}
 
       retarray->offset = 0;
       retarray->dtype = (array->dtype & ~GFC_DTYPE_RANK_MASK) | rank;
 
-      alloc_size = sizeof (GFC_INTEGER_8) * retarray->dim[rank-1].stride
+      alloc_size = sizeof (GFC_INTEGER_8) * GFC_DESCRIPTOR_STRIDE(retarray,rank-1)
     		   * extent[rank-1];
 
       if (alloc_size == 0)
 	{
 	  /* Make sure we have a zero-sized array.  */
-	  retarray->dim[0].lbound = 0;
-	  retarray->dim[0].ubound = -1;
+	  GFC_DIMENSION_SET(retarray->dim[0], 0, -1, 1);
 	  return;
 	}
       else
@@ -509,8 +516,7 @@ sminloc1_8_i16 (gfc_array_i8 * const restrict retarray,
 	    {
 	      index_type ret_extent;
 
-	      ret_extent = retarray->dim[n].ubound + 1
-		- retarray->dim[n].lbound;
+	      ret_extent = GFC_DESCRIPTOR_EXTENT(retarray,n);
 	      if (extent[n] != ret_extent)
 		runtime_error ("Incorrect extent in return value of"
 			       " MINLOC intrinsic in dimension %ld:"
@@ -523,7 +529,7 @@ sminloc1_8_i16 (gfc_array_i8 * const restrict retarray,
   for (n = 0; n < rank; n++)
     {
       count[n] = 0;
-      dstride[n] = retarray->dim[n].stride;
+      dstride[n] = GFC_DESCRIPTOR_STRIDE(retarray,n);
     }
 
   dest = retarray->data;
@@ -535,21 +541,21 @@ sminloc1_8_i16 (gfc_array_i8 * const restrict retarray,
       dest += dstride[0];
       n = 0;
       while (count[n] == extent[n])
-        {
+	{
 	  /* When we get to the end of a dimension, reset it and increment
-             the next dimension.  */
-          count[n] = 0;
-          /* We could precalculate these products, but this is a less
-             frequently used path so probably not worth it.  */
-          dest -= dstride[n] * extent[n];
-          n++;
-          if (n == rank)
+	     the next dimension.  */
+	  count[n] = 0;
+	  /* We could precalculate these products, but this is a less
+	     frequently used path so probably not worth it.  */
+	  dest -= dstride[n] * extent[n];
+	  n++;
+	  if (n == rank)
 	    return;
-          else
-            {
-              count[n]++;
-              dest += dstride[n];
-            }
+	  else
+	    {
+	      count[n]++;
+	      dest += dstride[n];
+	    }
       	}
     }
 }

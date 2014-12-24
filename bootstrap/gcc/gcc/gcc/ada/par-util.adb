@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -72,7 +72,8 @@ package body Util is
         and then Name_Len = 7
         and then Name_Buffer (1 .. 7) = "program"
       then
-         Error_Msg_SC ("PROCEDURE expected");
+         Error_Msg_SC -- CODEFIX
+           ("PROCEDURE expected");
          Token := T;
          return True;
 
@@ -119,7 +120,8 @@ package body Util is
             M1 (P1 + J - 1) := Fold_Upper (S (J));
          end loop;
 
-         Error_Msg_SC (M1 (1 .. P1 - 1 + S'Last));
+         Error_Msg_SC -- CODFIX
+           (M1 (1 .. P1 - 1 + S'Last));
          Token := T;
          return True;
 
@@ -158,10 +160,11 @@ package body Util is
 
    procedure Check_Bad_Layout is
    begin
-      if Style.RM_Column_Check and then Token_Is_At_Start_Of_Line
+      if RM_Column_Check and then Token_Is_At_Start_Of_Line
         and then Start_Column <= Scope.Table (Scope.Last).Ecol
       then
-         Error_Msg_BC ("(style) incorrect layout");
+         Error_Msg_BC -- CODEFIX
+           ("(style) incorrect layout");
       end if;
    end Check_Bad_Layout;
 
@@ -331,7 +334,8 @@ package body Util is
 
          <<Assume_Comma>>
             Restore_Scan_State (Scan_State);
-            Error_Msg_SC ("|"";"" should be "",""");
+            Error_Msg_SC -- CODEFIX
+              ("|"";"" should be "",""");
             Scan; -- past the semicolon
             return True;
 
@@ -381,26 +385,30 @@ package body Util is
    begin
       while Token = T loop
          if T = Tok_Comma then
-            Error_Msg_SC ("|extra "","" ignored");
+            Error_Msg_SC -- CODEFIX
+              ("|extra "","" ignored");
 
          elsif T = Tok_Left_Paren then
-            Error_Msg_SC ("|extra ""("" ignored");
+            Error_Msg_SC -- CODEFIX
+              ("|extra ""("" ignored");
 
          elsif T = Tok_Right_Paren then
-            Error_Msg_SC ("|extra "")"" ignored");
+            Error_Msg_SC -- CODEFIX
+              ("|extra "")"" ignored");
 
          elsif T = Tok_Semicolon then
-            Error_Msg_SC ("|extra "";"" ignored");
+            Error_Msg_SC -- CODEFIX
+              ("|extra "";"" ignored");
 
          elsif T = Tok_Colon then
-            Error_Msg_SC ("|extra "":"" ignored");
+            Error_Msg_SC -- CODEFIX
+              ("|extra "":"" ignored");
 
          else
             declare
                Tname : constant String := Token_Type'Image (Token);
             begin
-               Error_Msg_SC
-                 ("|extra " & Tname (5 .. Tname'Last) & "ignored");
+               Error_Msg_SC ("|extra " & Tname (5 .. Tname'Last) & "ignored");
             end;
          end if;
 
@@ -564,8 +572,7 @@ package body Util is
       end;
 
       Error_Msg_Node_1 := Prev;
-      Error_Msg_SC
-        ("unexpected identifier, possibly & was meant here");
+      Error_Msg_SC ("unexpected identifier, possibly & was meant here");
       Scan;
    end Merge_Identifier;
 
@@ -678,7 +685,8 @@ package body Util is
       Error_Msg_Name_1 := First_Attribute_Name;
       while Error_Msg_Name_1 <= Last_Attribute_Name loop
          if Is_Bad_Spelling_Of (Token_Name, Error_Msg_Name_1) then
-            Error_Msg_N ("\possible misspelling of %", Token_Node);
+            Error_Msg_N -- CODEFIX
+              ("\possible misspelling of %", Token_Node);
             exit;
          end if;
 

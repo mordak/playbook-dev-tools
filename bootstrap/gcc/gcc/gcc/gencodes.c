@@ -2,7 +2,7 @@
    - some macros CODE_FOR_... giving the insn_code_number value
    for each of the defined standard insn names.
    Copyright (C) 1987, 1991, 1995, 1998, 1999, 2000, 2001, 2003,
-   2004, 2007  Free Software Foundation, Inc.
+   2004, 2007, 2010  Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -58,7 +58,7 @@ main (int argc, char **argv)
      direct references to CODE_FOR_xxx in C code.  */
   insn_elision = 0;
 
-  if (init_md_reader_args (argc, argv) != SUCCESS_EXIT_CODE)
+  if (!init_rtx_reader_args (argc, argv))
     return (FATAL_EXIT_CODE);
 
   puts ("\

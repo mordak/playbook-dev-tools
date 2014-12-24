@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1998-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1998-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -42,7 +42,7 @@ package Lib.Xref is
    --     X  dependency-number  filename
 
    --        This header precedes xref information (entities/references from
-   --        the unit, identified by dependency number and file name. The
+   --        the unit), identified by dependency number and file name. The
    --        dependency number is the index into the generated D lines and
    --        is ones origin (i.e. 2 = reference to second generated D line).
 
@@ -68,9 +68,10 @@ package Lib.Xref is
    --        col is the column number of the referenced entity
 
    --        level is a single character that separates the col and
-   --        entity fields. It is an asterisk for a top level library
+   --        entity fields. It is an asterisk (*) for a top level library
    --        entity that is publicly visible, as well for an entity declared
-   --        in the visible part of a generic package, and space otherwise.
+   --        in the visible part of a generic package, the plus sign (+) for
+   --        a C/C++ static entity, and space otherwise.
 
    --        entity is the name of the referenced entity, with casing in
    --        the canonical casing for the source file where it is defined.
@@ -177,10 +178,12 @@ package Lib.Xref is
    --              k = implicit reference to parent unit in child unit
    --              l = label on END line
    --              m = modification
+   --              o = own variable reference (SPARK only)
    --              p = primitive operation
    --              P = overriding primitive operation
    --              r = reference
    --              R = subprogram reference in dispatching call
+   --              s = subprogram reference in a static call
    --              t = end of body
    --              w = WITH line
    --              x = type extension
@@ -271,6 +274,10 @@ package Lib.Xref is
    --           graph construction). Again, in the case of an accept there
    --           can be multiple l lines.
 
+   --           o is used for variables referenced from a SPARK 'own'
+   --           definition. In the SPARK language, it is allowed to use a
+   --           variable before its actual declaration.
+
    --           p is used to mark a primitive operation of the given entity.
    --           For example, if we have a type Tx, and a primitive operation
    --           Pq of this type, then an entry in the list of references to
@@ -289,6 +296,9 @@ package Lib.Xref is
    --           R is used to mark a dispatching call. The reference is to
    --           the specification of the primitive operation of the root
    --           type when the call has a controlling argument in its class.
+
+   --           s is used to mark a static subprogram call. The reference is
+   --           to the specification of the subprogram being called.
 
    --           t is similar to e. It identifies the end of a corresponding
    --           body (such a reference always links up with a b reference)
@@ -536,17 +546,17 @@ package Lib.Xref is
    --    d     decimal fixed-point object      decimal fixed-point type
    --    e     non-Boolean enumeration object  non_Boolean enumeration type
    --    f     floating-point object           floating-point type
-   --    g     (unused)                        (unused)
+   --    g     C/C++ macro                     C/C++ fun-like macro
    --    h     Interface (Ada 2005)            Abstract type
    --    i     signed integer object           signed integer type
-   --    j     (unused)                        (unused)
+   --    j     C++ class object                C++ class
    --    k     generic package                 package
    --    l     label on loop                   label on statement
    --    m     modular integer object          modular integer type
    --    n     enumeration literal             named number
    --    o     ordinary fixed-point object     ordinary fixed-point type
    --    p     access object                   access type
-   --    q     label on block                  (unused)
+   --    q     label on block                  C/C++ include file
    --    r     record object                   record type
    --    s     string object                   string type
    --    t     task object                     task type

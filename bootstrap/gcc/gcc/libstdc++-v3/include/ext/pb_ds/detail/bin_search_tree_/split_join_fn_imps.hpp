@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -139,7 +139,7 @@ typename PB_DS_CLASS_C_DEC::size_type
 PB_DS_CLASS_C_DEC::
 recursive_count(node_pointer p) const
 {
-  if (p == NULL)
+  if (p == 0)
     return 0;
   return 1 + recursive_count(p->m_p_left) + recursive_count(p->m_p_right);
 }

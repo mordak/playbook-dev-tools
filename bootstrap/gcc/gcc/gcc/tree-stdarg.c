@@ -1,5 +1,6 @@
 /* Pass computing data for optimizing stdarg functions.
-   Copyright (C) 2004, 2005, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2004, 2005, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Jakub Jelinek <jakub@redhat.com>
 
 This file is part of GCC.
@@ -25,7 +26,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree.h"
 #include "function.h"
 #include "langhooks.h"
-#include "diagnostic.h"
+#include "gimple-pretty-print.h"
 #include "target.h"
 #include "tree-flow.h"
 #include "tree-pass.h"
@@ -496,6 +497,9 @@ check_all_va_list_escapes (struct stdarg_info *si)
 	  tree use;
 	  ssa_op_iter iter;
 
+	  if (is_gimple_debug (stmt))
+	    continue;
+
 	  FOR_EACH_SSA_TREE_OPERAND (use, stmt, iter, SSA_OP_ALL_USES)
 	    {
 	      if (! bitmap_bit_p (si->va_list_escape_vars,
@@ -508,7 +512,7 @@ check_all_va_list_escapes (struct stdarg_info *si)
 		  enum tree_code rhs_code = gimple_assign_rhs_code (stmt);
 
 		  /* x = *ap_temp;  */
-		  if (gimple_assign_rhs_code (stmt) == INDIRECT_REF
+		  if (gimple_assign_rhs_code (stmt) == MEM_REF
 		      && TREE_OPERAND (rhs, 0) == use
 		      && TYPE_SIZE_UNIT (TREE_TYPE (rhs))
 		      && host_integerp (TYPE_SIZE_UNIT (TREE_TYPE (rhs)), 1)
@@ -518,6 +522,7 @@ check_all_va_list_escapes (struct stdarg_info *si)
 		      tree access_size = TYPE_SIZE_UNIT (TREE_TYPE (rhs));
 
 		      gpr_size = si->offsets[SSA_NAME_VERSION (use)]
+			  	 + tree_low_cst (TREE_OPERAND (rhs, 1), 0)
 				 + tree_low_cst (access_size, 1);
 		      if (gpr_size >= VA_LIST_MAX_GPR_SIZE)
 			cfun->va_list_gpr_size = VA_LIST_MAX_GPR_SIZE;
@@ -631,7 +636,6 @@ execute_optimize_stdarg (void)
 	      break;
 	      /* If old style builtins are used, don't optimize anything.  */
 	    case BUILT_IN_SAVEREGS:
-	    case BUILT_IN_ARGS_INFO:
 	    case BUILT_IN_NEXT_ARG:
 	      va_list_escapes = true;
 	      continue;
@@ -837,6 +841,8 @@ execute_optimize_stdarg (void)
 		    continue;
 		}
 	    }
+	  else if (is_gimple_debug (stmt))
+	    continue;
 
 	  /* All other uses of va_list are either va_copy (that is not handled
 	     in this optimization), taking address of va_list variable or
@@ -905,8 +911,8 @@ struct gimple_opt_pass pass_stdarg =
   NULL,					/* sub */
   NULL,					/* next */
   0,					/* static_pass_number */
-  0,					/* tv_id */
-  PROP_cfg | PROP_ssa | PROP_alias,	/* properties_required */
+  TV_NONE,				/* tv_id */
+  PROP_cfg | PROP_ssa,			/* properties_required */
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */

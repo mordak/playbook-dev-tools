@@ -1,6 +1,6 @@
 ; Options for the SPARC port of the compiler
 ;
-; Copyright (C) 2005, 2007 Free Software Foundation, Inc.
+; Copyright (C) 2005, 2007, 2010 Free Software Foundation, Inc.
 ;
 ; This file is part of GCC.
 ;
@@ -33,10 +33,6 @@ Do not use hardware FP
 munaligned-doubles
 Target Report Mask(UNALIGNED_DOUBLES)
 Assume possible double misalignment
-
-mimpure-text
-Target Report
-Pass -assert pure-text to linker
 
 mapp-regs
 Target Report Mask(APP_REGS)
@@ -101,6 +97,11 @@ Use given SPARC-V9 code model
 mstd-struct-return
 Target Report RejectNegative Var(sparc_std_struct_return)
 Enable strict 32-bit psABI struct return checking.
+
+mfix-at697f
+Target Report RejectNegative Var(sparc_fix_at697f)
+Enable workaround for single erratum of AT697F processor
+(corresponding to erratum #13 of AT697E processor)
 
 Mask(LITTLE_ENDIAN)
 ;; Generate code for little-endian

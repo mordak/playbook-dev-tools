@@ -1,8 +1,5 @@
 ! { dg-do compile }
 
-! FIXME: Remove -w after polymorphic entities are supported.
-! { dg-options "-w" }
-
 ! Type-bound procedures
 ! Test for errors in specific bindings, during resolution.
 
@@ -58,8 +55,8 @@ MODULE testmod
     PROCEDURE, PASS :: e1 => proc_noarg ! { dg-error "at least one argument" }
     PROCEDURE :: e2 => proc_noarg ! { dg-error "at least one argument" }
     PROCEDURE, PASS(me) :: e3 => proc_nome ! { dg-error "no argument 'me'" }
-    PROCEDURE, PASS(me) :: e4 => proc_mewrong ! { dg-error "of the derived" }
-    PROCEDURE, PASS :: e5 => proc_mewrong ! { dg-error "of the derived" }
+    PROCEDURE, PASS(me) :: e4 => proc_mewrong ! { dg-error "Non-polymorphic passed-object dummy argument" }
+    PROCEDURE, PASS :: e5 => proc_mewrong ! { dg-error "Non-polymorphic passed-object dummy argument" }
     PROCEDURE :: e6 => noproc ! { dg-error "module procedure" }
     PROCEDURE :: e7 => proc_nointf ! { dg-error "explicit interface" }
     PROCEDURE, NOPASS :: e8 => proc_abstract_intf ! { dg-error "explicit interface" }
@@ -71,19 +68,19 @@ CONTAINS
 
   SUBROUTINE proc_arg_first (me, x)
     IMPLICIT NONE
-    TYPE(t) :: me
+    CLASS(t) :: me
     REAL :: x
   END SUBROUTINE proc_arg_first
 
   INTEGER FUNCTION proc_arg_middle (x, me, y)
     IMPLICIT NONE
     REAL :: x, y
-    TYPE(t) :: me
+    CLASS(t) :: me
   END FUNCTION proc_arg_middle
 
   SUBROUTINE proc_arg_last (x, me)
     IMPLICIT NONE
-    TYPE(t) :: me
+    CLASS(t) :: me
     REAL :: x
   END SUBROUTINE proc_arg_last
 

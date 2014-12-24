@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -162,6 +162,9 @@ package body Expander is
 
                when N_Block_Statement =>
                   Expand_N_Block_Statement (N);
+
+               when N_Case_Expression =>
+                  Expand_N_Case_Expression (N);
 
                when N_Case_Statement =>
                   Expand_N_Case_Statement (N);
@@ -361,6 +364,9 @@ package body Expander is
                when N_Qualified_Expression =>
                   Expand_N_Qualified_Expression (N);
 
+               when N_Quantified_Expression  =>
+                  Expand_N_Quantified_Expression (N);
+
                when N_Raise_Statement =>
                   Expand_N_Raise_Statement (N);
 
@@ -470,7 +476,6 @@ package body Expander is
 
          Debug_A_Exit ("expanding  ", N, "  (done)");
       end if;
-
    end Expand;
 
    ---------------------------

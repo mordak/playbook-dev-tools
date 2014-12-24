@@ -1,3 +1,50 @@
+2011-11-29  Andreas Tobler  <andreast@fgznet.ch>
+
+	* config.rpath (ld_shlibs): Fix detection of FreeBSD-10 and up.
+	(libname_spec): Likewise.
+	* configure: Regenerate with autoconf -I ../../.
+
+2011-02-13  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* config.rpath, ltcf-c.sh, ltcf-gcj.sh, ltconfig: Remove
+	handling of freebsd1* which soon would match FreeBSD 10.0.
+	* configure: Regenerate.
+
+2011-01-31  Alexandre Oliva  <aoliva@redhat.com>
+
+	* configure.ac (GCJ_JAVAC): Run false rather than no.
+	* configure: Rebuilt.
+
+2011-01-03  Jakub Jelinek  <jakub@redhat.com>
+
+	* gnu/java/rmi/registry/RegistryImpl.java (version): Update
+	copyright notice dates.
+	* tools/gnu/classpath/tools/orbd/Main.java (run): Likewise.
+
+2010-06-21  Jan Kratochvil  <jan.kratochvil@redhat.com>
+
+	* doc/Makefile.am (POD2MAN): Provide --date from ChangeLog.
+	* doc/Makefile.in: Regenerate.
+
+2010-04-07  Jakub Jelinek  <jakub@redhat.com>
+
+	* native/jni/midi-alsa/gnu_javax_sound_midi_alsa_AlsaPortDevice.c
+	(Java_gnu_javax_sound_midi_alsa_AlsaPortDevice_run_1receiver_1thread_1):
+	Avoid set but not used warning.
+
+2010-01-09  Jakub Jelinek  <jakub@redhat.com>
+
+	* gnu/java/rmi/registry/RegistryImpl.java (version): Update
+	copyright notice dates.
+	* tools/gnu/classpath/tools/orbd/Main.java (run): Likewise.
+
+2009-07-01  Jakub Jelinek  <jakub@redhat.com>
+
+	* gnu/javax/swing/text/html/parser/HTML_401F.java (defineElements):
+	Split this huge method into...
+	(defineElements1, defineElements2, defineElements3, defineElements4,
+	defineElements5, defineElements6): ... these smaller methods.
+
 2009-06-16  Matthias Klose  <doko@ubuntu.com>
 
 	* tools/gnu/classpath/tools/gjdoc/Main.java (getGjdocVersion): Use

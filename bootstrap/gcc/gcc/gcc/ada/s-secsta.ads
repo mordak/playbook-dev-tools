@@ -29,9 +29,7 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-pragma Warnings (Off);
 pragma Compiler_Unit;
-pragma Warnings (On);
 
 with System.Storage_Elements;
 
@@ -58,7 +56,7 @@ package System.Secondary_Stack is
    --
    --  Otherwise (Sec_Stack_Ratio between 0 and 100), Stk is an IN parameter
    --  that is already pointing to a Stack_Id. The secondary stack in this case
-   --  is fixed, and any attempt to allocated more than the initial size will
+   --  is fixed, and any attempt to allocate more than the initial size will
    --  result in a Storage_Error being raised.
    --
    --  Note: the reason that Stk is passed is that SS_Init is called before
@@ -85,6 +83,7 @@ package System.Secondary_Stack is
    procedure SS_Release (M : Mark_Id);
    --  Restore the state of the stack corresponding to the mark M. If an
    --  additional chunk have been allocated, it will never be freed during a
+   --  ??? missing comment here
 
    function SS_Get_Max return Long_Long_Integer;
    --  Return maximum used space in storage units for the current secondary

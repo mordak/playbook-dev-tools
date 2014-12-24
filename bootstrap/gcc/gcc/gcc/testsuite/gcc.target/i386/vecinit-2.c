@@ -1,5 +1,6 @@
 /* { dg-do compile } */
-/* { dg-options "-O2 -msse2" } */
+/* { dg-options "-O2 -march=k8 -msse2" } */
+
 #define vector __attribute__((vector_size(16)))
 
 int a;

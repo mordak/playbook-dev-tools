@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -67,7 +67,7 @@ insert_fixup(node_pointer p_nd)
       if (p_nd->m_p_parent == p_nd->m_p_parent->m_p_parent->m_p_left)
         {
 	  node_pointer p_y = p_nd->m_p_parent->m_p_parent->m_p_right;
-	  if (p_y != NULL && p_y->m_red)
+	  if (p_y != 0 && p_y->m_red)
             {
 	      p_nd->m_p_parent->m_red = false;
 	      p_y->m_red = false;
@@ -89,7 +89,7 @@ insert_fixup(node_pointer p_nd)
       else
         {
 	  node_pointer p_y = p_nd->m_p_parent->m_p_parent->m_p_left;
-	  if (p_y != NULL && p_y->m_red)
+	  if (p_y != 0 && p_y->m_red)
             {
 	      p_nd->m_p_parent->m_red = false;
 	      p_y->m_red = false;

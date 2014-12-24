@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---                     Copyright (C) 1995-2008, AdaCore                     --
+--                     Copyright (C) 1995-2009, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -31,9 +31,7 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-pragma Warnings (Off);
 pragma Compiler_Unit;
-pragma Warnings (On);
 
 with System.Case_Util;
 with System.CRTL;
@@ -79,8 +77,17 @@ package body System.OS_Lib is
    -----------------------
 
    function Args_Length (Args : Argument_List) return Natural;
-   --  Returns total number of characters needed to create a string
-   --  of all Args terminated by ASCII.NUL characters
+   --  Returns total number of characters needed to create a string of all Args
+   --  terminated by ASCII.NUL characters.
+
+   procedure Create_Temp_File_Internal
+     (FD     : out File_Descriptor;
+      Name   : out String_Access;
+      Stdout : Boolean);
+   --  Internal routine to implement two Create_Temp_File routines. If Stdout
+   --  is set to True the created descriptor is stdout-compatible, otherwise
+   --  it might not be depending on the OS (VMS is one example). The first two
+   --  parameters are as in Create_Temp_File.
 
    function C_String_Length (S : Address) return Integer;
    --  Returns the length of a C string. Does check for null address
@@ -751,9 +758,56 @@ package body System.OS_Lib is
      (FD   : out File_Descriptor;
       Name : out String_Access)
    is
+   begin
+      Create_Temp_File_Internal (FD, Name, Stdout => False);
+   end Create_Temp_File;
+
+   procedure Create_Temp_Output_File
+     (FD   : out File_Descriptor;
+      Name : out String_Access)
+   is
+   begin
+      Create_Temp_File_Internal (FD, Name, Stdout => True);
+   end Create_Temp_Output_File;
+
+   -------------------------------
+   -- Create_Temp_File_Internal --
+   -------------------------------
+
+   procedure Create_Temp_File_Internal
+     (FD        : out File_Descriptor;
+      Name      : out String_Access;
+      Stdout    : Boolean)
+   is
       Pos      : Positive;
       Attempts : Natural := 0;
       Current  : String (Current_Temp_File_Name'Range);
+
+      ---------------------------------
+      -- Create_New_Output_Text_File --
+      ---------------------------------
+
+      function Create_New_Output_Text_File
+        (Name : String) return File_Descriptor;
+      --  Similar to Create_Output_Text_File, except it fails if the file
+      --  already exists. We need this behavior to ensure we don't accidentally
+      --  open a temp file that has just been created by a concurrently running
+      --  process. There is no point exposing this function, as it's generally
+      --  not particularly useful.
+
+      function Create_New_Output_Text_File
+        (Name : String) return File_Descriptor is
+         function C_Create_File
+           (Name : C_File_Name) return File_Descriptor;
+         pragma Import (C, C_Create_File, "__gnat_create_output_file_new");
+
+         C_Name : String (1 .. Name'Length + 1);
+
+      begin
+         C_Name (1 .. Name'Length) := Name;
+         C_Name (C_Name'Last)      := ASCII.NUL;
+         return C_Create_File (C_Name (C_Name'First)'Address);
+      end Create_New_Output_Text_File;
 
    begin
       --  Loop until a new temp file can be created
@@ -816,7 +870,11 @@ package body System.OS_Lib is
 
          --  Attempt to create the file
 
-         FD := Create_New_File (Current, Binary);
+         if Stdout then
+            FD := Create_New_Output_Text_File (Current);
+         else
+            FD := Create_New_File (Current, Binary);
+         end if;
 
          if FD /= Invalid_FD then
             Name := new String'(Current);
@@ -838,7 +896,7 @@ package body System.OS_Lib is
             end if;
          end if;
       end loop File_Loop;
-   end Create_Temp_File;
+   end Create_Temp_File_Internal;
 
    -----------------
    -- Delete_File --
@@ -846,12 +904,8 @@ package body System.OS_Lib is
 
    procedure Delete_File (Name : Address; Success : out Boolean) is
       R : Integer;
-
-      function unlink (A : Address) return Integer;
-      pragma Import (C, unlink, "unlink");
-
    begin
-      R := unlink (Name);
+      R := System.CRTL.unlink (Name);
       Success := (R = 0);
    end Delete_File;
 
@@ -1806,20 +1860,32 @@ package body System.OS_Lib is
       -------------------
 
       function Get_Directory (Dir : String) return String is
+         Result : String (1 .. Dir'Length + 1);
+         Length : constant Natural := Dir'Length;
+
       begin
          --  Directory given, add directory separator if needed
 
-         if Dir'Length > 0 then
-            if Dir (Dir'Last) = Directory_Separator then
-               return Dir;
+         if Length > 0 then
+            Result (1 .. Length) := Dir;
+
+            --  On Windows, change all '/' to '\'
+
+            if On_Windows then
+               for J in 1 .. Length loop
+                  if Result (J) = '/' then
+                     Result (J) := Directory_Separator;
+                  end if;
+               end loop;
+            end if;
+
+            --  Add directory separator, if needed
+
+            if Result (Length) = Directory_Separator then
+               return Result (1 .. Length);
             else
-               declare
-                  Result : String (1 .. Dir'Length + 1);
-               begin
-                  Result (1 .. Dir'Length) := Dir;
-                  Result (Result'Length) := Directory_Separator;
-                  return Result;
-               end;
+               Result (Result'Length) := Directory_Separator;
+               return Result;
             end if;
 
          --  Directory name not given, get current directory
@@ -1839,8 +1905,9 @@ package body System.OS_Lib is
 
                --  By default, the drive letter on Windows is in upper case
 
-               if On_Windows and then Path_Len >= 2 and then
-                 Buffer (2) = ':'
+               if On_Windows
+                 and then Path_Len >= 2
+                 and then Buffer (2) = ':'
                then
                   System.Case_Util.To_Upper (Buffer (1 .. 1));
                end if;
@@ -1912,31 +1979,41 @@ package body System.OS_Lib is
       --  it may have multiple equivalences and if resolved we will only
       --  get the first one.
 
-      --  On Windows, if we have an absolute path starting with a directory
-      --  separator, we need to have the drive letter appended in front.
+      if On_Windows then
 
-      --  On Windows, Get_Current_Dir will return a suitable directory
-      --  name (path starting with a drive letter on Windows). So we take this
-      --  drive letter and prepend it to the current path.
+         --  On Windows, if we have an absolute path starting with a directory
+         --  separator, we need to have the drive letter appended in front.
 
-      if On_Windows
-        and then Path_Buffer (1) = Directory_Separator
-        and then Path_Buffer (2) /= Directory_Separator
-      then
-         declare
-            Cur_Dir : constant String := Get_Directory ("");
-            --  Get the current directory to get the drive letter
+         --  On Windows, Get_Current_Dir will return a suitable directory name
+         --  (path starting with a drive letter on Windows). So we take this
+         --  drive letter and prepend it to the current path.
 
-         begin
-            if Cur_Dir'Length > 2
-              and then Cur_Dir (Cur_Dir'First + 1) = ':'
-            then
-               Path_Buffer (3 .. End_Path + 2) := Path_Buffer (1 .. End_Path);
-               Path_Buffer (1 .. 2) :=
-                 Cur_Dir (Cur_Dir'First .. Cur_Dir'First + 1);
-               End_Path := End_Path + 2;
-            end if;
-         end;
+         if Path_Buffer (1) = Directory_Separator
+           and then Path_Buffer (2) /= Directory_Separator
+         then
+            declare
+               Cur_Dir : constant String := Get_Directory ("");
+               --  Get the current directory to get the drive letter
+
+            begin
+               if Cur_Dir'Length > 2
+                 and then Cur_Dir (Cur_Dir'First + 1) = ':'
+               then
+                  Path_Buffer (3 .. End_Path + 2) :=
+                    Path_Buffer (1 .. End_Path);
+                  Path_Buffer (1 .. 2) :=
+                    Cur_Dir (Cur_Dir'First .. Cur_Dir'First + 1);
+                  End_Path := End_Path + 2;
+               end if;
+            end;
+
+         --  We have a drive letter, ensure it is upper-case
+
+         elsif Path_Buffer (1) in 'a' .. 'z'
+           and then Path_Buffer (2) = ':'
+         then
+            System.Case_Util.To_Upper (Path_Buffer (1 .. 1));
+         end if;
       end if;
 
       --  On Windows, remove all double-quotes that are possibly part of the
@@ -2232,8 +2309,11 @@ package body System.OS_Lib is
       N  : Integer) return Integer
    is
    begin
-      return Integer (System.CRTL.read
-        (System.CRTL.int (FD), System.CRTL.chars (A), System.CRTL.int (N)));
+      return
+        Integer (System.CRTL.read
+                   (System.CRTL.int (FD),
+                    System.CRTL.chars (A),
+                    System.CRTL.size_t (N)));
    end Read;
 
    -----------------
@@ -2246,7 +2326,7 @@ package body System.OS_Lib is
       Success  : out Boolean)
    is
       function rename (From, To : Address) return Integer;
-      pragma Import (C, rename, "rename");
+      pragma Import (C, rename, "__gnat_rename");
       R : Integer;
    begin
       R := rename (Old_Name, New_Name);
@@ -2641,8 +2721,11 @@ package body System.OS_Lib is
       N  : Integer) return Integer
    is
    begin
-      return Integer (System.CRTL.write
-        (System.CRTL.int (FD), System.CRTL.chars (A), System.CRTL.int (N)));
+      return
+        Integer (System.CRTL.write
+                   (System.CRTL.int (FD),
+                    System.CRTL.chars (A),
+                    System.CRTL.size_t (N)));
    end Write;
 
 end System.OS_Lib;

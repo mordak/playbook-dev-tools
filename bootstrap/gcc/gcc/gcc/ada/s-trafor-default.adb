@@ -6,7 +6,7 @@
 --                                                                          --
 --                                  B o d y                                 --
 --                                                                          --
---           Copyright (C) 2001-2009 Free Software Foundation, Inc.         --
+--          Copyright (C) 2001-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNARL is free software;  you can redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -40,8 +40,8 @@ package body System.Traces.Format is
    ------------------
 
    function Format_Trace (Source : String) return String_Trace is
-      Length : Integer      := Source'Length;
-      Result : String_Trace := (others => ' ');
+      Length : constant Integer := Source'Length;
+      Result : String_Trace     := (others => ' ');
 
    begin
       --  If run-time tracing active, then fill the string
@@ -52,7 +52,8 @@ package body System.Traces.Format is
             Result (Length + 1 .. Max_Size) := (others => ' ');
             Result (Length + 1) := ASCII.NUL;
          else
-            Result (1 .. Max_Size - 1) := Source (1 .. Max_Size - 1);
+            Result (1 .. Max_Size - 1) :=
+              Source (Source'First .. Source'First - 1 + Max_Size - 1);
             Result (Max_Size) := ASCII.NUL;
          end if;
       end if;
@@ -66,25 +67,25 @@ package body System.Traces.Format is
 
    function Append
      (Source : String_Trace;
-      Annex  : String)
-      return   String_Trace
+      Annex  : String) return String_Trace
    is
-      Result        : String_Trace := (others => ' ');
-      Source_Length : Integer := 1;
-      Annex_Length  : Integer := Annex'Length;
+      Result        : String_Trace     := (others => ' ');
+      Annex_Length  : constant Integer := Annex'Length;
+      Source_Length : Integer;
 
    begin
       if Parameters.Runtime_Traces then
 
-         --  First we determine the size used, without the spaces at the
-         --  end, if a String_Trace is present. Look at
-         --  System.Traces.Tasking for examples.
+         --  First we determine the size used, without the spaces at the end,
+         --  if a String_Trace is present. Look at System.Traces.Tasking for
+         --  examples.
 
+         Source_Length := 1;
          while Source (Source_Length) /= ASCII.NUL loop
             Source_Length := Source_Length + 1;
          end loop;
 
-         --  Then we fill the string.
+         --  Then we fill the string
 
          if Source_Length - 1 + Annex_Length <= Max_Size then
             Result (1 .. Source_Length - 1) :=
@@ -97,6 +98,7 @@ package body System.Traces.Format is
 
             Result (Source_Length + Annex_Length + 1 .. Max_Size) :=
               (others => ' ');
+
          else
             Result (1 .. Source_Length - 1) := Source (1 .. Source_Length - 1);
             Result (Source_Length .. Max_Size - 1) :=

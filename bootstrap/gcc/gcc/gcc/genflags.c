@@ -1,7 +1,7 @@
 /* Generate from machine description:
    - some flags HAVE_... saying which simple standard instructions are
    available for this machine.
-   Copyright (C) 1987, 1991, 1995, 1998, 1999, 2000, 2003, 2004, 2007
+   Copyright (C) 1987, 1991, 1995, 1998, 1999, 2000, 2003, 2004, 2007, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -28,6 +28,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "rtl.h"
 #include "obstack.h"
 #include "errors.h"
+#include "read-md.h"
 #include "gensupport.h"
 
 /* Obstack to remember insns with.  */
@@ -43,7 +44,7 @@ static void max_operand_1 (rtx);
 static int num_operands (rtx);
 static void gen_proto (rtx);
 static void gen_macro (const char *, int, int);
-static void gen_insn (rtx);
+static void gen_insn (int, rtx);
 
 /* Count the number of match_operand's found.  */
 
@@ -187,12 +188,31 @@ gen_proto (rtx insn)
 }
 
 static void
-gen_insn (rtx insn)
+gen_insn (int line_no, rtx insn)
 {
   const char *name = XSTR (insn, 0);
   const char *p;
+  const char *lt, *gt;
   int len;
   int truth = maybe_eval_c_test (XSTR (insn, 2));
+
+  lt = strchr (name, '<');
+  if (lt && strchr (lt + 1, '>'))
+    {
+      message_with_line (line_no, "unresolved iterator");
+      have_error = 1;
+      return;
+    }
+
+  gt = strchr (name, '>');
+  if (lt || gt)
+    {
+      message_with_line (line_no,
+			 "unmatched angle brackets, likely "
+			 "an error in iterator syntax");
+      have_error = 1;
+      return;
+    }
 
   /* Don't mention instructions whose names are the null string
      or begin with '*'.  They are in the machine description just
@@ -242,7 +262,7 @@ main (int argc, char **argv)
      direct calls to their generators in C code.  */
   insn_elision = 0;
 
-  if (init_md_reader_args (argc, argv) != SUCCESS_EXIT_CODE)
+  if (!init_rtx_reader_args (argc, argv))
     return (FATAL_EXIT_CODE);
 
   puts ("/* Generated automatically by the program `genflags'");
@@ -260,7 +280,7 @@ main (int argc, char **argv)
       if (desc == NULL)
 	break;
       if (GET_CODE (desc) == DEFINE_INSN || GET_CODE (desc) == DEFINE_EXPAND)
-	gen_insn (desc);
+	gen_insn (line_no, desc);
     }
 
   /* Print out the prototypes now.  */
@@ -273,7 +293,7 @@ main (int argc, char **argv)
 
   puts("\n#endif /* GCC_INSN_FLAGS_H */");
 
-  if (ferror (stdout) || fflush (stdout) || fclose (stdout))
+  if (have_error || ferror (stdout) || fflush (stdout) || fclose (stdout))
     return FATAL_EXIT_CODE;
 
   return SUCCESS_EXIT_CODE;

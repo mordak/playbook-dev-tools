@@ -1,18 +1,19 @@
 /* Loop header copying on trees.
-   Copyright (C) 2004, 2005, 2006, 2007, 2008 Free Software Foundation, Inc.
-   
+   Copyright (C) 2004, 2005, 2006, 2007, 2008, 2010
+   Free Software Foundation, Inc.
+
 This file is part of GCC.
-   
+
 GCC is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
 Free Software Foundation; either version 3, or (at your option) any
 later version.
-   
+
 GCC is distributed in the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
 FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 for more details.
-   
+
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING3.  If not see
 <http://www.gnu.org/licenses/>.  */
@@ -22,12 +23,9 @@ along with GCC; see the file COPYING3.  If not see
 #include "coretypes.h"
 #include "tm.h"
 #include "tree.h"
-#include "rtl.h"
 #include "tm_p.h"
-#include "hard-reg-set.h"
 #include "basic-block.h"
 #include "output.h"
-#include "diagnostic.h"
 #include "tree-flow.h"
 #include "tree-dump.h"
 #include "tree-pass.h"
@@ -90,6 +88,9 @@ should_duplicate_loop_header_p (basic_block header, struct loop *loop,
       if (gimple_code (last) == GIMPLE_LABEL)
 	continue;
 
+      if (is_gimple_debug (last))
+	continue;
+
       if (is_gimple_call (last))
 	return false;
 
@@ -103,7 +104,7 @@ should_duplicate_loop_header_p (basic_block header, struct loop *loop,
 
 /* Checks whether LOOP is a do-while style loop.  */
 
-static bool
+bool
 do_while_loop_p (struct loop *loop)
 {
   gimple stmt = last_stmt (loop->latch);
@@ -260,7 +261,7 @@ gate_ch (void)
   return flag_tree_ch != 0;
 }
 
-struct gimple_opt_pass pass_ch = 
+struct gimple_opt_pass pass_ch =
 {
  {
   GIMPLE_PASS,
@@ -275,7 +276,9 @@ struct gimple_opt_pass pass_ch =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_cleanup_cfg | TODO_dump_func 
-  | TODO_verify_ssa			/* todo_flags_finish */
+  TODO_cleanup_cfg
+    | TODO_verify_ssa
+    | TODO_verify_flow
+    | TODO_dump_func			/* todo_flags_finish */
  }
 };

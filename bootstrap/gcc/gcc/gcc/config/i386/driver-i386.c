@@ -1,5 +1,5 @@
 /* Subroutines for the gcc driver.
-   Copyright (C) 2006, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2006, 2007, 2008, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -21,7 +21,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "system.h"
 #include "coretypes.h"
 #include "tm.h"
-#include <stdlib.h>
 
 const char *host_detect_local_cpu (int argc, const char **argv);
 
@@ -46,12 +45,15 @@ describe_cache (struct cache_desc level1, struct cache_desc level2)
   /* At the moment, gcc does not use the information
      about the associativity of the cache.  */
 
-  sprintf (size, "--param l1-cache-size=%u", level1.sizekb);
-  sprintf (line, "--param l1-cache-line-size=%u", level1.line);
+  snprintf (size, sizeof (size),
+	    "--param l1-cache-size=%u ", level1.sizekb);
+  snprintf (line, sizeof (line),
+	    "--param l1-cache-line-size=%u ", level1.line);
 
-  sprintf (size2, "--param l2-cache-size=%u", level2.sizekb);
+  snprintf (size2, sizeof (size2),
+	    "--param l2-cache-size=%u ", level2.sizekb);
 
-  return concat (size, " ", line, " ", size2, " ", NULL);
+  return concat (size, line, size2, NULL);
 }
 
 /* Detect L2 cache parameters using CPUID extended function 0x80000006.  */
@@ -261,7 +263,8 @@ enum cache_type
 };
 
 static void
-detect_caches_cpuid4 (struct cache_desc *level1, struct cache_desc *level2)
+detect_caches_cpuid4 (struct cache_desc *level1, struct cache_desc *level2,
+		      struct cache_desc *level3)
 {
   struct cache_desc *cache;
 
@@ -286,6 +289,9 @@ detect_caches_cpuid4 (struct cache_desc *level1, struct cache_desc *level2)
 	      case 2:
 		cache = level2;
 		break;
+	      case 3:
+		cache = level3;
+		break;
 	      default:
 		cache = NULL;
 	      }
@@ -300,7 +306,7 @@ detect_caches_cpuid4 (struct cache_desc *level1, struct cache_desc *level2)
 
 		cache->sizekb = (cache->assoc * part
 				 * cache->line * sets) / 1024;
-	      }	       
+	      }
 	  }
 	default:
 	  break;
@@ -311,12 +317,13 @@ detect_caches_cpuid4 (struct cache_desc *level1, struct cache_desc *level2)
 /* Returns the description of caches for an Intel processor.  */
 
 static const char *
-detect_caches_intel (bool xeon_mp, unsigned max_level, unsigned max_ext_level)
+detect_caches_intel (bool xeon_mp, unsigned max_level,
+		     unsigned max_ext_level, unsigned *l2sizekb)
 {
-  struct cache_desc level1 = {0, 0, 0}, level2 = {0, 0, 0};
+  struct cache_desc level1 = {0, 0, 0}, level2 = {0, 0, 0}, level3 = {0, 0, 0};
 
   if (max_level >= 4)
-    detect_caches_cpuid4 (&level1, &level2);
+    detect_caches_cpuid4 (&level1, &level2, &level3);
   else if (max_level >= 2)
     detect_caches_cpuid2 (xeon_mp, &level1, &level2);
   else
@@ -325,10 +332,17 @@ detect_caches_intel (bool xeon_mp, unsigned max_level, unsigned max_ext_level)
   if (level1.sizekb == 0)
     return "";
 
+  /* Let the L3 replace the L2. This assumes inclusive caches
+     and single threaded program for now. */
+  if (level3.sizekb)
+    level2 = level3;
+
   /* Intel CPUs are equipped with AMD style L2 cache info.  Try this
      method if other methods fail to provide L2 cache parameters.  */
   if (level2.sizekb == 0 && max_ext_level >= 0x80000006)
     detect_l2_cache (&level2);
+
+  *l2sizekb = level2.sizekb;
 
   return describe_cache (level1, level2);
 }
@@ -378,11 +392,15 @@ const char *host_detect_local_cpu (int argc, const char **argv)
   /* Extended features */
   unsigned int has_lahf_lm = 0, has_sse4a = 0;
   unsigned int has_longmode = 0, has_3dnowp = 0, has_3dnow = 0;
-  unsigned int has_sse4_1 = 0, has_sse4_2 = 0;
+  unsigned int has_movbe = 0, has_sse4_1 = 0, has_sse4_2 = 0;
   unsigned int has_popcnt = 0, has_aes = 0, has_avx = 0;
-  unsigned int has_pclmul = 0;
+  unsigned int has_pclmul = 0, has_abm = 0, has_lwp = 0;
+  unsigned int has_fma = 0, has_fma4 = 0, has_xop = 0;
+  unsigned int has_bmi = 0, has_tbm = 0;
 
   bool arch;
+
+  unsigned int l2sizekb = 0;
 
   if (argc < 1)
     return NULL;
@@ -398,9 +416,22 @@ const char *host_detect_local_cpu (int argc, const char **argv)
 
   __cpuid (1, eax, ebx, ecx, edx);
 
-  /* We don't care for extended family.  */
   model = (eax >> 4) & 0x0f;
   family = (eax >> 8) & 0x0f;
+  if (vendor == SIG_INTEL)
+    {
+      unsigned int extended_model, extended_family;
+
+      extended_model = (eax >> 12) & 0xf0;
+      extended_family = (eax >> 20) & 0xff;
+      if (family == 0x0f)
+	{
+	  family += extended_family;
+	  model += extended_model;
+	}
+      else if (family == 0x06)
+	model += extended_model;
+    }
 
   has_sse3 = ecx & bit_SSE3;
   has_ssse3 = ecx & bit_SSSE3;
@@ -408,9 +439,11 @@ const char *host_detect_local_cpu (int argc, const char **argv)
   has_sse4_2 = ecx & bit_SSE4_2;
   has_avx = ecx & bit_AVX;
   has_cmpxchg16b = ecx & bit_CMPXCHG16B;
+  has_movbe = ecx & bit_MOVBE;
   has_popcnt = ecx & bit_POPCNT;
   has_aes = ecx & bit_AES;
   has_pclmul = ecx & bit_PCLMUL;
+  has_fma = ecx & bit_FMA;
 
   has_cmpxchg8b = edx & bit_CMPXCHG8B;
   has_cmov = edx & bit_CMOV;
@@ -427,10 +460,19 @@ const char *host_detect_local_cpu (int argc, const char **argv)
 
       has_lahf_lm = ecx & bit_LAHF_LM;
       has_sse4a = ecx & bit_SSE4a;
+      has_abm = ecx & bit_ABM;
+      has_lwp = ecx & bit_LWP;
+      has_fma4 = ecx & bit_FMA4;
+      has_xop = ecx & bit_XOP;
+      has_tbm = ecx & bit_TBM;
 
       has_longmode = edx & bit_LM;
       has_3dnowp = edx & bit_3DNOWP;
       has_3dnow = edx & bit_3DNOW;
+
+      __cpuid (0x7, eax, ebx, ecx, edx);
+
+      has_bmi = ebx & bit_BMI;
     }
 
   if (!arch)
@@ -440,7 +482,8 @@ const char *host_detect_local_cpu (int argc, const char **argv)
       else if (vendor == SIG_INTEL)
 	{
 	  bool xeon_mp = (family == 15 && model == 6);
-	  cache = detect_caches_intel (xeon_mp, max_level, ext_level);
+	  cache = detect_caches_intel (xeon_mp, max_level,
+				       ext_level, &l2sizekb);
 	}
     }
 
@@ -456,11 +499,15 @@ const char *host_detect_local_cpu (int argc, const char **argv)
 
       if (name == SIG_GEODE)
 	processor = PROCESSOR_GEODE;
+      else if (has_xop)
+	processor = PROCESSOR_BDVER1;
+      else if (has_sse4a && has_ssse3)
+        processor = PROCESSOR_BTVER1;
       else if (has_sse4a)
 	processor = PROCESSOR_AMDFAM10;
       else if (has_sse2 || has_longmode)
 	processor = PROCESSOR_K8;
-      else if (has_3dnowp)
+      else if (has_3dnowp && family == 6)
 	processor = PROCESSOR_ATHLON;
       else if (has_mmx)
 	processor = PROCESSOR_K6;
@@ -504,30 +551,79 @@ const char *host_detect_local_cpu (int argc, const char **argv)
 	cpu = "pentium";
       break;
     case PROCESSOR_PENTIUMPRO:
-      if (has_longmode)
-	/* It is Core 2 Duo.  */
-	cpu = "core2";
-      else if (arch)
+      switch (model)
 	{
-	  if (has_sse3)
-	    /* It is Core Duo.  */
-	    cpu = "prescott";
-	  else if (has_sse2)
-	    /* It is Pentium M.  */
-	    cpu = "pentium-m";
-	  else if (has_sse)
-	    /* It is Pentium III.  */
-	    cpu = "pentium3";
-	  else if (has_mmx)
-	    /* It is Pentium II.  */
-	    cpu = "pentium2";
+	case 0x1c:
+	case 0x26:
+	  /* Atom.  */
+	  cpu = "atom";
+	  break;
+	case 0x1a:
+	case 0x1e:
+	case 0x1f:
+	case 0x2e:
+	  /* Nehalem.  */
+	  cpu = "corei7";
+	  break;
+	case 0x25:
+	case 0x2c:
+	case 0x2f:
+	  /* Westmere.  */
+	  cpu = "corei7";
+	  break;
+	case 0x2a:
+	  /* Sandy Bridge.  */
+	  cpu = "corei7-avx";
+	  break;
+	case 0x17:
+	case 0x1d:
+	  /* Penryn.  */
+	  cpu = "core2";
+	  break;
+	case 0x0f:
+	  /* Merom.  */
+	  cpu = "core2";
+	  break;
+	default:
+	  if (arch)
+	    {
+	      /* This is unknown family 0x6 CPU.  */
+	      if (has_avx)
+		/* Assume Sandy Bridge.  */
+		cpu = "corei7-avx";
+	      else if (has_sse4_2)
+		/* Assume Core i7.  */
+		cpu = "corei7";
+	      else if (has_ssse3)
+		{
+		  if (has_movbe)
+		    /* Assume Atom.  */
+		    cpu = "atom";
+		  else
+		    /* Assume Core 2.  */
+		    cpu = "core2";
+		}
+	      else if (has_sse3)
+		/* It is Core Duo.  */
+		cpu = "pentium-m";
+	      else if (has_sse2)
+		/* It is Pentium M.  */
+		cpu = "pentium-m";
+	      else if (has_sse)
+		/* It is Pentium III.  */
+		cpu = "pentium3";
+	      else if (has_mmx)
+		/* It is Pentium II.  */
+		cpu = "pentium2";
+	      else
+		/* Default to Pentium Pro.  */
+		cpu = "pentiumpro";
+	    }
 	  else
-	    /* Default to Pentium Pro.  */
-	    cpu = "pentiumpro";
+	    /* For -mtune, we default to -mtune=generic.  */
+	    cpu = "generic";
+	  break;
 	}
-      else
-	/* For -mtune, we default to -mtune=generic.  */
-	cpu = "generic";
       break;
     case PROCESSOR_PENTIUM4:
       if (has_sse3)
@@ -564,6 +660,12 @@ const char *host_detect_local_cpu (int argc, const char **argv)
     case PROCESSOR_AMDFAM10:
       cpu = "amdfam10";
       break;
+    case PROCESSOR_BDVER1:
+      cpu = "bdver1";
+      break;
+    case PROCESSOR_BTVER1:
+      cpu = "btver1";
+      break;
 
     default:
       /* Use something reasonable.  */
@@ -593,54 +695,40 @@ const char *host_detect_local_cpu (int argc, const char **argv)
 
   if (arch)
     {
-      if (has_cmpxchg16b)
-	options = concat (options, "-mcx16 ", NULL);
-      if (has_lahf_lm)
-	options = concat (options, "-msahf ", NULL);
-      if (has_aes)
-	options = concat (options, "-maes ", NULL);
-      if (has_pclmul)
-	options = concat (options, "-mpclmul ", NULL);
-      if (has_popcnt)
-	options = concat (options, "-mpopcnt ", NULL);
-      if (has_avx)
-	options = concat (options, "-mavx ", NULL);
-      else if (has_sse4_2)
-	options = concat (options, "-msse4.2 ", NULL);
-      else if (has_sse4_1)
-	options = concat (options, "-msse4.1 ", NULL);
+      const char *cx16 = has_cmpxchg16b ? " -mcx16" : " -mno-cx16";
+      const char *sahf = has_lahf_lm ? " -msahf" : " -mno-sahf";
+      const char *movbe = has_movbe ? " -mmovbe" : " -mno-movbe";
+      const char *ase = has_aes ? " -maes" : " -mno-aes";
+      const char *pclmul = has_pclmul ? " -mpclmul" : " -mno-pclmul";
+      const char *popcnt = has_popcnt ? " -mpopcnt" : " -mno-popcnt";
+      const char *abm = has_abm ? " -mabm" : " -mno-abm";
+      const char *lwp = has_lwp ? " -mlwp" : " -mno-lwp";
+      const char *fma = has_fma ? " -mfma" : " -mno-fma";
+      const char *fma4 = has_fma4 ? " -mfma4" : " -mno-fma4";
+      const char *xop = has_xop ? " -mxop" : " -mno-xop";
+      const char *bmi = has_bmi ? " -mbmi" : " -mno-bmi";
+      const char *tbm = has_tbm ? " -mtbm" : " -mno-tbm";
+      const char *avx = has_avx ? " -mavx" : " -mno-avx";
+      const char *sse4_2 = has_sse4_2 ? " -msse4.2" : " -mno-sse4.2";
+      const char *sse4_1 = has_sse4_1 ? " -msse4.1" : " -mno-sse4.1";
+
+      options = concat (options, cx16, sahf, movbe, ase, pclmul,
+			popcnt, abm, lwp, fma, fma4, xop, bmi, tbm,
+			avx, sse4_2, sse4_1, NULL);
     }
 
 done:
-  return concat (cache, "-m", argv[0], "=", cpu, " ", options, NULL);
+  return concat (cache, "-m", argv[0], "=", cpu, options, NULL);
 }
 #else
 
-/* If we aren't compiling with GCC we just provide a minimal
-   default value.  */
+/* If we aren't compiling with GCC then the driver will just ignore
+   -march and -mtune "native" target and will leave to the newly
+   built compiler to generate code for its default target.  */
 
-const char *host_detect_local_cpu (int argc, const char **argv)
+const char *host_detect_local_cpu (int argc ATTRIBUTE_UNUSED,
+				   const char **argv ATTRIBUTE_UNUSED)
 {
-  const char *cpu;
-  bool arch;
-
-  if (argc < 1)
-    return NULL;
-
-  arch = !strcmp (argv[0], "arch");
-
-  if (!arch && strcmp (argv[0], "tune"))
-    return NULL;
-  
-  if (arch)
-    {
-      /* FIXME: i386 is wrong for 64bit compiler.  How can we tell if
-	 we are generating 64bit or 32bit code?  */
-      cpu = "i386";
-    }
-  else
-    cpu = "generic";
-
-  return concat ("-m", argv[0], "=", cpu, NULL);
+  return NULL;
 }
 #endif /* __GNUC__ */

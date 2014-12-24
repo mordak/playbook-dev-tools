@@ -1,5 +1,6 @@
 /* Tree inlining hooks and declarations.
-   Copyright 2001, 2003, 2004, 2005, 2007, 2008 Free Software Foundation, Inc.
+   Copyright 2001, 2003, 2004, 2005, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Alexandre Oliva  <aoliva@redhat.com>
 
 This file is part of GCC.
@@ -21,9 +22,20 @@ along with GCC; see the file COPYING3.  If not see
 #ifndef GCC_TREE_INLINE_H
 #define GCC_TREE_INLINE_H
 
-#include "varray.h"
-#include "pointer-set.h"
+#include "vecir.h" /* For VEC(gimple,heap).  */
 
+struct cgraph_edge;
+
+/* Indicate the desired behavior wrt call graph edges.  We can either
+   duplicate the edge (inlining, cloning), move the edge (versioning,
+   parallelization), or move the edges of the clones (saving).  */
+
+enum copy_body_cge_which
+{
+  CB_CGE_DUPLICATE,
+  CB_CGE_MOVE,
+  CB_CGE_MOVE_CLONES
+};
 
 /* Data required for function body duplication.  */
 
@@ -65,25 +77,19 @@ typedef struct copy_body_data
      is not.  */
   gimple gimple_call;
 
-  /* Exception region the inlined call lie in.  */
-  int eh_region;
+  /* Exception landing pad the inlined call lies in.  */
+  int eh_lp_nr;
 
-  /* Take region number in the function being copied, add this value and
-     get eh region number of the duplicate in the function we inline into.  */
-  int eh_region_offset;
+  /* Maps region and landing pad structures from the function being copied
+     to duplicates created within the function we inline into.  */
+  struct pointer_map_t *eh_map;
 
   /* We use the same mechanism do all sorts of different things.  Rather
      than enumerating the different cases, we categorize the behavior
      in the various situations.  */
 
-  /* Indicate the desired behavior wrt call graph edges.  We can either
-     duplicate the edge (inlining, cloning), move the edge (versioning,
-     parallelization), or move the edges of the clones (saving).  */
-  enum copy_body_cge_which {
-    CB_CGE_DUPLICATE,
-    CB_CGE_MOVE,
-    CB_CGE_MOVE_CLONES
-  } transform_call_graph_edges;
+  /* What to do with call graph edges.  */
+  enum copy_body_cge_which transform_call_graph_edges;
 
   /* True if a new CFG should be created.  False for inlining, true for
      everything else.  */
@@ -97,6 +103,9 @@ typedef struct copy_body_data
   /* True if this statement will need to be regimplified.  */
   bool regimplify;
 
+  /* True if trees should not be unshared.  */
+  bool do_not_unshare;
+
   /* > 0 if we are remapping a type currently.  */
   int remapping_type_depth;
 
@@ -108,6 +117,15 @@ typedef struct copy_body_data
 
   /* Entry basic block to currently copied body.  */
   struct basic_block_def *entry_bb;
+
+  /* Debug statements that need processing.  */
+  VEC(gimple,heap) *debug_stmts;
+
+  /* A map from local declarations in the inlined function to
+     equivalents in the function into which it is being inlined, where
+     the originals have been mapped to a value rather than to a
+     variable.  */
+  struct pointer_map_t *debug_map;
 } copy_body_data;
 
 /* Weights of constructions for estimate_num_insns.  */
@@ -125,6 +143,14 @@ typedef struct eni_weights_d
 
   /* Cost for omp construct.  */
   unsigned omp_cost;
+
+  /* Cost of return.  */
+  unsigned return_cost;
+
+  /* True when time of statemnt should be estimated.  Thus i.e
+     cost of switch statement is logarithmic rather than linear in number
+     of cases.  */
+  bool time_based;
 } eni_weights;
 
 /* Weights that estimate_num_insns uses for heuristics in inlining.  */
@@ -147,23 +173,21 @@ extern tree copy_tree_body_r (tree *, int *, void *);
 extern void insert_decl_map (copy_body_data *, tree, tree);
 
 unsigned int optimize_inline_calls (tree);
+tree maybe_inline_call_in_expr (tree);
 bool tree_inlinable_function_p (tree);
 tree copy_tree_r (tree *, int *, void *);
 tree copy_decl_no_change (tree decl, copy_body_data *id);
-void save_body (tree, tree *, tree *);
 int estimate_move_cost (tree type);
 int estimate_num_insns (gimple, eni_weights *);
 int estimate_num_insns_fn (tree, eni_weights *);
 int count_insns_seq (gimple_seq, eni_weights *);
 bool tree_versionable_function_p (tree);
-void tree_function_versioning (tree, tree, varray_type, bool, bitmap);
-bool tree_can_inline_p (tree, tree);
+bool tree_can_inline_p (struct cgraph_edge *e);
 
-extern gimple_seq remap_gimple_seq (gimple_seq, copy_body_data *);
 extern tree remap_decl (tree decl, copy_body_data *id);
 extern tree remap_type (tree type, copy_body_data *id);
 extern gimple_seq copy_gimple_seq_and_replace_locals (gimple_seq seq);
 
-extern HOST_WIDE_INT estimated_stack_frame_size (void);
+extern HOST_WIDE_INT estimated_stack_frame_size (struct cgraph_node *);
 
 #endif /* GCC_TREE_INLINE_H */

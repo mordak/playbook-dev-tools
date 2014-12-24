@@ -1,7 +1,7 @@
 // Exception Handling support header for -*- C++ -*-
 
 // Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003,
-// 2004, 2005, 2006, 2007, 2008, 2009
+// 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
 // Free Software Foundation
 //
 // This file is part of GCC.
@@ -10,12 +10,12 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation; either version 3, or (at your option)
 // any later version.
-// 
+//
 // GCC is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
-// 
+//
 // Under Section 7 of GPL version 3, you are granted additional
 // permissions described in the GCC Runtime Library Exception, version
 // 3.1, as published by the Free Software Foundation.
@@ -32,13 +32,15 @@
 #ifndef __EXCEPTION__
 #define __EXCEPTION__
 
+#pragma GCC system_header
+
 #pragma GCC visibility push(default)
 
 #include <bits/c++config.h>
 
 extern "C++" {
 
-namespace std 
+namespace std
 {
   /**
    * @defgroup exceptions Exceptions
@@ -56,7 +58,7 @@ namespace std
    *  your own %exception classes, or use a different hierarchy, or to
    *  throw non-class data (e.g., fundamental types).
    */
-  class exception 
+  class exception
   {
   public:
     exception() throw() { }
@@ -69,7 +71,7 @@ namespace std
 
   /** If an %exception is thrown which is not listed in a function's
    *  %exception specification, one of these may be thrown.  */
-  class bad_exception : public exception 
+  class bad_exception : public exception
   {
   public:
     bad_exception() throw() { }
@@ -93,7 +95,7 @@ namespace std
 
   /** The runtime will call this function if %exception handling must be
    *  abandoned for any reason.  It can also be called by the user.  */
-  void terminate() __attribute__ ((__noreturn__));
+  void terminate() throw() __attribute__ ((__noreturn__));
 
   /// Takes a new handler function as an argument, returns the old function.
   unexpected_handler set_unexpected(unexpected_handler) throw();
@@ -102,27 +104,30 @@ namespace std
    *  violates the function's %exception specification.  */
   void unexpected() __attribute__ ((__noreturn__));
 
-  /** [18.6.4]/1:  "Returns true after completing evaluation of a
+  /** [18.6.4]/1:  'Returns true after completing evaluation of a
    *  throw-expression until either completing initialization of the
    *  exception-declaration in the matching handler or entering @c unexpected()
    *  due to the throw; or after entering @c terminate() for any reason
    *  other than an explicit call to @c terminate().  [Note: This includes
-   *  stack unwinding [15.2].  end note]"
+   *  stack unwinding [15.2].  end note]'
    *
-   *  2:  "When @c uncaught_exception() is true, throwing an %exception can
-   *  result in a call of @c terminate() (15.5.1)."
+   *  2: 'When @c uncaught_exception() is true, throwing an
+   *  %exception can result in a call of @c terminate()
+   *  (15.5.1).'
    */
-  bool uncaught_exception() throw();
+  bool uncaught_exception() throw() __attribute__ ((__pure__));
 
   // @} group exceptions
 } // namespace std
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
+namespace __gnu_cxx
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
-  /** 
+  /**
    *  @brief A replacement for the standard terminate_handler which
    *  prints more information about the terminating exception (if any)
-   *  on stderr.  
+   *  on stderr.
    *
    *  @ingroup exceptions
    *
@@ -137,15 +142,17 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
    */
   void __verbose_terminate_handler();
 
-_GLIBCXX_END_NAMESPACE
-  
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
+
 } // extern "C++"
 
 #pragma GCC visibility pop
 
 #if (defined(__GXX_EXPERIMENTAL_CXX0X__) \
      && defined(_GLIBCXX_ATOMIC_BUILTINS_4))
-#include <exception_ptr.h>
+#include <bits/exception_ptr.h>
+#include <bits/nested_exception.h>
 #endif
 
 #endif

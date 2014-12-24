@@ -1,5 +1,5 @@
 /* Simple bitmaps.
-   Copyright (C) 1999, 2000, 2002, 2003, 2004, 2006, 2007, 2008
+   Copyright (C) 1999, 2000, 2002, 2003, 2004, 2006, 2007, 2008, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -36,17 +36,13 @@ along with GCC; see the file COPYING3.  If not see
 #error Need to increase size of datatype used for popcount
 #endif
 
-typedef struct simple_bitmap_def
+struct simple_bitmap_def
 {
   unsigned char *popcount;      /* Population count.  */
   unsigned int n_bits;		/* Number of bits.  */
   unsigned int size;		/* Size in elements.  */
   SBITMAP_ELT_TYPE elms[1];	/* The elements.  */
-} *sbitmap;
-typedef const struct simple_bitmap_def *const_sbitmap;
-
-typedef SBITMAP_ELT_TYPE *sbitmap_ptr;
-typedef const SBITMAP_ELT_TYPE *const_sbitmap_ptr;
+};
 
 /* Return the set size needed for N elements.  */
 #define SBITMAP_SET_SIZE(N) (((N) + SBITMAP_ELT_BITS - 1) / SBITMAP_ELT_BITS)

@@ -1,5 +1,5 @@
 /* Tree SCC value numbering
-   Copyright (C) 2007, 2008, 2009 Free Software Foundation, Inc.
+   Copyright (C) 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Daniel Berlin <dberlin@dberlin.org>
 
    This file is part of GCC.
@@ -20,6 +20,10 @@
 
 #ifndef TREE_SSA_SCCVN_H
 #define TREE_SSA_SCCVN_H
+
+/* In tree-ssa-sccvn.c  */
+bool expressions_equal_p (tree, tree);
+
 
 /* TOP of the VN lattice.  */
 extern tree VN_TOP;
@@ -68,6 +72,8 @@ typedef const struct vn_phi_s *const_vn_phi_t;
 typedef struct vn_reference_op_struct
 {
   enum tree_code opcode;
+  /* Constant offset this op adds or -1 if it is variable.  */
+  HOST_WIDE_INT off;
   tree type;
   tree op0;
   tree op1;
@@ -79,20 +85,21 @@ typedef const vn_reference_op_s *const_vn_reference_op_t;
 DEF_VEC_O(vn_reference_op_s);
 DEF_VEC_ALLOC_O(vn_reference_op_s, heap);
 
-/* A reference operation in the hashtable is representation as a
-   collection of vuses, representing the memory state at the time of
+/* A reference operation in the hashtable is representation as
+   the vuse, representing the memory state at the time of
    the operation, and a collection of operands that make up the
    addressing calculation.  If two vn_reference_t's have the same set
    of operands, they access the same memory location. We also store
-   the resulting value number, and the hashcode.  The vuses are
-   always stored in order sorted by ssa name version.  */
+   the resulting value number, and the hashcode.  */
 
 typedef struct vn_reference_s
 {
   /* Unique identifier that all expressions with the same value have. */
   unsigned int value_id;
   hashval_t hashcode;
-  VEC (tree, gc) *vuses;
+  tree vuse;
+  alias_set_type set;
+  tree type;
   VEC (vn_reference_op_s, heap) *operands;
   tree result;
 } *vn_reference_t;
@@ -158,11 +165,13 @@ typedef struct vn_ssa_aux
   unsigned needs_insertion : 1;
 } *vn_ssa_aux_t;
 
+typedef enum { VN_NOWALK, VN_WALK, VN_WALKREWRITE } vn_lookup_kind;
+
 /* Return the value numbering info for an SSA_NAME.  */
 extern vn_ssa_aux_t VN_INFO (tree);
 extern vn_ssa_aux_t VN_INFO_GET (tree);
 tree vn_get_expr_for (tree);
-bool run_scc_vn (bool);
+bool run_scc_vn (vn_lookup_kind);
 void free_scc_vn (void);
 tree vn_nary_op_lookup (tree, vn_nary_op_t *);
 tree vn_nary_op_lookup_stmt (gimple, vn_nary_op_t *);
@@ -174,14 +183,18 @@ vn_nary_op_t vn_nary_op_insert_stmt (gimple, tree);
 vn_nary_op_t vn_nary_op_insert_pieces (unsigned int, enum tree_code,
 				       tree, tree, tree, tree,
 				       tree, tree, unsigned int);
+void vn_reference_fold_indirect (VEC (vn_reference_op_s, heap) **,
+				 unsigned int *);
 void copy_reference_ops_from_ref (tree, VEC(vn_reference_op_s, heap) **);
 void copy_reference_ops_from_call (gimple, VEC(vn_reference_op_s, heap) **);
-tree vn_reference_lookup_pieces (VEC (tree, gc) *,
+bool ao_ref_init_from_vn_reference (ao_ref *, alias_set_type, tree,
+				    VEC (vn_reference_op_s, heap) *);
+tree vn_reference_lookup_pieces (tree, alias_set_type, tree,
 				 VEC (vn_reference_op_s, heap) *,
-				 vn_reference_t *, bool);
-tree vn_reference_lookup (tree, VEC (tree, gc) *, bool, vn_reference_t *);
-vn_reference_t vn_reference_insert (tree, tree, VEC (tree, gc) *);
-vn_reference_t vn_reference_insert_pieces (VEC (tree, gc) *,
+				 vn_reference_t *, vn_lookup_kind);
+tree vn_reference_lookup (tree, tree, vn_lookup_kind, vn_reference_t *);
+vn_reference_t vn_reference_insert (tree, tree, tree);
+vn_reference_t vn_reference_insert_pieces (tree, alias_set_type, tree,
 					   VEC (vn_reference_op_s, heap) *,
 					   tree, unsigned int);
 
@@ -195,5 +208,5 @@ unsigned int get_next_value_id (void);
 unsigned int get_constant_value_id (tree);
 unsigned int get_or_alloc_constant_value_id (tree);
 bool value_id_constant_p (unsigned int);
-VEC (tree, gc) *shared_vuses_from_stmt (gimple);
+tree fully_constant_vn_reference_p (vn_reference_t);
 #endif /* TREE_SSA_SCCVN_H  */

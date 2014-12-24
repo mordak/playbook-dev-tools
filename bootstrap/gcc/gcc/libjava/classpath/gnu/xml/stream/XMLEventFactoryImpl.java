@@ -1,4 +1,4 @@
-/* XMLEventFactoryImpl.java -- 
+/* XMLEventFactoryImpl.java --
    Copyright (C) 2005,2006  Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
@@ -81,7 +81,7 @@ public class XMLEventFactoryImpl
                              new QName(namespaceURI, localName, prefix),
                              value, "CDATA", true);
   }
-  
+
   public Attribute createAttribute(String localName, String value)
   {
     return new AttributeImpl(location,
@@ -98,12 +98,14 @@ public class XMLEventFactoryImpl
   public Namespace createNamespace(String namespaceURI)
   {
     return new NamespaceImpl(location,
-                             XMLConstants.DEFAULT_NS_PREFIX, namespaceURI);
+                             XMLConstants.DEFAULT_NS_PREFIX,
+                             namespaceURI,
+                             true);
   }
 
   public Namespace createNamespace(String prefix, String namespaceUri)
   {
-     return new NamespaceImpl(location, prefix, namespaceUri);
+     return new NamespaceImpl(location, prefix, namespaceUri, true);
   }
 
   public StartElement createStartElement(QName name,
@@ -115,7 +117,7 @@ public class XMLEventFactoryImpl
                                 createLinkedList(namespaces),
                                 null);
   }
-  
+
   public StartElement createStartElement(String prefix,
                                          String namespaceUri,
                                          String localName)
@@ -153,7 +155,7 @@ public class XMLEventFactoryImpl
                                 createLinkedList(namespaces),
                                 context);
   }
-  
+
   public EndElement createEndElement(QName name,
                                      Iterator namespaces)
   {
@@ -169,7 +171,7 @@ public class XMLEventFactoryImpl
                               new QName(namespaceUri, localName, prefix),
                               Collections.EMPTY_LIST);
   }
-  
+
   public EndElement createEndElement(String prefix,
                                      String namespaceUri,
                                      String localName,
@@ -213,7 +215,7 @@ public class XMLEventFactoryImpl
     return new StartDocumentImpl(location, null, encoding, version,
                                  standalone, true, true);
   }
-  
+
   public StartDocument createStartDocument(String encoding,
                                            String version)
   {
@@ -263,6 +265,5 @@ public class XMLEventFactoryImpl
       ret.add(i.next());
     return ret;
   }
-  
-}
 
+}

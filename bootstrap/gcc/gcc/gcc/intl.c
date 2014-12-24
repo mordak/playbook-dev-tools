@@ -1,5 +1,5 @@
 /* Message translation utilities.
-   Copyright (C) 2001, 2003, 2004, 2005, 2007, 2008
+   Copyright (C) 2001, 2003, 2004, 2005, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -21,7 +21,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "tm.h"
 #include "intl.h"
 
 #ifdef HAVE_LANGINFO_CODESET
@@ -33,6 +32,12 @@ const char *open_quote = "'";
 
 /* Closing quotation mark for diagnostics.  */
 const char *close_quote = "'";
+
+/* The name of the locale encoding.  */
+const char *locale_encoding = NULL;
+
+/* Whether the locale is using UTF-8.  */
+bool locale_utf8 = false;
 
 #ifdef ENABLE_NLS
 
@@ -60,20 +65,22 @@ gcc_init_libintl (void)
   /* Closing quotation mark.  */
   close_quote = _("'");
 
+#if defined HAVE_LANGINFO_CODESET
+  locale_encoding = nl_langinfo (CODESET);
+  if (locale_encoding != NULL
+      && (!strcasecmp (locale_encoding, "utf-8")
+	  || !strcasecmp (locale_encoding, "utf8")))
+    locale_utf8 = true;
+#endif
+
   if (!strcmp (open_quote, "`") && !strcmp (close_quote, "'"))
     {
-#if defined HAVE_LANGINFO_CODESET
-      const char *encoding;
-#endif
       /* Untranslated quotes that it may be possible to replace with
 	 U+2018 and U+2019; but otherwise use "'" instead of "`" as
 	 opening quote.  */
       open_quote = "'";
 #if defined HAVE_LANGINFO_CODESET
-      encoding = nl_langinfo (CODESET);
-      if (encoding != NULL
-	  && (!strcasecmp (encoding, "utf-8")
-	      || !strcasecmp (encoding, "utf8")))
+      if (locale_utf8)
 	{
 	  open_quote = "\xe2\x80\x98";
 	  close_quote = "\xe2\x80\x99";
@@ -112,3 +119,33 @@ gcc_gettext_width (const char *msgstr)
 #endif
 
 #endif /* ENABLE_NLS */
+
+#ifndef ENABLE_NLS
+
+const char *
+fake_ngettext (const char *singular, const char *plural, unsigned long n)
+{
+  if (n == 1UL)
+    return singular;
+
+  return plural;
+}
+
+#endif
+
+/* Return the indent for successive lines, using the width of
+   the STR.  STR must have been translated already.  The string
+   must be freed by the caller.  */
+
+char *
+get_spaces (const char *str)
+{
+   size_t len = gcc_gettext_width (str);
+   char *spaces = XNEWVEC(char, len + 1);
+   memset (spaces, ' ', len);
+   spaces[len] = '\0';
+   return spaces;
+}
+
+
+

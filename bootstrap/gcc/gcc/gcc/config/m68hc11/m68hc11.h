@@ -1,6 +1,6 @@
 /* Definitions of target machine for GNU compiler.
    Motorola 68HC11 and 68HC12.
-   Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008
+   Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by Stephane Carrez (stcarrez@nerim.fr)
 
@@ -141,17 +141,6 @@ extern short *reg_renumber;	/* def in local_alloc.c */
 
 /* Print subsidiary information on the compiler version in use.  */
 #define TARGET_VERSION	fprintf (stderr, " (MC68HC11/MC68HC12/MC68HCS12)")
-
-/* Sometimes certain combinations of command options do not make
-   sense on a particular target machine.  You can define a macro
-   `OVERRIDE_OPTIONS' to take account of this.  This macro, if
-   defined, is executed once just after all the command options have
-   been parsed.
-
-   Don't use this macro to turn on various extra optimizations for
-   `-O'.  That is what `OPTIMIZATION_OPTIONS' is for.  */
-
-#define OVERRIDE_OPTIONS	m68hc11_override_options ()
 
 
 /* Define cost parameters for a given processor variant.  */
@@ -382,14 +371,6 @@ SOFT_REG_FIRST+28, SOFT_REG_FIRST+29,SOFT_REG_FIRST+30,SOFT_REG_FIRST+31
   {1, 1, 1, 1, 1, 1, 1, 1,   1, 1,  1,   1,1, 1, SOFT_REG_USED, 1, 1}
 /* X, D, Y, SP,PC,A, B, CCR, Z, FP, ZTMP,ZR,XYR, D1 - 32,     SOFT-FP, AP */
 
-
-/* Define this macro to change register usage conditional on target flags.
-
-   The soft-registers are disabled or enabled according to the
-  -msoft-reg-count=<n> option.  */
-
-
-#define CONDITIONAL_REGISTER_USAGE (m68hc11_conditional_register_usage ())
 
 /* List the order in which to allocate registers.  Each register must be
    listed once, even those in FIXED_REGISTERS.  */
@@ -707,41 +688,13 @@ extern enum reg_class m68hc11_tmp_regs_class;
 
 #define PREFERRED_RELOAD_CLASS(X,CLASS)	preferred_reload_class(X,CLASS)
 
-#define SMALL_REGISTER_CLASSES 1
+#define TARGET_SMALL_REGISTER_CLASSES_FOR_MODE_P hook_bool_mode_true
 
 /* A C expression that is nonzero if hard register number REGNO2 can be
    considered for use as a rename register for REGNO1 */
 
 #define HARD_REGNO_RENAME_OK(REGNO1,REGNO2) \
   m68hc11_hard_regno_rename_ok ((REGNO1), (REGNO2))
-
-/* A C expression whose value is nonzero if pseudos that have been
-   assigned to registers of class CLASS would likely be spilled
-   because registers of CLASS are needed for spill registers.
-
-   The default value of this macro returns 1 if CLASS has exactly one
-   register and zero otherwise.  On most machines, this default
-   should be used.  Only define this macro to some other expression
-   if pseudo allocated by `local-alloc.c' end up in memory because
-   their hard registers were needed for spill registers.  If this
-   macro returns nonzero for those classes, those pseudos will only
-   be allocated by `global.c', which knows how to reallocate the
-   pseudo to another register.  If there would not be another
-   register available for reallocation, you should not change the
-   definition of this macro since the only effect of such a
-   definition would be to slow down register allocation.  */
-
-#define CLASS_LIKELY_SPILLED_P(CLASS)					\
-  (((CLASS) == D_REGS)							\
-   || ((CLASS) == X_REGS)                                               \
-   || ((CLASS) == Y_REGS)                                               \
-   || ((CLASS) == A_REGS)                                               \
-   || ((CLASS) == SP_REGS)                                              \
-   || ((CLASS) == D_OR_X_REGS)                                          \
-   || ((CLASS) == D_OR_Y_REGS)                                          \
-   || ((CLASS) == X_OR_SP_REGS)                                         \
-   || ((CLASS) == Y_OR_SP_REGS)                                         \
-   || ((CLASS) == D_OR_SP_REGS))
 
 /* Return the maximum number of consecutive registers needed to represent
    mode MODE in a register of class CLASS.  */
@@ -883,23 +836,6 @@ extern enum reg_class m68hc11_tmp_regs_class;
  {FRAME_POINTER_REGNUM, STACK_POINTER_REGNUM},		\
  {FRAME_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM}}
 
-/* Value should be nonzero if functions must have frame pointers.
-   Zero means the frame pointer need not be set up (and parms may be
-   accessed via the stack pointer) in functions that seem suitable.
-   This is computed in `reload', in reload1.c.  */
-#define FRAME_POINTER_REQUIRED	0
-
-/* Given FROM and TO register numbers, say whether this elimination is allowed.
-   Frame pointer elimination is automatically handled.
-
-   All other eliminations are valid.  */
-
-#define CAN_ELIMINATE(FROM, TO)					\
- ((FROM) == ARG_POINTER_REGNUM && (TO) == STACK_POINTER_REGNUM	\
-  ? ! frame_pointer_needed					\
-  : 1)
-
-
 /* Define the offset between two registers, one to be eliminated, and the other
    its replacement, at the start of a routine.  */
 
@@ -913,15 +849,6 @@ extern enum reg_class m68hc11_tmp_regs_class;
    stack pointer really advances by. No rounding or alignment needed
    for MC6811.  */
 #define PUSH_ROUNDING(BYTES)	(BYTES)
-
-/* Value is 1 if returning from a function call automatically pops the
-   arguments described by the number-of-args field in the call. FUNTYPE is
-   the data type of the function (as a tree), or for a library call it is
-   an identifier node for the subroutine name.
-  
-   The standard MC6811 call, with arg count word, includes popping the
-   args as part of the call template.  */
-#define RETURN_POPS_ARGS(FUNDECL,FUNTYPE,SIZE)	0
 
 /* Passing Arguments in Registers.  */
 
@@ -954,27 +881,6 @@ typedef struct m68hc11_args
    function whose data type is FNTYPE. For a library call, FNTYPE is 0.  */
 #define INIT_CUMULATIVE_ARGS(CUM, FNTYPE, LIBNAME, INDIRECT, N_NAMED_ARGS) \
     (m68hc11_init_cumulative_args (&CUM, FNTYPE, LIBNAME))
-
-/* Update the data in CUM to advance over an argument of mode MODE and data
-   type TYPE. (TYPE is null for libcalls where that information may not be
-   available.) */
-#define FUNCTION_ARG_ADVANCE(CUM, MODE, TYPE, NAMED) \
-    (m68hc11_function_arg_advance (&CUM, MODE, TYPE, NAMED))
-
-/* Define where to put the arguments to a function.
-   Value is zero to push the argument on the stack,
-   or a hard register in which to store the argument.
-
-   MODE is the argument's machine mode.
-   TYPE is the data type of the argument (as a tree).
-    This is null for libcalls where that information may
-    not be available.
-   CUM is a variable of type CUMULATIVE_ARGS which gives info about
-    the preceding args and about the function being called.
-   NAMED is nonzero if this argument is a named parameter
-    (otherwise it is an extra parameter matching an ellipsis).  */
-#define FUNCTION_ARG(CUM, MODE, TYPE, NAMED) \
-  (m68hc11_function_arg (&CUM, MODE, TYPE, NAMED))
 
 /* Define the profitability of saving registers around calls.
 
@@ -1022,16 +928,9 @@ typedef struct m68hc11_args
    for profiling a function entry.  */
 #define FUNCTION_PROFILER(FILE, LABELNO)		\
     fprintf (FILE, "\tldy\t.LP%d\n\tjsr mcount\n", (LABELNO))
+
 /* Length in units of the trampoline for entering a nested function.  */
 #define TRAMPOLINE_SIZE		(TARGET_M6811 ? 11 : 9)
-
-/* A C statement to initialize the variable parts of a trampoline.
-   ADDR is an RTX for the address of the trampoline; FNADDR is an
-   RTX for the address of the nested function; STATIC_CHAIN is an
-   RTX for the static chain value that should be passed to the
-   function when it is called.  */
-#define INITIALIZE_TRAMPOLINE(TRAMP, FNADDR, CXT) \
-  m68hc11_initialize_trampoline ((TRAMP), (FNADDR), (CXT))
 
 
 /* Addressing modes, and classification of registers for them.  */
@@ -1132,13 +1031,10 @@ extern unsigned char m68hc11_reg_valid_for_index[FIRST_PSEUDO_REGISTER];
      && (GET_CODE (XEXP (operand, 0)) == POST_INC) \
      && (SP_REG_P (XEXP (XEXP (operand, 0), 0))))
 
-/* 1 if X is an rtx for a constant that is a valid address.  */
-#define CONSTANT_ADDRESS_P(X)	(CONSTANT_P (X))
-
 /* Maximum number of registers that can appear in a valid memory address */
 #define MAX_REGS_PER_ADDRESS	2
 
-/* GO_IF_LEGITIMATE_ADDRESS recognizes an RTL expression that is a
+/* TARGET_LEGITIMATE_ADDRESS_P recognizes an RTL expression that is a
    valid memory address for an instruction. The MODE argument is the
    machine mode for the MEM expression that wants to use this address.  */
 
@@ -1175,19 +1071,6 @@ extern unsigned char m68hc11_reg_valid_for_index[FIRST_PSEUDO_REGISTER];
   (((GET_CODE (X) == PRE_DEC) || (GET_CODE (X) == POST_INC)) \
 	&& SP_REG_P (XEXP (X, 0)))
 
-/* Go to ADDR if X is a valid address.  */
-#ifndef REG_OK_STRICT
-#define GO_IF_LEGITIMATE_ADDRESS(MODE, X, ADDR) \
-{ \
-  if (m68hc11_go_if_legitimate_address ((X), (MODE), 0)) goto ADDR; \
-}
-#else
-#define GO_IF_LEGITIMATE_ADDRESS(MODE, X, ADDR)		 \
-{							 \
-  if (m68hc11_go_if_legitimate_address ((X), (MODE), 1)) goto ADDR; \
-}
-#endif
-
 /* The macros REG_OK_FOR..._P assume that the arg is a REG rtx and check its
    validity for a certain class.  We have two alternate definitions for each
    of them.  The usual definition accepts all pseudo regs; the other rejects
@@ -1210,32 +1093,6 @@ extern unsigned char m68hc11_reg_valid_for_index[FIRST_PSEUDO_REGISTER];
 #define REG_OK_FOR_INDEX_P(X)  REG_OK_FOR_INDEX_STRICT_P(X)
 #endif
 
-
-/* Try machine-dependent ways of modifying an illegitimate address
-   to be legitimate.  If we find one, return the new, valid address.
-   This macro is used in only one place: `memory_address' in explow.c.
-  
-   OLDX is the address as it was before break_out_memory_refs was called.
-   In some cases it is useful to look at this to decide what needs to be done.
-  
-   MODE and WIN are passed so that this macro can use
-   GO_IF_LEGITIMATE_ADDRESS.
-  
-   It is always safe for this macro to do nothing.
-   It exists to recognize opportunities to optimize the output.  */
-
-#define LEGITIMIZE_ADDRESS(X,OLDX,MODE,WIN)                     \
-{ rtx operand = (X);                                            \
-  if (m68hc11_legitimize_address (&operand, (OLDX), (MODE)))	\
-    {                                                           \
-      (X) = operand;                                            \
-      GO_IF_LEGITIMATE_ADDRESS (MODE,X,WIN);                    \
-    }                                                           \
-}
-
-/* Go to LABEL if ADDR (a legitimate address expression)
-   has an effect that depends on the machine mode it is used for.  */
-#define GO_IF_MODE_DEPENDENT_ADDRESS(ADDR,LABEL)
 
 /* Nonzero if the constant value X is a legitimate general operand.
    It is given that X satisfies CONSTANT_P or is a CONST_DOUBLE.  */
@@ -1417,17 +1274,6 @@ do {                                                                    \
   "*_.frame", "*_.tmp", "*_.z", "*_.xy", "*fake clobber",	\
   SOFT_REG_NAMES, "*sframe", "*ap"}
 
-/* Print an instruction operand X on file FILE. CODE is the code from the
-   %-spec for printing this operand. If `%z3' was used to print operand
-   3, then CODE is 'z'.  */
-
-#define PRINT_OPERAND(FILE, X, CODE) \
-  print_operand (FILE, X, CODE)
-
-/* Print a memory operand whose address is X, on file FILE.  */
-#define PRINT_OPERAND_ADDRESS(FILE, ADDR) \
-  print_operand_address (FILE, ADDR)
-
 /* This is how to output an insn to push/pop a register on the stack.
    It need not be very fast code.  
 
@@ -1530,8 +1376,6 @@ extern int current_function_interrupt;
 extern int current_function_trap;
 extern int current_function_far;
 
-extern GTY(()) rtx m68hc11_compare_op0;
-extern GTY(()) rtx m68hc11_compare_op1;
 extern GTY(()) rtx m68hc11_soft_tmp_reg;
 extern GTY(()) rtx ix_reg;
 extern GTY(()) rtx iy_reg;

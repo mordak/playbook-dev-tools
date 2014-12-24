@@ -29,7 +29,9 @@
 
 #include <istream>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   template<>
     basic_istream<char>&
@@ -37,7 +39,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     getline(char_type* __s, streamsize __n, char_type __delim)
     {
       _M_gcount = 0;
-      ios_base::iostate __err = ios_base::iostate(ios_base::goodbit);
+      ios_base::iostate __err = ios_base::goodbit;
       sentry __cerb(*this, true);
       if (__cerb)
 	{
@@ -65,7 +67,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 			__size = __p - __sb->gptr();
 		      traits_type::copy(__s, __sb->gptr(), __size);
 		      __s += __size;
-		      __sb->gbump(__size);
+		      __sb->__safe_gbump(__size);
 		      _M_gcount += __size;
 		      __c = __sb->sgetc();
 		    }
@@ -116,12 +118,12 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
       _M_gcount = 0;
       sentry __cerb(*this, true);
-      if (__cerb && __n > 0)
+      if (__n > 0 && __cerb)
 	{
-	  ios_base::iostate __err = ios_base::iostate(ios_base::goodbit);
+	  ios_base::iostate __err = ios_base::goodbit;
 	  __try
 	    {
-	      const char_type __cdelim = traits_type::to_char_type(__delim);	      
+	      const char_type __cdelim = traits_type::to_char_type(__delim);
 	      const int_type __eof = traits_type::eof();
 	      __streambuf_type* __sb = this->rdbuf();
 	      int_type __c = __sb->sgetc();
@@ -143,7 +145,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 								   __cdelim);
 			  if (__p)
 			    __size = __p - __sb->gptr();
-			  __sb->gbump(__size);
+			  __sb->__safe_gbump(__size);
 			  _M_gcount += __size;
 			  __c = __sb->sgetc();
 			}
@@ -203,7 +205,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       typedef __istream_type::__ctype_type	__ctype_type;
 
       streamsize __extracted = 0;
-      ios_base::iostate __err = ios_base::iostate(ios_base::goodbit);
+      ios_base::iostate __err = ios_base::goodbit;
       __istream_type::sentry __cerb(__in, false);
       if (__cerb)
 	{
@@ -237,7 +239,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 				- __sb->gptr());
 		      __traits_type::copy(__s, __sb->gptr(), __size);
 		      __s += __size;
-		      __sb->gbump(__size);
+		      __sb->__safe_gbump(__size);
 		      __extracted += __size;
 		      __c = __sb->sgetc();
 		    }
@@ -286,7 +288,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       typedef __string_type::size_type		__size_type;
 
       __size_type __extracted = 0;
-      ios_base::iostate __err = ios_base::iostate(ios_base::goodbit);
+      ios_base::iostate __err = ios_base::goodbit;
       __istream_type::sentry __cerb(__in, false);
       if (__cerb)
 	{
@@ -316,7 +318,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 					     __sb->gptr() + __size)
 				- __sb->gptr());
 		      __str.append(__sb->gptr(), __size);
-		      __sb->gbump(__size);
+		      __sb->__safe_gbump(__size);
 		      __extracted += __size;
 		      __c = __sb->sgetc();
 		    }
@@ -368,7 +370,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
       __size_type __extracted = 0;
       const __size_type __n = __str.max_size();
-      ios_base::iostate __err = ios_base::iostate(ios_base::goodbit);
+      ios_base::iostate __err = ios_base::goodbit;
       __istream_type::sentry __cerb(__in, true);
       if (__cerb)
 	{
@@ -395,7 +397,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 		      if (__p)
 			__size = __p - __sb->gptr();
 		      __str.append(__sb->gptr(), __size);
-		      __sb->gbump(__size);
+		      __sb->__safe_gbump(__size);
 		      __extracted += __size;
 		      __c = __sb->sgetc();
 		    }
@@ -444,7 +446,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     getline(char_type* __s, streamsize __n, char_type __delim)
     {
       _M_gcount = 0;
-      ios_base::iostate __err = ios_base::iostate(ios_base::goodbit);
+      ios_base::iostate __err = ios_base::goodbit;
       sentry __cerb(*this, true);
       if (__cerb)
 	{
@@ -472,7 +474,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 			__size = __p - __sb->gptr();
 		      traits_type::copy(__s, __sb->gptr(), __size);
 		      __s += __size;
-		      __sb->gbump(__size);
+		      __sb->__safe_gbump(__size);
 		      _M_gcount += __size;
 		      __c = __sb->sgetc();
 		    }
@@ -523,12 +525,12 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
       _M_gcount = 0;
       sentry __cerb(*this, true);
-      if (__cerb && __n > 0)
+      if (__n > 0 && __cerb)
 	{
-	  ios_base::iostate __err = ios_base::iostate(ios_base::goodbit);
+	  ios_base::iostate __err = ios_base::goodbit;
 	  __try
 	    {
-	      const char_type __cdelim = traits_type::to_char_type(__delim);	      
+	      const char_type __cdelim = traits_type::to_char_type(__delim);
 	      const int_type __eof = traits_type::eof();
 	      __streambuf_type* __sb = this->rdbuf();
 	      int_type __c = __sb->sgetc();
@@ -550,7 +552,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 								   __cdelim);
 			  if (__p)
 			    __size = __p - __sb->gptr();
-			  __sb->gbump(__size);
+			  __sb->__safe_gbump(__size);
 			  _M_gcount += __size;
 			  __c = __sb->sgetc();
 			}
@@ -614,7 +616,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
       __size_type __extracted = 0;
       const __size_type __n = __str.max_size();
-      ios_base::iostate __err = ios_base::iostate(ios_base::goodbit);
+      ios_base::iostate __err = ios_base::goodbit;
       __istream_type::sentry __cerb(__in, true);
       if (__cerb)
 	{
@@ -641,7 +643,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 		      if (__p)
 			__size = __p - __sb->gptr();
 		      __str.append(__sb->gptr(), __size);
-		      __sb->gbump(__size);
+		      __sb->__safe_gbump(__size);
 		      __extracted += __size;
 		      __c = __sb->sgetc();
 		    }
@@ -684,4 +686,5 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     }
 #endif
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace

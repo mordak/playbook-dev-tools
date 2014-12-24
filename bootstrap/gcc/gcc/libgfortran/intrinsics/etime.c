@@ -1,8 +1,9 @@
 /* Implementation of the ETIME intrinsic.
-   Copyright (C) 2004, 2005, 2006, 2007, 2009 Free Software Foundation, Inc.
+   Copyright (C) 2004, 2005, 2006, 2007, 2009, 2011 Free Software
+   Foundation, Inc.
    Contributed by Steven G. Kargl <kargls@comcast.net>.
 
-This file is part of the GNU Fortran 95 runtime library (libgfortran).
+This file is part of the GNU Fortran runtime library (libgfortran).
 
 Libgfortran is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public
@@ -35,10 +36,10 @@ etime_sub (gfc_array_r4 *t, GFC_REAL_4 *result)
   GFC_REAL_4 tu, ts, tt, *tp;
   long user_sec, user_usec, system_sec, system_usec;
 
-  if (((t->dim[0].ubound + 1 - t->dim[0].lbound)) < 2)
+  if (((GFC_DESCRIPTOR_EXTENT(t,0))) < 2)
     runtime_error ("Insufficient number of elements in TARRAY.");
 
-  if (__time_1 (&user_sec, &user_usec, &system_sec, &system_usec) == 0)
+  if (gf_cputime (&user_sec, &user_usec, &system_sec, &system_usec) == 0)
     {
       tu = (GFC_REAL_4)(user_sec + 1.e-6 * user_usec);
       ts = (GFC_REAL_4)(system_sec + 1.e-6 * system_usec);
@@ -54,7 +55,7 @@ etime_sub (gfc_array_r4 *t, GFC_REAL_4 *result)
   tp = t->data;
 
   *tp = tu;
-  tp += t->dim[0].stride;
+  tp += GFC_DESCRIPTOR_STRIDE(t,0);
   *tp = ts;
   *result = tt;
 }

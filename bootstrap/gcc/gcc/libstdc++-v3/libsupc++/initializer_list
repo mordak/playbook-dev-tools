@@ -1,6 +1,6 @@
 // std::initializer_list support -*- C++ -*-
 
-// Copyright (C) 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2008, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of GCC.
 //
@@ -8,12 +8,12 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation; either version 3, or (at your option)
 // any later version.
-// 
+//
 // GCC is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
-// 
+//
 // Under Section 7 of GPL version 3, you are granted additional
 // permissions described in the GCC Runtime Library Exception, version
 // 3.1, as published by the Free Software Foundation.
@@ -27,14 +27,16 @@
  *  This is a Standard C++ Library header.
  */
 
-#ifndef __CXX_INITIALIZER_LIST
-#define __CXX_INITIALIZER_LIST
+#ifndef _INITIALIZER_LIST
+#define _INITIALIZER_LIST
+
+#pragma GCC system_header
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
 
 #pragma GCC visibility push(default)
 
-#include <cstddef>
+#include <bits/c++config.h>
 
 namespace std
 {
@@ -42,31 +44,59 @@ namespace std
   template<class _E>
     class initializer_list
     {
-      const _E* __array;
-      size_t __len;
+    public:
+      typedef _E 		value_type;
+      typedef const _E& 	reference;
+      typedef const _E& 	const_reference;
+      typedef size_t 		size_type;
+      typedef const _E* 	iterator;
+      typedef const _E* 	const_iterator;
+
+    private:
+      iterator			_M_array;
+      size_type			_M_len;
 
       // The compiler can call a private constructor.
-      initializer_list(const _E* __a, size_t __l)
-      : __array(__a), __len(__l) { }
+      constexpr initializer_list(const_iterator __a, size_type __l)
+      : _M_array(__a), _M_len(__l) { }
 
     public:
-      initializer_list()
-      : __array(NULL), __len(0) { }
+      constexpr initializer_list() : _M_array(0), _M_len(0) { }
 
       // Number of elements.
-      size_t size() const
-      { return __len; }
+      constexpr size_type
+      size() { return _M_len; }
 
       // First element.
-      const _E* begin() const
-      { return __array; }
+      constexpr const_iterator
+      begin() { return _M_array; }
 
       // One past the last element.
-      const _E* end() const
-      { return begin() + size(); }
+      constexpr const_iterator
+      end() { return begin() + size(); }
   };
+
+  /**
+   *  @brief  Return an iterator pointing to the first element of
+   *          the initilizer_list.
+   *  @param  il  Initializer list.
+   */
+  template<class _Tp>
+    constexpr const _Tp*
+    begin(initializer_list<_Tp> __ils)
+    { return __ils.begin(); }
+
+  /**
+   *  @brief  Return an iterator pointing to one past the last element
+   *          of the initilizer_list.
+   *  @param  il  Initializer list.
+   */
+  template<class _Tp>
+    constexpr const _Tp*
+    end(initializer_list<_Tp> __ils)
+    { return __ils.end(); }
 }
 
 #pragma GCC visibility pop
 #endif // C++0x
-#endif // __CXX_INITIALIZER_LIST
+#endif // _INITIALIZER_LIST

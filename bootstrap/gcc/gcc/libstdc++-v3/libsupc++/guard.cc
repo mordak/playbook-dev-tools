@@ -1,4 +1,5 @@
-// Copyright (C) 2002, 2004, 2006, 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2002, 2004, 2006, 2008, 2009, 2010, 2011
+// Free Software Foundation, Inc.
 //  
 // This file is part of GCC.
 //
@@ -133,25 +134,6 @@ __set_and_release (__cxxabiv1::__guard *g)
 # define _GLIBCXX_GUARD_SET_AND_RELEASE(G) _GLIBCXX_GUARD_SET (G)
 
 #endif /* __GTHREADS */
-
-namespace __gnu_cxx
-{
-  // 6.7[stmt.dcl]/4: If control re-enters the declaration (recursively)
-  // while the object is being initialized, the behavior is undefined.
-
-  // Since we already have a library function to handle locking, we might
-  // as well check for this situation and throw an exception.
-  // We use the second byte of the guard variable to remember that we're
-  // in the middle of an initialization.
-  class recursive_init_error: public std::exception
-  {
-  public:
-    recursive_init_error() throw() { }
-    virtual ~recursive_init_error() throw ();
-  };
-
-  recursive_init_error::~recursive_init_error() throw() { }
-}
 
 //
 // Here are C++ run-time routines for guarded initiailization of static
@@ -330,7 +312,7 @@ namespace __cxxabiv1
   }
 
   extern "C"
-  void __cxa_guard_abort (__guard *g)
+  void __cxa_guard_abort (__guard *g) throw ()
   {
 #ifdef _GLIBCXX_USE_FUTEX
     // If __sync_* and futex syscall are supported, don't use any global
@@ -369,7 +351,7 @@ namespace __cxxabiv1
   }
 
   extern "C"
-  void __cxa_guard_release (__guard *g)
+  void __cxa_guard_release (__guard *g) throw ()
   {
 #ifdef _GLIBCXX_USE_FUTEX
     // If __sync_* and futex syscall are supported, don't use any global

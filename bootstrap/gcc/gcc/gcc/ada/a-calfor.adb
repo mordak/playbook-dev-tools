@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2006-2009, Free Software Foundation, Inc.         --
+--          Copyright (C) 2006-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -42,15 +42,15 @@ package body Ada.Calendar.Formatting is
    --  independent, thus only one source file is needed for multiple targets.
 
    procedure Check_Char (S : String; C : Character; Index : Integer);
-   --  Subsidiary to the two versions of Value. Determine whether the
-   --  input string S has character C at position Index. Raise
-   --  Constraint_Error if there is a mismatch.
+   --  Subsidiary to the two versions of Value. Determine whether the input
+   --  string S has character C at position Index. Raise Constraint_Error if
+   --  there is a mismatch.
 
    procedure Check_Digit (S : String; Index : Integer);
-   --  Subsidiary to the two versions of Value. Determine whether the
-   --  character of string S at position Index is a digit. This catches
-   --  invalid input such as 1983-*1-j3 u5:n7:k9 which should be
-   --  1983-01-03 05:07:09. Raise Constraint_Error if there is a mismatch.
+   --  Subsidiary to the two versions of Value. Determine whether the character
+   --  of string S at position Index is a digit. This catches invalid input
+   --  such as 1983-*1-j3 u5:n7:k9 which should be 1983-01-03 05:07:09. Raise
+   --  Constraint_Error if there is a mismatch.
 
    ----------------
    -- Check_Char --
@@ -156,21 +156,17 @@ package body Ada.Calendar.Formatting is
       --  Determine the two slice bounds for the result string depending on
       --  whether the input is negative and whether fractions are requested.
 
-      if Elapsed_Time < 0.0 then
-         Low := 1;
-      else
-         Low := 2;
-      end if;
-
-      if Include_Time_Fraction then
-         High := 12;
-      else
-         High := 9;
-      end if;
+      Low  := (if Elapsed_Time < 0.0 then 1 else 2);
+      High := (if Include_Time_Fraction then 12 else 9);
 
       --  Prevent rounding when converting to natural
 
-      Sub_Second := Sub_Second * 100.0 - 0.5;
+      Sub_Second := Sub_Second * 100.0;
+
+      if Sub_Second > 0.0 then
+         Sub_Second := Sub_Second - 0.5;
+      end if;
+
       SS_Nat := Natural (Sub_Second);
 
       declare
@@ -249,7 +245,12 @@ package body Ada.Calendar.Formatting is
 
       --  Prevent rounding when converting to natural
 
-      Sub_Second := Sub_Second * 100.0 - 0.5;
+      Sub_Second := Sub_Second * 100.0;
+
+      if Sub_Second > 0.0 then
+         Sub_Second := Sub_Second - 0.5;
+      end if;
+
       SS_Nat := Natural (Sub_Second);
 
       declare
@@ -447,11 +448,7 @@ package body Ada.Calendar.Formatting is
          raise Constraint_Error;
       end if;
 
-      if Seconds = 0.0 then
-         Secs := 0;
-      else
-         Secs := Natural (Seconds - 0.5);
-      end if;
+      Secs := (if Seconds = 0.0 then 0 else Natural (Seconds - 0.5));
 
       Sub_Second := Second_Duration (Seconds - Day_Duration (Secs));
       Hour       := Hour_Number (Secs / 3_600);
@@ -784,8 +781,8 @@ package body Ada.Calendar.Formatting is
          raise Constraint_Error;
       end if;
 
-      --  After the correct length has been determined, it is safe to
-      --  copy the Date in order to avoid Date'First + N indexing.
+      --  After the correct length has been determined, it is safe to copy the
+      --  Date in order to avoid Date'First + N indexing.
 
       D (1 .. Date'Length) := Date;
 
@@ -868,8 +865,8 @@ package body Ada.Calendar.Formatting is
          raise Constraint_Error;
       end if;
 
-      --  After the correct length has been determined, it is safe to
-      --  copy the Elapsed_Time in order to avoid Date'First + N indexing.
+      --  After the correct length has been determined, it is safe to copy the
+      --  Elapsed_Time in order to avoid Date'First + N indexing.
 
       D (1 .. Elapsed_Time'Length) := Elapsed_Time;
 

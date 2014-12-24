@@ -1,11 +1,9 @@
-/* { dg-options "-O2 -fgraphite -fdump-tree-graphite-all" } */
-
 void bar (void);
 
 int toto()
 {
   int i, j, k;
-  int a[100][100];
+  int a[101][100];
   int b[100];
 
   for (i = 1; i < 100; i++)

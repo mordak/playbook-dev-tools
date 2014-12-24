@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -36,6 +36,7 @@ with Nmake;    use Nmake;
 with Opt;      use Opt;
 with Rtsfind;  use Rtsfind;
 with Sem;      use Sem;
+with Sem_Aux;  use Sem_Aux;
 with Sem_Ch3;  use Sem_Ch3;
 with Sem_Ch8;  use Sem_Ch8;
 with Sem_Ch13; use Sem_Ch13;
@@ -66,23 +67,22 @@ package body Exp_Pakd is
    --    For big-endian machines, element zero is at the left hand end
    --    (high order end) of a bit field.
 
-   --  The shifts that are used to right justify a field therefore differ
-   --  in the two cases. For the little-endian case, we can simply use the
-   --  bit number (i.e. the element number * element size) as the count for
-   --  a right shift. For the big-endian case, we have to subtract the shift
-   --  count from an appropriate constant to use in the right shift. We use
-   --  rotates instead of shifts (which is necessary in the store case to
-   --  preserve other fields), and we expect that the backend will be able
-   --  to change the right rotate into a left rotate, avoiding the subtract,
-   --  if the architecture provides such an instruction.
+   --  The shifts that are used to right justify a field therefore differ in
+   --  the two cases. For the little-endian case, we can simply use the bit
+   --  number (i.e. the element number * element size) as the count for a right
+   --  shift. For the big-endian case, we have to subtract the shift count from
+   --  an appropriate constant to use in the right shift. We use rotates
+   --  instead of shifts (which is necessary in the store case to preserve
+   --  other fields), and we expect that the backend will be able to change the
+   --  right rotate into a left rotate, avoiding the subtract, if the machine
+   --  architecture provides such an instruction.
 
    ----------------------------------------------
    -- Entity Tables for Packed Access Routines --
    ----------------------------------------------
 
-   --  For the cases of component size = 3,5-7,9-15,17-31,33-63 we call
-   --  library routines. This table is used to obtain the entity for the
-   --  proper routine.
+   --  For the cases of component size = 3,5-7,9-15,17-31,33-63 we call library
+   --  routines. This table provides the entity for the proper routine.
 
    type E_Array is array (Int range 01 .. 63) of RE_Id;
 
@@ -156,10 +156,10 @@ package body Exp_Pakd is
       62 => RE_Bits_62,
       63 => RE_Bits_63);
 
-   --  Array of Get routine entities. These are used to obtain an element
-   --  from a packed array. The N'th entry is used to obtain elements from
-   --  a packed array whose component size is N. RE_Null is used as a null
-   --  entry, for the cases where a library routine is not used.
+   --  Array of Get routine entities. These are used to obtain an element from
+   --  a packed array. The N'th entry is used to obtain elements from a packed
+   --  array whose component size is N. RE_Null is used as a null entry, for
+   --  the cases where a library routine is not used.
 
    Get_Id : constant E_Array :=
      (01 => RE_Null,
@@ -227,9 +227,9 @@ package body Exp_Pakd is
       63 => RE_Get_63);
 
    --  Array of Get routine entities to be used in the case where the packed
-   --  array is itself a component of a packed structure, and therefore may
-   --  not be fully aligned. This only affects the even sizes, since for the
-   --  odd sizes, we do not get any fixed alignment in any case.
+   --  array is itself a component of a packed structure, and therefore may not
+   --  be fully aligned. This only affects the even sizes, since for the odd
+   --  sizes, we do not get any fixed alignment in any case.
 
    GetU_Id : constant E_Array :=
      (01 => RE_Null,
@@ -296,10 +296,10 @@ package body Exp_Pakd is
       62 => RE_GetU_62,
       63 => RE_Get_63);
 
-   --  Array of Set routine entities. These are used to assign an element
-   --  of a packed array. The N'th entry is used to assign elements for
-   --  a packed array whose component size is N. RE_Null is used as a null
-   --  entry, for the cases where a library routine is not used.
+   --  Array of Set routine entities. These are used to assign an element of a
+   --  packed array. The N'th entry is used to assign elements for a packed
+   --  array whose component size is N. RE_Null is used as a null entry, for
+   --  the cases where a library routine is not used.
 
    Set_Id : constant E_Array :=
      (01 => RE_Null,
@@ -367,9 +367,9 @@ package body Exp_Pakd is
       63 => RE_Set_63);
 
    --  Array of Set routine entities to be used in the case where the packed
-   --  array is itself a component of a packed structure, and therefore may
-   --  not be fully aligned. This only affects the even sizes, since for the
-   --  odd sizes, we do not get any fixed alignment in any case.
+   --  array is itself a component of a packed structure, and therefore may not
+   --  be fully aligned. This only affects the even sizes, since for the odd
+   --  sizes, we do not get any fixed alignment in any case.
 
    SetU_Id : constant E_Array :=
      (01 => RE_Null,
@@ -444,15 +444,24 @@ package body Exp_Pakd is
      (Atyp   : Entity_Id;
       N      : Node_Id;
       Subscr : out Node_Id);
-   --  Given a constrained array type Atyp, and an indexed component node
-   --  N referencing an array object of this type, build an expression of
-   --  type Standard.Integer representing the zero-based linear subscript
-   --  value. This expression includes any required range checks.
+   --  Given a constrained array type Atyp, and an indexed component node N
+   --  referencing an array object of this type, build an expression of type
+   --  Standard.Integer representing the zero-based linear subscript value.
+   --  This expression includes any required range checks.
 
    procedure Convert_To_PAT_Type (Aexp : Node_Id);
    --  Given an expression of a packed array type, builds a corresponding
    --  expression whose type is the implementation type used to represent
    --  the packed array. Aexp is analyzed and resolved on entry and on exit.
+
+   procedure Get_Base_And_Bit_Offset
+     (N      : Node_Id;
+      Base   : out Node_Id;
+      Offset : out Node_Id);
+   --  Given a node N for a name which involves a packed array reference,
+   --  return the base object of the reference and build an expression of
+   --  type Standard.Integer representing the zero-based offset in bits
+   --  from Base'Address to the first bit of the reference.
 
    function Known_Aligned_Enough (Obj : Node_Id; Csiz : Nat) return Boolean;
    --  There are two versions of the Set routines, the ones used when the
@@ -1133,16 +1142,6 @@ package body Exp_Pakd is
                 (Len_Bits <= System_Word_Size
                    or else (Len_Bits <= System_Max_Binary_Modulus_Power
                               and then Support_Long_Shifts_On_Target))
-
-            --  Also test for alignment given. If an alignment is given which
-            --  is smaller than the natural modular alignment, force the array
-            --  of bytes representation to accommodate the alignment.
-
-              and then
-                (No (Alignment_Clause (Typ))
-                   or else
-                 Alignment (Typ) >= ((Len_Bits + System_Storage_Unit)
-                                             / System_Storage_Unit))
             then
                --  We can use the modular type, it has the form:
 
@@ -1192,6 +1191,14 @@ package body Exp_Pakd is
                end if;
 
                Install_PAT;
+
+               --  Propagate a given alignment to the modular type. This can
+               --  cause it to be under-aligned, but that's OK.
+
+               if Present (Alignment_Clause (Typ)) then
+                  Set_Alignment (PAT, Alignment (Typ));
+               end if;
+
                return;
             end if;
          end if;
@@ -1332,6 +1339,14 @@ package body Exp_Pakd is
       Ctyp := Component_Type (Atyp);
       Csiz := UI_To_Int (Component_Size (Atyp));
 
+      --  We remove side effects, in case the rhs modifies the lhs, because we
+      --  are about to transform the rhs into an expression that first READS
+      --  the lhs, so we can do the necessary shifting and masking. Example:
+      --  "X(2) := F(...);" where F modifies X(3). Otherwise, the side effect
+      --  will be lost.
+
+      Remove_Side_Effects (Rhs);
+
       --  We convert the right hand side to the proper subtype to ensure
       --  that an appropriate range check is made (since the normal range
       --  check from assignment will be lost in the transformations). This
@@ -1348,10 +1363,9 @@ package body Exp_Pakd is
          begin
             Decl :=
               Make_Object_Declaration (Loc,
-                Defining_Identifier =>
-                  Make_Defining_Identifier (Loc,  New_Internal_Name ('T')),
-                Object_Definition => New_Occurrence_Of (Ctyp, Loc),
-                Expression => New_Copy_Tree (Rhs));
+                Defining_Identifier => Make_Temporary (Loc, 'T', Rhs),
+                Object_Definition   => New_Occurrence_Of (Ctyp, Loc),
+                Expression          => New_Copy_Tree (Rhs));
 
             Insert_Actions (N, New_List (Decl));
             Rhs := New_Occurrence_Of (Defining_Identifier (Decl), Loc);
@@ -1374,6 +1388,19 @@ package body Exp_Pakd is
          Analyze_And_Resolve (Rhs, Ctyp);
       end if;
 
+      --  For the AAMP target, indexing of certain packed array is passed
+      --  through to the back end without expansion, because the expansion
+      --  results in very inefficient code on that target. This allows the
+      --  GNAAMP back end to generate specialized macros that support more
+      --  efficient indexing of packed arrays with components having sizes
+      --  that are small powers of two.
+
+      if AAMP_On_Target
+        and then (Csiz = 1 or else Csiz = 2 or else Csiz = 4)
+      then
+         return;
+      end if;
+
       --  Case of component size 1,2,4 or any component size for the modular
       --  case. These are the cases for which we can inline the code.
 
@@ -1384,9 +1411,9 @@ package body Exp_Pakd is
 
          --  The statement to be generated is:
 
-         --    Obj := atyp!((Obj and Mask1) or (shift_left (rhs, shift)))
+         --    Obj := atyp!((Obj and Mask1) or (shift_left (rhs, Shift)))
 
-         --      where mask1 is obtained by shifting Cmask left Shift bits
+         --      where Mask1 is obtained by shifting Cmask left Shift bits
          --      and then complementing the result.
 
          --      the "and Mask1" is omitted if rhs is constant and all 1 bits
@@ -1419,21 +1446,21 @@ package body Exp_Pakd is
             Rhs_Val_Known := False;
          end if;
 
-         --  Some special checks for the case where the right hand value
-         --  is known at compile time. Basically we have to take care of
-         --  the implicit conversion to the subtype of the component object.
+         --  Some special checks for the case where the right hand value is
+         --  known at compile time. Basically we have to take care of the
+         --  implicit conversion to the subtype of the component object.
 
          if Rhs_Val_Known then
 
-            --  If we have a biased component type then we must manually do
-            --  the biasing, since we are taking responsibility in this case
-            --  for constructing the exact bit pattern to be used.
+            --  If we have a biased component type then we must manually do the
+            --  biasing, since we are taking responsibility in this case for
+            --  constructing the exact bit pattern to be used.
 
             if Has_Biased_Representation (Ctyp) then
                Rhs_Val := Rhs_Val - Expr_Rep_Value (Type_Low_Bound (Ctyp));
             end if;
 
-            --  For a negative value, we manually convert the twos complement
+            --  For a negative value, we manually convert the two's complement
             --  value to a corresponding unsigned value, so that the proper
             --  field width is maintained. If we did not do this, we would
             --  get too many leading sign bits later on.
@@ -1516,8 +1543,8 @@ package body Exp_Pakd is
                      Rhs := Unchecked_Convert_To (RTE (Bits_Id (Csiz)), Rhs);
                   end if;
 
-                  --  Set Etype, since it can be referenced before the
-                  --  node is completely analyzed.
+                  --  Set Etype, since it can be referenced before the node is
+                  --  completely analyzed.
 
                   Set_Etype (Rhs, Etyp);
 
@@ -1665,18 +1692,11 @@ package body Exp_Pakd is
 
    procedure Expand_Packed_Address_Reference (N : Node_Id) is
       Loc    : constant Source_Ptr := Sloc (N);
-      Ploc   : Source_Ptr;
-      Pref   : Node_Id;
-      Expr   : Node_Id;
-      Term   : Node_Id;
-      Atyp   : Entity_Id;
-      Subscr : Node_Id;
+      Base   : Node_Id;
+      Offset : Node_Id;
 
    begin
-      Pref := Prefix (N);
-      Expr := Empty;
-
-      --  We build up an expression serially that has the form
+      --  We build an expression that has the form
 
       --    outer_object'Address
       --      + (linear-subscript * component_size  for each array reference
@@ -1684,49 +1704,7 @@ package body Exp_Pakd is
       --      +  ...
       --      +  ...) / Storage_Unit;
 
-      --  Some additional conversions are required to deal with the addition
-      --  operation, which is not normally visible to generated code.
-
-      loop
-         Ploc := Sloc (Pref);
-
-         if Nkind (Pref) = N_Indexed_Component then
-            Convert_To_Actual_Subtype (Prefix (Pref));
-            Atyp := Etype (Prefix (Pref));
-            Compute_Linear_Subscript (Atyp, Pref, Subscr);
-
-            Term :=
-              Make_Op_Multiply (Ploc,
-                Left_Opnd => Subscr,
-                Right_Opnd =>
-                 Make_Attribute_Reference (Ploc,
-                   Prefix         => New_Occurrence_Of (Atyp, Ploc),
-                   Attribute_Name => Name_Component_Size));
-
-         elsif Nkind (Pref) = N_Selected_Component then
-            Term :=
-              Make_Attribute_Reference (Ploc,
-                Prefix         => Selector_Name (Pref),
-                Attribute_Name => Name_Bit_Position);
-
-         else
-            exit;
-         end if;
-
-         Term := Convert_To (RTE (RE_Integer_Address), Term);
-
-         if No (Expr) then
-            Expr := Term;
-
-         else
-            Expr :=
-              Make_Op_Add (Ploc,
-                Left_Opnd  => Expr,
-                Right_Opnd => Term);
-         end if;
-
-         Pref := Prefix (Pref);
-      end loop;
+      Get_Base_And_Bit_Offset (Prefix (N), Base, Offset);
 
       Rewrite (N,
         Unchecked_Convert_To (RTE (RE_Address),
@@ -1734,17 +1712,46 @@ package body Exp_Pakd is
             Left_Opnd =>
               Unchecked_Convert_To (RTE (RE_Integer_Address),
                 Make_Attribute_Reference (Loc,
-                  Prefix         => Pref,
+                  Prefix         => Base,
                   Attribute_Name => Name_Address)),
 
             Right_Opnd =>
-              Make_Op_Divide (Loc,
-                Left_Opnd => Expr,
-                Right_Opnd =>
-                  Make_Integer_Literal (Loc, System_Storage_Unit)))));
+              Unchecked_Convert_To (RTE (RE_Integer_Address),
+                Make_Op_Divide (Loc,
+                  Left_Opnd => Offset,
+                  Right_Opnd =>
+                    Make_Integer_Literal (Loc, System_Storage_Unit))))));
 
       Analyze_And_Resolve (N, RTE (RE_Address));
    end Expand_Packed_Address_Reference;
+
+   ---------------------------------
+   -- Expand_Packed_Bit_Reference --
+   ---------------------------------
+
+   procedure Expand_Packed_Bit_Reference (N : Node_Id) is
+      Loc    : constant Source_Ptr := Sloc (N);
+      Base   : Node_Id;
+      Offset : Node_Id;
+
+   begin
+      --  We build an expression that has the form
+
+      --    (linear-subscript * component_size      for each array reference
+      --      +  field'Bit_Position                 for each record field
+      --      +  ...
+      --      +  ...) mod Storage_Unit;
+
+      Get_Base_And_Bit_Offset (Prefix (N), Base, Offset);
+
+      Rewrite (N,
+        Unchecked_Convert_To (Universal_Integer,
+          Make_Op_Mod (Loc,
+            Left_Opnd => Offset,
+            Right_Opnd => Make_Integer_Literal (Loc, System_Storage_Unit))));
+
+      Analyze_And_Resolve (N, Universal_Integer);
+   end Expand_Packed_Bit_Reference;
 
    ------------------------------------
    -- Expand_Packed_Boolean_Operator --
@@ -1823,7 +1830,7 @@ package body Exp_Pakd is
 
       --    Result : Ltype;
 
-      --    System.Bitops.Bit_And/Or/Xor
+      --    System.Bit_Ops.Bit_And/Or/Xor
       --     (Left'Address,
       --      Ltype'Length * Ltype'Component_Size;
       --      Right'Address,
@@ -1842,11 +1849,8 @@ package body Exp_Pakd is
 
       else
          declare
-            Result_Ent : constant Entity_Id :=
-                           Make_Defining_Identifier (Loc,
-                             Chars => New_Internal_Name ('T'));
-
-            E_Id : RE_Id;
+            Result_Ent : constant Entity_Id := Make_Temporary (Loc, 'T');
+            E_Id       : RE_Id;
 
          begin
             if Nkind (N) = N_Op_And then
@@ -1949,6 +1953,19 @@ package body Exp_Pakd is
       Ctyp := Component_Type (Atyp);
       Csiz := UI_To_Int (Component_Size (Atyp));
 
+      --  For the AAMP target, indexing of certain packed array is passed
+      --  through to the back end without expansion, because the expansion
+      --  results in very inefficient code on that target. This allows the
+      --  GNAAMP back end to generate specialized macros that support more
+      --  efficient indexing of packed arrays with components having sizes
+      --  that are small powers of two.
+
+      if AAMP_On_Target
+        and then (Csiz = 1 or else Csiz = 2 or else Csiz = 4)
+      then
+         return;
+      end if;
+
       --  Case of component size 1,2,4 or any component size for the modular
       --  case. These are the cases for which we can inline the code.
 
@@ -1981,8 +1998,7 @@ package body Exp_Pakd is
          Set_Parent (Arg, Parent (N));
          Analyze_And_Resolve (Arg);
 
-         Rewrite (N,
-           RJ_Unchecked_Convert_To (Ctyp, Arg));
+         Rewrite (N, RJ_Unchecked_Convert_To (Ctyp, Arg));
 
       --  All other component sizes for non-modular case
 
@@ -2159,14 +2175,14 @@ package body Exp_Pakd is
       Convert_To_PAT_Type (Opnd);
       PAT := Etype (Opnd);
 
-      --  For the case where the packed array type is a modular type,
-      --  not A expands simply into:
+      --  For the case where the packed array type is a modular type, "not A"
+      --  expands simply into:
 
-      --     rtyp!(PAT!(A) xor mask)
+      --     Rtyp!(PAT!(A) xor Mask)
 
-      --  where PAT is the packed array type, and mask is a mask of all
-      --  one bits of length equal to the size of this packed type and
-      --  rtyp is the actual subtype of the operand
+      --  where PAT is the packed array type, Mask is a mask of all 1 bits of
+      --  length equal to the size of this packed type, and Rtyp is the actual
+      --  actual subtype of the operand.
 
       Lit := Make_Integer_Literal (Loc, 2 ** RM_Size (PAT) - 1);
       Set_Print_In_Hex (Lit);
@@ -2182,32 +2198,28 @@ package body Exp_Pakd is
 
       --    Result : Typ;
 
-      --    System.Bitops.Bit_Not
+      --    System.Bit_Ops.Bit_Not
       --     (Opnd'Address,
-      --      Typ'Length * Typ'Component_Size;
+      --      Typ'Length * Typ'Component_Size,
       --      Result'Address);
 
-      --  where Opnd is the Packed_Bytes{1,2,4} operand and the second
-      --  argument is the length of the operand in bits. Then we replace
-      --  the expression by a reference to Result.
+      --  where Opnd is the Packed_Bytes{1,2,4} operand and the second argument
+      --  is the length of the operand in bits. We then replace the expression
+      --  with a reference to Result.
 
       else
          declare
-            Result_Ent : constant Entity_Id :=
-                           Make_Defining_Identifier (Loc,
-                             Chars => New_Internal_Name ('T'));
+            Result_Ent : constant Entity_Id := Make_Temporary (Loc, 'T');
 
          begin
             Insert_Actions (N, New_List (
-
               Make_Object_Declaration (Loc,
                 Defining_Identifier => Result_Ent,
-                Object_Definition => New_Occurrence_Of (Rtyp, Loc)),
+                Object_Definition   => New_Occurrence_Of (Rtyp, Loc)),
 
               Make_Procedure_Call_Statement (Loc,
                 Name => New_Occurrence_Of (RTE (RE_Bit_Not), Loc),
                   Parameter_Associations => New_List (
-
                     Make_Byte_Aligned_Attribute_Reference (Loc,
                       Prefix         => Opnd,
                       Attribute_Name => Name_Address),
@@ -2224,17 +2236,79 @@ package body Exp_Pakd is
                         Make_Integer_Literal (Loc, Component_Size (Rtyp))),
 
                     Make_Byte_Aligned_Attribute_Reference (Loc,
-                      Prefix => New_Occurrence_Of (Result_Ent, Loc),
+                      Prefix         => New_Occurrence_Of (Result_Ent, Loc),
                       Attribute_Name => Name_Address)))));
 
-            Rewrite (N,
-              New_Occurrence_Of (Result_Ent, Loc));
+            Rewrite (N, New_Occurrence_Of (Result_Ent, Loc));
          end;
       end if;
 
       Analyze_And_Resolve (N, Typ, Suppress => All_Checks);
-
    end Expand_Packed_Not;
+
+   -----------------------------
+   -- Get_Base_And_Bit_Offset --
+   -----------------------------
+
+   procedure Get_Base_And_Bit_Offset
+     (N      : Node_Id;
+      Base   : out Node_Id;
+      Offset : out Node_Id)
+   is
+      Loc    : Source_Ptr;
+      Term   : Node_Id;
+      Atyp   : Entity_Id;
+      Subscr : Node_Id;
+
+   begin
+      Base   := N;
+      Offset := Empty;
+
+      --  We build up an expression serially that has the form
+
+      --    linear-subscript * component_size       for each array reference
+      --      +  field'Bit_Position                 for each record field
+      --      +  ...
+
+      loop
+         Loc := Sloc (Base);
+
+         if Nkind (Base) = N_Indexed_Component then
+            Convert_To_Actual_Subtype (Prefix (Base));
+            Atyp := Etype (Prefix (Base));
+            Compute_Linear_Subscript (Atyp, Base, Subscr);
+
+            Term :=
+              Make_Op_Multiply (Loc,
+                Left_Opnd => Subscr,
+                Right_Opnd =>
+                 Make_Attribute_Reference (Loc,
+                   Prefix         => New_Occurrence_Of (Atyp, Loc),
+                   Attribute_Name => Name_Component_Size));
+
+         elsif Nkind (Base) = N_Selected_Component then
+            Term :=
+              Make_Attribute_Reference (Loc,
+                Prefix         => Selector_Name (Base),
+                Attribute_Name => Name_Bit_Position);
+
+         else
+            return;
+         end if;
+
+         if No (Offset) then
+            Offset := Term;
+
+         else
+            Offset :=
+              Make_Op_Add (Loc,
+                Left_Opnd  => Offset,
+                Right_Opnd => Term);
+         end if;
+
+         Base := Prefix (Base);
+      end loop;
+   end Get_Base_And_Bit_Offset;
 
    -------------------------------------
    -- Involves_Packed_Array_Reference --
@@ -2439,27 +2513,27 @@ package body Exp_Pakd is
       Source_Siz := UI_To_Int (RM_Size (Source_Typ));
       Target_Siz := UI_To_Int (RM_Size (Target_Typ));
 
-      --  First step, if the source type is not a discrete type, then we
-      --  first convert to a modular type of the source length, since
-      --  otherwise, on a big-endian machine, we get left-justification.
-      --  We do it for little-endian machines as well, because there might
-      --  be junk bits that are not cleared if the type is not numeric.
+      --  First step, if the source type is not a discrete type, then we first
+      --  convert to a modular type of the source length, since otherwise, on
+      --  a big-endian machine, we get left-justification. We do it for little-
+      --  endian machines as well, because there might be junk bits that are
+      --  not cleared if the type is not numeric.
 
       if Source_Siz /= Target_Siz
-        and then  not Is_Discrete_Type (Source_Typ)
+        and then not Is_Discrete_Type (Source_Typ)
       then
          Src := Unchecked_Convert_To (RTE (Bits_Id (Source_Siz)), Src);
       end if;
 
-      --  In the big endian case, if the lengths of the two types differ,
-      --  then we must worry about possible left justification in the
-      --  conversion, and avoiding that is what this is all about.
+      --  In the big endian case, if the lengths of the two types differ, then
+      --  we must worry about possible left justification in the conversion,
+      --  and avoiding that is what this is all about.
 
       if Bytes_Big_Endian and then Source_Siz /= Target_Siz then
 
          --  Next step. If the target is not a discrete type, then we first
-         --  convert to a modular type of the target length, since
-         --  otherwise, on a big-endian machine, we get left-justification.
+         --  convert to a modular type of the target length, since otherwise,
+         --  on a big-endian machine, we get left-justification.
 
          if not Is_Discrete_Type (Target_Typ) then
             Src := Unchecked_Convert_To (RTE (Bits_Id (Target_Siz)), Src);
@@ -2475,16 +2549,16 @@ package body Exp_Pakd is
    -- Setup_Enumeration_Packed_Array_Reference --
    ----------------------------------------------
 
-   --  All we have to do here is to find the subscripts that correspond
-   --  to the index positions that have non-standard enumeration types
-   --  and insert a Pos attribute to get the proper subscript value.
+   --  All we have to do here is to find the subscripts that correspond to the
+   --  index positions that have non-standard enumeration types and insert a
+   --  Pos attribute to get the proper subscript value.
 
-   --  Finally the prefix must be uncheck converted to the corresponding
-   --  packed array type.
+   --  Finally the prefix must be uncheck-converted to the corresponding packed
+   --  array type.
 
-   --  Note that the component type is unchanged, so we do not need to
-   --  fiddle with the types (Gigi always automatically takes the packed
-   --  array type if it is set, as it will be in this case).
+   --  Note that the component type is unchanged, so we do not need to fiddle
+   --  with the types (Gigi always automatically takes the packed array type if
+   --  it is set, as it will be in this case).
 
    procedure Setup_Enumeration_Packed_Array_Reference (N : Node_Id) is
       Pfx   : constant Node_Id   := Prefix (N);
@@ -2493,9 +2567,9 @@ package body Exp_Pakd is
       Expr  : Node_Id;
 
    begin
-      --  If the array is unconstrained, then we replace the array
-      --  reference with its actual subtype. This actual subtype will
-      --  have a packed array type with appropriate bounds.
+      --  If the array is unconstrained, then we replace the array reference
+      --  with its actual subtype. This actual subtype will have a packed array
+      --  type with appropriate bounds.
 
       if not Is_Constrained (Packed_Array_Type (Etype (Pfx))) then
          Convert_To_Actual_Subtype (Pfx);
@@ -2530,7 +2604,6 @@ package body Exp_Pakd is
           Expressions => Exprs));
 
       Analyze_And_Resolve (N, Typ);
-
    end Setup_Enumeration_Packed_Array_Reference;
 
    -----------------------------------------
@@ -2577,8 +2650,8 @@ package body Exp_Pakd is
 
       Compute_Linear_Subscript (Atyp, N, Shift);
 
-      --  If the component size is not 1, then the subscript must be
-      --  multiplied by the component size to get the shift count.
+      --  If the component size is not 1, then the subscript must be multiplied
+      --  by the component size to get the shift count.
 
       if Csiz /= 1 then
          Shift :=
@@ -2587,8 +2660,8 @@ package body Exp_Pakd is
              Right_Opnd => Shift);
       end if;
 
-      --  If we have the array case, then this shift count must be broken
-      --  down into a byte subscript, and a shift within the byte.
+      --  If we have the array case, then this shift count must be broken down
+      --  into a byte subscript, and a shift within the byte.
 
       if Is_Array_Type (PAT) then
 
@@ -2624,9 +2697,9 @@ package body Exp_Pakd is
             Shift := New_Shift;
          end;
 
-      --  For the modular integer case, the object to be manipulated is
-      --  the entire array, so Obj is unchanged. Note that we will reset
-      --  its type to PAT before returning to the caller.
+      --  For the modular integer case, the object to be manipulated is the
+      --  entire array, so Obj is unchanged. Note that we will reset its type
+      --  to PAT before returning to the caller.
 
       else
          null;
@@ -2642,14 +2715,13 @@ package body Exp_Pakd is
 
       --  Here we have the case of 2-bit fields
 
-      --  For the little-endian case, we already have the proper shift
-      --  count set, e.g. for element 2, the shift count is 2*2 = 4.
+      --  For the little-endian case, we already have the proper shift count
+      --  set, e.g. for element 2, the shift count is 2*2 = 4.
 
-      --  For the big endian case, we have to adjust the shift count,
-      --  computing it as (N - F) - shift, where N is the number of bits
-      --  in an element of the array used to implement the packed array,
-      --  F is the number of bits in a source level array element, and
-      --  shift is the count so far computed.
+      --  For the big endian case, we have to adjust the shift count, computing
+      --  it as (N - F) - Shift, where N is the number of bits in an element of
+      --  the array used to implement the packed array, F is the number of bits
+      --  in a source array element, and Shift is the count so far computed.
 
       if Bytes_Big_Endian then
          Shift :=

@@ -1,5 +1,5 @@
 /* Implementation of the SPACING intrinsic
-   Copyright 2006, 2007, 2009 Free Software Foundation, Inc.
+   Copyright 2006, 2007, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Steven G. Kargl <kargl@gcc.gnu.org>
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -26,6 +26,9 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #include "libgfortran.h"
 
 
+
+#define MATHFUNC(funcname) funcname ## l
+
 #if defined (HAVE_GFC_REAL_10) && defined (HAVE_FREXPL)
 
 extern GFC_REAL_10 spacing_r10 (GFC_REAL_10 s, int p, int emin, GFC_REAL_10 tiny);
@@ -37,13 +40,13 @@ spacing_r10 (GFC_REAL_10 s, int p, int emin, GFC_REAL_10 tiny)
   int e;
   if (s == 0.)
     return tiny;
-  frexpl (s, &e);
+  MATHFUNC(frexp) (s, &e);
   e = e - p;
   e = e > emin ? e : emin;
 #if defined (HAVE_LDEXPL)
-  return ldexpl (1., e);
+  return MATHFUNC(ldexp) (1., e);
 #else
-  return scalbnl (1., e);
+  return MATHFUNC(scalbn) (1., e);
 #endif
 }
 

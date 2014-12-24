@@ -24,24 +24,19 @@
    see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
    <http://www.gnu.org/licenses/>.  */
 
-typedef          int  HItype __attribute__ ((mode (HI)));
-typedef unsigned int UHItype __attribute__ ((mode (HI)));
-typedef          int  SItype __attribute__ ((mode (SI)));
-typedef unsigned int USItype __attribute__ ((mode (SI)));
+typedef          int  sint32_type   __attribute__ ((mode (SI)));
+typedef unsigned int  uint32_type   __attribute__ ((mode (SI)));
+typedef int           word_type     __attribute__ ((mode (__word__)));
 
-typedef int word_type __attribute__ ((mode (__word__)));
+uint32_type udivmodsi4 (uint32_type, uint32_type, word_type);
+sint32_type __divsi3   (sint32_type, sint32_type);
+sint32_type __modsi3   (sint32_type, sint32_type);
 
-USItype udivmodsi4 (USItype num, USItype den, word_type modwanted);
-SItype __divsi3 (SItype a, SItype b);
-SItype __modsi3 (SItype a, SItype b);
-SItype __udivsi3 (SItype a, SItype b);
-SItype __umodsi3 (SItype a, SItype b);
-
-USItype
-udivmodsi4 (USItype num, USItype den, word_type modwanted)
+uint32_type
+udivmodsi4 (uint32_type num, uint32_type den, word_type modwanted)
 {
-  USItype bit = 1;
-  USItype res = 0;
+  uint32_type bit = 1;
+  uint32_type res = 0;
 
   while (den < num && bit && !(den & (1L << 31)))
     {
@@ -63,13 +58,11 @@ udivmodsi4 (USItype num, USItype den, word_type modwanted)
   return res;
 }
 
-
-
-SItype
-__divsi3 (SItype a, SItype b)
+sint32_type
+__divsi3 (sint32_type a, sint32_type b)
 {
   word_type neg = 0;
-  SItype res;
+  sint32_type res;
 
   if (a < 0)
     {
@@ -91,13 +84,11 @@ __divsi3 (SItype a, SItype b)
   return res;
 }
 
-
-
-SItype
-__modsi3 (SItype a, SItype b)
+sint32_type
+__modsi3 (sint32_type a, sint32_type b)
 {
   word_type neg = 0;
-  SItype res;
+  sint32_type res;
 
   if (a < 0)
     {
@@ -116,19 +107,28 @@ __modsi3 (SItype a, SItype b)
   return res;
 }
 
+/* See the comment by the definition of LIBGCC2_UNITS_PER_WORD in
+   m32c.h for why we are creating extra versions of some of the
+   functions defined in libgcc2.c.  */
 
+#define LIBGCC2_UNITS_PER_WORD 2
 
+#define L_clzsi2
+#define L_ctzsi2
+#define L_ffssi2
+#define L_paritysi2
+#define L_popcountsi2
 
-SItype
-__udivsi3 (SItype a, SItype b)
+#include "libgcc2.c"
+
+uint32_type
+__udivsi3 (uint32_type a, uint32_type b)
 {
   return udivmodsi4 (a, b, 0);
 }
 
-
-
-SItype
-__umodsi3 (SItype a, SItype b)
+uint32_type
+__umoddi3 (uint32_type a, uint32_type b)
 {
   return udivmodsi4 (a, b, 1);
 }

@@ -1,6 +1,6 @@
-// new abi support -*- C++ -*-
-  
-// Copyright (C) 2000, 2002, 2003, 2004, 2006, 2007, 2009
+// ABI Support -*- C++ -*-
+
+// Copyright (C) 2000, 2002, 2003, 2004, 2006, 2007, 2009, 2010, 2011
 // Free Software Foundation, Inc.
 //
 // This file is part of GCC.
@@ -9,12 +9,12 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation; either version 3, or (at your option)
 // any later version.
-// 
+//
 // GCC is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
-// 
+//
 // Under Section 7 of GPL version 3, you are granted additional
 // permissions described in the GCC Runtime Library Exception, version
 // 3.1, as published by the Free Software Foundation.
@@ -25,12 +25,12 @@
 // <http://www.gnu.org/licenses/>.
 
 // Written by Nathan Sidwell, Codesourcery LLC, <nathan@codesourcery.com>
- 
+
 /* This file declares the new abi entry points into the runtime. It is not
    normally necessary for user programs to include this header, or use the
    entry points directly. However, this header is available should that be
    needed.
-   
+
    Some of the entry points are intended for both C and C++, thus this header
    is includable from both C and C++. Though the C++ specific parts are not
    available in C, naturally enough.  */
@@ -42,93 +42,90 @@
 #ifndef _CXXABI_H
 #define _CXXABI_H 1
 
+#pragma GCC system_header
+
 #pragma GCC visibility push(default)
 
 #include <stddef.h>
+#include <bits/c++config.h>
 #include <bits/cxxabi_tweaks.h>
-#include <cxxabi-forced.h>
- 
-#ifdef __cplusplus
-#define _GLIBCXX_NOTHROW throw() 
-#else
-#define _GLIBCXX_NOTHROW __attribute__((nothrow))
-#endif
+#include <bits/cxxabi_forced.h>
 
 #ifdef __cplusplus
 namespace __cxxabiv1
-{  
-  extern "C" 
+{
+  extern "C"
   {
 #endif
 
   typedef __cxa_cdtor_return_type (*__cxa_cdtor_type)(void *);
 
   // Allocate array.
-  void* 
-  __cxa_vec_new(size_t __element_count, size_t __element_size, 
-		size_t __padding_size, __cxa_cdtor_type constructor,
-		__cxa_cdtor_type destructor);
+  void*
+  __cxa_vec_new(size_t __element_count, size_t __element_size,
+		size_t __padding_size, __cxa_cdtor_type __constructor,
+		__cxa_cdtor_type __destructor);
 
   void*
   __cxa_vec_new2(size_t __element_count, size_t __element_size,
-		 size_t __padding_size, __cxa_cdtor_type constructor,
-		 __cxa_cdtor_type destructor, void *(*__alloc) (size_t), 
+		 size_t __padding_size, __cxa_cdtor_type __constructor,
+		 __cxa_cdtor_type __destructor, void *(*__alloc) (size_t),
 		 void (*__dealloc) (void*));
 
   void*
   __cxa_vec_new3(size_t __element_count, size_t __element_size,
-		 size_t __padding_size, __cxa_cdtor_type constructor,
-		 __cxa_cdtor_type destructor, void *(*__alloc) (size_t), 
+		 size_t __padding_size, __cxa_cdtor_type __constructor,
+		 __cxa_cdtor_type __destructor, void *(*__alloc) (size_t),
 		 void (*__dealloc) (void*, size_t));
 
   // Construct array.
   __cxa_vec_ctor_return_type
   __cxa_vec_ctor(void* __array_address, size_t __element_count,
-		 size_t __element_size, __cxa_cdtor_type constructor,
-		 __cxa_cdtor_type destructor);
+		 size_t __element_size, __cxa_cdtor_type __constructor,
+		 __cxa_cdtor_type __destructor);
 
   __cxa_vec_ctor_return_type
-  __cxa_vec_cctor(void* dest_array, void* src_array, size_t element_count, 
-		  size_t element_size, 
-		  __cxa_cdtor_return_type (*constructor) (void*, void*), 
-		  __cxa_cdtor_type destructor);
- 
-  // Destruct array.
-  void 
-  __cxa_vec_dtor(void* __array_address, size_t __element_count,
-		 size_t __element_size, __cxa_cdtor_type destructor);
-  
-  void 
-  __cxa_vec_cleanup(void* __array_address, size_t __element_count,
-		    size_t __element_size, __cxa_cdtor_type destructor);
-  
-  // Destruct and release array.
-  void 
-  __cxa_vec_delete(void* __array_address, size_t __element_size,
-		   size_t __padding_size, __cxa_cdtor_type destructor);
+  __cxa_vec_cctor(void* __dest_array, void* __src_array,
+		  size_t __element_count, size_t __element_size,
+		  __cxa_cdtor_return_type (*__constructor) (void*, void*),
+		  __cxa_cdtor_type __destructor);
 
-  void 
+  // Destruct array.
+  void
+  __cxa_vec_dtor(void* __array_address, size_t __element_count,
+		 size_t __element_size, __cxa_cdtor_type __destructor);
+
+  void
+  __cxa_vec_cleanup(void* __array_address, size_t __element_count, size_t __s,
+		    __cxa_cdtor_type __destructor) _GLIBCXX_NOTHROW;
+
+  // Destruct and release array.
+  void
+  __cxa_vec_delete(void* __array_address, size_t __element_size,
+		   size_t __padding_size, __cxa_cdtor_type __destructor);
+
+  void
   __cxa_vec_delete2(void* __array_address, size_t __element_size,
-		    size_t __padding_size, __cxa_cdtor_type destructor,
+		    size_t __padding_size, __cxa_cdtor_type __destructor,
 		    void (*__dealloc) (void*));
-                  
-  void 
+
+  void
   __cxa_vec_delete3(void* __array_address, size_t __element_size,
-		    size_t __padding_size, __cxa_cdtor_type destructor,
+		    size_t __padding_size, __cxa_cdtor_type __destructor,
 		    void (*__dealloc) (void*, size_t));
 
-  int 
+  int
   __cxa_guard_acquire(__guard*);
 
-  void 
-  __cxa_guard_release(__guard*);
+  void
+  __cxa_guard_release(__guard*) _GLIBCXX_NOTHROW;
 
-  void 
-  __cxa_guard_abort(__guard*);
+  void
+  __cxa_guard_abort(__guard*) _GLIBCXX_NOTHROW;
 
   // Pure virtual functions.
   void
-  __cxa_pure_virtual(void);
+  __cxa_pure_virtual(void) __attribute__ ((__noreturn__));
 
   // Exception handling.
   void
@@ -146,7 +143,7 @@ namespace __cxxabiv1
 
 
   /**
-   *  @brief Demangling routine. 
+   *  @brief Demangling routine.
    *  ABI-mandated entry point in the C++ runtime library for demangling.
    *
    *  @param __mangled_name A NUL-terminated character string
@@ -164,7 +161,7 @@ namespace __cxxabiv1
    *
    *  @param __status @a *__status is set to one of the following values:
    *   0: The demangling operation succeeded.
-   *  -1: A memory allocation failiure occurred.
+   *  -1: A memory allocation failure occurred.
    *  -2: @a mangled_name is not a valid name under the C++ ABI mangling rules.
    *  -3: One of the arguments is invalid.
    *
@@ -175,7 +172,7 @@ namespace __cxxabiv1
    *  The demangling is performed using the C++ ABI mangling rules,
    *  with GNU extensions. For example, this function is used in
    *  __gnu_cxx::__verbose_terminate_handler.
-   * 
+   *
    *  See http://gcc.gnu.org/onlinedocs/libstdc++/manual/bk01pt12ch39.html
    *  for other examples of use.
    *
@@ -203,10 +200,10 @@ namespace __cxxabiv1
   class __fundamental_type_info : public std::type_info
   {
   public:
-    explicit 
+    explicit
     __fundamental_type_info(const char* __n) : std::type_info(__n) { }
 
-    virtual 
+    virtual
     ~__fundamental_type_info();
   };
 
@@ -214,10 +211,10 @@ namespace __cxxabiv1
   class __array_type_info : public std::type_info
   {
   public:
-    explicit 
+    explicit
     __array_type_info(const char* __n) : std::type_info(__n) { }
 
-    virtual 
+    virtual
     ~__array_type_info();
   };
 
@@ -225,15 +222,15 @@ namespace __cxxabiv1
   class __function_type_info : public std::type_info
   {
   public:
-    explicit 
+    explicit
     __function_type_info(const char* __n) : std::type_info(__n) { }
 
-    virtual 
+    virtual
     ~__function_type_info();
 
   protected:
     // Implementation defined member function.
-    virtual bool 
+    virtual bool
     __is_function_p() const;
   };
 
@@ -241,10 +238,10 @@ namespace __cxxabiv1
   class __enum_type_info : public std::type_info
   {
   public:
-    explicit 
+    explicit
     __enum_type_info(const char* __n) : std::type_info(__n) { }
 
-    virtual 
+    virtual
     ~__enum_type_info();
   };
 
@@ -255,17 +252,17 @@ namespace __cxxabiv1
     unsigned int 		__flags; // Qualification of the target object.
     const std::type_info* 	__pointee; // Type of pointed to object.
 
-    explicit 
-    __pbase_type_info(const char* __n, int __quals, 
+    explicit
+    __pbase_type_info(const char* __n, int __quals,
 		      const std::type_info* __type)
     : std::type_info(__n), __flags(__quals), __pointee(__type)
     { }
-    
-    virtual 
+
+    virtual
     ~__pbase_type_info();
 
     // Implementation defined type.
-    enum __masks 
+    enum __masks
       {
 	__const_mask = 0x1,
 	__volatile_mask = 0x2,
@@ -281,11 +278,11 @@ namespace __cxxabiv1
     operator=(const __pbase_type_info&);
 
     // Implementation defined member functions.
-    virtual bool 
-    __do_catch(const std::type_info* __thr_type, void** __thr_obj, 
+    virtual bool
+    __do_catch(const std::type_info* __thr_type, void** __thr_obj,
 	       unsigned int __outer) const;
 
-    inline virtual bool 
+    inline virtual bool
     __pointer_catch(const __pbase_type_info* __thr_type, void** __thr_obj,
 		    unsigned __outer) const;
   };
@@ -294,22 +291,22 @@ namespace __cxxabiv1
   class __pointer_type_info : public __pbase_type_info
   {
   public:
-    explicit 
-    __pointer_type_info(const char* __n, int __quals, 
+    explicit
+    __pointer_type_info(const char* __n, int __quals,
 			const std::type_info* __type)
     : __pbase_type_info (__n, __quals, __type) { }
 
 
-    virtual 
+    virtual
     ~__pointer_type_info();
 
   protected:
     // Implementation defined member functions.
-    virtual bool 
+    virtual bool
     __is_pointer_p() const;
 
-    virtual bool 
-    __pointer_catch(const __pbase_type_info* __thr_type, void** __thr_obj, 
+    virtual bool
+    __pointer_catch(const __pbase_type_info* __thr_type, void** __thr_obj,
 		    unsigned __outer) const;
   };
 
@@ -321,13 +318,13 @@ namespace __cxxabiv1
   public:
     __class_type_info* __context;   // Class of the member.
 
-    explicit 
+    explicit
     __pointer_to_member_type_info(const char* __n, int __quals,
-				  const std::type_info* __type, 
+				  const std::type_info* __type,
 				  __class_type_info* __klass)
     : __pbase_type_info(__n, __quals, __type), __context(__klass) { }
 
-    virtual 
+    virtual
     ~__pointer_to_member_type_info();
 
   protected:
@@ -337,7 +334,7 @@ namespace __cxxabiv1
     operator=(const __pointer_to_member_type_info&);
 
     // Implementation defined member function.
-    virtual bool 
+    virtual bool
     __pointer_catch(const __pbase_type_info* __thr_type, void** __thr_obj,
 		    unsigned __outer) const;
   };
@@ -349,26 +346,26 @@ namespace __cxxabiv1
     const __class_type_info* 	__base_type;  // Base class type.
     long 			__offset_flags;  // Offset and info.
 
-    enum __offset_flags_masks 
+    enum __offset_flags_masks
       {
 	__virtual_mask = 0x1,
 	__public_mask = 0x2,
 	__hwm_bit = 2,
 	__offset_shift = 8          // Bits to shift offset.
       };
-  
+
     // Implementation defined member functions.
-    bool 
+    bool
     __is_virtual_p() const
     { return __offset_flags & __virtual_mask; }
 
-    bool 
+    bool
     __is_public_p() const
     { return __offset_flags & __public_mask; }
 
-    ptrdiff_t 
+    ptrdiff_t
     __offset() const
-    { 
+    {
       // This shift, being of a signed type, is implementation
       // defined. GCC implements such shifts as arithmetic, which is
       // what we want.
@@ -380,10 +377,10 @@ namespace __cxxabiv1
   class __class_type_info : public std::type_info
   {
   public:
-    explicit 
+    explicit
     __class_type_info (const char *__n) : type_info(__n) { }
 
-    virtual 
+    virtual
     ~__class_type_info ();
 
     // Implementation defined types.
@@ -394,24 +391,24 @@ namespace __cxxabiv1
     enum __sub_kind
       {
 	// We have no idea.
-	__unknown = 0, 
+	__unknown = 0,
 
 	// Not contained within us (in some circumstances this might
 	// mean not contained publicly)
-	__not_contained, 
+	__not_contained,
 
 	// Contained ambiguously.
-	__contained_ambig, 
-    
+	__contained_ambig,
+
 	// Via a virtual path.
-	__contained_virtual_mask = __base_class_type_info::__virtual_mask, 
+	__contained_virtual_mask = __base_class_type_info::__virtual_mask,
 
 	// Via a public path.
-	__contained_public_mask = __base_class_type_info::__public_mask,   
+	__contained_public_mask = __base_class_type_info::__public_mask,
 
 	// Contained within us.
 	__contained_mask = 1 << __base_class_type_info::__hwm_bit,
-    
+
 	__contained_private = __contained_mask,
 	__contained_public = __contained_mask | __contained_public_mask
       };
@@ -421,17 +418,17 @@ namespace __cxxabiv1
 
   protected:
     // Implementation defined member functions.
-    virtual bool 
+    virtual bool
     __do_upcast(const __class_type_info* __dst_type, void**__obj_ptr) const;
 
-    virtual bool 
-    __do_catch(const type_info* __thr_type, void** __thr_obj, 
+    virtual bool
+    __do_catch(const type_info* __thr_type, void** __thr_obj,
 	       unsigned __outer) const;
 
   public:
-    // Helper for upcast. See if DST is us, or one of our bases. 
-    // Return false if not found, true if found. 
-    virtual bool 
+    // Helper for upcast. See if DST is us, or one of our bases.
+    // Return false if not found, true if found.
+    virtual bool
     __do_upcast(const __class_type_info* __dst, const void* __obj,
 		__upcast_result& __restrict __result) const;
 
@@ -441,9 +438,9 @@ namespace __cxxabiv1
     // objects might be contained within this type.  If SRC_PTR is one
     // of our SRC_TYPE bases, indicate the virtuality. Returns
     // not_contained for non containment or private containment.
-    inline __sub_kind 
+    inline __sub_kind
     __find_public_src(ptrdiff_t __src2dst, const void* __obj_ptr,
-		      const __class_type_info* __src_type, 
+		      const __class_type_info* __src_type,
 		      const void* __src_ptr) const;
 
     // Helper for dynamic cast. ACCESS_PATH gives the access from the
@@ -453,17 +450,17 @@ namespace __cxxabiv1
     // started from and SRC_PTR points to that base within the most
     // derived object. Fill in RESULT with what we find. Return true
     // if we have located an ambiguous match.
-    virtual bool 
+    virtual bool
     __do_dyncast(ptrdiff_t __src2dst, __sub_kind __access_path,
-		 const __class_type_info* __dst_type, const void* __obj_ptr, 
-		 const __class_type_info* __src_type, const void* __src_ptr, 
+		 const __class_type_info* __dst_type, const void* __obj_ptr,
+		 const __class_type_info* __src_type, const void* __src_ptr,
 		 __dyncast_result& __result) const;
-    
+
     // Helper for find_public_subobj. SRC2DST indicates how SRC_TYPE
     // bases are inherited by the type started from -- which is not
     // necessarily the current type. The current type will be a base
     // of the destination type.  OBJ_PTR points to the current base.
-    virtual __sub_kind 
+    virtual __sub_kind
     __do_find_public_src(ptrdiff_t __src2dst, const void* __obj_ptr,
 			 const __class_type_info* __src_type,
 			 const void* __src_ptr) const;
@@ -475,11 +472,11 @@ namespace __cxxabiv1
   public:
     const __class_type_info* __base_type;
 
-    explicit 
+    explicit
     __si_class_type_info(const char *__n, const __class_type_info *__base)
     : __class_type_info(__n), __base_type(__base) { }
 
-    virtual 
+    virtual
     ~__si_class_type_info();
 
   protected:
@@ -489,24 +486,24 @@ namespace __cxxabiv1
     operator=(const __si_class_type_info&);
 
     // Implementation defined member functions.
-    virtual bool 
+    virtual bool
     __do_dyncast(ptrdiff_t __src2dst, __sub_kind __access_path,
 		 const __class_type_info* __dst_type, const void* __obj_ptr,
 		 const __class_type_info* __src_type, const void* __src_ptr,
 		 __dyncast_result& __result) const;
 
-    virtual __sub_kind 
+    virtual __sub_kind
     __do_find_public_src(ptrdiff_t __src2dst, const void* __obj_ptr,
 			 const __class_type_info* __src_type,
 			 const void* __sub_ptr) const;
 
-    virtual bool 
+    virtual bool
     __do_upcast(const __class_type_info*__dst, const void*__obj,
 		__upcast_result& __restrict __result) const;
   };
 
   // Type information for a class with multiple and/or virtual bases.
-  class __vmi_class_type_info : public __class_type_info 
+  class __vmi_class_type_info : public __class_type_info
   {
   public:
     unsigned int 		__flags;  // Details about the class hierarchy.
@@ -517,15 +514,15 @@ namespace __cxxabiv1
     // internally generated by the compiler.
     __base_class_type_info 	__base_info[1];  // Array of bases.
 
-    explicit 
+    explicit
     __vmi_class_type_info(const char* __n, int ___flags)
     : __class_type_info(__n), __flags(___flags), __base_count(0) { }
 
-    virtual 
+    virtual
     ~__vmi_class_type_info();
 
     // Implementation defined types.
-    enum __flags_masks 
+    enum __flags_masks
       {
 	__non_diamond_repeat_mask = 0x1, // Distinct instance of repeated base.
 	__diamond_shaped_mask = 0x2, // Diamond shaped multiple inheritance.
@@ -534,18 +531,18 @@ namespace __cxxabiv1
 
   protected:
     // Implementation defined member functions.
-    virtual bool 
+    virtual bool
     __do_dyncast(ptrdiff_t __src2dst, __sub_kind __access_path,
 		 const __class_type_info* __dst_type, const void* __obj_ptr,
 		 const __class_type_info* __src_type, const void* __src_ptr,
 		 __dyncast_result& __result) const;
 
-    virtual __sub_kind 
-    __do_find_public_src(ptrdiff_t __src2dst, const void* __obj_ptr, 
+    virtual __sub_kind
+    __do_find_public_src(ptrdiff_t __src2dst, const void* __obj_ptr,
 			 const __class_type_info* __src_type,
 			 const void* __src_ptr) const;
-    
-    virtual bool 
+
+    virtual bool
     __do_upcast(const __class_type_info* __dst, const void* __obj,
 		__upcast_result& __restrict __result) const;
   };
@@ -567,13 +564,13 @@ namespace __cxxabiv1
   // Returns the type_info for the currently handled exception [15.3/8], or
   // null if there is none.
   extern "C" std::type_info*
-  __cxa_current_exception_type();
+  __cxa_current_exception_type() _GLIBCXX_NOTHROW __attribute__ ((__pure__));
 
   // A magic placeholder class that can be caught by reference
   // to recognize foreign exceptions.
   class __foreign_exception
   {
-    virtual ~__foreign_exception() throw();
+    virtual ~__foreign_exception() _GLIBCXX_NOTHROW;
     virtual void __pure_dummy() = 0; // prevent catch by value
   };
 
@@ -582,7 +579,7 @@ namespace __cxxabiv1
 /** @namespace abi
  *  @brief The cross-vendor C++ Application Binary Interface. A
  *  namespace alias to __cxxabiv1, but user programs should use the
- *  alias `abi'.
+ *  alias 'abi'.
  *
  *  A brief overview of an ABI is given in the libstdc++ FAQ, question
  *  5.8 (you may have a copy of the FAQ locally, or you can view the online
@@ -594,15 +591,36 @@ namespace __cxxabiv1
  *  along with the current specification.
  *
  *  For users of GCC greater than or equal to 3.x, entry points are
- *  available in <cxxabi.h>, which notes, <em>"It is not normally
+ *  available in <cxxabi.h>, which notes, <em>'It is not normally
  *  necessary for user programs to include this header, or use the
  *  entry points directly.  However, this header is available should
- *  that be needed."</em>
+ *  that be needed.'</em>
 */
 namespace abi = __cxxabiv1;
 
+namespace __gnu_cxx
+{
+  /**
+   *  @brief Exception thrown by __cxa_guard_acquire.
+   *  @ingroup exceptions
+   *
+   *  6.7[stmt.dcl]/4: If control re-enters the declaration (recursively)
+   *  while the object is being initialized, the behavior is undefined.
+   *
+   *  Since we already have a library function to handle locking, we might
+   *  as well check for this situation and throw an exception.
+   *  We use the second byte of the guard variable to remember that we're
+   *  in the middle of an initialization.
+   */
+  class recursive_init_error: public std::exception
+  {
+  public:
+    recursive_init_error() throw() { }
+    virtual ~recursive_init_error() throw ();
+  };
+}
 #endif // __cplusplus
 
 #pragma GCC visibility pop
 
-#endif // __CXXABI_H 
+#endif // __CXXABI_H

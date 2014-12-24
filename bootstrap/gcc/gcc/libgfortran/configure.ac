@@ -1,7 +1,7 @@
 # Process this file with autoconf to produce a configure script, like so:
 # aclocal && autoconf && autoheader && automake
 
-AC_PREREQ(2.59)
+AC_PREREQ(2.64)
 AC_INIT([GNU Fortran Runtime Library], 0.3,,[libgfortran])
 AC_CONFIG_HEADER(config.h)
 GCC_TOPLEV_SUBDIRS
@@ -12,7 +12,8 @@ GCC_TOPLEV_SUBDIRS
 
 AC_MSG_CHECKING([for --enable-version-specific-runtime-libs])
 AC_ARG_ENABLE(version-specific-runtime-libs,
-[  --enable-version-specific-runtime-libs    Specify that runtime libraries should be installed in a compiler-specific directory ],
+AS_HELP_STRING([--enable-version-specific-runtime-libs],
+  [specify that runtime libraries should be installed in a compiler-specific directory]),
 [case "$enableval" in
  yes) version_specific_libs=yes ;;
  no)  version_specific_libs=no ;;
@@ -24,7 +25,7 @@ AC_MSG_RESULT($version_specific_libs)
 # Build with intermodule optimisations
 AC_MSG_CHECKING([for --enable-intermodule])
 AC_ARG_ENABLE(intermodule,
-[  --enable-intermodule    build the library in one step],
+AS_HELP_STRING([--enable-intermodule],[build the library in one step]),
 [case "$enable_intermodule" in
   yes) onestep="-onestep";;
     *) onestep="";;
@@ -60,9 +61,10 @@ target_alias=${target_alias-$host_alias}
 #              we can do about that; they come from AC_INIT).
 #  foreign:  we don't follow the normal rules for GNU packages (no COPYING
 #            file in the top srcdir, etc, etc), so stop complaining.
+#  no-dist:  we don't want 'dist' and related rules.
 #  -Wall:  turns on all automake warnings...
 #  -Wno-portability:  ...except this one, since GNU make is required.
-AM_INIT_AUTOMAKE([1.9.6 no-define foreign -Wall -Wno-portability])
+AM_INIT_AUTOMAKE([1.9.6 no-define foreign no-dist -Wall -Wno-portability])
 
 AM_MAINTAINER_MODE
 AM_ENABLE_MULTILIB(, ..)
@@ -79,6 +81,8 @@ if test "$build" != "$host"; then
 else
   LIBGFOR_IS_NATIVE=true
 fi
+
+AC_USE_SYSTEM_EXTENSIONS
 
 # Calculate toolexeclibdir
 # Also toolexecdir, though it's only used in toolexeclibdir
@@ -110,6 +114,9 @@ esac
 AC_SUBST(toolexecdir)
 AC_SUBST(toolexeclibdir)
 
+# Create a spec file, so that compile/link tests don't fail
+test -f libgfortran.spec || touch libgfortran.spec
+
 # Check the compiler.
 # The same as in boehm-gc and libstdc++. Have to borrow it from there.
 # We must force CC to /not/ be precious variables; otherwise
@@ -119,7 +126,7 @@ AC_SUBST(toolexeclibdir)
 m4_rename([_AC_ARG_VAR_PRECIOUS],[real_PRECIOUS])
 m4_define([_AC_ARG_VAR_PRECIOUS],[])
 AC_PROG_CC
-m4_rename([real_PRECIOUS],[_AC_ARG_VAR_PRECIOUS])
+m4_rename_force([real_PRECIOUS],[_AC_ARG_VAR_PRECIOUS])
 
 # Add -Wall -fno-repack-arrays -fno-underscoring if we are using GCC.
 if test "x$GCC" = "xyes"; then
@@ -137,17 +144,62 @@ AC_SUBST(CFLAGS)
 
 # Check for symbol versioning (copied from libssp).
 AC_MSG_CHECKING([whether symbol versioning is supported])
-cat > conftest.map <<EOF
+AC_ARG_ENABLE(symvers,
+AS_HELP_STRING([--disable-symvers],
+  [disable symbol versioning for libgfortran]),
+gfortran_use_symver=$enableval,
+gfortran_use_symver=yes)
+if test "x$gfortran_use_symver" = xyes; then
+  save_LDFLAGS="$LDFLAGS"
+  LDFLAGS="$LDFLAGS -fPIC -shared -Wl,--version-script,./conftest.map"
+  cat > conftest.map <<EOF
 FOO_1.0 {
   global: *foo*; bar; local: *;
 };
 EOF
-save_LDFLAGS="$LDFLAGS"
-LDFLAGS="$LDFLAGS -fPIC -shared -Wl,--version-script,./conftest.map"
-AC_TRY_LINK([int foo;],[],[gfortran_use_symver=yes],[gfortran_use_symver=no])
-LDFLAGS="$save_LDFLAGS"
+  AC_TRY_LINK([int foo;],[],[gfortran_use_symver=gnu],[gfortran_use_symver=no])
+  if test x$gfortran_use_symver = xno; then
+    case "$target_os" in
+      solaris2*)
+        LDFLAGS="$save_LDFLAGS"
+        LDFLAGS="$LDFLAGS -fPIC -shared -Wl,-M,./conftest.map"
+        # Sun ld cannot handle wildcards and treats all entries as undefined.
+        cat > conftest.map <<EOF
+FOO_1.0 {
+  global: foo; local: *;
+};
+EOF
+        AC_TRY_LINK([int foo;],[],[gfortran_use_symver=sun],[gfortran_use_symver=no])
+        ;;
+    esac
+  fi
+  LDFLAGS="$save_LDFLAGS"
+fi
 AC_MSG_RESULT($gfortran_use_symver)
-AM_CONDITIONAL(LIBGFOR_USE_SYMVER, [test "x$gfortran_use_symver" = xyes])
+AM_CONDITIONAL(LIBGFOR_USE_SYMVER, [test "x$gfortran_use_symver" != xno])
+AM_CONDITIONAL(LIBGFOR_USE_SYMVER_GNU, [test "x$gfortran_use_symver" = xgnu])
+AM_CONDITIONAL(LIBGFOR_USE_SYMVER_SUN, [test "x$gfortran_use_symver" = xsun])
+
+# Figure out whether the compiler supports "-ffunction-sections -fdata-sections",
+# similarly to how libstdc++ does it
+ac_test_CFLAGS="${CFLAGS+set}"
+ac_save_CFLAGS="$CFLAGS"
+
+# Check for -ffunction-sections -fdata-sections
+AC_MSG_CHECKING([for gcc that supports -ffunction-sections -fdata-sections])
+CFLAGS='-Werror -ffunction-sections -fdata-sections'
+AC_TRY_COMPILE(, [int foo;], [ac_fdsections=yes], [ac_fdsections=no])
+if test "$ac_test_CFLAGS" = set; then
+  CFLAGS="$ac_save_CFLAGS"
+else
+  # this is the suspicious part
+  CFLAGS=""
+fi
+if test x"$ac_fdsections" = x"yes"; then
+  SECTION_FLAGS='-ffunction-sections -fdata-sections'
+fi
+AC_MSG_RESULT($ac_fdsections)
+AC_SUBST(SECTION_FLAGS)
 
 # Find other programs we need.
 AC_CHECK_TOOL(AS, as)
@@ -160,6 +212,7 @@ AC_PROG_INSTALL
 #AC_MSG_NOTICE([====== Starting libtool configuration])
 AC_LIBTOOL_DLOPEN
 AM_PROG_LIBTOOL
+ACX_LT_HOST_FLAGS
 AC_SUBST(enable_shared)
 AC_SUBST(enable_static)
 #AC_MSG_NOTICE([====== Finished libtool configuration]) ; sleep 10
@@ -202,9 +255,11 @@ AC_CHECK_MEMBERS([struct stat.st_rdev])
 # Check for library functions.
 AC_CHECK_FUNCS(getrusage times mkstemp strtof strtold snprintf ftruncate chsize)
 AC_CHECK_FUNCS(chdir strerror getlogin gethostname kill link symlink perror)
-AC_CHECK_FUNCS(sleep time ttyname signal alarm ctime clock access fork execl)
+AC_CHECK_FUNCS(sleep time ttyname signal alarm clock access fork execl)
 AC_CHECK_FUNCS(wait setmode execvp pipe dup2 close fdopen strcasestr getrlimit)
 AC_CHECK_FUNCS(gettimeofday stat fstat lstat getpwuid vsnprintf dup getcwd)
+AC_CHECK_FUNCS(localtime_r gmtime_r strerror_r getpwuid_r ttyname_r)
+AC_CHECK_FUNCS(clock_gettime strftime)
 
 # Check for glibc backtrace functions
 AC_CHECK_FUNCS(backtrace backtrace_symbols)
@@ -387,17 +442,28 @@ AC_CHECK_LIB([m],[lgamma],[AC_DEFINE([HAVE_LGAMMA],[1],[libm includes lgamma])])
 AC_CHECK_LIB([m],[lgammaf],[AC_DEFINE([HAVE_LGAMMAF],[1],[libm includes lgammaf])])
 AC_CHECK_LIB([m],[lgammal],[AC_DEFINE([HAVE_LGAMMAL],[1],[libm includes lgammal])])
 
+# Check for GFORTRAN_C99_1.1 funcs
+AC_CHECK_LIB([m],[cacos],[AC_DEFINE([HAVE_CACOS],[1],[libm includes cacos])])
+AC_CHECK_LIB([m],[cacosf],[AC_DEFINE([HAVE_CACOSF],[1],[libm includes cacosf])])
+AC_CHECK_LIB([m],[cacosh],[AC_DEFINE([HAVE_CACOSH],[1],[libm includes cacosh])])
+AC_CHECK_LIB([m],[cacoshf],[AC_DEFINE([HAVE_CACOSHF],[1],[libm includes cacoshf])])
+AC_CHECK_LIB([m],[cacoshl],[AC_DEFINE([HAVE_CACOSHL],[1],[libm includes cacoshl])])
+AC_CHECK_LIB([m],[cacosl],[AC_DEFINE([HAVE_CACOSL],[1],[libm includes cacosl])])
+AC_CHECK_LIB([m],[casin],[AC_DEFINE([HAVE_CASIN],[1],[libm includes casin])])
+AC_CHECK_LIB([m],[casinf],[AC_DEFINE([HAVE_CASINF],[1],[libm includes casinf])])
+AC_CHECK_LIB([m],[casinh],[AC_DEFINE([HAVE_CASINH],[1],[libm includes casinh])])
+AC_CHECK_LIB([m],[casinhf],[AC_DEFINE([HAVE_CASINHF],[1],[libm includes casinhf])])
+AC_CHECK_LIB([m],[casinhl],[AC_DEFINE([HAVE_CASINHL],[1],[libm includes casinhl])])
+AC_CHECK_LIB([m],[casinl],[AC_DEFINE([HAVE_CASINL],[1],[libm includes casinl])])
+AC_CHECK_LIB([m],[catan],[AC_DEFINE([HAVE_CATAN],[1],[libm includes catan])])
+AC_CHECK_LIB([m],[catanf],[AC_DEFINE([HAVE_CATANF],[1],[libm includes catanf])])
+AC_CHECK_LIB([m],[catanh],[AC_DEFINE([HAVE_CATANH],[1],[libm includes catanh])])
+AC_CHECK_LIB([m],[catanhf],[AC_DEFINE([HAVE_CATANHF],[1],[libm includes catanhf])])
+AC_CHECK_LIB([m],[catanhl],[AC_DEFINE([HAVE_CATANHL],[1],[libm includes catanhl])])
+AC_CHECK_LIB([m],[catanl],[AC_DEFINE([HAVE_CATANL],[1],[libm includes catanl])])
+
 # On AIX, clog is present in libm as __clog
 AC_CHECK_LIB([m],[__clog],[AC_DEFINE([HAVE_CLOG],[1],[libm includes clog])])
-
-# Check for a isfinite macro that works on long doubles.
-LIBGFOR_CHECK_FOR_BROKEN_ISFINITE
-
-# Check for a isnan macro that works on long doubles.
-LIBGFOR_CHECK_FOR_BROKEN_ISNAN
-
-# Check for a fpclassify macro that works on long doubles.
-LIBGFOR_CHECK_FOR_BROKEN_FPCLASSIFY
 
 # Check whether the system has a working stat()
 LIBGFOR_CHECK_WORKING_STAT
@@ -408,8 +474,33 @@ LIBGFOR_CHECK_MINGW_SNPRINTF
 # Check for a broken powf implementation
 LIBGFOR_CHECK_FOR_BROKEN_POWF
 
+# Check whether libquadmath should be used
+AC_ARG_ENABLE(libquadmath-support,
+AS_HELP_STRING([--disable-libquadmath-support],
+  [disable libquadmath support for Fortran]),
+ENABLE_LIBQUADMATH_SUPPORT=$enableval,
+ENABLE_LIBQUADMATH_SUPPORT=yes)
+enable_libquadmath_support=
+if test "${ENABLE_LIBQUADMATH_SUPPORT}" = "no" ; then
+  enable_libquadmath_support=no
+fi
+
+# Check whether we have a __float128 type, depends on enable_libquadmath_support
+LIBGFOR_CHECK_FLOAT128
+
 # Check for GNU libc feenableexcept
 AC_CHECK_LIB([m],[feenableexcept],[have_feenableexcept=yes AC_DEFINE([HAVE_FEENABLEEXCEPT],[1],[libm includes feenableexcept])])
+
+# At least for glibc and Tru64, clock_gettime is in librt.  But don't
+# pull that in if it still doesn't give us the function we want.  This
+# test is copied from libgomp, and modified to not link in -lrt as
+# libgfortran calls clock_gettime via a weak reference if it's found
+# in librt.
+if test $ac_cv_func_clock_gettime = no; then
+  AC_CHECK_LIB(rt, clock_gettime,
+    [AC_DEFINE(HAVE_CLOCK_GETTIME_LIBRT, 1,
+               [Define to 1 if you have the `clock_gettime' function in librt.])])
+fi
 
 # Check for SysV fpsetmask
 LIBGFOR_CHECK_FPSETMASK
@@ -425,6 +516,30 @@ AC_CHECK_FUNC([fp_enable],[have_fp_enable=yes AC_DEFINE([HAVE_FP_ENABLE],[1],[fp
 AC_MSG_NOTICE([FPU dependent file will be ${fpu_host}.h])
 FPU_HOST_HEADER=config/${fpu_host}.h
 AC_SUBST(FPU_HOST_HEADER)
+
+# Some targets require additional compiler options for IEEE compatibility.
+IEEE_FLAGS="${ieee_flags}"
+AC_SUBST(IEEE_FLAGS)
+
+
+# Check for POSIX getpwuid_r 
+#
+# There are two versions of getpwuid_r, the POSIX one with 5
+# arguments, and another one with 4 arguments used by at least HP-UX
+# 10.2.
+if test "$ac_cv_func_getpwuid_r" = "yes"; then
+   AC_CACHE_CHECK([POSIX version of getpwuid_r with 5 arguments], libgfor_cv_posix_getpwuid_r, [
+   AC_LINK_IFELSE([AC_LANG_PROGRAM([
+#include <stdio.h>
+#include <sys/types.h>
+#include <pwd.h>], [
+    getpwuid_r(0, NULL, NULL, 0, NULL);
+    ])],  [libgfor_cv_posix_getpwuid_r="yes"], [libgfor_cv_posix_getpwuid_r="no"])])
+fi
+if test "$libgfor_cv_posix_getpwuid_r" = "yes"; then
+    AC_DEFINE([HAVE_POSIX_GETPWUID_R], [1], [Define to 1 if we have POSIX getpwuid_r which takes 5 arguments.])
+fi
+
 
 # Check out attribute support.
 LIBGFOR_CHECK_ATTRIBUTE_VISIBILITY
@@ -454,6 +569,9 @@ else
   multilib_arg=
 fi
 
-# Write our Makefile.
-AC_CONFIG_FILES(Makefile)
+# Write our Makefile and spec file.
+AC_CONFIG_FILES([
+Makefile
+libgfortran.spec
+])
 AC_OUTPUT

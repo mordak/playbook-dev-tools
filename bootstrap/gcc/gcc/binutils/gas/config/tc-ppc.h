@@ -1,6 +1,6 @@
 /* tc-ppc.h -- Header file for tc-ppc.c.
    Copyright 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003,
-   2004, 2005, 2006, 2007, 2008 Free Software Foundation, Inc.
+   2004, 2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
    Written by Ian Lance Taylor, Cygnus Support.
 
    This file is part of GAS, the GNU Assembler.
@@ -78,9 +78,6 @@ extern char *ppc_target_format (void);
 /* We don't need to handle .word strangely.  */
 #define WORKING_DOT_WORD
 
-#define tc_init_after_args() ppc_init_after_args()
-extern void ppc_init_after_args(void);
-
 #define MAX_MEM_FOR_RS_ALIGN_CODE 4
 #define HANDLE_ALIGN(FRAGP)						\
   if ((FRAGP)->fr_type == rs_align_code)				\
@@ -132,26 +129,32 @@ struct ppc_tc_sy
 {
   /* We keep a few linked lists of symbols.  */
   symbolS *next;
+  /* The real name, if the symbol was renamed.  */
+  char *real_name;
   /* Non-zero if the symbol should be output.  The RS/6000 assembler
      only outputs symbols that are external or are mentioned in a
      .globl or .lglobl statement.  */
-  int output;
+  unsigned char output;
   /* The symbol class.  */
-  int class;
-  /* The real name, if the symbol was renamed.  */
-  char *real_name;
+  short symbol_class;
+  /* For a csect or common symbol, the alignment to use.  */
+  unsigned char align;
   /* For a csect symbol, the subsegment we are using.  This is zero
      for symbols that are not csects.  */
   subsegT subseg;
-  /* For a csect or common symbol, the alignment to use.  */
-  int align;
-  /* For a function symbol, a symbol whose value is the size.  The
-     field is NULL if there is no size.  */
-  symbolS *size;
   /* For a csect symbol, the last symbol which has been defined in
-     this csect, or NULL if none have been defined so far.  For a .bs
-     symbol, the referenced csect symbol.  */
+     this csect, or NULL if none have been defined so far.
+     For a .bs symbol, the referenced csect symbol.
+     For a label, the enclosing csect.  */
   symbolS *within;
+  union
+  {
+    /* For a function symbol, a symbol whose value is the size.  The
+       field is NULL if there is no size.  */
+    symbolS *size;
+    /* For a dwarf symbol, the corresponding dwarf subsection.  */
+    struct dw_subsection *dw;
+  } u;
 };
 
 #define TC_SYMFIELD_TYPE struct ppc_tc_sy
@@ -196,11 +199,17 @@ extern void ppc_adjust_symtab (void);
 do {								\
   if (SF_GET_GET_SEGMENT (dest))				\
     S_SET_SEGMENT (dest, S_GET_SEGMENT (src));			\
-  symbol_get_tc (dest)->size = symbol_get_tc (src)->size;	\
+  symbol_get_tc (dest)->u = symbol_get_tc (src)->u;		\
   symbol_get_tc (dest)->align = symbol_get_tc (src)->align;	\
-  symbol_get_tc (dest)->class = symbol_get_tc (src)->class;	\
+  symbol_get_tc (dest)->symbol_class = symbol_get_tc (src)->symbol_class;	\
   symbol_get_tc (dest)->within = symbol_get_tc (src)->within;	\
 } while (0)
+
+extern void ppc_xcoff_end (void);
+#define md_end ppc_xcoff_end
+
+#define tc_new_dot_label(sym) ppc_new_dot_label (sym)
+extern void ppc_new_dot_label (symbolS *);
 
 #endif /* OBJ_XCOFF */
 
@@ -209,15 +218,11 @@ extern const char       ppc_symbol_chars[];
 
 #ifdef OBJ_ELF
 
-/* Support for SHF_EXCLUDE and SHT_ORDERED */
-extern int ppc_section_letter (int, char **);
+/* Support for SHT_ORDERED */
 extern int ppc_section_type (char *, size_t);
-extern int ppc_section_word (char *, size_t);
-extern int ppc_section_flags (int, int, int);
+extern int ppc_section_flags (flagword, bfd_vma, int);
 
-#define md_elf_section_letter(LETTER, PTR_MSG)	ppc_section_letter (LETTER, PTR_MSG)
 #define md_elf_section_type(STR, LEN)		ppc_section_type (STR, LEN)
-#define md_elf_section_word(STR, LEN)		ppc_section_word (STR, LEN)
 #define md_elf_section_flags(FLAGS, ATTR, TYPE)	ppc_section_flags (FLAGS, ATTR, TYPE)
 
 #define tc_comment_chars ppc_comment_chars
@@ -251,6 +256,12 @@ extern int ppc_parse_name (const char *, struct expressionS *);
 
 #define md_cleanup() ppc_cleanup ()
 extern void ppc_cleanup (void);
+
+/* ppc uses different register numbers between .eh_frame and .debug_frame.
+   This macro translates the .eh_frame register numbers to .debug_frame
+   register numbers.  */
+#define md_reg_eh_frame_to_debug_frame(regno) \
+  ((regno) == 70 ? 64 /* cr2 */ : (regno))
 
 #define TARGET_USE_CFIPOP 1
 

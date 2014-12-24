@@ -1,6 +1,6 @@
 /* Subroutines for insn-output.c for Renesas H8/300.
    Copyright (C) 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
-   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008
+   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by Steve Chamberlain (sac@cygnus.com),
    Jim Wilson (wilson@cygnus.com), and Doug Evans (dje@cygnus.com).
@@ -29,7 +29,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree.h"
 #include "regs.h"
 #include "hard-reg-set.h"
-#include "real.h"
 #include "insn-config.h"
 #include "conditions.h"
 #include "output.h"
@@ -39,12 +38,13 @@ along with GCC; see the file COPYING3.  If not see
 #include "expr.h"
 #include "function.h"
 #include "optabs.h"
-#include "toplev.h"
-#include "c-pragma.h"
+#include "diagnostic-core.h"
+#include "c-family/c-pragma.h"	/* ??? */
 #include "tm_p.h"
 #include "ggc.h"
 #include "target.h"
 #include "target-def.h"
+#include "df.h"
 
 /* Classifies a h8300_src_operand or h8300_dst_operand.
 
@@ -83,7 +83,7 @@ static int h8300_interrupt_function_p (tree);
 static int h8300_saveall_function_p (tree);
 static int h8300_monitor_function_p (tree);
 static int h8300_os_task_function_p (tree);
-static void h8300_emit_stack_adjustment (int, HOST_WIDE_INT);
+static void h8300_emit_stack_adjustment (int, HOST_WIDE_INT, bool);
 static HOST_WIDE_INT round_frame_size (HOST_WIDE_INT);
 static unsigned int compute_saved_regs (void);
 static void push (int);
@@ -98,7 +98,7 @@ static void h8300_asm_named_section (const char *, unsigned int, tree);
 #endif
 static int h8300_and_costs (rtx);
 static int h8300_shift_costs (rtx);
-static void          h8300_push_pop               (int, int, int, int);
+static void          h8300_push_pop               (int, int, bool, bool);
 static int           h8300_stack_offset_p         (rtx, int);
 static int           h8300_ldm_stm_regno          (rtx, int, int, int);
 static void          h8300_reorg                  (void);
@@ -303,10 +303,21 @@ enum h8_cpu
   H8_S
 };
 
+/* Implement TARGET_OPTION_OPTIMIZATION_TABLE.  */
+
+static const struct default_options h8300_option_optimization_table[] =
+  {
+    /* Basic block reordering is only beneficial on targets with cache
+       and/or variable-cycle branches where (cycle count taken !=
+       cycle count not taken).  */
+    { OPT_LEVELS_ALL, OPT_freorder_blocks, NULL, 0 },
+    { OPT_LEVELS_NONE, 0, NULL, 0 }
+  };
+
 /* Initialize various cpu specific globals at start up.  */
 
-void
-h8300_init_once (void)
+static void
+h8300_option_override (void)
 {
   static const char *const h8_push_ops[2] = { "push" , "push.l" };
   static const char *const h8_pop_ops[2]  = { "pop"  , "pop.l"  };
@@ -403,6 +414,10 @@ h8300_init_once (void)
 	 restore er6 though, so bump up the cost.  */
       h8300_move_ratio = 6;
     }
+
+  /* This target defaults to strict volatile bitfields.  */
+  if (flag_strict_volatile_bitfields < 0)
+    flag_strict_volatile_bitfields = 1;
 }
 
 /* Implement REG_CLASS_FROM_LETTER.
@@ -507,11 +522,38 @@ byte_reg (rtx x, int b)
 	   && call_used_regs[regno]					\
 	   && !current_function_is_leaf)))
 
+/* We use this to wrap all emitted insns in the prologue.  */
+static rtx
+F (rtx x, bool set_it)
+{
+  if (set_it)
+    RTX_FRAME_RELATED_P (x) = 1;
+  return x;
+}
+
+/* Mark all the subexpressions of the PARALLEL rtx PAR as
+   frame-related.  Return PAR.
+
+   dwarf2out.c:dwarf2out_frame_debug_expr ignores sub-expressions of a
+   PARALLEL rtx other than the first if they do not have the
+   FRAME_RELATED flag set on them.  */
+static rtx
+Fpa (rtx par)
+{
+  int len = XVECLEN (par, 0);
+  int i;
+
+  for (i = 0; i < len; i++)
+    F (XVECEXP (par, 0, i), true);
+
+  return par;
+}
+
 /* Output assembly language to FILE for the operation OP with operand size
    SIZE to adjust the stack pointer.  */
 
 static void
-h8300_emit_stack_adjustment (int sign, HOST_WIDE_INT size)
+h8300_emit_stack_adjustment (int sign, HOST_WIDE_INT size, bool in_prologue)
 {
   /* If the frame size is 0, we don't have anything to do.  */
   if (size == 0)
@@ -526,22 +568,27 @@ h8300_emit_stack_adjustment (int sign, HOST_WIDE_INT size)
       && !(cfun->static_chain_decl != NULL && sign < 0))
     {
       rtx r3 = gen_rtx_REG (Pmode, 3);
-      emit_insn (gen_movhi (r3, GEN_INT (sign * size)));
-      emit_insn (gen_addhi3 (stack_pointer_rtx,
-			     stack_pointer_rtx, r3));
+      F (emit_insn (gen_movhi (r3, GEN_INT (sign * size))), in_prologue);
+      F (emit_insn (gen_addhi3 (stack_pointer_rtx,
+				stack_pointer_rtx, r3)), in_prologue);
     }
   else
     {
       /* The stack adjustment made here is further optimized by the
 	 splitter.  In case of H8/300, the splitter always splits the
-	 addition emitted here to make the adjustment
-	 interrupt-safe.  */
+	 addition emitted here to make the adjustment interrupt-safe.
+	 FIXME: We don't always tag those, because we don't know what
+	 the splitter will do.  */
       if (Pmode == HImode)
-	emit_insn (gen_addhi3 (stack_pointer_rtx,
-			       stack_pointer_rtx, GEN_INT (sign * size)));
+	{
+	  rtx x = emit_insn (gen_addhi3 (stack_pointer_rtx,
+					 stack_pointer_rtx, GEN_INT (sign * size)));
+	  if (size < 4)
+	    F (x, in_prologue);
+	}
       else
-	emit_insn (gen_addsi3 (stack_pointer_rtx,
-			       stack_pointer_rtx, GEN_INT (sign * size)));
+	F (emit_insn (gen_addsi3 (stack_pointer_rtx,
+				  stack_pointer_rtx, GEN_INT (sign * size))), in_prologue);
     }
 }
 
@@ -591,8 +638,8 @@ push (int rn)
     x = gen_push_h8300hs_advanced (reg);
   else
     x = gen_push_h8300hs_normal (reg);
-  x = emit_insn (x);
-  REG_NOTES (x) = gen_rtx_EXPR_LIST (REG_INC, stack_pointer_rtx, 0);
+  x = F (emit_insn (x), true);
+  add_reg_note (x, REG_INC, stack_pointer_rtx);
 }
 
 /* Emit an insn to pop register RN.  */
@@ -610,7 +657,7 @@ pop (int rn)
   else
     x = gen_pop_h8300hs_normal (reg);
   x = emit_insn (x);
-  REG_NOTES (x) = gen_rtx_EXPR_LIST (REG_INC, stack_pointer_rtx, 0);
+  add_reg_note (x, REG_INC, stack_pointer_rtx);
 }
 
 /* Emit an instruction to push or pop NREGS consecutive registers
@@ -630,11 +677,11 @@ pop (int rn)
 	(set sp (plus sp (const_int adjust)))]  */
 
 static void
-h8300_push_pop (int regno, int nregs, int pop_p, int return_p)
+h8300_push_pop (int regno, int nregs, bool pop_p, bool return_p)
 {
   int i, j;
   rtvec vec;
-  rtx sp, offset;
+  rtx sp, offset, x;
 
   /* See whether we can use a simple push or pop.  */
   if (!return_p && nregs == 1)
@@ -648,7 +695,7 @@ h8300_push_pop (int regno, int nregs, int pop_p, int return_p)
 
   /* We need one element for the return insn, if present, one for each
      register, and one for stack adjustment.  */
-  vec = rtvec_alloc ((return_p != 0) + nregs + 1);
+  vec = rtvec_alloc ((return_p ? 1 : 0) + nregs + 1);
   sp = stack_pointer_rtx;
   i = 0;
 
@@ -685,7 +732,14 @@ h8300_push_pop (int regno, int nregs, int pop_p, int return_p)
   RTVEC_ELT (vec, i + j) = gen_rtx_SET (VOIDmode, sp,
 					gen_rtx_PLUS (Pmode, sp, offset));
 
-  emit_insn (gen_rtx_PARALLEL (VOIDmode, vec));
+  x = gen_rtx_PARALLEL (VOIDmode, vec);
+  if (!pop_p)
+    x = Fpa (x);
+
+  if (return_p)
+    emit_jump_insn (x);
+  else
+    emit_insn (x);
 }
 
 /* Return true if X has the value sp + OFFSET.  */
@@ -820,7 +874,7 @@ h8300_expand_prologue (void)
     {
       /* Push fp.  */
       push (HARD_FRAME_POINTER_REGNUM);
-      emit_move_insn (hard_frame_pointer_rtx, stack_pointer_rtx);
+      F (emit_move_insn (hard_frame_pointer_rtx, stack_pointer_rtx), true);
     }
 
   /* Push the rest of the registers in ascending order.  */
@@ -846,12 +900,12 @@ h8300_expand_prologue (void)
 		n_regs = 2;
 	    }
 
-	  h8300_push_pop (regno, n_regs, 0, 0);
+	  h8300_push_pop (regno, n_regs, false, false);
 	}
     }
 
   /* Leave room for locals.  */
-  h8300_emit_stack_adjustment (-1, round_frame_size (get_frame_size ()));
+  h8300_emit_stack_adjustment (-1, round_frame_size (get_frame_size ()), true);
 }
 
 /* Return nonzero if we can use "rts" for the function currently being
@@ -886,7 +940,7 @@ h8300_expand_epilogue (void)
   returned_p = false;
 
   /* Deallocate locals.  */
-  h8300_emit_stack_adjustment (1, frame_size);
+  h8300_emit_stack_adjustment (1, frame_size, false);
 
   /* Pop the saved registers in descending order.  */
   saved_regs = compute_saved_regs ();
@@ -919,7 +973,7 @@ h8300_expand_epilogue (void)
 	      && (saved_regs & ((1 << (regno - n_regs + 1)) - 1)) == 0)
 	    returned_p = true;
 
-	  h8300_push_pop (regno - n_regs + 1, n_regs, 1, returned_p);
+	  h8300_push_pop (regno - n_regs + 1, n_regs, true, returned_p);
 	}
     }
 
@@ -928,7 +982,7 @@ h8300_expand_epilogue (void)
     {
       if (TARGET_H8300SX)
 	returned_p = true;
-      h8300_push_pop (HARD_FRAME_POINTER_REGNUM, 1, 1, returned_p);
+      h8300_push_pop (HARD_FRAME_POINTER_REGNUM, 1, true, returned_p);
     }
 
   if (!returned_p)
@@ -1041,11 +1095,14 @@ h8300_pr_saveall (struct cpp_reader *pfile ATTRIBUTE_UNUSED)
 /* If the next function argument with MODE and TYPE is to be passed in
    a register, return a reg RTX for the hard register in which to pass
    the argument.  CUM represents the state after the last argument.
-   If the argument is to be pushed, NULL_RTX is returned.  */
+   If the argument is to be pushed, NULL_RTX is returned.
 
-rtx
-function_arg (CUMULATIVE_ARGS *cum, enum machine_mode mode,
-	      tree type, int named)
+   On the H8/300 all normal args are pushed, unless -mquickcall in which
+   case the first 3 arguments are passed in registers.  */
+
+static rtx
+h8300_function_arg (CUMULATIVE_ARGS *cum, enum machine_mode mode,
+		    const_tree type, bool named)
 {
   static const char *const hand_list[] = {
     "__main",
@@ -1109,6 +1166,20 @@ function_arg (CUMULATIVE_ARGS *cum, enum machine_mode mode,
 
   return result;
 }
+
+/* Update the data in CUM to advance over an argument
+   of mode MODE and data type TYPE.
+   (TYPE is null for libcalls where that information may not be available.)  */
+
+static void
+h8300_function_arg_advance (CUMULATIVE_ARGS *cum, enum machine_mode mode,
+			    const_tree type, bool named ATTRIBUTE_UNUSED)
+{
+  cum->nbytes += (mode != BLKmode
+		  ? (GET_MODE_SIZE (mode) + UNITS_PER_WORD - 1) & -UNITS_PER_WORD
+		  : (int_size_in_bytes (type) + UNITS_PER_WORD - 1) & -UNITS_PER_WORD);
+}
+
 
 /* Compute the cost of an and insn.  */
 
@@ -1225,6 +1296,11 @@ h8300_rtx_costs (rtx x, int code, int outer_code, int *total, bool speed)
     case CONST_DOUBLE:
       *total = 20;
       return true;
+
+    case COMPARE:
+      if (XEXP (x, 1) == const0_rtx)
+	*total = 0;
+      return false;
 
     case AND:
       if (!h8300_dst_operand (XEXP (x, 0), VOIDmode)
@@ -1424,12 +1500,20 @@ print_operand (FILE *file, rtx x, int code)
 	goto def;
       break;
     case 'V':
-      bitint = exact_log2 (INTVAL (x) & 0xff);
+      bitint = (INTVAL (x) & 0xffff);
+      if ((exact_log2 ((bitint >> 8) & 0xff)) == -1)
+	bitint = exact_log2 (bitint & 0xff);
+      else
+        bitint = exact_log2 ((bitint >> 8) & 0xff);	      
       gcc_assert (bitint >= 0);
       fprintf (file, "#%d", bitint);
       break;
     case 'W':
-      bitint = exact_log2 ((~INTVAL (x)) & 0xff);
+      bitint = ((~INTVAL (x)) & 0xffff);
+      if ((exact_log2 ((bitint >> 8) & 0xff)) == -1 )
+	bitint = exact_log2 (bitint & 0xff);
+      else
+	bitint = (exact_log2 ((bitint >> 8) & 0xff));      
       gcc_assert (bitint >= 0);
       fprintf (file, "#%d", bitint);
       break;
@@ -1818,6 +1902,29 @@ h8300_expand_movsi (rtx operands[])
 	}
     }
   return 0;
+}
+
+/* Given FROM and TO register numbers, say whether this elimination is allowed.
+   Frame pointer elimination is automatically handled.
+
+   For the h8300, if frame pointer elimination is being done, we would like to
+   convert ap and rp into sp, not fp.
+
+   All other eliminations are valid.  */
+
+static bool
+h8300_can_eliminate (const int from ATTRIBUTE_UNUSED, const int to)
+{
+  return (to == STACK_POINTER_REGNUM ? ! frame_pointer_needed : true);
+}
+
+/* Conditionally modify register usage based on target flags.  */
+
+static void
+h8300_conditional_register_usage (void)
+{
+  if (!TARGET_MAC)
+    fixed_regs[MAC_REG] = call_used_regs[MAC_REG] = 1;
 }
 
 /* Function for INITIAL_ELIMINATION_OFFSET(FROM, TO, OFFSET).
@@ -3036,7 +3143,7 @@ compute_plussi_length (rtx *operands)
 
 /* Compute which flag bits are valid after an addition insn.  */
 
-int
+enum attr_cc
 compute_plussi_cc (rtx *operands)
 {
   enum machine_mode mode = GET_MODE (operands[0]);
@@ -3420,7 +3527,7 @@ compute_logical_op_length (enum machine_mode mode, rtx *operands)
 
 /* Compute which flag bits are valid after a logical insn.  */
 
-int
+enum attr_cc
 compute_logical_op_cc (enum machine_mode mode, rtx *operands)
 {
   /* Figure out the logical op that we need to perform.  */
@@ -3503,15 +3610,41 @@ compute_logical_op_cc (enum machine_mode mode, rtx *operands)
 /* Expand a conditional branch.  */
 
 void
-h8300_expand_branch (enum rtx_code code, rtx label)
+h8300_expand_branch (rtx operands[])
 {
+  enum rtx_code code = GET_CODE (operands[0]);
+  rtx op0 = operands[1];
+  rtx op1 = operands[2];
+  rtx label = operands[3];
   rtx tmp;
+
+  tmp = gen_rtx_COMPARE (VOIDmode, op0, op1);
+  emit_insn (gen_rtx_SET (VOIDmode, cc0_rtx, tmp));
 
   tmp = gen_rtx_fmt_ee (code, VOIDmode, cc0_rtx, const0_rtx);
   tmp = gen_rtx_IF_THEN_ELSE (VOIDmode, tmp,
 			      gen_rtx_LABEL_REF (VOIDmode, label),
 			      pc_rtx);
   emit_jump_insn (gen_rtx_SET (VOIDmode, pc_rtx, tmp));
+}
+
+
+/* Expand a conditional store.  */
+
+void
+h8300_expand_store (rtx operands[])
+{
+  rtx dest = operands[0];
+  enum rtx_code code = GET_CODE (operands[1]);
+  rtx op0 = operands[2];
+  rtx op1 = operands[3];
+  rtx tmp;
+
+  tmp = gen_rtx_COMPARE (VOIDmode, op0, op1);
+  emit_insn (gen_rtx_SET (VOIDmode, cc0_rtx, tmp));
+
+  tmp = gen_rtx_fmt_ee (code, GET_MODE (dest), cc0_rtx, const0_rtx);
+  emit_insn (gen_rtx_SET (VOIDmode, dest, tmp));
 }
 
 /* Shifts.
@@ -3645,7 +3778,7 @@ output_h8sx_shift (rtx *operands, int suffix, int optype)
 /* Emit code to do shifts.  */
 
 bool
-expand_a_shift (enum machine_mode mode, int code, rtx operands[])
+expand_a_shift (enum machine_mode mode, enum rtx_code code, rtx operands[])
 {
   switch (h8sx_classify_shift (mode, code, operands[2]))
     {
@@ -3690,7 +3823,7 @@ enum shift_mode
 struct shift_insn
 {
   const char *const assembler;
-  const int cc_valid;
+  const enum attr_cc cc_valid;
 };
 
 /* Assembler instruction shift table.
@@ -3858,10 +3991,10 @@ struct shift_info {
   const char *shift2;
 
   /* CC status for SHIFT_INLINE.  */
-  int cc_inline;
+  enum attr_cc cc_inline;
 
   /* CC status  for SHIFT_SPECIAL.  */
-  int cc_special;
+  enum attr_cc cc_special;
 };
 
 static void get_shift_alg (enum shift_type,
@@ -4691,7 +4824,7 @@ compute_a_shift_length (rtx insn ATTRIBUTE_UNUSED, rtx *operands)
 
 /* Compute which flag bits are valid after a shift insn.  */
 
-int
+enum attr_cc
 compute_a_shift_cc (rtx insn ATTRIBUTE_UNUSED, rtx *operands)
 {
   rtx shift = operands[3];
@@ -5232,7 +5365,7 @@ h8300_insert_attributes (tree node, tree *attributes)
    tiny_data: This variable lives in the tiny data area and can be
    referenced with 16-bit absolute memory references.  */
 
-const struct attribute_spec h8300_attribute_table[] =
+static const struct attribute_spec h8300_attribute_table[] =
 {
   /* { name, min_len, max_len, decl_req, type_req, fn_type_req, handler } */
   { "interrupt_handler", 0, 0, true,  false, false, h8300_handle_fndecl_attribute },
@@ -5256,8 +5389,8 @@ h8300_handle_fndecl_attribute (tree *node, tree name,
 {
   if (TREE_CODE (*node) != FUNCTION_DECL)
     {
-      warning (OPT_Wattributes, "%qs attribute only applies to functions",
-	       IDENTIFIER_POINTER (name));
+      warning (OPT_Wattributes, "%qE attribute only applies to functions",
+	       name);
       *no_add_attrs = true;
     }
 
@@ -5280,8 +5413,8 @@ h8300_handle_eightbit_data_attribute (tree *node, tree name,
     }
   else
     {
-      warning (OPT_Wattributes, "%qs attribute ignored",
-	       IDENTIFIER_POINTER (name));
+      warning (OPT_Wattributes, "%qE attribute ignored",
+	       name);
       *no_add_attrs = true;
     }
 
@@ -5304,8 +5437,8 @@ h8300_handle_tiny_data_attribute (tree *node, tree name,
     }
   else
     {
-      warning (OPT_Wattributes, "%qs attribute ignored",
-	       IDENTIFIER_POINTER (name));
+      warning (OPT_Wattributes, "%qE attribute ignored",
+	       name);
       *no_add_attrs = true;
     }
 
@@ -5655,8 +5788,8 @@ h8300_rtx_ok_for_base_p (rtx x, int strict)
    legitimate address has the form REG, REG+CONSTANT_ADDRESS or
    CONSTANT_ADDRESS.  */
 
-int
-h8300_legitimate_address_p (enum machine_mode mode, rtx x, int strict)
+static bool
+h8300_legitimate_address_p (enum machine_mode mode, rtx x, bool strict)
 {
   /* The register indirect addresses like @er0 is always valid.  */
   if (h8300_rtx_ok_for_base_p (x, strict))
@@ -5728,6 +5861,56 @@ h8300_return_in_memory (const_tree type, const_tree fntype ATTRIBUTE_UNUSED)
 	  || GET_MODE_SIZE (TYPE_MODE (type)) > (TARGET_H8300 ? 4 : 8));
 }
 
+/* We emit the entire trampoline here.  Depending on the pointer size,
+   we use a different trampoline.
+
+   Pmode == HImode
+	      vvvv context
+   1 0000 7903xxxx		mov.w	#0x1234,r3
+   2 0004 5A00xxxx		jmp	@0x1234
+	      ^^^^ function
+
+   Pmode == SImode
+	      vvvvvvvv context
+   2 0000 7A03xxxxxxxx		mov.l	#0x12345678,er3
+   3 0006 5Axxxxxx		jmp	@0x123456
+	    ^^^^^^ function
+*/
+
+static void
+h8300_trampoline_init (rtx m_tramp, tree fndecl, rtx cxt)
+{
+  rtx fnaddr = XEXP (DECL_RTL (fndecl), 0);
+  rtx mem;
+
+  if (Pmode == HImode)
+    {
+      mem = adjust_address (m_tramp, HImode, 0);
+      emit_move_insn (mem, GEN_INT (0x7903));
+      mem = adjust_address (m_tramp, Pmode, 2);
+      emit_move_insn (mem, cxt);
+      mem = adjust_address (m_tramp, HImode, 4);
+      emit_move_insn (mem, GEN_INT (0x5a00));
+      mem = adjust_address (m_tramp, Pmode, 6);
+      emit_move_insn (mem, fnaddr);
+    }
+  else
+    {
+      rtx tem;
+
+      mem = adjust_address (m_tramp, HImode, 0);
+      emit_move_insn (mem, GEN_INT (0x7a03));
+      mem = adjust_address (m_tramp, Pmode, 2);
+      emit_move_insn (mem, cxt);
+
+      tem = copy_to_reg (fnaddr);
+      emit_insn (gen_andsi3 (tem, tem, GEN_INT (0x00ffffff)));
+      emit_insn (gen_iorsi3 (tem, tem, GEN_INT (0x5a000000)));
+      mem = adjust_address (m_tramp, SImode, 6);
+      emit_move_insn (mem, tem);
+    }
+}
+
 /* Initialize the GCC target structure.  */
 #undef TARGET_ATTRIBUTE_TABLE
 #define TARGET_ATTRIBUTE_TABLE h8300_attribute_table
@@ -5758,13 +5941,40 @@ h8300_return_in_memory (const_tree type, const_tree fntype ATTRIBUTE_UNUSED)
 #undef TARGET_RETURN_IN_MEMORY
 #define TARGET_RETURN_IN_MEMORY h8300_return_in_memory
 
+#undef TARGET_FUNCTION_ARG
+#define TARGET_FUNCTION_ARG h8300_function_arg
+
+#undef TARGET_FUNCTION_ARG_ADVANCE
+#define TARGET_FUNCTION_ARG_ADVANCE h8300_function_arg_advance
+
 #undef  TARGET_MACHINE_DEPENDENT_REORG
 #define TARGET_MACHINE_DEPENDENT_REORG h8300_reorg
 
 #undef TARGET_HARD_REGNO_SCRATCH_OK
 #define TARGET_HARD_REGNO_SCRATCH_OK h8300_hard_regno_scratch_ok
 
+#undef TARGET_LEGITIMATE_ADDRESS_P
+#define TARGET_LEGITIMATE_ADDRESS_P	h8300_legitimate_address_p
+
 #undef TARGET_DEFAULT_TARGET_FLAGS
 #define TARGET_DEFAULT_TARGET_FLAGS TARGET_DEFAULT
+
+#undef TARGET_CAN_ELIMINATE
+#define TARGET_CAN_ELIMINATE h8300_can_eliminate
+
+#undef TARGET_CONDITIONAL_REGISTER_USAGE
+#define TARGET_CONDITIONAL_REGISTER_USAGE h8300_conditional_register_usage
+
+#undef TARGET_TRAMPOLINE_INIT
+#define TARGET_TRAMPOLINE_INIT h8300_trampoline_init
+
+#undef TARGET_OPTION_OVERRIDE
+#define TARGET_OPTION_OVERRIDE h8300_option_override
+
+#undef TARGET_OPTION_OPTIMIZATION_TABLE
+#define TARGET_OPTION_OPTIMIZATION_TABLE h8300_option_optimization_table
+
+#undef TARGET_EXCEPT_UNWIND_INFO
+#define TARGET_EXCEPT_UNWIND_INFO sjlj_except_unwind_info
 
 struct gcc_target targetm = TARGET_INITIALIZER;

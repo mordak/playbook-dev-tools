@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -24,6 +24,7 @@
 ------------------------------------------------------------------------------
 
 with Atree;    use Atree;
+with Debug;    use Debug;
 with Einfo;    use Einfo;
 with Elists;   use Elists;
 with Errout;   use Errout;
@@ -34,12 +35,14 @@ with Exp_VFpt; use Exp_VFpt;
 with Namet;    use Namet;
 with Nmake;    use Nmake;
 with Opt;      use Opt;
+with Output;   use Output;
 with Sem;      use Sem;
 with Sem_Eval; use Sem_Eval;
 with Sem_Res;  use Sem_Res;
 with Sem_Util; use Sem_Util;
 with Sem_Warn; use Sem_Warn;
 with Sinfo;    use Sinfo;
+with Sinput;   use Sinput;
 with Snames;   use Snames;
 with Tbuild;   use Tbuild;
 with Uintp;    use Uintp;
@@ -267,11 +270,9 @@ package body Exp_Ch2 is
          end loop;
 
          --  If the discriminant occurs within the default expression for a
-         --  formal of an entry or protected operation, create a default
-         --  function for it, and replace the discriminant with a reference to
-         --  the discriminant of the formal of the default function. The
-         --  discriminant entity is the one defined in the corresponding
-         --  record.
+         --  formal of an entry or protected operation, replace it with a
+         --  reference to the discriminant of the formal of the enclosing
+         --  operation.
 
          if Present (Parent_P)
            and then Present (Corresponding_Spec (Parent_P))
@@ -284,8 +285,9 @@ package body Exp_Ch2 is
                Disc   : Entity_Id;
 
             begin
-               --  Verify that we are within a default function: the type of
-               --  its formal parameter is the same task or protected type.
+               --  Verify that we are within the body of an entry or protected
+               --  operation. Its first formal parameter is the synchronized
+               --  type itself.
 
                if Present (Formal)
                  and then Etype (Formal) = Scope (Entity (N))
@@ -309,6 +311,17 @@ package body Exp_Ch2 is
            and then In_Entry
          then
             Set_Entity (N, CR_Discriminant (Entity (N)));
+
+            --  Finally, if the entity is the discriminant of the original
+            --  type declaration, and we are within the initialization
+            --  procedure for a task, the designated entity is the
+            --  discriminal of the task body. This can happen when the
+            --  argument of pragma Task_Name mentions a discriminant,
+            --  because the pragma is analyzed in the task declaration
+            --  but is expanded in the call to Create_Task in the init_proc.
+
+         elsif Within_Init_Proc then
+            Set_Entity (N, Discriminal (CR_Discriminant (Entity (N))));
          else
             Set_Entity (N, Discriminal (Entity (N)));
          end if;
@@ -360,13 +373,34 @@ package body Exp_Ch2 is
          Expand_Shared_Passive_Variable (N);
       end if;
 
+      --  Test code for implementing the pragma Reviewable requirement of
+      --  classifying reads of scalars as referencing potentially uninitialized
+      --  objects or not.
+
+      if Debug_Flag_XX
+        and then Is_Scalar_Type (Etype (N))
+        and then (Is_Assignable (E) or else Is_Constant_Object (E))
+        and then Comes_From_Source (N)
+        and then not Is_LHS (N)
+        and then not Is_Actual_Out_Parameter (N)
+        and then (Nkind (Parent (N)) /= N_Attribute_Reference
+                   or else Attribute_Name (Parent (N)) /= Name_Valid)
+      then
+         Write_Location (Sloc (N));
+         Write_Str (": Read from scalar """);
+         Write_Name (Chars (N));
+         Write_Str ("""");
+
+         if Is_Known_Valid (E) then
+            Write_Str (", Is_Known_Valid");
+         end if;
+
+         Write_Eol;
+      end if;
+
       --  Interpret possible Current_Value for variable case
 
-      if (Ekind (E) = E_Variable
-            or else
-          Ekind (E) = E_In_Out_Parameter
-            or else
-          Ekind (E) = E_Out_Parameter)
+      if Is_Assignable (E)
         and then Present (Current_Value (E))
       then
          Expand_Current_Value (N);
@@ -509,8 +543,8 @@ package body Exp_Ch2 is
 
       --  For all types of parameters, the constructed parameter record object
       --  contains a pointer to the parameter. Thus we must dereference them to
-      --  access them (this will often be redundant, since the needed deference
-      --  is implicit, but no harm is done by making it explicit).
+      --  access them (this will often be redundant, since the dereference is
+      --  implicit, but no harm is done by making it explicit).
 
       Rewrite (N,
         Make_Explicit_Dereference (Loc, P_Comp_Ref));

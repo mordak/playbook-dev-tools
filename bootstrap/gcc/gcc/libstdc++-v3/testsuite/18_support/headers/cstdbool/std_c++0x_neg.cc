@@ -18,9 +18,9 @@
 // with this library; see the file COPYING3.  If not see
 // <http://www.gnu.org/licenses/>.
 
-#include <cstdbool>  // { dg-excess-errors "In file included from" }
+#include <cstdbool>
 
-// { dg-error "upcoming ISO" "" { target *-*-* } 31 } 
+// { dg-error "upcoming ISO" "" { target *-*-* } 32 } 
 
 
 

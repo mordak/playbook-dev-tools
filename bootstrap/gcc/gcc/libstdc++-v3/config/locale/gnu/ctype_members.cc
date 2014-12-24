@@ -1,6 +1,6 @@
 // std::ctype implementation details, GNU version -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -33,7 +33,9 @@
 #include <cstdio>
 #include <bits/c++locale_internal.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   // NB: The other ctype<char> specializations are in src/locale.cc and
   // various /config/os/* files.
@@ -55,7 +57,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
 #ifdef _GLIBCXX_USE_WCHAR_T  
   ctype<wchar_t>::__wmask_type
-  ctype<wchar_t>::_M_convert_to_wmask(const mask __m) const
+  ctype<wchar_t>::_M_convert_to_wmask(const mask __m) const throw()
   {
     __wmask_type __ret;
     switch (__m)
@@ -267,7 +269,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   }
 
   void
-  ctype<wchar_t>::_M_initialize_ctype()
+  ctype<wchar_t>::_M_initialize_ctype() throw()
   {
 #if __GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ > 2)
     __c_locale __old = __uselocale(_M_c_locale_ctype);
@@ -300,4 +302,5 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   }
 #endif //  _GLIBCXX_USE_WCHAR_T
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace

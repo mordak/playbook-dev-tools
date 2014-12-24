@@ -84,7 +84,7 @@ static pid_t pex_win32_exec_child (struct pex_obj *, int, const char *,
                                   int, int, int, int,
 				  const char **, int *);
 static int pex_win32_close (struct pex_obj *, int);
-static int pex_win32_wait (struct pex_obj *, pid_t, int *,
+static pid_t pex_win32_wait (struct pex_obj *, pid_t, int *,
 			   struct pex_time *, int, const char **, int *);
 static int pex_win32_pipe (struct pex_obj *, int *, int);
 static FILE *pex_win32_fdopenr (struct pex_obj *, int, int);
@@ -210,10 +210,8 @@ mingw_rootify (const char *executable)
   if (!namebuf || !foundbuf)
     {
       RegCloseKey (hKey);
-      if (namebuf)
-	free (namebuf);
-      if (foundbuf)
-	free (foundbuf);
+      free (namebuf);
+      free (foundbuf);
       return executable;
     }
 
@@ -315,8 +313,7 @@ msys_rootify (const char *executable)
     return tack_on_executable (buf, executable);
 
   /* failed */
-  if (buf)
-    free (buf);
+  free (buf);
   return executable;
 }
 #endif
@@ -607,8 +604,7 @@ win32_spawn (const char *executable,
 		      si,
 		      pi))
     {
-      if (env_block)
-        free (env_block);
+      free (env_block);
 
       free (full_executable);
 
@@ -618,18 +614,14 @@ win32_spawn (const char *executable,
   /* Clean up.  */
   CloseHandle (pi->hThread);
   free (full_executable);
-  if (env_block)
-    free (env_block);
+  free (env_block);
 
   return (pid_t) pi->hProcess;
 
  error:
-  if (env_block)
-    free (env_block);
-  if (cmdline)
-    free (cmdline);
-  if (full_executable)
-    free (full_executable);
+  free (env_block);
+  free (cmdline);
+  free (full_executable);
 
   return (pid_t) -1;
 }
@@ -705,7 +697,7 @@ spawn_script (const char *executable, char *const *argv,
 				     dwCreationFlags, si, pi);
 		  if (executable1 != newex)
 		    free ((char *) newex);
-		  if ((long) pid < 0)
+		  if (pid == (pid_t) -1)
 		    {
 		      newex = msys_rootify (executable1);
 		      if (newex != executable1)
@@ -722,7 +714,7 @@ spawn_script (const char *executable, char *const *argv,
 	    }
 	}
     }
-  if ((long) pid < 0)
+  if (pid == (pid_t) -1)
     errno = save_errno;
   return pid;
 }
@@ -746,6 +738,28 @@ pex_win32_exec_child (struct pex_obj *obj ATTRIBUTE_UNUSED, int flags,
   OSVERSIONINFO version_info;
   STARTUPINFO si;
   PROCESS_INFORMATION pi;
+  int orig_out, orig_in, orig_err;
+  BOOL separate_stderr = !(flags & PEX_STDERR_TO_STDOUT);
+
+  /* Ensure we have inheritable descriptors to pass to the child, and close the
+     original descriptors.  */
+  orig_in = in;
+  in = _dup (orig_in);
+  if (orig_in != STDIN_FILENO)
+    _close (orig_in);
+  
+  orig_out = out;
+  out = _dup (orig_out);
+  if (orig_out != STDOUT_FILENO)
+    _close (orig_out);
+  
+  if (separate_stderr)
+    {
+      orig_err = errdes;
+      errdes = _dup (orig_err);
+      if (orig_err != STDERR_FILENO)
+	_close (orig_err);
+    }
 
   stdin_handle = INVALID_HANDLE_VALUE;
   stdout_handle = INVALID_HANDLE_VALUE;
@@ -753,7 +767,7 @@ pex_win32_exec_child (struct pex_obj *obj ATTRIBUTE_UNUSED, int flags,
 
   stdin_handle = (HANDLE) _get_osfhandle (in);
   stdout_handle = (HANDLE) _get_osfhandle (out);
-  if (!(flags & PEX_STDERR_TO_STDOUT))
+  if (separate_stderr)
     stderr_handle = (HANDLE) _get_osfhandle (errdes);
   else
     stderr_handle = stdout_handle;
@@ -822,12 +836,13 @@ pex_win32_exec_child (struct pex_obj *obj ATTRIBUTE_UNUSED, int flags,
       *errmsg = "CreateProcess";
     }
 
-  /* Close the standard output and standard error handles in the
-     parent.  */ 
-  if (out != STDOUT_FILENO)
-    obj->funcs->close (obj, out);
-  if (errdes != STDERR_FILENO)
-    obj->funcs->close (obj, errdes);
+  /* Close the standard input, standard output and standard error handles
+     in the parent.  */ 
+
+  _close (in);
+  _close (out);
+  if (separate_stderr)
+    _close (errdes);
 
   return pid;
 }
@@ -840,7 +855,7 @@ pex_win32_exec_child (struct pex_obj *obj ATTRIBUTE_UNUSED, int flags,
    status == 3.  We fix the status code to conform to the usual WIF*
    macros.  Note that WIFSIGNALED will never be true under CRTDLL. */
 
-static int
+static pid_t
 pex_win32_wait (struct pex_obj *obj ATTRIBUTE_UNUSED, pid_t pid,
 		int *status, struct pex_time *time, int done ATTRIBUTE_UNUSED,
 		const char **errmsg, int *err)
@@ -883,7 +898,7 @@ static int
 pex_win32_pipe (struct pex_obj *obj ATTRIBUTE_UNUSED, int *p,
 		int binary)
 {
-  return _pipe (p, 256, binary ? _O_BINARY : _O_TEXT);
+  return _pipe (p, 256, (binary ? _O_BINARY : _O_TEXT) | _O_NOINHERIT);
 }
 
 /* Get a FILE pointer to read from a file descriptor.  */
@@ -892,6 +907,11 @@ static FILE *
 pex_win32_fdopenr (struct pex_obj *obj ATTRIBUTE_UNUSED, int fd,
 		   int binary)
 {
+  HANDLE h = (HANDLE) _get_osfhandle (fd);
+  if (h == INVALID_HANDLE_VALUE)
+    return NULL;
+  if (! SetHandleInformation (h, HANDLE_FLAG_INHERIT, 0))
+    return NULL;
   return fdopen (fd, binary ? "rb" : "r");
 }
 

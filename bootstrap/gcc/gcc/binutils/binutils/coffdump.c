@@ -1,6 +1,6 @@
 /* Coff file dumper.
-   Copyright 1994, 1995, 1998, 1999, 2000, 2001, 2002, 2003, 2005, 2007
-   Free Software Foundation, Inc.
+   Copyright 1994, 1995, 1998, 1999, 2000, 2001, 2002, 2003, 2005, 2007,
+   2011 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
@@ -27,6 +27,7 @@
 
 #include "sysdep.h"
 #include "bfd.h"
+#include "bfd_stdint.h"
 #include "libiberty.h"
 #include "bucomm.h"
 
@@ -365,7 +366,7 @@ dump_coff_scope (struct coff_scope *p)
   if (p)
     {
       tab (1);
-      printf ("List of blocks %lx ",(unsigned long) p);
+      printf ("List of blocks %" BFD_VMA_FMT "x ",(bfd_vma) (uintptr_t) p);
 
       if (p->sec)
 	printf( "  %s %x..%x",  p->sec->name,p->offset, p->offset + p->size -1);
@@ -444,7 +445,7 @@ coff_dump (struct coff_ofile *ptr)
 
   printf ("Coff dump");
   nl ();
-  printf ("#souces %d", ptr->nsources);
+  printf ("#sources %d", ptr->nsources);
   nl ();
   dump_coff_sfile (ptr->source_head);
 
@@ -458,7 +459,7 @@ static void
 show_usage (FILE *file, int status)
 {
   fprintf (file, _("Usage: %s [option(s)] in-file\n"), program_name);
-  fprintf (file, _(" Print a human readable interpretation of a SYSROFF object file\n"));
+  fprintf (file, _(" Print a human readable interpretation of a COFF object file\n"));
   fprintf (file, _(" The options are:\n\
   @<file>                Read options from <file>\n\
   -h --help              Display this information\n\

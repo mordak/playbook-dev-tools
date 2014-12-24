@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2004-2009, Free Software Foundation, Inc.         --
+--          Copyright (C) 2004-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -259,8 +259,7 @@ package body Ada.Containers.Ordered_Multisets is
    -- Adjust --
    ------------
 
-   procedure Adjust is
-      new Tree_Operations.Generic_Adjust (Copy_Tree);
+   procedure Adjust is new Tree_Operations.Generic_Adjust (Copy_Tree);
 
    procedure Adjust (Container : in out Set) is
    begin
@@ -1482,7 +1481,7 @@ package body Ada.Containers.Ordered_Multisets is
       else
          if Tree.Lock > 0 then
             raise Program_Error with
-              "attempt to tamper with cursors (set is locked)";
+              "attempt to tamper with elements (set is locked)";
          end if;
 
          Node.Element := Item;

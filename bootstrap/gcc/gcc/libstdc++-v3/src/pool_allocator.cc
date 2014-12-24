@@ -40,18 +40,20 @@ namespace
   }
 } // anonymous namespace
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   // Definitions for __pool_alloc_base.
   __pool_alloc_base::_Obj* volatile*
-  __pool_alloc_base::_M_get_free_list(size_t __bytes)
+  __pool_alloc_base::_M_get_free_list(size_t __bytes) throw ()
   { 
     size_t __i = ((__bytes + (size_t)_S_align - 1) / (size_t)_S_align - 1);
     return _S_free_list + __i;
   }
 
   __mutex&
-  __pool_alloc_base::_M_get_mutex()
+  __pool_alloc_base::_M_get_mutex() throw ()
   { return get_palloc_mutex(); }
 
   // Allocate memory in large chunks in order to avoid fragmenting the
@@ -90,11 +92,11 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	
 	size_t __bytes_to_get = (2 * __total_bytes
 				 + _M_round_up(_S_heap_size >> 4));
-	try
+	__try
 	  {
 	    _S_start_free = static_cast<char*>(::operator new(__bytes_to_get));
 	  }
-	catch (...)
+	__catch(const std::bad_alloc&)
 	  {
 	    // Try to make do with what we have.  That can't hurt.  We
 	    // do not try smaller requests, since that tends to result
@@ -171,4 +173,5 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
   template class __pool_alloc<char>;
   template class __pool_alloc<wchar_t>;
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace

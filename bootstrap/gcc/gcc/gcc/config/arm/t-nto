@@ -16,23 +16,9 @@ LIB1ASMFUNCS += _udivsi3 _divsi3 _umodsi3 _modsi3 _dvmd_nto _bb_init_func \
 		_arm_cmpsf2 _arm_unordsf2 _arm_fixsfsi _arm_fixunssfsi \
 	        _arm_floatdidf _arm_floatdisf _arm_floatundidf _arm_floatundisf 
 
-
-MULTILIB_OPTIONS = fpic 
-MULTILIB_DIRNAMES = pic 
-MULTILIB_MATCHES = fpic=shared
-
 EXTRA_MULTILIB_PARTS = crtbegin.o crtend.o
 
 LIBGCC = stmp-multilib
 INSTALL_LIBGCC = install-multilib
 
-TARGET_LIBGCC2_CFLAGS = -fno-inline -fexceptions -fomit-frame-pointer -g0
-
-# Assemble startup files.
-$(T)crti.o: $(srcdir)/config/arm/crti.asm $(GCC_PASSES)
-	$(GCC_FOR_TARGET) $(GCC_CFLAGS) $(MULTILIB_CFLAGS) $(INCLUDES) \
-	-c -o $(T)crti.o -x assembler-with-cpp $(srcdir)/config/arm/crti.asm
-
-$(T)crtn.o: $(srcdir)/config/arm/crtn.asm $(GCC_PASSES)
-	$(GCC_FOR_TARGET) $(GCC_CFLAGS) $(MULTILIB_CFLAGS) $(INCLUDES) \
-	-c -o $(T)crtn.o -x assembler-with-cpp $(srcdir)/config/arm/crtn.asm
+TARGET_LIBGCC2_CFLAGS = -fno-inline -fexceptions -fomit-frame-pointer -g0 -marm -fpic

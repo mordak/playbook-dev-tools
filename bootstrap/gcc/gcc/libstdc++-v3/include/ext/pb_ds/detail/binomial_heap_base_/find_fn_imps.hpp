@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -46,10 +46,10 @@ top() const
   _GLIBCXX_DEBUG_ONLY(assert_valid(false);)
     _GLIBCXX_DEBUG_ASSERT(!base_type::empty());
 
-  if (m_p_max == NULL)
+  if (m_p_max == 0)
     const_cast<PB_DS_CLASS_C_DEC* >(this)->find_max();
 
-  _GLIBCXX_DEBUG_ASSERT(m_p_max != NULL);
+  _GLIBCXX_DEBUG_ASSERT(m_p_max != 0);
   return m_p_max->m_value;
 }
 
@@ -62,7 +62,7 @@ find_max()
 
   m_p_max = p_cur;
 
-  while (p_cur != NULL)
+  while (p_cur != 0)
     {
       if (Cmp_Fn::operator()(m_p_max->m_value, p_cur->m_value))
 	m_p_max = p_cur;

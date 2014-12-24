@@ -1,6 +1,6 @@
 /* -----------------------------------------------------------------*-C-*-
    ffitarget.h - Copyright (c) 1996-2003  Red Hat, Inc.
-   Copyright (C) 2007, 2008 Free Software Foundation, Inc
+   Copyright (C) 2007, 2008, 2010 Free Software Foundation, Inc
    Target configuration macros for PowerPC.
 
    Permission is hereby granted, free of charge, to any person obtaining
@@ -14,13 +14,14 @@
    The above copyright notice and this permission notice shall be included
    in all copies or substantial portions of the Software.
 
-   THE SOFTWARE IS PROVIDED ``AS IS'', WITHOUT WARRANTY OF ANY KIND, EXPRESS
-   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-   IN NO EVENT SHALL CYGNUS SOLUTIONS BE LIABLE FOR ANY CLAIM, DAMAGES OR
-   OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-   ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-   OTHER DEALINGS IN THE SOFTWARE.
+   THE SOFTWARE IS PROVIDED ``AS IS'', WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+   HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+   WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+   DEALINGS IN THE SOFTWARE.
 
    ----------------------------------------------------------------------- */
 
@@ -29,8 +30,21 @@
 
 /* ---- System specific configurations ----------------------------------- */
 
-#if defined (POWERPC) && defined (__powerpc64__)
+#if defined (POWERPC) && defined (__powerpc64__)	/* linux64 */
+#ifndef POWERPC64
 #define POWERPC64
+#endif
+#elif defined (POWERPC_DARWIN) && defined (__ppc64__)	/* Darwin64 */
+#ifndef POWERPC64
+#define POWERPC64
+#endif
+#ifndef POWERPC_DARWIN64
+#define POWERPC_DARWIN64
+#endif
+#elif defined (POWERPC_AIX) && defined (__64BIT__)	/* AIX64 */
+#ifndef POWERPC64
+#define POWERPC64
+#endif
 #endif
 
 #ifndef LIBFFI_ASM
@@ -103,9 +117,13 @@ typedef enum ffi_abi {
 #define FFI_SYSV_TYPE_SMALL_STRUCT (FFI_TYPE_LAST + 2)
 
 #if defined(POWERPC64) || defined(POWERPC_AIX)
-#define FFI_TRAMPOLINE_SIZE 24
+#  if defined(POWERPC_DARWIN64)
+#    define FFI_TRAMPOLINE_SIZE 48
+#  else
+#    define FFI_TRAMPOLINE_SIZE 24
+#  endif
 #else /* POWERPC || POWERPC_AIX */
-#define FFI_TRAMPOLINE_SIZE 40
+#  define FFI_TRAMPOLINE_SIZE 40
 #endif
 
 #ifndef LIBFFI_ASM

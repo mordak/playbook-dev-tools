@@ -6,7 +6,7 @@
 --                                                                          --
 --                                  B o d y                                 --
 --                                                                          --
---         Copyright (C) 1998-2009, Free Software Foundation, Inc.          --
+--         Copyright (C) 1998-2010, Free Software Foundation, Inc.          --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -582,11 +582,9 @@ package body System.Tasking.Protected_Objects.Operations is
       Entry_Call.Mode := Mode;
       Entry_Call.Cancellation_Attempted := False;
 
-      if Self_ID.Deferral_Level > 1 then
-         Entry_Call.State := Never_Abortable;
-      else
-         Entry_Call.State := Now_Abortable;
-      end if;
+      Entry_Call.State :=
+        (if Self_ID.Deferral_Level > 1
+         then Never_Abortable else Now_Abortable);
 
       Entry_Call.E := Entry_Index (E);
       Entry_Call.Prio := STPO.Get_Priority (Self_ID);
@@ -648,26 +646,26 @@ package body System.Tasking.Protected_Objects.Operations is
             end if;
          end if;
 
-      elsif Mode < Asynchronous_Call then
-
-         --  Simple_Call or Conditional_Call
-
-         if Single_Lock then
-            STPO.Lock_RTS;
-            Entry_Calls.Wait_For_Completion (Entry_Call);
-            STPO.Unlock_RTS;
-
-         else
-            STPO.Write_Lock (Self_ID);
-            Entry_Calls.Wait_For_Completion (Entry_Call);
-            STPO.Unlock (Self_ID);
-         end if;
-
-         Block.Cancelled := Entry_Call.State = Cancelled;
-
       else
-         pragma Assert (False);
-         null;
+         case Mode is
+            when Simple_Call | Conditional_Call =>
+               if Single_Lock then
+                  STPO.Lock_RTS;
+                  Entry_Calls.Wait_For_Completion (Entry_Call);
+                  STPO.Unlock_RTS;
+
+               else
+                  STPO.Write_Lock (Self_ID);
+                  Entry_Calls.Wait_For_Completion (Entry_Call);
+                  STPO.Unlock (Self_ID);
+               end if;
+
+               Block.Cancelled := Entry_Call.State = Cancelled;
+
+            when Asynchronous_Call | Timed_Call =>
+               pragma Assert (False);
+               null;
+         end case;
       end if;
 
       Initialization.Undefer_Abort_Nestable (Self_ID);
@@ -960,7 +958,7 @@ package body System.Tasking.Protected_Objects.Operations is
          Send_Trace_Info (POT_Call, Entry_Index (E), Timeout);
       end if;
 
-      Initialization.Defer_Abort (Self_Id);
+      Initialization.Defer_Abort_Nestable (Self_Id);
       Lock_Entries (Object, Ceiling_Violation);
 
       if Ceiling_Violation then
@@ -972,17 +970,15 @@ package body System.Tasking.Protected_Objects.Operations is
       pragma Debug
         (Debug.Trace (Self_Id, "TPEC: exited to ATC level: " &
          ATC_Level'Image (Self_Id.ATC_Nesting_Level), 'A'));
-      Entry_Call :=
-        Self_Id.Entry_Calls (Self_Id.ATC_Nesting_Level)'Access;
+      Entry_Call := Self_Id.Entry_Calls (Self_Id.ATC_Nesting_Level)'Access;
       Entry_Call.Next := null;
       Entry_Call.Mode := Timed_Call;
       Entry_Call.Cancellation_Attempted := False;
 
-      if Self_Id.Deferral_Level > 1 then
-         Entry_Call.State := Never_Abortable;
-      else
-         Entry_Call.State := Now_Abortable;
-      end if;
+      Entry_Call.State :=
+        (if Self_Id.Deferral_Level > 1
+         then Never_Abortable
+         else Now_Abortable);
 
       Entry_Call.E := Entry_Index (E);
       Entry_Call.Prio := STPO.Get_Priority (Self_Id);
@@ -1013,7 +1009,7 @@ package body System.Tasking.Protected_Objects.Operations is
          end if;
 
          Entry_Call_Successful := Entry_Call.State = Done;
-         Initialization.Undefer_Abort (Self_Id);
+         Initialization.Undefer_Abort_Nestable (Self_Id);
          Entry_Calls.Check_Exception (Self_Id, Entry_Call);
          return;
       end if;
@@ -1029,7 +1025,7 @@ package body System.Tasking.Protected_Objects.Operations is
 
       --  ??? Do we need to yield in case Yielded is False
 
-      Initialization.Undefer_Abort (Self_Id);
+      Initialization.Undefer_Abort_Nestable (Self_Id);
       Entry_Call_Successful := Entry_Call.State = Done;
       Entry_Calls.Check_Exception (Self_Id, Entry_Call);
    end Timed_Protected_Entry_Call;

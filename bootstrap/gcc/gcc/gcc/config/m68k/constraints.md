@@ -78,6 +78,11 @@
   (and (match_code "const_double")
        (match_test "!(TARGET_68881 && standard_68881_constant_p (op))")))
 
+(define_constraint "H"
+  "Defines a real zero constant."
+  (and (match_code "const_double")
+       (match_test "op == CONST0_RTX (GET_MODE (op))")))
+
 (define_constraint "S"
   "Used for operands that satisfy 'm' when -mpcrel is in effect."
   (and (match_code "mem")
@@ -123,6 +128,11 @@
   "Range of signed numbers that don't fit in 16 bits."
   (and (match_code "const_int")
        (match_test "ival < -0x8000 || ival > 0x7FFF")))
+
+(define_constraint "Cu"
+  "16-bit offset for wrapped symbols"
+  (and (match_code "const")
+       (match_test "m68k_unwrap_symbol (op, false) != op")))
 
 (define_constraint "CQ"
   "Integers valid for mvq."

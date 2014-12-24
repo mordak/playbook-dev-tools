@@ -1,4 +1,6 @@
 ! { dg-do run }
+! { dg-options "-std=legacy" }
+!
 ! Tests passing of character array initialiser as actual argument.
 ! Fixes PR18109.
 ! Contributed by Paul Thomas pault@gcc.gnu.org  
@@ -22,6 +24,7 @@ contains
   function pfoo(ch2)
      character*5, dimension(:), target  :: ch2
      character*5, dimension(:), pointer :: pfoo
-     pfoo => ch2
+     allocate(pfoo(size(ch2)))
+     pfoo = ch2
   end function pfoo
 end program

@@ -25,12 +25,13 @@ void test01()
 {
   bool test __attribute__((unused)) = true;
 
-  std::list<int> l;
+  typedef std::list<int> list_type;
+  list_type l;
 
-#ifndef _GLIBCXX_DEBUG
+#if ! defined _GLIBCXX_DEBUG && ! defined _GLIBCXX_PROFILE
   using std::_List_node;
 #else
-  using std::_GLIBCXX_STD_D::_List_node;
+  using std::_GLIBCXX_STD_C::_List_node;
 #endif
 
   VERIFY( l.max_size() == std::allocator<_List_node<int> >().max_size() );

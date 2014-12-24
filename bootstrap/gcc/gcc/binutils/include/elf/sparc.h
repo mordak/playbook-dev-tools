@@ -1,23 +1,25 @@
 /* SPARC ELF support for BFD.
-   Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2003, 2008
+   Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2003, 2008, 2010,
+   2011
    Free Software Foundation, Inc.
    By Doug Evans, Cygnus Support, <dje@cygnus.com>.
 
-This file is part of BFD, the Binary File Descriptor library.
+   This file is part of BFD, the Binary File Descriptor library.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
 #ifndef _ELF_SPARC_H
 #define _ELF_SPARC_H
@@ -45,12 +47,11 @@ Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA. 
 
 /* Section indices.  */
 
-#define SHN_BEFORE	SHN_LORESERVE		/* used with SHF_ORDERED */
-#define SHN_AFTER	(SHN_LORESERVE + 1)	/* used with SHF_ORDERED */
+#define SHN_BEFORE	SHN_LORESERVE		/* Used with SHF_ORDERED and...  */
+#define SHN_AFTER	(SHN_LORESERVE + 1)	/* SHF_LINK_ORDER section flags. */
 
 /* Section flags.  */
 
-#define SHF_EXCLUDE		0x80000000	/* exclude from linking */
 #define SHF_ORDERED		0x40000000	/* treat sh_link,sh_info specially */
 
 /* Symbol types.  */
@@ -164,6 +165,8 @@ START_RELOC_NUMBERS (elf_sparc_reloc_type)
   
   EMPTY_RELOC  (R_SPARC_max_std)
 
+  RELOC_NUMBER (R_SPARC_JMP_IREL, 248)
+  RELOC_NUMBER (R_SPARC_IRELATIVE, 249)
   RELOC_NUMBER (R_SPARC_GNU_VTINHERIT, 250)
   RELOC_NUMBER (R_SPARC_GNU_VTENTRY, 251)
   RELOC_NUMBER (R_SPARC_REV32, 252)
@@ -182,5 +185,32 @@ END_RELOC_NUMBERS (R_SPARC_max)
 /* Values for Elf64_Dyn.d_tag.  */
 
 #define DT_SPARC_REGISTER	0x70000001
+
+/* Object attribute tags.  */
+enum
+{
+  /* 0-3 are generic.  */
+  Tag_GNU_Sparc_HWCAPS = 4,
+};
+
+/* These values match the AV_SPARC_* hwcap bits defined under Solaris.  */
+#define ELF_SPARC_HWCAP_MUL32	0x00000001 /* umul/umulcc/smul/smulcc insns */
+#define ELF_SPARC_HWCAP_DIV32	0x00000002 /* udiv/udivcc/sdiv/sdivcc insns */
+#define ELF_SPARC_HWCAP_FSMULD	0x00000004 /* 'fsmuld' insn */
+#define ELF_SPARC_HWCAP_V8PLUS	0x00000008 /* v9 insns available to 32bit */
+#define ELF_SPARC_HWCAP_POPC	0x00000010 /* 'popc' insn */
+#define ELF_SPARC_HWCAP_VIS	0x00000020 /* VIS insns */
+#define ELF_SPARC_HWCAP_VIS2	0x00000040 /* VIS2 insns */
+#define ELF_SPARC_HWCAP_ASI_BLK_INIT	\
+				0x00000080 /* block init ASIs */
+#define ELF_SPARC_HWCAP_FMAF	0x00000100 /* fused multiply-add */
+#define ELF_SPARC_HWCAP_VIS3	0x00000400 /* VIS3 insns */
+#define ELF_SPARC_HWCAP_HPC	0x00000800 /* HPC insns */
+#define ELF_SPARC_HWCAP_RANDOM	0x00001000 /* 'random' insn */
+#define ELF_SPARC_HWCAP_TRANS	0x00002000 /* transaction insns */
+#define ELF_SPARC_HWCAP_FJFMAU	0x00004000 /* unfused multiply-add */
+#define ELF_SPARC_HWCAP_IMA	0x00008000 /* integer multiply-add */
+#define ELF_SPARC_HWCAP_ASI_CACHE_SPARING \
+				0x00010000 /* cache sparing ASIs */
 
 #endif /* _ELF_SPARC_H */

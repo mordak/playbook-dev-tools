@@ -1,4 +1,4 @@
-# Copyright (C) 1997, 2007, 2008, 2009 Free Software Foundation, Inc.
+# Copyright (C) 1997, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -137,13 +137,6 @@
 # For example, "isa_rev>=1" selects a MIPS32 or MIPS64 processor,
 # "isa=4" selects a MIPS IV processor, and so on.
 #
-# If certain processor-specific extensions are not applicable to the
-# test you can list them as !CPU in the isa or isa_rev options.  For
-# example, isa=64!octeon enforces MIPS64 while avoiding octeon.  You
-# can also use ! without an ISA value.  For example
-# isa=!octeon!loongson2e disables octeon and loongson2e if otherwise
-# you would compile for one of them.
-#
 # There are also the following special pseudo-options:
 #
 #   isa=loongson
@@ -151,6 +144,10 @@
 #
 #   addressing=absolute
 #	force absolute addresses to be used
+#
+#   forbid_cpu=REGEXP
+#	forbid processors that match the given regexp; choose a
+#	generic ISA instead.
 #
 #
 # In summary:
@@ -183,7 +180,36 @@
 #	"-mips32r2" or "-mips64r2".
 #
 #   (6) If you need to disable processor-specific extensions use
-#	isa=!CPU instead of forcing a generic ISA.
+#	forbid_cpu=REGEXP instead of forcing a generic ISA.
+#
+#
+# Terminology
+#
+#   Option group or just group:
+#      See comment before mips_option_groups.
+#
+#   Test options:
+#      The options specified in dg-options.
+#
+#   Explicit options:
+#      The options that were either passed to runtest as "multilib" options
+#      (e.g. -mips4 in --target_board=mips-sim-idt/-mips4) or specified as
+#      test options.  Note that options in parenthesis (i.e. (-mips16)) are
+#      not explicit and can be omitted depending on the base options.
+#
+#   Base options:
+#      Options that are on by default without being specified in dg-options,
+#      e.g. -march=mips64r2 for mipsisa64r2-elf or because they've been
+#      passed to runtest as "multilib" options.
+#
+#   Option array:
+#      Many functions in this file work with option arrays.  These are
+#      two-dimensional Tcl arrays where the first dimension can have three
+#      values: option, explicit_p or test_option_p.  The second dimension is
+#      the name of the option group.  "option" contains the name of the
+#      option that is in effect from this group.  If no option is active it
+#      contains the empty string.  The flags "explicit_p" and "test_option_p"
+#      are set for explicit and test options.
 
 # Exit immediately if this isn't a MIPS target.
 if ![istarget mips*-*-*] {
@@ -194,8 +220,8 @@ if ![istarget mips*-*-*] {
 load_lib gcc-dg.exp
 
 # A list of GROUP REGEXP pairs.  Each GROUP represents a logical group of
-# options from which only option should be chosen.  REGEXP matches all the
-# options in that group; it is implicitly wrapped in "^(...)$".
+# options from which only one option should be chosen.  REGEXP matches all
+# the options in that group; it is implicitly wrapped in "^(...)$".
 set mips_option_groups {
     abi "-mabi=.*"
     addressing "addressing=.*"
@@ -203,10 +229,11 @@ set mips_option_groups {
     dump_pattern "-dp"
     endianness "-E(L|B)|-me(l|b)"
     float "-m(hard|soft)-float"
+    forbid_cpu "forbid_cpu=.*"
     fp "-mfp(32|64)"
     gp "-mgp(32|64)"
     long "-mlong(32|64)"
-    mips16 "-mips16|-mno-mips16"
+    mips16 "-mips16|-mno-mips16|-mflip-mips16"
     mips3d "-mips3d|-mno-mips3d"
     optimization "-O(|[0-3s])"
     pic "-f(no-|)(pic|PIC)"
@@ -234,6 +261,9 @@ foreach option {
     shared
     smartmips
     sym32
+    synci
+    relax-pic-calls
+    mcount-ra-address
 } {
     lappend mips_option_groups $option "-m(no-|)$option"
 }
@@ -243,6 +273,7 @@ foreach option {
     branch-cost
     code-readable
     r10k-cache-barrier
+    tune
 } {
     lappend mips_option_groups $option "-m$option=.*"
 }
@@ -441,7 +472,7 @@ proc mips_option { upstatus group } {
     return $status(option,$group)
 }
 
-# If the default options for this test run include an option in group GROUP,
+# If the base options for this test run include an option in group GROUP,
 # return that option, otherwise return "".
 proc mips_original_option { group } {
     global mips_base_options
@@ -449,8 +480,8 @@ proc mips_original_option { group } {
     return [mips_option mips_base_options $group]
 }
 
-# Return true if the test described up UPSTATUS requires a specific
-# option in group GROUP.
+# Return true if the test described by UPSTATUS requires a specific
+# option in group GROUP.  UPSTATUS describes the option status.
 proc mips_test_option_p { upstatus group } {
     upvar $upstatus status
 
@@ -476,6 +507,14 @@ proc mips_have_option_p { upstatus option } {
     return [mips_same_option_p \
 		[mips_option status [mips_option_group $option]] \
 		$option]
+}
+
+# Return true if the options described by UPSTATUS require MIPS16 support.
+proc mips_using_mips16_p { upstatus } {
+    upvar $upstatus status
+
+    return [expr { [mips_have_option_p status "-mips16"]
+		   || [mips_have_option_p status "-mflip-mips16"] }]
 }
 
 # Return true if the test described by UPSTATUS requires option OPTION.
@@ -732,7 +771,7 @@ proc mips-dg-finish {} {
 #
 #          START                        END
 #            |                           |
-#         -mips16                     -mno-mips16
+#         -mips16/-mflip-mips16       -mno-mips16
 #            |                           |
 #         -mips3d                     -mno-mips3d
 #            |                           |
@@ -743,6 +782,8 @@ proc mips-dg-finish {} {
 #         -mhard-float                -msoft-float
 #            |                           |
 #         -mno-sym32                  -msym32
+#            |                           |
+#         -mrelax-pic-calls           -mno-relax-pic-calls
 #            |                           |
 #         -fpic                       -fno-pic
 #            |                           |
@@ -804,6 +845,9 @@ proc mips-dg-options { args } {
     mips_option_dependency options "-mips3d" "-mpaired-single"
     mips_option_dependency options "-mpaired-single" "-mfp64"
     mips_option_dependency options "-mfp64" "-mhard-float"
+    mips_option_dependency options "-mrelax-pic-calls" "-mno-plt"
+    mips_option_dependency options "-mrelax-pic-calls" "-mabicalls"
+    mips_option_dependency options "-mrelax-pic-calls" "-mexplicit-relocs"
     mips_option_dependency options "-fpic" "-mshared"
     mips_option_dependency options "-mshared" "-mno-plt"
     mips_option_dependency options "-mno-plt" "addressing=unknown"
@@ -825,60 +869,47 @@ proc mips-dg-options { args } {
 	}
     }
 
+    # See whether forbid_cpu forces us to choose a new architecture.
+    set arch [mips_option mips_base_options arch]
+    set force_generic_isa_p [expr {
+	[regexp "forbid_cpu=(.*)" [mips_option options forbid_cpu] dummy spec]
+	&& [regexp -- "^-march=$spec\$" $arch]
+    }]
+
     # Interpret the special "isa" and "isa_rev" options.  If we have
     # a choice of a 32-bit or a 64-bit architecture, prefer to keep
     # the -mgp setting the same.
     set spec [mips_option options arch]
     if { [regexp {^[^-]} $spec] } {
-	set arch [mips_option mips_base_options arch]
 	if { [string equal $spec "isa=loongson"] } {
 	    if { ![regexp {^-march=loongson} $arch] } {
 		set arch "-march=loongson2f"
 	    }
 	} else {
-	    # With ! and = the ISA value is optional.
-	    if { ![regexp {^(isa(?:|_rev))(=|<=|>=)([0-9]*)((?:![^!]+)*)$} \
-		       $spec dummy prop relation value nocpus]
-		 || ($value eq ""
-		     && ($relation ne "="
-			 || $nocpus eq ""))} {
+	    if { ![regexp {^(isa(?:|_rev))(=|<=|>=)([0-9]*)$} \
+		       $spec dummy prop relation value nocpus] } {
 		error "Unrecognized isa specification: $spec"
 	    }
-	    if { $value ne "" } {
-		set current [mips_arch_info $arch $prop]
-		if { ($current < $value && ![string equal $relation "<="])
-		     || ($current > $value && ![string equal $relation ">="])
-		     || ([mips_have_test_option_p options "-mgp64"]
-			 && [mips_32bit_arch_p $arch]) } {
-		    # The current setting is out of range; it cannot
-		    # possibly be used.  Find a replacement that can.
-		    if { [string equal $prop "isa"] } {
-			set arch "-mips$value"
-		    } elseif { $value == 0 } {
-			set arch "-mips4"
+	    set current [mips_arch_info $arch $prop]
+	    if { $force_generic_isa_p
+		 || ($current < $value && ![string equal $relation "<="])
+		 || ($current > $value && ![string equal $relation ">="])
+		 || ([mips_have_test_option_p options "-mgp64"]
+		     && [mips_32bit_arch_p $arch]) } {
+		# The current setting is out of range; it cannot
+		# possibly be used.  Find a replacement that can.
+		if { [string equal $prop "isa"] } {
+		    set arch "-mips$value"
+		} elseif { $value == 0 } {
+		    set arch "-mips4"
+		} else {
+		    if { [mips_have_option_p options "-mgp32"] } {
+			set arch "-mips32"
 		    } else {
-			if { [mips_have_option_p options "-mgp32"] } {
-			    set arch "-mips32"
-			} else {
-			    set arch "-mips64"
-			}
-			if { $value > 1 } {
-			    append arch "r$value"
-			}
+			set arch "-mips64"
 		    }
-		}
-	    }
-	    # If we haven't switched to a generic ISA based on the
-	    # isa* value, do it here if the processor-specific
-	    # extension is not allowed.
-	    if { $nocpus ne ""
-		 && $arch eq [mips_option mips_base_options arch] } {
-		set cpu [regsub -- {-march=} $arch ""]
-		if { [regexp "!$cpu!" "$nocpus!"] } {
-		    set isa_rev [mips_arch_info $arch isa_rev]
-		    set arch "-mips[mips_arch_info $arch isa]"		
-		    if { $isa_rev > 1 } {
-			append arch "r$isa_rev"
+		    if { $value > 1 } {
+			append arch "r$value"
 		    }
 		}
 	    }
@@ -963,6 +994,14 @@ proc mips-dg-options { args } {
 	    } else {
 		mips_make_test_option options "-mips64r$isa_rev"
 	    }
+	# Otherwise, if the current choice of architecture is unacceptable,
+	# choose the equivalent generic architecture.
+	} elseif { $force_generic_isa_p } {
+	    set arch "-mips[mips_arch_info $arch isa]"
+	    if { $isa_rev > 1 } {
+		append arch "r$isa_rev"
+	    }
+	    mips_make_test_option options $arch
 	}
 	unset arch
 	unset isa
@@ -980,7 +1019,7 @@ proc mips-dg-options { args } {
 	    # EABI doesn't support -mabicalls.
 	    # EABI doesn't support the combination -mgp32 -mfp64.
 	    set force_abi 1
-	} elseif { [mips_have_option_p options "-mips16"]
+	} elseif { [mips_using_mips16_p options]
 		   && ![mips_same_option_p $abi "-mabi=32"]
 		   && ![mips_same_option_p $abi "-mabi=o64"]
 		   && (![mips_have_option_p options "addressing=absolute"]
@@ -1017,7 +1056,7 @@ proc mips-dg-options { args } {
 		mips_make_test_option options "-mfp32"
 	    }
 	}
-	if { [mips_have_option_p options "-mips16"]
+	if { [mips_using_mips16_p options]
 	     && ![mips_same_option_p $abi "-mabi=32"]
 	     && ![mips_same_option_p $abi "-mabi=o64"]
 	     && (![mips_have_option_p options "addressing=absolute"]
@@ -1109,6 +1148,7 @@ proc mips-dg-options { args } {
 
     # Add all options to the dg variable.
     set options(explicit_p,addressing) 0
+    set options(explicit_p,forbid_cpu) 0
     foreach { group regexp } $mips_option_groups {
 	if { $options(explicit_p,$group) } {
 	    append extra_tool_flags " " $options(option,$group)

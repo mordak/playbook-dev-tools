@@ -1,5 +1,6 @@
-;; Machine description for ST Microelectronics Loongson-2E/2F.
-;; Copyright (C) 2008, 2009 Free Software Foundation, Inc.
+;; Machine description for Loongson-specific patterns, such as
+;; ST Microelectronics Loongson-2E/2F etc.
+;; Copyright (C) 2008, 2009, 2010 Free Software Foundation, Inc.
 ;; Contributed by CodeSourcery.
 ;;
 ;; This file is part of GCC.
@@ -17,6 +18,30 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with GCC; see the file COPYING3.  If not see
 ;; <http://www.gnu.org/licenses/>.
+
+(define_c_enum "unspec" [
+  UNSPEC_LOONGSON_PAVG
+  UNSPEC_LOONGSON_PCMPEQ
+  UNSPEC_LOONGSON_PCMPGT
+  UNSPEC_LOONGSON_PEXTR
+  UNSPEC_LOONGSON_PINSR_0
+  UNSPEC_LOONGSON_PINSR_1
+  UNSPEC_LOONGSON_PINSR_2
+  UNSPEC_LOONGSON_PINSR_3
+  UNSPEC_LOONGSON_PMADD
+  UNSPEC_LOONGSON_PMOVMSK
+  UNSPEC_LOONGSON_PMULHU
+  UNSPEC_LOONGSON_PMULH
+  UNSPEC_LOONGSON_PMULU
+  UNSPEC_LOONGSON_PASUBUB
+  UNSPEC_LOONGSON_BIADD
+  UNSPEC_LOONGSON_PSADBH
+  UNSPEC_LOONGSON_PSHUFH
+  UNSPEC_LOONGSON_PUNPCKH
+  UNSPEC_LOONGSON_PUNPCKL
+  UNSPEC_LOONGSON_PADDD
+  UNSPEC_LOONGSON_PSUBD
+])
 
 ;; Mode iterators and attributes.
 
@@ -328,11 +353,10 @@
   [(set_attr "type" "fmul")])
 
 ;; Multiply signed integers and store low result.
-(define_insn "loongson_pmull<V_suffix>"
+(define_insn "mul<mode>3"
   [(set (match_operand:VH 0 "register_operand" "=f")
-        (unspec:VH [(match_operand:VH 1 "register_operand" "f")
-		    (match_operand:VH 2 "register_operand" "f")]
-		   UNSPEC_LOONGSON_PMULL))]
+        (mult:VH (match_operand:VH 1 "register_operand" "f")
+                 (match_operand:VH 2 "register_operand" "f")))]
   "TARGET_HARD_FLOAT && TARGET_LOONGSON_VECTORS"
   "pmull<V_suffix>\t%0,%1,%2"
   [(set_attr "type" "fmul")])
@@ -388,7 +412,7 @@
   [(set_attr "type" "fmul")])
 
 ;; Shift left logical.
-(define_insn "loongson_psll<V_suffix>"
+(define_insn "ashl<mode>3"
   [(set (match_operand:VWH 0 "register_operand" "=f")
         (ashift:VWH (match_operand:VWH 1 "register_operand" "f")
 		    (match_operand:SI 2 "register_operand" "f")))]
@@ -397,7 +421,7 @@
   [(set_attr "type" "fmul")])
 
 ;; Shift right arithmetic.
-(define_insn "loongson_psra<V_suffix>"
+(define_insn "ashr<mode>3"
   [(set (match_operand:VWH 0 "register_operand" "=f")
         (ashiftrt:VWH (match_operand:VWH 1 "register_operand" "f")
 		      (match_operand:SI 2 "register_operand" "f")))]
@@ -406,7 +430,7 @@
   [(set_attr "type" "fdiv")])
 
 ;; Shift right logical.
-(define_insn "loongson_psrl<V_suffix>"
+(define_insn "lshr<mode>3"
   [(set (match_operand:VWH 0 "register_operand" "=f")
         (lshiftrt:VWH (match_operand:VWH 1 "register_operand" "f")
 		      (match_operand:SI 2 "register_operand" "f")))]
@@ -474,14 +498,19 @@
   "punpckl<V_stretch_half_suffix>\t%0,%1,%2"
   [(set_attr "type" "fdiv")])
 
-;; Integer division and modulus.
+;; Integer division and modulus.  For integer multiplication, see mips.md.
 
 (define_insn "<u>div<mode>3"
   [(set (match_operand:GPR 0 "register_operand" "=&d")
 	(any_div:GPR (match_operand:GPR 1 "register_operand" "d")
 		     (match_operand:GPR 2 "register_operand" "d")))]
-  "TARGET_LOONGSON_2EF"
-  { return mips_output_division ("<d>div<u>.g\t%0,%1,%2", operands); }
+  "TARGET_LOONGSON_2EF || TARGET_LOONGSON_3A"
+  {
+    if (TARGET_LOONGSON_2EF)
+      return mips_output_division ("<d>div<u>.g\t%0,%1,%2", operands);
+    else
+      return mips_output_division ("gs<d>div<u>\t%0,%1,%2", operands);
+  }
   [(set_attr "type" "idiv3")
    (set_attr "mode" "<MODE>")])
 
@@ -489,7 +518,12 @@
   [(set (match_operand:GPR 0 "register_operand" "=&d")
 	(any_mod:GPR (match_operand:GPR 1 "register_operand" "d")
 		     (match_operand:GPR 2 "register_operand" "d")))]
-  "TARGET_LOONGSON_2EF"
-  { return mips_output_division ("<d>mod<u>.g\t%0,%1,%2", operands); }
+  "TARGET_LOONGSON_2EF || TARGET_LOONGSON_3A"
+  {
+    if (TARGET_LOONGSON_2EF)
+      return mips_output_division ("<d>mod<u>.g\t%0,%1,%2", operands);
+    else
+      return mips_output_division ("gs<d>mod<u>\t%0,%1,%2", operands);
+  }
   [(set_attr "type" "idiv3")
    (set_attr "mode" "<MODE>")])

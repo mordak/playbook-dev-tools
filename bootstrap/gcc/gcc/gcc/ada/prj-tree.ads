@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 2001-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 2001-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -31,6 +31,7 @@ with GNAT.Dynamic_Tables;
 with Table;
 
 with Prj.Attr; use Prj.Attr;
+with Prj.Env;
 
 package Prj.Tree is
 
@@ -92,11 +93,11 @@ package Prj.Tree is
 
    function Present (Node : Project_Node_Id) return Boolean;
    pragma Inline (Present);
-   --  Return True iff Node /= Empty_Node
+   --  Return True if Node /= Empty_Node
 
    function No (Node : Project_Node_Id) return Boolean;
    pragma Inline (No);
-   --  Return True iff Node = Empty_Node
+   --  Return True if Node = Empty_Node
 
    procedure Initialize (Tree : Project_Node_Tree_Ref);
    --  Initialize the Project File tree: empty the Project_Nodes table
@@ -108,6 +109,7 @@ package Prj.Tree is
       And_Expr_Kind : Variable_Kind := Undefined) return Project_Node_Id;
    --  Returns a Project_Node_Record with the specified Kind and Expr_Kind. All
    --  the other components have default nil values.
+   --  To create a node for a project itself, see Create_Project below instead
 
    function Hash (N : Project_Node_Id) return Header_Num;
    --  Used for hash tables where the key is a Project_Node_Id
@@ -131,9 +133,9 @@ package Prj.Tree is
    --  Save in variable S the comment state. Called before scanning a new
    --  project file.
 
-   procedure Restore (S : Comment_State);
+   procedure Restore_And_Free (S : in out Comment_State);
    --  Restore the comment state to a previously saved value. Called after
-   --  scanning a project file.
+   --  scanning a project file. Frees the memory occupied by S
 
    procedure Reset_State;
    --  Set the comment state to its initial value. Called before scanning a
@@ -285,7 +287,8 @@ package Prj.Tree is
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref) return Path_Name_Type;
    pragma Inline (Directory_Of);
-   --  Only valid for N_Project nodes
+   --  Returns the directory that contains the project file. This always ends
+   --  with a directory separator. Only valid for N_Project nodes.
 
    function Expression_Kind_Of
      (Node    : Project_Node_Id;
@@ -293,7 +296,8 @@ package Prj.Tree is
    pragma Inline (Expression_Kind_Of);
    --  Only valid for N_Literal_String, N_Attribute_Declaration,
    --  N_Variable_Declaration, N_Typed_Variable_Declaration, N_Expression,
-   --  N_Term, N_Variable_Reference or N_Attribute_Reference nodes.
+   --  N_Term, N_Variable_Reference, N_Attribute_Reference nodes or
+   --  N_External_Value.
 
    function Is_Extending_All
      (Node    : Project_Node_Id;
@@ -406,7 +410,8 @@ package Prj.Tree is
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref) return Project_Node_Id;
    pragma Inline (First_Declarative_Item_Of);
-   --  Only valid for N_With_Clause nodes
+   --  Only valid for N_Project_Declaration, N_Case_Item and
+   --  N_Package_Declaration.
 
    function Extended_Project_Of
      (Node    : Project_Node_Id;
@@ -430,8 +435,7 @@ package Prj.Tree is
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref) return Project_Node_Id;
    pragma Inline (Project_Of_Renamed_Package_Of);
-   --  Only valid for N_Package_Declaration nodes.
-   --  May return Empty_Node.
+   --  Only valid for N_Package_Declaration nodes. May return Empty_Node.
 
    function Next_Package_In_Project
      (Node    : Project_Node_Id;
@@ -491,7 +495,7 @@ package Prj.Tree is
       In_Tree : Project_Node_Tree_Ref) return Name_Id;
    pragma Inline (Associative_Array_Index_Of);
    --  Only valid for N_Attribute_Declaration and N_Attribute_Reference.
-   --  Returns No_String for non associative array attributes.
+   --  Returns No_Name for non associative array attributes.
 
    function Next_Variable
      (Node    : Project_Node_Id;
@@ -572,8 +576,8 @@ package Prj.Tree is
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref) return Project_Node_Id;
    pragma Inline (First_Choice_Of);
-   --  Return the first choice in a N_Case_Item, or Empty_Node if
-   --  this is when others.
+   --  Only valid for N_Case_Item nodes. Return the first choice in a
+   --  N_Case_Item, or Empty_Node if this is when others.
 
    function Next_Case_Item
      (Node    : Project_Node_Id;
@@ -586,161 +590,277 @@ package Prj.Tree is
       In_Tree : Project_Node_Tree_Ref) return Boolean;
    --  Only valid for N_Attribute_Declaration and N_Attribute_Reference nodes
 
+   -----------------------
+   -- Create procedures --
+   -----------------------
+   --  The following procedures are used to edit a project file tree. They are
+   --  slightly higher-level than the Set_* procedures below
+
+   function Create_Project
+     (In_Tree        : Project_Node_Tree_Ref;
+      Name           : Name_Id;
+      Full_Path      : Path_Name_Type;
+      Is_Config_File : Boolean := False) return Project_Node_Id;
+   --  Create a new node for a project and register it in the tree so that it
+   --  can be retrieved later on.
+
+   function Create_Package
+     (Tree    : Project_Node_Tree_Ref;
+      Project : Project_Node_Id;
+      Pkg     : String) return Project_Node_Id;
+   --  Create a new package in Project. If the package already exists, it is
+   --  returned. The name of the package *must* be lower-cases, or none of its
+   --  attributes will be recognized.
+
+   function Create_Attribute
+     (Tree       : Project_Node_Tree_Ref;
+      Prj_Or_Pkg : Project_Node_Id;
+      Name       : Name_Id;
+      Index_Name : Name_Id         := No_Name;
+      Kind       : Variable_Kind   := List;
+      At_Index   : Integer         := 0;
+      Value      : Project_Node_Id := Empty_Node) return Project_Node_Id;
+   --  Create a new attribute. The new declaration is added at the end of the
+   --  declarative item list for Prj_Or_Pkg (a project or a package), but
+   --  before any package declaration). No addition is done if Prj_Or_Pkg is
+   --  Empty_Node. If Index_Name is not "", then if creates an attribute value
+   --  for a specific index. At_Index is used for the " at <idx>" in the naming
+   --  exceptions.
+   --
+   --  To set the value of the attribute, either provide a value for Value, or
+   --  use Set_Expression_Of to set the value of the attribute (in which case
+   --  Enclose_In_Expression might be useful). The former is recommended since
+   --  it will more correctly handle cases where the index needs to be set on
+   --  the expression rather than on the index of the attribute (i.e. 'for
+   --  Specification ("unit") use "file" at 3', versus 'for Executable ("file"
+   --  at 3) use "name"'). Value must be a N_String_Literal if an index will be
+   --  added to it.
+
+   function Create_Literal_String
+     (Str  : Namet.Name_Id;
+      Tree : Project_Node_Tree_Ref) return Project_Node_Id;
+   --  Create a literal string whose value is Str
+
+   procedure Add_At_End
+     (Tree                  : Project_Node_Tree_Ref;
+      Parent                : Project_Node_Id;
+      Expr                  : Project_Node_Id;
+      Add_Before_First_Pkg  : Boolean := False;
+      Add_Before_First_Case : Boolean := False);
+   --  Add a new declarative item in the list in Parent. This new declarative
+   --  item will contain Expr (unless Expr is already a declarative item, in
+   --  which case it is added directly to the list). The new item is inserted
+   --  at the end of the list, unless Add_Before_First_Pkg is True. In the
+   --  latter case, it is added just before the first case construction is
+   --  seen, or before the first package (this assumes that all packages are
+   --  found at the end of the project, which isn't true in the general case
+   --  unless you have normalized the project to match this description).
+
+   function Enclose_In_Expression
+     (Node : Project_Node_Id;
+      Tree : Project_Node_Tree_Ref) return Project_Node_Id;
+   --  Enclose the Node inside a N_Expression node, and return this expression.
+   --  This does nothing if Node is already a N_Expression.
+
    --------------------
    -- Set Procedures --
    --------------------
 
-   --  The following procedures are part of the abstract interface of
-   --  the Project File tree.
+   --  The following procedures are part of the abstract interface of the
+   --  Project File tree.
 
-   --  Each Set_* procedure is valid only for the same Project_Node_Kind
-   --  nodes as the corresponding query function above.
+   --  Foe each Set_* procedure the condition of validity is specified. If an
+   --  access function is called with invalid arguments, then exception
+   --  Assertion_Error is raised if assertions are enabled, otherwise the
+   --  behaviour is not defined and may result in a crash.
+
+   --  These are very low-level, and manipulate the tree itself directly. You
+   --  should look at the Create_* procedure instead if you want to use higher
+   --  level constructs
 
    procedure Set_Name_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Name_Id);
    pragma Inline (Set_Name_Of);
+   --  Valid for all non empty nodes.
 
    procedure Set_Kind_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Kind);
    pragma Inline (Set_Kind_Of);
+   --  Valid for all non empty nodes
 
    procedure Set_Location_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Source_Ptr);
    pragma Inline (Set_Location_Of);
+   --  Valid for all non empty nodes
 
    procedure Set_First_Comment_After
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_First_Comment_After);
+   --  Valid only for N_Comment_Zones nodes
 
    procedure Set_First_Comment_After_End
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_First_Comment_After_End);
+   --  Valid only for N_Comment_Zones nodes
 
    procedure Set_First_Comment_Before
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_First_Comment_Before);
+   --  Valid only for N_Comment_Zones nodes
 
    procedure Set_First_Comment_Before_End
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_First_Comment_Before_End);
+   --  Valid only for N_Comment_Zones nodes
 
    procedure Set_Next_Comment
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Next_Comment);
+   --  Valid only for N_Comment nodes
 
    procedure Set_Parent_Project_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
+   --  Valid only for N_Project nodes
 
    procedure Set_Project_File_Includes_Unkept_Comments
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Boolean);
+   --  Valid only for N_Project nodes
 
    procedure Set_Directory_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Path_Name_Type);
    pragma Inline (Set_Directory_Of);
+   --  Valid only for N_Project nodes
 
    procedure Set_Expression_Kind_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Variable_Kind);
    pragma Inline (Set_Expression_Kind_Of);
+   --  Only valid for N_Literal_String, N_Attribute_Declaration,
+   --  N_Variable_Declaration, N_Typed_Variable_Declaration, N_Expression,
+   --  N_Term, N_Variable_Reference, N_Attribute_Reference or N_External_Value
+   --  nodes.
 
    procedure Set_Is_Extending_All
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref);
    pragma Inline (Set_Is_Extending_All);
+   --  Only valid for N_Project and N_With_Clause
 
    procedure Set_Is_Not_Last_In_List
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref);
    pragma Inline (Set_Is_Not_Last_In_List);
+   --  Only valid for N_With_Clause
 
    procedure Set_First_Variable_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Variable_Node_Id);
    pragma Inline (Set_First_Variable_Of);
+   --  Only valid for N_Project or N_Package_Declaration nodes
 
    procedure Set_First_Package_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Package_Declaration_Id);
    pragma Inline (Set_First_Package_Of);
+   --  Only valid for N_Project nodes
 
    procedure Set_Package_Id_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Package_Node_Id);
    pragma Inline (Set_Package_Id_Of);
+   --  Only valid for N_Package_Declaration nodes
 
    procedure Set_Path_Name_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Path_Name_Type);
    pragma Inline (Set_Path_Name_Of);
+   --  Only valid for N_Project and N_With_Clause nodes
 
    procedure Set_String_Value_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Name_Id);
    pragma Inline (Set_String_Value_Of);
+   --  Only valid for N_With_Clause, N_Literal_String nodes or N_Comment.
+
+   procedure Set_Source_Index_Of
+     (Node    : Project_Node_Id;
+      In_Tree : Project_Node_Tree_Ref;
+      To      : Int);
+   pragma Inline (Set_Source_Index_Of);
+   --  Only valid for N_Literal_String and N_Attribute_Declaration nodes. For
+   --  N_Literal_String, set the source index of the literal string. For
+   --  N_Attribute_Declaration, set the source index of the index of the
+   --  associative array element.
 
    procedure Set_First_With_Clause_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_First_With_Clause_Of);
+   --  Only valid for N_Project nodes
 
    procedure Set_Project_Declaration_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Project_Declaration_Of);
+   --  Only valid for N_Project nodes
 
    procedure Set_Project_Qualifier_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Qualifier);
    pragma Inline (Set_Project_Qualifier_Of);
+   --  Only valid for N_Project nodes
 
    procedure Set_Extending_Project_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Extending_Project_Of);
+   --  Only valid for N_Project_Declaration nodes
 
    procedure Set_First_String_Type_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_First_String_Type_Of);
+   --  Only valid for N_Project nodes
 
    procedure Set_Extended_Project_Path_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Path_Name_Type);
    pragma Inline (Set_Extended_Project_Path_Of);
+   --  Only valid for N_With_Clause nodes
 
    procedure Set_Project_Node_Of
      (Node         : Project_Node_Id;
@@ -748,185 +868,214 @@ package Prj.Tree is
       To           : Project_Node_Id;
       Limited_With : Boolean := False);
    pragma Inline (Set_Project_Node_Of);
+   --  Only valid for N_With_Clause, N_Variable_Reference and
+   --  N_Attribute_Reference nodes.
 
    procedure Set_Next_With_Clause_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Next_With_Clause_Of);
+   --  Only valid for N_With_Clause nodes
 
    procedure Set_First_Declarative_Item_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_First_Declarative_Item_Of);
+   --  Only valid for N_Project_Declaration, N_Case_Item and
+   --  N_Package_Declaration.
 
    procedure Set_Extended_Project_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Extended_Project_Of);
+   --  Only valid for N_Project_Declaration nodes
 
    procedure Set_Current_Item_Node
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Current_Item_Node);
+   --  Only valid for N_Declarative_Item nodes
 
    procedure Set_Next_Declarative_Item
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Next_Declarative_Item);
+   --  Only valid for N_Declarative_Item node
 
    procedure Set_Project_Of_Renamed_Package_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Project_Of_Renamed_Package_Of);
+   --  Only valid for N_Package_Declaration nodes.
 
    procedure Set_Next_Package_In_Project
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Next_Package_In_Project);
+   --  Only valid for N_Package_Declaration nodes
 
    procedure Set_First_Literal_String
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_First_Literal_String);
+   --  Only valid for N_String_Type_Declaration nodes
 
    procedure Set_Next_String_Type
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Next_String_Type);
+   --  Only valid for N_String_Type_Declaration nodes
 
    procedure Set_Next_Literal_String
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Next_Literal_String);
+   --  Only valid for N_Literal_String nodes
 
    procedure Set_Expression_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Expression_Of);
+   --  Only valid for N_Attribute_Declaration, N_Typed_Variable_Declaration
+   --  or N_Variable_Declaration nodes
 
    procedure Set_Associative_Project_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Associative_Project_Of);
+   --  Only valid for N_Attribute_Declaration nodes
 
    procedure Set_Associative_Package_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Associative_Package_Of);
+   --  Only valid for N_Attribute_Declaration nodes
 
    procedure Set_Associative_Array_Index_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Name_Id);
    pragma Inline (Set_Associative_Array_Index_Of);
+   --  Only valid for N_Attribute_Declaration and N_Attribute_Reference.
 
    procedure Set_Next_Variable
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Next_Variable);
+   --  Only valid for N_Typed_Variable_Declaration or N_Variable_Declaration
+   --  nodes.
 
    procedure Set_First_Term
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_First_Term);
+   --  Only valid for N_Expression nodes
 
    procedure Set_Next_Expression_In_List
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Next_Expression_In_List);
+   --  Only valid for N_Expression nodes
 
    procedure Set_Current_Term
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Current_Term);
+   --  Only valid for N_Term nodes
 
    procedure Set_Next_Term
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Next_Term);
+   --  Only valid for N_Term nodes
 
    procedure Set_First_Expression_In_List
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_First_Expression_In_List);
+   --  Only valid for N_Literal_String_List nodes
 
    procedure Set_Package_Node_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Package_Node_Of);
-
-   procedure Set_Source_Index_Of
-     (Node    : Project_Node_Id;
-      In_Tree : Project_Node_Tree_Ref;
-      To      : Int);
-   pragma Inline (Set_Source_Index_Of);
+   --  Only valid for N_Variable_Reference or N_Attribute_Reference nodes.
 
    procedure Set_String_Type_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_String_Type_Of);
+   --  Only valid for N_Variable_Reference or N_Typed_Variable_Declaration
+   --  nodes.
 
    procedure Set_External_Reference_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_External_Reference_Of);
+   --  Only valid for N_External_Value nodes
 
    procedure Set_External_Default_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_External_Default_Of);
+   --  Only valid for N_External_Value nodes
 
    procedure Set_Case_Variable_Reference_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Case_Variable_Reference_Of);
+   --  Only valid for N_Case_Construction nodes
 
    procedure Set_First_Case_Item_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_First_Case_Item_Of);
+   --  Only valid for N_Case_Construction nodes
 
    procedure Set_First_Choice_Of
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_First_Choice_Of);
+   --  Only valid for N_Case_Item nodes.
 
    procedure Set_Next_Case_Item
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Project_Node_Id);
    pragma Inline (Set_Next_Case_Item);
+   --  Only valid for N_Case_Item nodes.
 
    procedure Set_Case_Insensitive
      (Node    : Project_Node_Id;
       In_Tree : Project_Node_Tree_Ref;
       To      : Boolean);
+   --  Only valid for N_Attribute_Declaration and N_Attribute_Reference nodes
 
    -------------------------------
    -- Restricted Access Section --
@@ -934,9 +1083,8 @@ package Prj.Tree is
 
    package Tree_Private_Part is
 
-      --  This is conceptually in the private part
-
-      --  However, for efficiency, some packages are accessing it directly
+      --  This is conceptually in the private part. However, for efficiency,
+      --  some packages are accessing it directly.
 
       type Project_Node_Record is record
 
@@ -960,6 +1108,7 @@ package Prj.Tree is
 
          Pkg_Id : Package_Node_Id := Empty_Package;
          --  Only used for N_Package_Declaration
+         --
          --  The component Pkg_Id is an entry into the table Package_Attributes
          --  (in Prj.Attr). It is used to indicate all the attributes of the
          --  package with their characteristics.
@@ -995,38 +1144,45 @@ package Prj.Tree is
 
          Flag1 : Boolean := False;
          --  This flag is significant only for:
+         --
          --    N_Attribute_Declaration and N_Attribute_Reference
-         --      It indicates for an associative array attribute, that the
+         --      Indicates for an associative array attribute, that the
          --      index is case insensitive.
-         --    N_Comment - it indicates that the comment is preceded by an
-         --                empty line.
-         --    N_Project - it indicates that there are comments in the project
-         --                source that cannot be kept in the tree.
+         --
+         --    N_Comment
+         --      Indicates that the comment is preceded by an empty line.
+         --
+         --    N_Project
+         --      Indicates that there are comments in the project source that
+         --      cannot be kept in the tree.
+         --
          --    N_Project_Declaration
-         --              - it indicates that there are unkept comments in the
-         --                project.
+         --      Indicates that there are unkept comments in the project.
+         --
          --    N_With_Clause
-         --              - it indicates that this is not the last with in a
-         --                with clause. It is set for "A", but not for "B" in
-         --                    with "B";
-         --                  and
-         --                    with "A", "B";
+         --      Indicates that this is not the last with in a with clause.
+         --      Set for "A", but not for "B" in with "B"; and with "A", "B";
 
          Flag2 : Boolean := False;
          --  This flag is significant only for:
-         --    N_Project - it indicates that the project "extends all" another
-         --                project.
-         --    N_Comment - it indicates that the comment is followed by an
-         --                empty line.
+         --
+         --    N_Project
+         --      Indicates that the project "extends all" another project.
+         --
+         --    N_Comment
+         --      Indicates that the comment is followed by an empty line.
+         --
          --    N_With_Clause
-         --              - it indicates that the originally imported project
-         --                is an extending all project.
+         --      Indicates that the originally imported project is an extending
+         --      all project.
 
          Comments : Project_Node_Id := Empty_Node;
          --  For nodes other that N_Comment_Zones or N_Comment, designates the
          --  comment zones associated with the node.
-         --  for N_Comment_Zones, designates the comment after the "end" of
+         --
+         --  For N_Comment_Zones, designates the comment after the "end" of
          --  the construct.
+         --
          --  For N_Comment, designates the next comment, if any.
 
       end record;
@@ -1245,19 +1401,21 @@ package Prj.Tree is
       --    --  Flag2:     comment is followed by an empty line
       --    --  Comments:  next comment
 
-      package Project_Node_Table is
-        new GNAT.Dynamic_Tables
+      package Project_Node_Table is new
+        GNAT.Dynamic_Tables
           (Table_Component_Type => Project_Node_Record,
            Table_Index_Type     => Project_Node_Id,
            Table_Low_Bound      => First_Node_Id,
            Table_Initial        => Project_Nodes_Initial,
            Table_Increment      => Project_Nodes_Increment);
-      --  This table contains the syntactic tree of project data
-      --  from project files.
+      --  Table contains the syntactic tree of project data from project files
 
       type Project_Name_And_Node is record
          Name : Name_Id;
          --  Name of the project
+
+         Display_Name : Name_Id;
+         --  The name of the project as it appears in the .gpr file
 
          Node : Project_Node_Id;
          --  Node of the project in table Project_Nodes
@@ -1275,6 +1433,7 @@ package Prj.Tree is
 
       No_Project_Name_And_Node : constant Project_Name_And_Node :=
         (Name           => No_Name,
+         Display_Name   => No_Name,
          Node           => Empty_Node,
          Canonical_Path => No_Path,
          Extended       => True,
@@ -1294,11 +1453,39 @@ package Prj.Tree is
 
    end Tree_Private_Part;
 
+   package Name_To_Name_HTable is new GNAT.Dynamic_HTables.Simple_HTable
+     (Header_Num => Header_Num,
+      Element    => Name_Id,
+      No_Element => No_Name,
+      Key        => Name_Id,
+      Hash       => Hash,
+      Equal      => "=");
+   --  General type for htables associating name_id to name_id. This is in
+   --  particular used to store the values of external references.
+
    type Project_Node_Tree_Data is record
       Project_Nodes : Tree_Private_Part.Project_Node_Table.Instance;
       Projects_HT   : Tree_Private_Part.Projects_Htable.Instance;
+
+      External_References : Name_To_Name_HTable.Instance;
+      --  External references are stored in this hash table (and manipulated
+      --  through subprograms in prj-ext.ads). External references are
+      --  project-tree specific so that one can load the same tree twice but
+      --  have two views of it, for instance.
+
+      Target_Name : String_Access := null;
+      --  The target name, if any, specified with the gprbuild or gprclean
+      --  switch --target=.
+
+      Project_Path : aliased Prj.Env.Project_Search_Path;
+      --  The project path is tree specific, since we might want to load
+      --  simultaneously multiple projects, each with its own search path, in
+      --  particular when using different compilers with different default
+      --  search directories.
    end record;
-   --  The data for a project node tree
+
+   procedure Free (Proj : in out Project_Node_Tree_Ref);
+   --  Free memory used by Prj
 
 private
    type Comment_Array is array (Positive range <>) of Comment_Data;
@@ -1306,13 +1493,9 @@ private
 
    type Comment_State is record
       End_Of_Line_Node   : Project_Node_Id := Empty_Node;
-
       Previous_Line_Node : Project_Node_Id := Empty_Node;
-
       Previous_End_Node  : Project_Node_Id := Empty_Node;
-
       Unkept_Comments    : Boolean := False;
-
       Comments           : Comments_Ptr := null;
    end record;
 

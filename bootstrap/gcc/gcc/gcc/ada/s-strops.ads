@@ -32,9 +32,11 @@
 --  This package contains functions for runtime operations on strings
 --  (other than runtime comparison, found in s-strcom.ads).
 
-pragma Warnings (Off);
+--  NOTE: This package is obsolescent. It is no longer used by the compiler
+--  which now generates concatenation inline. It is retained only because
+--  it may be used during bootstrapping using old versions of the compiler.
+
 pragma Compiler_Unit;
-pragma Warnings (On);
 
 package System.String_Ops is
    pragma Pure;

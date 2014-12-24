@@ -1,6 +1,6 @@
 /* Object file "section" support for the BFD library.
    Copyright 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
-   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007
+   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
    Free Software Foundation, Inc.
    Written by Cygnus Support.
 
@@ -327,6 +327,11 @@ CODE_FRAGMENT
 .     sections.  *}
 .#define SEC_COFF_SHARED_LIBRARY 0x4000000
 .
+.  {* This input section should be copied to output in reverse order
+.     as an array of pointers.  This is for ELF linker internal use
+.     only.  *}
+.#define SEC_ELF_REVERSE_COPY 0x4000000
+.
 .  {* This section contains data which may be shared with other
 .     executables or shared objects. This is for COFF only.  *}
 .#define SEC_COFF_SHARED 0x8000000
@@ -342,6 +347,10 @@ CODE_FRAGMENT
 .     references found to any symbol in the section.  This is for TI
 .     TMS320C54X only.  *}
 .#define SEC_TIC54X_CLINK 0x20000000
+.
+.  {* Indicate that section has the no read flag set. This happens
+.     when memory read flag isn't set. *}
+.#define SEC_COFF_NOREAD 0x40000000
 .
 .  {*  End of section flags.  *}
 .
@@ -359,6 +368,12 @@ CODE_FRAGMENT
 .
 .  {* Mark flag used by some linker backends for garbage collection.  *}
 .  unsigned int gc_mark : 1;
+.
+.  {* Section compression status.  *}
+.  unsigned int compress_status : 2;
+.#define COMPRESS_SECTION_NONE    0
+.#define COMPRESS_SECTION_DONE    1
+.#define DECOMPRESS_SECTION_SIZED 2
 .
 .  {* The following flags are used by the ELF linker. *}
 .
@@ -379,17 +394,12 @@ CODE_FRAGMENT
 .  {* Bits used by various backends.  The generic code doesn't touch
 .     these fields.  *}
 .
-.  {* Nonzero if this section has TLS related relocations.  *}
-.  unsigned int has_tls_reloc:1;
-.
-.  {* Nonzero if this section has a gp reloc.  *}
-.  unsigned int has_gp_reloc:1;
-.
-.  {* Nonzero if this section needs the relax finalize pass.  *}
-.  unsigned int need_finalize_relax:1;
-.
-.  {* Whether relocations have been processed.  *}
-.  unsigned int reloc_done : 1;
+.  unsigned int sec_flg0:1;
+.  unsigned int sec_flg1:1;
+.  unsigned int sec_flg2:1;
+.  unsigned int sec_flg3:1;
+.  unsigned int sec_flg4:1;
+.  unsigned int sec_flg5:1;
 .
 .  {* End of internal packed boolean fields.  *}
 .
@@ -420,6 +430,16 @@ CODE_FRAGMENT
 .     section multiple times.  For output sections, rawsize holds the
 .     section size calculated on a previous linker relaxation pass.  *}
 .  bfd_size_type rawsize;
+.
+.  {* The compressed size of the section in octets.  *}
+.  bfd_size_type compressed_size;
+.
+.  {* Relaxation table. *}
+.  struct relax_table *relax;
+.
+.  {* Count of used relaxation table entries. *}
+.  int relax_count;
+.
 .
 .  {* If this section is going to be output, then this value is the
 .     offset in *bytes* into the output section of the first byte in the
@@ -496,6 +516,9 @@ CODE_FRAGMENT
 .  {* The BFD which owns the section.  *}
 .  bfd *owner;
 .
+.  {* INPUT_SECTION_FLAGS if specified in the linker script.  *}
+.  struct flag_info *section_flag_info;
+.
 .  {* A symbol which points at this section only.  *}
 .  struct bfd_symbol *symbol;
 .  struct bfd_symbol **symbol_ptr_ptr;
@@ -509,6 +532,17 @@ CODE_FRAGMENT
 .    struct bfd_section *s;
 .  } map_head, map_tail;
 .} asection;
+.
+.{* Relax table contains information about instructions which can
+.   be removed by relaxation -- replacing a long address with a 
+.   short address.  *}
+.struct relax_table {
+.  {* Address where bytes may be deleted. *}
+.  bfd_vma addr;
+.  
+.  {* Number of bytes to be deleted.  *}
+.  int size;
+.};
 .
 .{* These sections are global, and are managed by BFD.  The application
 .   and target back end are not permitted to change the values in
@@ -636,17 +670,17 @@ CODE_FRAGMENT
 .  {* name, id,  index, next, prev, flags, user_set_vma,            *}	\
 .  { NAME,  IDX, 0,     NULL, NULL, FLAGS, 0,				\
 .									\
-.  {* linker_mark, linker_has_input, gc_mark,                       *}	\
-.     0,           0,                1,         			\
+.  {* linker_mark, linker_has_input, gc_mark, decompress_status,    *}	\
+.     0,           0,                1,       0,			\
 .									\
-.  {* segment_mark, sec_info_type, use_rela_p, has_tls_reloc,       *}	\
-.     0,            0,             0,          0,			\
+.  {* segment_mark, sec_info_type, use_rela_p,                      *}	\
+.     0,            0,             0,					\
 .									\
-.  {* has_gp_reloc, need_finalize_relax, reloc_done,                *}	\
-.     0,            0,                   0,				\
+.  {* sec_flg0, sec_flg1, sec_flg2, sec_flg3, sec_flg4, sec_flg5,   *}	\
+.     0,        0,        0,        0,        0,        0,		\
 .									\
-.  {* vma, lma, size, rawsize                                       *}	\
-.     0,   0,   0,    0,						\
+.  {* vma, lma, size, rawsize, compressed_size, relax, relax_count, *}	\
+.     0,   0,   0,    0,       0,               0,     0,		\
 .									\
 .  {* output_offset, output_section,              alignment_power,  *}	\
 .     0,             (struct bfd_section *) &SEC, 0,			\
@@ -662,6 +696,9 @@ CODE_FRAGMENT
 .									\
 .  {* target_index, used_by_bfd, constructor_chain, owner,          *}	\
 .     0,            NULL,        NULL,              NULL,		\
+.									\
+.  {* flag_info,						    *}  \
+.     NULL,								\
 .									\
 .  {* symbol,                    symbol_ptr_ptr,                    *}	\
 .     (struct bfd_symbol *) SYM, &SEC.symbol,				\
@@ -912,7 +949,7 @@ bfd_get_unique_section_name (bfd *abfd, const char *templat, int *count)
   char *sname;
 
   len = strlen (templat);
-  sname = bfd_malloc (len + 8);
+  sname = (char *) bfd_malloc (len + 8);
   if (sname == NULL)
     return NULL;
   memcpy (sname, templat, len);
@@ -1189,6 +1226,29 @@ bfd_set_section_flags (bfd *abfd ATTRIBUTE_UNUSED,
 
 /*
 FUNCTION
+	bfd_rename_section
+
+SYNOPSIS
+	void bfd_rename_section
+	  (bfd *abfd, asection *sec, const char *newname);
+
+DESCRIPTION
+	Rename section @var{sec} in @var{abfd} to @var{newname}.
+*/
+
+void
+bfd_rename_section (bfd *abfd, sec_ptr sec, const char *newname)
+{
+  struct section_hash_entry *sh;
+
+  sh = (struct section_hash_entry *)
+    ((char *) sec - offsetof (struct section_hash_entry, section));
+  sh->section.name = newname;
+  bfd_hash_rename (&abfd->section_htab, newname, &sh->root);
+}
+
+/*
+FUNCTION
 	bfd_map_over_sections
 
 SYNOPSIS
@@ -1407,7 +1467,10 @@ bfd_get_section_contents (bfd *abfd,
       return TRUE;
     }
 
-  sz = section->rawsize ? section->rawsize : section->size;
+  if (abfd->direction != write_direction && section->rawsize != 0)
+    sz = section->rawsize;
+  else
+    sz = section->size;
   if ((bfd_size_type) offset > sz
       || count > sz
       || offset + count > sz
@@ -1429,6 +1492,16 @@ bfd_get_section_contents (bfd *abfd,
 
   if ((section->flags & SEC_IN_MEMORY) != 0)
     {
+      if (section->contents == NULL)
+	{
+	  /* This can happen because of errors earlier on in the linking process.
+	     We do not want to seg-fault here, so clear the flag and return an
+	     error code.  */
+	  section->flags &= ~ SEC_IN_MEMORY;
+	  bfd_set_error (bfd_error_invalid_operation);
+	  return FALSE;
+	}
+      
       memcpy (location, section->contents + offset, (size_t) count);
       return TRUE;
     }
@@ -1453,19 +1526,8 @@ DESCRIPTION
 bfd_boolean
 bfd_malloc_and_get_section (bfd *abfd, sec_ptr sec, bfd_byte **buf)
 {
-  bfd_size_type sz = sec->rawsize ? sec->rawsize : sec->size;
-  bfd_byte *p = NULL;
-
-  *buf = p;
-  if (sz == 0)
-    return TRUE;
-
-  p = bfd_malloc (sec->rawsize > sec->size ? sec->rawsize : sec->size);
-  if (p == NULL)
-    return FALSE;
-  *buf = p;
-
-  return bfd_get_section_contents (abfd, sec, p, 0, sz);
+  *buf = NULL;
+  return bfd_get_full_section_contents (abfd, sec, buf);
 }
 /*
 FUNCTION

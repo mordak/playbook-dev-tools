@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -29,8 +29,14 @@
 with Namet; use Namet;
 with Types; use Types;
 
-with System.OS_Lib; use System.OS_Lib;
-with System;        use System;
+with System;                  use System;
+
+pragma Warnings (Off);
+--  This package is used also by gnatcoll
+with System.OS_Lib;           use System.OS_Lib;
+pragma Warnings (On);
+
+with System.Storage_Elements;
 
 pragma Elaborate_All (System.OS_Lib);
 --  For the call to function Get_Target_Object_Suffix in the private part
@@ -38,9 +44,8 @@ pragma Elaborate_All (System.OS_Lib);
 package Osint is
 
    Multi_Unit_Index_Character : Character := '~';
-   --  The character before the index of the unit in a multi-unit source, in
-   --  ALI and object file names. This is not a constant, because it is changed
-   --  to '$' on VMS.
+   --  The character before the index of the unit in a multi-unit source in ALI
+   --  and object file names. Changed to '$' on VMS.
 
    Ada_Include_Path          : constant String := "ADA_INCLUDE_PATH";
    Ada_Objects_Path          : constant String := "ADA_OBJECTS_PATH";
@@ -79,7 +84,7 @@ package Osint is
                                  Get_File_Names_Case_Sensitive /= 0;
    --  Set to indicate whether the operating system convention is for file
    --  names to be case sensitive (e.g., in Unix, set True), or non case
-   --  sensitive (e.g., in OS/2, set False).
+   --  sensitive (e.g., in Windows, set False).
 
    procedure Canonical_Case_File_Name (S : in out String);
    --  Given a file name, converts it to canonical case form. For systems
@@ -88,6 +93,23 @@ package Osint is
    --  the file "xyz.adb", you can refer to it as XYZ.adb or XyZ.AdB), then
    --  this call converts the given string to canonical all lower case form,
    --  so that two file names compare equal if they refer to the same file.
+
+   function Get_Env_Vars_Case_Sensitive return Int;
+   pragma Import (C, Get_Env_Vars_Case_Sensitive,
+                  "__gnat_get_env_vars_case_sensitive");
+   Env_Vars_Case_Sensitive : constant Boolean :=
+                                 Get_Env_Vars_Case_Sensitive /= 0;
+   --  Set to indicate whether the operating system convention is for
+   --  environment variable names to be case sensitive (e.g., in Unix, set
+   --  True), or non case sensitive (e.g., in Windows, set False).
+
+   procedure Canonical_Case_Env_Var_Name (S : in out String);
+   --  Given an environment variable name, converts it to canonical case form.
+   --  For systems where environment variable names are case sensitive, this
+   --  procedure has no effect. If environment variable names are not case
+   --  sensitive, then this call converts the given string to canonical all
+   --  lower case form, so that two environment variable names compare equal if
+   --  they refer to the same environment variable.
 
    function Number_Of_Files return Int;
    --  Gives the total number of filenames found on the command line
@@ -121,11 +143,11 @@ package Osint is
    --  Writes name of program as invoked to the current output (normally
    --  standard output).
 
-   procedure Fail (S1 : String; S2 : String := ""; S3 : String := "");
+   procedure Fail (S : String);
    pragma No_Return (Fail);
-   --  Outputs error messages S1 & S2 & S3 preceded by the name of the
-   --  executing program and exits with E_Fatal. The output goes to standard
-   --  error, except if special output is in effect (see Output).
+   --  Outputs error message S preceded by the name of the executing program
+   --  and exits with E_Fatal. The output goes to standard error, except if
+   --  special output is in effect (see Output).
 
    function Is_Directory_Separator (C : Character) return Boolean;
    --  Returns True if C is a directory separator
@@ -146,13 +168,17 @@ package Osint is
    --  Strips the suffix (the last '.' and whatever comes after it) from Name.
    --  Returns the stripped name.
 
-   function Executable_Name (Name : File_Name_Type) return File_Name_Type;
+   function Executable_Name
+     (Name              : File_Name_Type;
+      Only_If_No_Suffix : Boolean := False) return File_Name_Type;
    --  Given a file name it adds the appropriate suffix at the end so that
    --  it becomes the name of the executable on the system at end. For
    --  instance under DOS it adds the ".exe" suffix, whereas under UNIX no
    --  suffix is added.
 
-   function Executable_Name (Name : String) return String;
+   function Executable_Name
+     (Name              : String;
+      Only_If_No_Suffix : Boolean := False) return String;
    --  Same as above, with String parameters
 
    function File_Stamp (Name : File_Name_Type) return Time_Stamp_Type;
@@ -206,9 +232,9 @@ package Osint is
    function To_Host_Dir_Spec
      (Canonical_Dir : String;
       Prefix_Style  : Boolean) return String_Access;
-   --  Convert a canonical syntax directory specification to host syntax.
-   --  The Prefix_Style flag is currently ignored but should be set to
-   --  False.
+   --  Convert a canonical syntax directory specification to host syntax. The
+   --  Prefix_Style flag is currently ignored but should be set to False.
+   --  Note that the caller must free result.
 
    function To_Host_File_Spec
      (Canonical_File : String) return String_Access;
@@ -229,6 +255,60 @@ package Osint is
    --  version is the GNAT runtime library option for the platform. For example
    --  this routine called with Name set to "gnat" will return "-lgnat-5.02"
    --  on UNIX and Windows and -lgnat_5_02 on VMS.
+
+   ---------------------
+   -- File attributes --
+   ---------------------
+
+   --  The following subprograms offer services similar to those found in
+   --  System.OS_Lib, but with the ability to extra multiple information from
+   --  a single system call, depending on the system. This can result in fewer
+   --  system calls when reused.
+
+   --  In all these subprograms, the requested value is either read from the
+   --  File_Attributes parameter (resulting in no system call), or computed
+   --  from the disk and then cached in the File_Attributes parameter (possibly
+   --  along with other values).
+
+   type File_Attributes is private;
+   Unknown_Attributes : constant File_Attributes;
+   --  A cache for various attributes for a file (length, accessibility,...)
+   --  This must be initialized to Unknown_Attributes prior to the first call.
+
+   function Is_Directory
+     (Name : C_File_Name;
+      Attr : access File_Attributes) return Boolean;
+   function Is_Regular_File
+     (Name : C_File_Name;
+      Attr : access File_Attributes) return Boolean;
+   function Is_Symbolic_Link
+     (Name : C_File_Name;
+      Attr : access File_Attributes) return Boolean;
+   --  Return the type of the file,
+
+   function File_Length
+     (Name : C_File_Name;
+      Attr : access File_Attributes) return Long_Integer;
+   --  Return the length (number of bytes) of the file
+
+   function File_Time_Stamp
+     (Name : C_File_Name;
+      Attr : access File_Attributes) return OS_Time;
+   function File_Time_Stamp
+     (Name : Path_Name_Type;
+      Attr : access File_Attributes) return Time_Stamp_Type;
+   --  Return the time stamp of the file
+
+   function Is_Readable_File
+     (Name : C_File_Name;
+      Attr : access File_Attributes) return Boolean;
+   function Is_Executable_File
+     (Name : C_File_Name;
+      Attr : access File_Attributes) return Boolean;
+   function Is_Writable_File
+     (Name : C_File_Name;
+      Attr : access File_Attributes) return Boolean;
+   --  Return the access rights for the file
 
    -------------------------
    -- Search Dir Routines --
@@ -344,7 +424,6 @@ package Osint is
    --
    --    CR
    --    CR/LF
-   --    LF/CR
    --    LF
 
    --  The source is terminated by an EOF (16#1A#) character, which is the last
@@ -381,6 +460,10 @@ package Osint is
    --  using Read_Source_File. Calling this routine entails no source file
    --  directory lookup penalty.
 
+   procedure Full_Source_Name
+     (N         : File_Name_Type;
+      Full_File : out File_Name_Type;
+      Attr      : access File_Attributes);
    function Full_Source_Name (N : File_Name_Type) return File_Name_Type;
    function Source_File_Stamp (N : File_Name_Type) return Time_Stamp_Type;
    --  Returns the full name/time stamp of the source file whose simple name
@@ -391,6 +474,9 @@ package Osint is
    --  The source file directory lookup penalty is incurred every single time
    --  the routines are called unless you have previously called
    --  Source_File_Data (Cache => True). See below.
+   --
+   --  The procedural version also returns some file attributes for the ALI
+   --  file (to save on system calls later on).
 
    function Current_File_Index return Int;
    --  Return the index in its source file of the current main unit
@@ -411,15 +497,21 @@ package Osint is
    --  Cache => True access to source file data does not incur a penalty if
    --  this data was previously retrieved.
 
+   procedure Dump_Source_File_Names;
+   --  Prints out the names of all source files that have been read by
+   --  Read_Source_File, except those that come from the run-time library
+   --  (i.e. Include_Dir_Default_Prefix). The text is sent to whatever Output
+   --  is currently using (e.g. standard output or standard error).
+
    -------------------------------------------
    -- Representation of Library Information --
    -------------------------------------------
 
-   --  Associated with each compiled source file is library information,
-   --  a string of bytes whose exact format is described in the body of
-   --  Lib.Writ. Compiling a source file generates this library information
-   --  for the compiled unit, and access the library information for units
-   --  that were compiled previously on which the unit being compiled depends.
+   --  Associated with each compiled source file is library information, a
+   --  string of bytes whose exact format is described in the body of Lib.Writ.
+   --  Compiling a source file generates this library information for the
+   --  compiled unit, and access the library information for units that were
+   --  compiled previously on which the unit being compiled depends.
 
    --  How this information is stored is up to the implementation of this
    --  package. At the interface level, this information is simply associated
@@ -471,15 +563,25 @@ package Osint is
    --  include any directory information. The implementation is responsible
    --  for searching for the file in appropriate directories.
    --
-   --  If Opt.Check_Object_Consistency is set to True then this routine
-   --  checks whether the object file corresponding to the Lib_File is
-   --  consistent with it. The object file is inconsistent if the object
-   --  does not exist or if it has an older time stamp than Lib_File.
-   --  This check is not performed when the Lib_File is "locked" (i.e.
-   --  read/only) because in this case the object file may be buried
-   --  in a library. In case of inconsistencies Read_Library_Info
-   --  behaves as if it did not find Lib_File (namely if Fatal_Err is
-   --  False, null is returned).
+   --  If Opt.Check_Object_Consistency is set to True then this routine checks
+   --  whether the object file corresponding to the Lib_File is consistent with
+   --  it. The object file is inconsistent if the object does not exist or if
+   --  it has an older time stamp than Lib_File. This check is not performed
+   --  when the Lib_File is "locked" (i.e. read/only) because in this case the
+   --  object file may be buried in a library. In case of inconsistencies
+   --  Read_Library_Info behaves as if it did not find Lib_File (namely if
+   --  Fatal_Err is False, null is returned).
+
+   function Read_Library_Info_From_Full
+     (Full_Lib_File : File_Name_Type;
+      Lib_File_Attr : access File_Attributes;
+      Fatal_Err     : Boolean := False) return Text_Buffer_Ptr;
+   --  Same as Read_Library_Info, except Full_Lib_File must contains the full
+   --  path to the library file (instead of having Read_Library_Info recompute
+   --  it).
+   --  Lib_File_Attr should be an initialized set of attributes for the
+   --  library file (it can be initialized to Unknown_Attributes, but in
+   --  general will have been initialized by a previous call to Find_File).
 
    function Full_Library_Info_Name return File_Name_Type;
    function Full_Object_File_Name return File_Name_Type;
@@ -496,14 +598,19 @@ package Osint is
    --  It is an error to call Current_Object_File_Stamp if
    --  Opt.Check_Object_Consistency is set to False.
 
+   procedure Full_Lib_File_Name
+     (N        : File_Name_Type;
+      Lib_File : out File_Name_Type;
+      Attr     : out File_Attributes);
    function Full_Lib_File_Name (N : File_Name_Type) return File_Name_Type;
-   function Library_File_Stamp (N : File_Name_Type) return Time_Stamp_Type;
-   --  Returns the full name/time stamp of library file N. N should not include
+   --  Returns the full name of library file N. N should not include
    --  path information. Note that if the file cannot be located No_File is
    --  returned for the first routine and an all blank time stamp is returned
    --  for the second (this is not an error situation). The full name includes
    --  the appropriate directory information. The library file directory lookup
    --  penalty is incurred every single time this routine is called.
+   --  The procedural version also returns some file attributes for the ALI
+   --  file (to save on system calls later on).
 
    function Lib_File_Name
      (Source_File : File_Name_Type;
@@ -566,10 +673,11 @@ package Osint is
    pragma Import (C, Len_Arg, "__gnat_len_arg");
    --  Get length of argument
 
-private
+   ALI_Default_Suffix : constant String_Ptr := new String'("ali");
+   ALI_Suffix         : String_Ptr          := ALI_Default_Suffix;
+   --  The suffixes used for the library files (also known as ALI files)
 
-   ALI_Suffix : constant String_Ptr := new String'("ali");
-   --  The suffix used for the library files (also known as ALI files)
+private
 
    Current_Main : File_Name_Type := No_File;
    --  Used to save a simple file name between calls to Next_Main_Source and
@@ -647,5 +755,22 @@ private
    --  in Output_File_Name. A check is made for disk full, and if this is
    --  detected, the file being written is deleted, and a fatal error is
    --  signalled.
+
+   File_Attributes_Size : constant Natural := 24;
+   --  This should be big enough to fit a "struct file_attributes" on any
+   --  system. It doesn't cause any malfunction if it is too big (which avoids
+   --  the need for either mapping the struct exactly or importing the sizeof
+   --  from C, which would result in dynamic code). However, it does waste
+   --  space (e.g. when a component of this type appears in a record, if it is
+   --  unnecessarily large.
+
+   type File_Attributes is
+     array (1 .. File_Attributes_Size)
+       of System.Storage_Elements.Storage_Element;
+   for File_Attributes'Alignment use Standard'Maximum_Alignment;
+
+   Unknown_Attributes : constant File_Attributes := (others => 0);
+   --  Will be initialized properly at elaboration (for efficiency later on,
+   --  avoid function calls every time we want to reset the attributes).
 
 end Osint;

@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---                     Copyright (C) 1999-2008, AdaCore                     --
+--                     Copyright (C) 1999-2009, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -74,10 +74,11 @@ package body GNAT.Traceback.Symbolic is
          buf      : System.Address;
          len      : System.Address);
       pragma Import (C, convert_addresses, "convert_addresses");
-      --  This is the procedure version of the Ada aware addr2line.  It places
+      --  This is the procedure version of the Ada-aware addr2line. It places
       --  in BUF a string representing the symbolic translation of the N_ADDRS
       --  raw addresses provided in ADDRS, looked up in debug information from
-      --  FILENAME.  LEN is filled with the result length.
+      --  FILENAME. LEN points to an integer which contains the size of the
+      --  BUF buffer at input and the result length at output.
       --
       --  This procedure is provided by libaddr2line on targets that support
       --  it. A dummy version is in adaint.c for other targets so that build
@@ -99,8 +100,8 @@ package body GNAT.Traceback.Symbolic is
       use type System.Address;
 
    begin
-      --  The symbolic translation of an empty set of addresses is the
-      --  the empty string.
+      --  The symbolic translation of an empty set of addresses is an empty
+      --  string.
 
       if Traceback'Length = 0 then
          return "";
@@ -110,8 +111,8 @@ package body GNAT.Traceback.Symbolic is
       --  libaddr2line service to symbolize it all.
 
       --  Compute, cache and provide the absolute path to our executable file
-      --  name as the binary file where the relevant debug information is to
-      --  be found. If the executable file name resolution fails, we have no
+      --  name as the binary file where the relevant debug information is to be
+      --  found. If the executable file name resolution fails, we have no
       --  sensible basis to invoke the symbolizer at all.
 
       --  Protect all this against concurrent accesses explicitly, as the
@@ -125,6 +126,7 @@ package body GNAT.Traceback.Symbolic is
       end if;
 
       if Exename /= System.Null_Address then
+         Len := Res'Length;
          convert_addresses
            (Exename, Traceback'Address, Traceback'Length,
             Res (1)'Address, Len'Address);

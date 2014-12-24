@@ -1,6 +1,6 @@
 /* ld.h -- general linker header file
    Copyright 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
-   2001, 2002, 2003, 2004, 2005, 2006, 2007
+   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
    Free Software Foundation, Inc.
 
    This file is part of the GNU Binutils.
@@ -31,24 +31,6 @@
 #ifndef SEEK_END
 #define SEEK_END 2
 #endif
-
-#if defined(__GNUC__) && !defined(C_ALLOCA)
-# undef alloca
-# define alloca __builtin_alloca
-#else
-# if defined(HAVE_ALLOCA_H) && !defined(C_ALLOCA)
-#  include <alloca.h>
-# else
-#  ifndef alloca /* predefined by HP cc +Olibcalls */
-#   if !defined (__STDC__) && !defined (__hpux)
-char *alloca ();
-#   else
-void *alloca ();
-#   endif /* __STDC__, __hpux */
-#  endif /* alloca */
-# endif /* HAVE_ALLOCA_H */
-#endif
-
 
 #ifdef HAVE_LOCALE_H
 # ifndef ENABLE_NLS
@@ -104,7 +86,8 @@ typedef enum {sort_none, sort_ascending, sort_descending} sort_order;
 /* A wildcard specification.  */
 
 typedef enum {
-  none, by_name, by_alignment, by_name_alignment, by_alignment_name
+  none, by_name, by_alignment, by_name_alignment, by_alignment_name,
+  by_init_priority
 } sort_type;
 
 extern sort_type sort_section;
@@ -113,6 +96,7 @@ struct wildcard_spec {
   const char *name;
   struct name_list *exclude_name_list;
   sort_type sorted;
+  struct flag_info *section_flag_list;
 };
 
 struct wildcard_list {
@@ -132,6 +116,7 @@ typedef struct fat_user_section_struct {
      list of hash table entries for symbols defined in this section.  */
   struct map_symbol_def *map_symbol_def_head;
   struct map_symbol_def **map_symbol_def_tail;
+  unsigned long map_symbol_def_count;
 } fat_section_userdata_type;
 
 #define get_userdata(x) ((x)->userdata)
@@ -141,13 +126,51 @@ typedef struct fat_user_section_struct {
 #define LONG_SIZE	(4)
 #define QUAD_SIZE	(8)
 
+enum endian_enum { ENDIAN_UNSET = 0, ENDIAN_BIG, ENDIAN_LITTLE };
+
+enum symbolic_enum
+  {
+    symbolic_unset = 0,
+    symbolic,
+    symbolic_functions,
+  };
+
+enum dynamic_list_enum
+  {
+    dynamic_list_unset = 0,
+    dynamic_list_data,
+    dynamic_list
+  };
+
 typedef struct {
   /* 1 => assign space to common symbols even if `relocatable_output'.  */
   bfd_boolean force_common_definition;
 
   /* 1 => do not assign addresses to common symbols.  */
   bfd_boolean inhibit_common_definition;
-  bfd_boolean relax;
+
+  /* Enable or disable target specific optimizations.
+
+     Not all targets have optimizations to enable.
+
+     Normally these optimizations are disabled by default but some targets
+     prefer to enable them by default.  So this field is a tri-state variable.
+     The values are:
+     
+     zero: Enable the optimizations (either from --relax being specified on
+       the command line or the backend's before_allocation emulation function.
+       
+     positive: The user has requested that these optimizations be disabled.
+       (Via the --no-relax command line option).
+
+     negative: The optimizations are disabled.  (Set when initializing the
+       args_type structure in ldmain.c:main.  */
+  signed int disable_target_specific_optimizations;
+#define RELAXATION_DISABLED_BY_DEFAULT (command_line.disable_target_specific_optimizations < 0)
+#define RELAXATION_DISABLED_BY_USER    (command_line.disable_target_specific_optimizations > 0)
+#define RELAXATION_ENABLED (command_line.disable_target_specific_optimizations == 0)
+#define DISABLE_RELAXATION do { command_line.disable_target_specific_optimizations = 1; } while (0)
+#define ENABLE_RELAXATION  do { command_line.disable_target_specific_optimizations = 0; } while (0)
 
   /* If TRUE, build MIPS embedded PIC relocation tables in the output
      file.  */
@@ -167,10 +190,9 @@ typedef struct {
      search.  */
   bfd_boolean warn_search_mismatch;
 
-
-  /* If TRUE (the default) check section addresses, once compute,
-     fpor overlaps.  */
-  bfd_boolean check_section_addresses;
+  /* If non-zero check section addresses, once computed,
+     for overlaps.  Relocatable links only check when this is > 0.  */
+  signed char check_section_addresses;
 
   /* If TRUE allow the linking of input files in an unknown architecture
      assuming that the user knows what they are doing.  This was the old
@@ -178,25 +200,18 @@ typedef struct {
      input files.  */
   bfd_boolean accept_unknown_input_arch;
 
+  /* If TRUE we'll just print the default output on stdout.  */
+  bfd_boolean print_output_format;
+
   /* Big or little endian as set on command line.  */
-  enum { ENDIAN_UNSET = 0, ENDIAN_BIG, ENDIAN_LITTLE } endian;
+  enum endian_enum endian;
 
   /* -Bsymbolic and -Bsymbolic-functions, as set on command line.  */
-  enum
-    {
-      symbolic_unset = 0,
-      symbolic,
-      symbolic_functions,
-    } symbolic;
+  enum symbolic_enum symbolic;
 
   /* --dynamic-list, --dynamic-list-cpp-new, --dynamic-list-cpp-typeinfo
      and --dynamic-list FILE, as set on command line.  */
-  enum
-    {
-      dynamic_list_unset = 0,
-      dynamic_list_data,
-      dynamic_list
-    } dynamic_list;
+  enum dynamic_list_enum dynamic_list;
 
   /* Name of runtime interpreter to invoke.  */
   char *interpreter;
@@ -281,6 +296,10 @@ typedef struct {
      on the command line.  */
   bfd_boolean only_cmd_line_lib_dirs;
 
+  /* If set, numbers and absolute symbols are simply treated as
+     numbers everywhere.  */
+  bfd_boolean sane_expr;
+
   /* The rpath separation character.  Usually ':'.  */
   char rpath_separator;
 
@@ -293,7 +312,7 @@ typedef struct {
   bfd_size_type specified_data_size;
 
   /* The size of the hash table to use.  */
-  bfd_size_type hash_table_size;
+  unsigned long hash_table_size;
 
   /* The maximum page size for ELF.  */
   bfd_vma maxpagesize;

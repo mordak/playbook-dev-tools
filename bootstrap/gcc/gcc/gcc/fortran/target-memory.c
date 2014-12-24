@@ -1,5 +1,5 @@
 /* Simulate storage of variables into target memory.
-   Copyright (C) 2007, 2008, 2009
+   Copyright (C) 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by Paul Thomas and Brooks Moses
 
@@ -26,6 +26,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree.h"
 #include "gfortran.h"
 #include "arith.h"
+#include "constructor.h"
 #include "trans.h"
 #include "trans-const.h"
 #include "trans-types.h"
@@ -38,7 +39,8 @@ static size_t
 size_array (gfc_expr *e)
 {
   mpz_t array_size;
-  size_t elt_size = gfc_target_expr_size (e->value.constructor->expr);
+  gfc_constructor *c = gfc_constructor_first (e->value.constructor);
+  size_t elt_size = gfc_target_expr_size (c->expr);
 
   gfc_array_size (e, &array_size);
   return (size_t)mpz_get_ui (array_size) * elt_size;
@@ -134,10 +136,12 @@ encode_array (gfc_expr *expr, unsigned char *buffer, size_t buffer_size)
   int i;
   int ptr = 0;
 
+  gfc_constructor_base ctor = expr->value.constructor;
+
   gfc_array_size (expr, &array_size);
   for (i = 0; i < (int)mpz_get_ui (array_size); i++)
     {
-      ptr += gfc_target_encode_expr (gfc_get_array_element (expr, i),
+      ptr += gfc_target_encode_expr (gfc_constructor_lookup_expr (ctor, i),
 				     &buffer[ptr], buffer_size - ptr);
     }
 
@@ -158,18 +162,19 @@ encode_integer (int kind, mpz_t integer, unsigned char *buffer,
 static int
 encode_float (int kind, mpfr_t real, unsigned char *buffer, size_t buffer_size)
 {
-  return native_encode_expr (gfc_conv_mpfr_to_tree (real, kind), buffer,
+  return native_encode_expr (gfc_conv_mpfr_to_tree (real, kind, 0), buffer,
 			     buffer_size);
 }
 
 
 static int
-encode_complex (int kind, mpfr_t real, mpfr_t imaginary, unsigned char *buffer,
-		size_t buffer_size)
+encode_complex (int kind, mpc_t cmplx,
+		unsigned char *buffer, size_t buffer_size)
 {
   int size;
-  size = encode_float (kind, real, &buffer[0], buffer_size);
-  size += encode_float (kind, imaginary, &buffer[size], buffer_size - size);
+  size = encode_float (kind, mpc_realref (cmplx), &buffer[0], buffer_size);
+  size += encode_float (kind, mpc_imagref (cmplx),
+			&buffer[size], buffer_size - size);
   return size;
 }
 
@@ -204,28 +209,29 @@ gfc_encode_character (int kind, int length, const gfc_char_t *string,
 static int
 encode_derived (gfc_expr *source, unsigned char *buffer, size_t buffer_size)
 {
-  gfc_constructor *ctr;
+  gfc_constructor *c;
   gfc_component *cmp;
   int ptr;
   tree type;
 
   type = gfc_typenode_for_spec (&source->ts);
 
-  ctr = source->value.constructor;
-  cmp = source->ts.derived->components;
-  for (;ctr; ctr = ctr->next, cmp = cmp->next)
+  for (c = gfc_constructor_first (source->value.constructor),
+       cmp = source->ts.u.derived->components;
+       c;
+       c = gfc_constructor_next (c), cmp = cmp->next)
     {
       gcc_assert (cmp);
-      if (!ctr->expr)
+      if (!c->expr)
 	continue;
       ptr = TREE_INT_CST_LOW(DECL_FIELD_OFFSET(cmp->backend_decl))
 	    + TREE_INT_CST_LOW(DECL_FIELD_BIT_OFFSET(cmp->backend_decl))/8;
 
-      if (ctr->expr->expr_type == EXPR_NULL)
+      if (c->expr->expr_type == EXPR_NULL)
  	memset (&buffer[ptr], 0,
 		int_size_in_bytes (TREE_TYPE (cmp->backend_decl)));
       else
-	gfc_target_encode_expr (ctr->expr, &buffer[ptr],
+	gfc_target_encode_expr (c->expr, &buffer[ptr],
 				buffer_size - ptr);
     }
 
@@ -266,8 +272,8 @@ gfc_target_encode_expr (gfc_expr *source, unsigned char *buffer,
       return encode_float (source->ts.kind, source->value.real, buffer,
 			   buffer_size);
     case BT_COMPLEX:
-      return encode_complex (source->ts.kind, source->value.complex.r,
-			     source->value.complex.i, buffer, buffer_size);
+      return encode_complex (source->ts.kind, source->value.complex,
+			     buffer, buffer_size);
     case BT_LOGICAL:
       return encode_logical (source->ts.kind, source->value.logical, buffer,
 			     buffer_size);
@@ -301,10 +307,10 @@ gfc_target_encode_expr (gfc_expr *source, unsigned char *buffer,
 static int
 interpret_array (unsigned char *buffer, size_t buffer_size, gfc_expr *result)
 {
+  gfc_constructor_base base = NULL;
   int array_size = 1;
   int i;
   int ptr = 0;
-  gfc_constructor *head = NULL, *tail = NULL;
 
   /* Calculate array size from its shape and rank.  */
   gcc_assert (result->rank > 0 && result->shape);
@@ -315,27 +321,19 @@ interpret_array (unsigned char *buffer, size_t buffer_size, gfc_expr *result)
   /* Iterate over array elements, producing constructors.  */
   for (i = 0; i < array_size; i++)
     {
-      if (head == NULL)
-	head = tail = gfc_get_constructor ();
-      else
-	{
-	  tail->next = gfc_get_constructor ();
-	  tail = tail->next;
-	}
+      gfc_expr *e = gfc_get_constant_expr (result->ts.type, result->ts.kind,
+					   &result->where);
+      e->ts = result->ts;
 
-      tail->where = result->where;
-      tail->expr = gfc_constant_result (result->ts.type,
-					  result->ts.kind, &result->where);
-      tail->expr->ts = result->ts;
+      if (e->ts.type == BT_CHARACTER)
+	e->value.character.length = result->value.character.length;
 
-      if (tail->expr->ts.type == BT_CHARACTER)
-	tail->expr->value.character.length = result->value.character.length;
+      gfc_constructor_append_expr (&base, e, &result->where);
 
-      ptr += gfc_target_interpret_expr (&buffer[ptr], buffer_size - ptr,
-					tail->expr);
+      ptr += gfc_target_interpret_expr (&buffer[ptr], buffer_size - ptr, e);
     }
-  result->value.constructor = head;
 
+  result->value.constructor = base;
   return ptr;
 }
 
@@ -368,12 +366,13 @@ gfc_interpret_float (int kind, unsigned char *buffer, size_t buffer_size,
 
 int
 gfc_interpret_complex (int kind, unsigned char *buffer, size_t buffer_size,
-		   mpfr_t real, mpfr_t imaginary)
+		       mpc_t complex)
 {
   int size;
-  size = gfc_interpret_float (kind, &buffer[0], buffer_size, real);
+  size = gfc_interpret_float (kind, &buffer[0], buffer_size,
+			      mpc_realref (complex));
   size += gfc_interpret_float (kind, &buffer[size], buffer_size - size,
-			       imaginary);
+			       mpc_imagref (complex));
   return size;
 }
 
@@ -396,9 +395,9 @@ gfc_interpret_character (unsigned char *buffer, size_t buffer_size,
 {
   int i;
 
-  if (result->ts.cl && result->ts.cl->length)
+  if (result->ts.u.cl && result->ts.u.cl->length)
     result->value.character.length =
-      (int) mpz_get_ui (result->ts.cl->length->value.integer);
+      (int) mpz_get_ui (result->ts.u.cl->length->value.integer);
 
   gcc_assert (buffer_size >= size_character (result->value.character.length,
 					     result->ts.kind));
@@ -437,58 +436,77 @@ int
 gfc_interpret_derived (unsigned char *buffer, size_t buffer_size, gfc_expr *result)
 {
   gfc_component *cmp;
-  gfc_constructor *head = NULL, *tail = NULL;
   int ptr;
   tree type;
 
   /* The attributes of the derived type need to be bolted to the floor.  */
   result->expr_type = EXPR_STRUCTURE;
 
+  cmp = result->ts.u.derived->components;
+
+  if (result->ts.u.derived->from_intmod == INTMOD_ISO_C_BINDING
+      && (result->ts.u.derived->intmod_sym_id == ISOCBINDING_PTR
+	  || result->ts.u.derived->intmod_sym_id == ISOCBINDING_FUNPTR))
+    {
+      gfc_constructor *c;
+      gfc_expr *e;
+      /* Needed as gfc_typenode_for_spec as gfc_typenode_for_spec
+	 sets this to BT_INTEGER.  */
+      result->ts.type = BT_DERIVED;
+      e = gfc_get_constant_expr (cmp->ts.type, cmp->ts.kind, &result->where); 
+      c = gfc_constructor_append_expr (&result->value.constructor, e, NULL);
+      c->n.component = cmp;
+      gfc_target_interpret_expr (buffer, buffer_size, e);
+      e->ts.is_iso_c = 1;
+      return int_size_in_bytes (ptr_type_node);
+    }
+
   type = gfc_typenode_for_spec (&result->ts);
-  cmp = result->ts.derived->components;
 
   /* Run through the derived type components.  */
   for (;cmp; cmp = cmp->next)
     {
-      if (head == NULL)
-	head = tail = gfc_get_constructor ();
-      else
-	{
-	  tail->next = gfc_get_constructor ();
-	  tail = tail->next;
-	}
-
-      /* The constructor points to the component.  */
-      tail->n.component = cmp;
-
-      tail->expr = gfc_constant_result (cmp->ts.type, cmp->ts.kind,
-					&result->where);
-      tail->expr->ts = cmp->ts;
+      gfc_constructor *c;
+      gfc_expr *e = gfc_get_constant_expr (cmp->ts.type, cmp->ts.kind,
+					   &result->where); 
+      e->ts = cmp->ts;
 
       /* Copy shape, if needed.  */
       if (cmp->as && cmp->as->rank)
 	{
 	  int n;
 
-	  tail->expr->expr_type = EXPR_ARRAY;
-	  tail->expr->rank = cmp->as->rank;
+	  e->expr_type = EXPR_ARRAY;
+	  e->rank = cmp->as->rank;
 
-	  tail->expr->shape = gfc_get_shape (tail->expr->rank);
-	  for (n = 0; n < tail->expr->rank; n++)
+	  e->shape = gfc_get_shape (e->rank);
+	  for (n = 0; n < e->rank; n++)
 	     {
-	       mpz_init_set_ui (tail->expr->shape[n], 1);
-	       mpz_add (tail->expr->shape[n], tail->expr->shape[n],
+	       mpz_init_set_ui (e->shape[n], 1);
+	       mpz_add (e->shape[n], e->shape[n],
 			cmp->as->upper[n]->value.integer);
-	       mpz_sub (tail->expr->shape[n], tail->expr->shape[n],
+	       mpz_sub (e->shape[n], e->shape[n],
 			cmp->as->lower[n]->value.integer);
 	     }
 	}
 
-      ptr = TREE_INT_CST_LOW (DECL_FIELD_OFFSET (cmp->backend_decl));
-      gfc_target_interpret_expr (&buffer[ptr], buffer_size - ptr,
-				 tail->expr);
+      c = gfc_constructor_append_expr (&result->value.constructor, e, NULL);
 
-      result->value.constructor = head;
+      /* The constructor points to the component.  */
+      c->n.component = cmp;
+
+      /* Calculate the offset, which consists of the the FIELD_OFFSET in
+	 bytes, which appears in multiples of DECL_OFFSET_ALIGN-bit-sized,
+	 and additional bits of FIELD_BIT_OFFSET. The code assumes that all
+	 sizes of the components are multiples of BITS_PER_UNIT,
+	 i.e. there are, e.g., no bit fields.  */
+
+      gcc_assert (cmp->backend_decl);
+      ptr = TREE_INT_CST_LOW (DECL_FIELD_BIT_OFFSET (cmp->backend_decl));
+      gcc_assert (ptr % 8 == 0);
+      ptr = ptr/8 + TREE_INT_CST_LOW (DECL_FIELD_OFFSET (cmp->backend_decl));
+
+      gfc_target_interpret_expr (&buffer[ptr], buffer_size - ptr, e);
     }
     
   return int_size_in_bytes (type);
@@ -520,8 +538,7 @@ gfc_target_interpret_expr (unsigned char *buffer, size_t buffer_size,
     case BT_COMPLEX:
       result->representation.length = 
         gfc_interpret_complex (result->ts.kind, buffer, buffer_size,
-			       result->value.complex.r,
-			       result->value.complex.i);
+			       result->value.complex);
       break;
 
     case BT_LOGICAL:
@@ -577,7 +594,7 @@ expr_to_char (gfc_expr *e, unsigned char *data, unsigned char *chk, size_t len)
 {
   int i;
   int ptr;
-  gfc_constructor *ctr;
+  gfc_constructor *c;
   gfc_component *cmp;
   unsigned char *buffer;
 
@@ -588,16 +605,16 @@ expr_to_char (gfc_expr *e, unsigned char *data, unsigned char *chk, size_t len)
      declaration.  */
   if (e->ts.type == BT_DERIVED)
     {
-      ctr = e->value.constructor;
-      cmp = e->ts.derived->components;
-      for (;ctr; ctr = ctr->next, cmp = cmp->next)
+      for (c = gfc_constructor_first (e->value.constructor),
+	   cmp = e->ts.u.derived->components;
+	   c; c = gfc_constructor_next (c), cmp = cmp->next)
 	{
 	  gcc_assert (cmp && cmp->backend_decl);
-	  if (!ctr->expr)
+	  if (!c->expr)
 	    continue;
 	    ptr = TREE_INT_CST_LOW(DECL_FIELD_OFFSET(cmp->backend_decl))
 			+ TREE_INT_CST_LOW(DECL_FIELD_BIT_OFFSET(cmp->backend_decl))/8;
-	  expr_to_char (ctr->expr, &data[ptr], &chk[ptr], len);
+	  expr_to_char (c->expr, &data[ptr], &chk[ptr], len);
 	}
       return len;
     }
@@ -644,12 +661,13 @@ gfc_merge_initializers (gfc_typespec ts, gfc_expr *e, unsigned char *data,
       break;
 
     case EXPR_ARRAY:
-      for (c = e->value.constructor; c; c = c->next)
+      for (c = gfc_constructor_first (e->value.constructor);
+	   c; c = gfc_constructor_next (c))
 	{
 	  size_t elt_size = gfc_target_expr_size (c->expr);
 
-	  if (c->n.offset)
-	    len = elt_size * (size_t)mpz_get_si (c->n.offset);
+	  if (c->offset)
+	    len = elt_size * (size_t)mpz_get_si (c->offset);
 
 	  len = len + gfc_merge_initializers (ts, c->expr, &data[len],
 					      &chk[len], length - len);
@@ -722,10 +740,9 @@ gfc_convert_boz (gfc_expr *expr, gfc_typespec *ts)
     }
   else
     {
-      mpfr_init (expr->value.complex.r);
-      mpfr_init (expr->value.complex.i);
+      mpc_init2 (expr->value.complex, mpfr_get_default_prec());
       gfc_interpret_complex (ts->kind, buffer, buffer_size,
-			     expr->value.complex.r, expr->value.complex.i);
+			     expr->value.complex);
     }
   expr->is_boz = 0;  
   expr->ts.type = ts->type;

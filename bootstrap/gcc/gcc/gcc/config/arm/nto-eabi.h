@@ -53,15 +53,14 @@ do {                                            \
 #undef LIB_SPEC
 #define LIB_SPEC \
   QNX_SYSTEM_LIBDIRS \
-  "%{!symbolic: -lc -Bstatic %{!shared: -lc} %{shared:-lcS}}"
+  "%{!symbolic: -lc -Bstatic %{static|nopie: -lc;:-lcS}}"
 
 #undef LIBGCC_SPEC
 #define LIBGCC_SPEC "-lgcc"
 
 #undef STARTFILE_SPEC
 #define STARTFILE_SPEC \
-"%{!shared: %$QNX_TARGET/arm%{EB:be}%{!EB:le}-v7/lib/%{pg:m}%{p:m}crt1.o \
-  } \
+"%{!shared: %$QNX_TARGET/arm%{EB:be}%{!EB:le}-v7/lib/%{pg:m}%{p:mcrt1.o;pie:crt1S.o%s;static|nopie:crt1.o%s;:crt1S.o%s}\ } \
 %$QNX_TARGET/arm%{EB:be}%{!EB:le}-v7/lib/crti.o crtbegin.o%s "
 
 #undef ENDFILE_SPEC
@@ -72,12 +71,16 @@ do {                                            \
 #define LINK_SPEC \
 "%{h*} %{v:-V} \
  %{b} %{Wl,*:%*} \
+ %{!r:--build-id=md5} \
  %{static:-Bstatic} \
  %{shared} \
  %{symbolic:-Bsymbolic} \
  %{G:-G} %{MAP:-Map mapfile} \
- %{!shared:-dynamic-linker /usr/lib/ldqnx.so.2} \
- -m armnto -X \
+ %{!shared: \
+   %{!static: \
+     %{rdynamic:-export-dynamic}} \
+   --dynamic-linker /usr/lib/ldqnx.so.2} \
+ -m armnto -X --hash-style=gnu \
  %{EB:-EB} %{!EB:-EL} %{EL:-EL}"
 
 #undef CPP_APCS_PC_DEFAULT_SPEC
@@ -93,9 +96,6 @@ do {                                            \
 
 #undef	CC1_SPEC
 #define	CC1_SPEC " \
-%{!mfloat-abi=*: -mfloat-abi=softfp} \
-%{!march=*: -march=armv7-a} \
-%{!mfpu=*: -mfpu=vfpv3-d16}  \
 %{EB:-mbig-endian} %{!EB:-mlittle-endian}"
 
 /* Call the function profiler with a given profile label. 
@@ -121,7 +121,7 @@ do {                                            \
 {                                                                       \
  register unsigned long _beg __asm ("a1") = (unsigned long) (BEG);      \
   register unsigned long _len __asm ("a2") = (unsigned long) (END) - (unsigned long) (BEG); \
-  register unsigned long _flg __asm ("a3") = 0x2;			\
+  register unsigned long _flg __asm ("a3") = 0x1000000;			\
   __asm __volatile ("bl	msync"						\
                     : "=r" (_beg)					\
                     : "r" (_beg), "r" (_len), "r" (_flg));		\

@@ -1,5 +1,5 @@
 /* Implementation of the SET_EXPONENT intrinsic
-   Copyright 2003, 2007, 2009 Free Software Foundation, Inc.
+   Copyright 2003, 2007, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Richard Henderson <rth@redhat.com>.
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -26,6 +26,9 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #include "libgfortran.h"
 
 
+
+#define MATHFUNC(funcname) funcname ## f
+
 #if defined (HAVE_GFC_REAL_4) && defined (HAVE_SCALBNF) && defined (HAVE_FREXPF)
 
 extern GFC_REAL_4 set_exponent_r4 (GFC_REAL_4 s, GFC_INTEGER_4 i);
@@ -35,7 +38,7 @@ GFC_REAL_4
 set_exponent_r4 (GFC_REAL_4 s, GFC_INTEGER_4 i)
 {
   int dummy_exp;
-  return scalbnf (frexpf (s, &dummy_exp), i);
+  return MATHFUNC(scalbn) (MATHFUNC(frexp) (s, &dummy_exp), i);
 }
 
 #endif

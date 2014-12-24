@@ -123,11 +123,11 @@ pack_'rtype_code` ('rtype` *ret, const 'rtype` *array,
   for (n = 0; n < dim; n++)
     {
       count[n] = 0;
-      extent[n] = array->dim[n].ubound + 1 - array->dim[n].lbound;
+      extent[n] = GFC_DESCRIPTOR_EXTENT(array,n);
       if (extent[n] <= 0)
        zero_sized = 1;
-      sstride[n] = array->dim[n].stride;
-      mstride[n] = mask->dim[n].stride * mask_kind;
+      sstride[n] = GFC_DESCRIPTOR_STRIDE(array,n);
+      mstride[n] = GFC_DESCRIPTOR_STRIDE_BYTES(mask,n);
     }
   if (sstride[0] == 0)
     sstride[0] = 1;
@@ -139,7 +139,7 @@ pack_'rtype_code` ('rtype` *ret, const 'rtype` *array,
   else
     sptr = array->data;
 
-  if (ret->data == NULL || compile_options.bounds_check)
+  if (ret->data == NULL || unlikely (compile_options.bounds_check))
     {
       /* Count the elements, either for allocating memory or
 	 for bounds checking.  */
@@ -148,7 +148,7 @@ pack_'rtype_code` ('rtype` *ret, const 'rtype` *array,
 	{
 	  /* The return array will have as many
 	     elements as there are in VECTOR.  */
-	  total = vector->dim[0].ubound + 1 - vector->dim[0].lbound;
+	  total = GFC_DESCRIPTOR_EXTENT(vector,0);
 	  if (total < 0)
 	    {
 	      total = 0;
@@ -156,69 +156,15 @@ pack_'rtype_code` ('rtype` *ret, const 'rtype` *array,
 	    }
 	}
       else
-	{
-	  /* We have to count the true elements in MASK.  */
-
-	  /* TODO: We could speed up pack easily in the case of only
-	     few .TRUE. entries in MASK, by keeping track of where we
-	     would be in the source array during the initial traversal
-	     of MASK, and caching the pointers to those elements. Then,
-	     supposed the number of elements is small enough, we would
-	     only have to traverse the list, and copy those elements
-	     into the result array. In the case of datatypes which fit
-	     in one of the integer types we could also cache the
-	     value instead of a pointer to it.
-	     This approach might be bad from the point of view of
-	     cache behavior in the case where our cache is not big
-	     enough to hold all elements that have to be copied.  */
-
-	  const GFC_LOGICAL_1 *m = mptr;
-
-	  total = 0;
-	  if (zero_sized)
-	    m = NULL;
-
-	  while (m)
-	    {
-	      /* Test this element.  */
-	      if (*m)
-		total++;
-
-	      /* Advance to the next element.  */
-	      m += mstride[0];
-	      count[0]++;
-	      n = 0;
-	      while (count[n] == extent[n])
-		{
-		  /* When we get to the end of a dimension, reset it
-		     and increment the next dimension.  */
-		  count[n] = 0;
-		  /* We could precalculate this product, but this is a
-		     less frequently used path so probably not worth
-		     it.  */
-		  m -= mstride[n] * extent[n];
-		  n++;
-		  if (n >= dim)
-		    {
-		      /* Break out of the loop.  */
-		      m = NULL;
-		      break;
-		    }
-		  else
-		    {
-		      count[n]++;
-		      m += mstride[n];
-		    }
-		}
-	    }
-	}
+        {
+      	  /* We have to count the true elements in MASK.  */
+	  total = count_0 (mask);
+        }
 
       if (ret->data == NULL)
 	{
 	  /* Setup the array descriptor.  */
-	  ret->dim[0].lbound = 0;
-	  ret->dim[0].ubound = total - 1;
-	  ret->dim[0].stride = 1;
+	  GFC_DIMENSION_SET(ret->dim[0], 0, total-1, 1);
 
 	  ret->offset = 0;
 	  if (total == 0)
@@ -235,7 +181,7 @@ pack_'rtype_code` ('rtype` *ret, const 'rtype` *array,
 	  /* We come here because of range checking.  */
 	  index_type ret_extent;
 
-	  ret_extent = ret->dim[0].ubound + 1 - ret->dim[0].lbound;
+	  ret_extent = GFC_DESCRIPTOR_EXTENT(ret,0);
 	  if (total != ret_extent)
 	    runtime_error ("Incorrect extent in return value of PACK intrinsic;"
 			   " is %ld, should be %ld", (long int) total,
@@ -243,7 +189,7 @@ pack_'rtype_code` ('rtype` *ret, const 'rtype` *array,
 	}
     }
 
-  rstride0 = ret->dim[0].stride;
+  rstride0 = GFC_DESCRIPTOR_STRIDE(ret,0);
   if (rstride0 == 0)
     rstride0 = 1;
   sstride0 = sstride[0];
@@ -292,11 +238,11 @@ pack_'rtype_code` ('rtype` *ret, const 'rtype` *array,
   /* Add any remaining elements from VECTOR.  */
   if (vector)
     {
-      n = vector->dim[0].ubound + 1 - vector->dim[0].lbound;
+      n = GFC_DESCRIPTOR_EXTENT(vector,0);
       nelem = ((rptr - ret->data) / rstride0);
       if (n > nelem)
         {
-          sstride0 = vector->dim[0].stride;
+          sstride0 = GFC_DESCRIPTOR_STRIDE(vector,0);
           if (sstride0 == 0)
             sstride0 = 1;
 

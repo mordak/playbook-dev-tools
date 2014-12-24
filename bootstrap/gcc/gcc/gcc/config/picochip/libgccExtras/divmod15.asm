@@ -3,7 +3,7 @@
 //   Support for 16-bit unsigned division/modulus.
 //
 //   Copyright (C) 2003, 2004, 2005, 2008, 2009  Free Software Foundation, Inc.
-//   Contributed by picoChip Designs Ltd.
+//   Contributed by Picochip Ltd.
 //   Maintained by Daniel Towner (daniel.towner@picochip.com)
 //
 //   This file is free software; you can redistribute it and/or modify it
@@ -32,8 +32,6 @@ __divmod15:
 _picoMark_FUNCTION_BEGIN=
 	
 // picoChip Function Prologue : &__divmod15 = 0 bytes
-
-__divmod15:	
 
 	// The picoChip instruction set has a divstep instruction which
 	// is used to perform one iteration of a binary division algorithm.

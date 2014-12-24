@@ -1,6 +1,6 @@
 // array allocator -*- C++ -*-
 
-// Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009
+// Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -30,13 +30,15 @@
 #ifndef _ARRAY_ALLOCATOR_H
 #define _ARRAY_ALLOCATOR_H 1
 
-#include <cstddef>
+#include <bits/c++config.h>
 #include <new>
 #include <bits/functexcept.h>
 #include <tr1/array>
 #include <bits/move.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
  using std::size_t;
  using std::ptrdiff_t;
@@ -55,10 +57,10 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       typedef _Tp        	value_type;
 
       pointer
-      address(reference __x) const { return &__x; }
+      address(reference __x) const { return std::__addressof(__x); }
 
       const_pointer
-      address(const_reference __x) const { return &__x; }
+      address(const_reference __x) const { return std::__addressof(__x); }
 
       void
       deallocate(pointer, size_type)
@@ -114,7 +116,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
         struct rebind
         { typedef array_allocator<_Tp1, _Array1> other; };
 
-      array_allocator(array_type* __array = NULL) throw() 
+      array_allocator(array_type* __array = 0) throw() 
       : _M_array(__array), _M_used(size_type()) { }
 
       array_allocator(const array_allocator& __o)  throw() 
@@ -122,7 +124,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 
       template<typename _Tp1, typename _Array1>
         array_allocator(const array_allocator<_Tp1, _Array1>&) throw()
-	: _M_array(NULL), _M_used(size_type()) { }
+	: _M_array(0), _M_used(size_type()) { }
 
       ~array_allocator() throw() { }
 
@@ -149,6 +151,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	       const array_allocator<_Tp, _Array>&)
     { return false; }
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif

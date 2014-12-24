@@ -1,7 +1,6 @@
 /* { dg-require-effective-target vect_int } */
 
 #include <stdarg.h>
-#include <stdio.h>
 #include "tree-vect.h"
 
 #define M00 100
@@ -61,8 +60,7 @@ int main (int argc, const char* argv[])
       input2[i] = i%256;
       output[i] = 0;
       output2[i] = 0;
-      if (input[i] > 256)
-        abort ();
+      __asm__ volatile ("");
     }
 
   foo (input, output, input2, output2);

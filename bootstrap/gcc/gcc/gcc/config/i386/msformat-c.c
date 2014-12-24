@@ -1,6 +1,7 @@
 /* Check calls to formatted I/O functions (-Wformat).
    Copyright (C) 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
-   2001, 2002, 2003, 2004, 2005, 2007, 2008 Free Software Foundation, Inc.
+   2001, 2002, 2003, 2004, 2005, 2007, 2008, 2010
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -24,24 +25,23 @@ along with GCC; see the file COPYING3.  If not see
 #include "tm.h"
 #include "tree.h"
 #include "flags.h"
-#include "c-common.h"
-#include "toplev.h"
+#include "c-family/c-common.h"
 #include "intl.h"
 #include "diagnostic.h"
 #include "langhooks.h"
-#include "c-format.h"
+#include "c-family/c-format.h"
 #include "alloc-pool.h"
 
 /* Mingw specific format attributes ms_printf, ms_scanf, and ms_strftime.  */
 
 static format_length_info ms_printf_length_specs[] =
 {
-  { "h", FMT_LEN_h, STD_C89, NULL, 0, 0 },
-  { "l", FMT_LEN_l, STD_C89, NULL, 0, 0 },
-  { "I32", FMT_LEN_l, STD_EXT, NULL, 0, 0 },
-  { "I64", FMT_LEN_ll, STD_EXT, NULL, 0, 0 },
-  { "I", FMT_LEN_L, STD_EXT, NULL, 0, 0 },
-  { NULL, 0, 0, NULL, 0, 0 }
+  { "h", FMT_LEN_h, STD_C89, NULL, FMT_LEN_none, STD_C89, 0 },
+  { "l", FMT_LEN_l, STD_C89, NULL, FMT_LEN_none, STD_C89, 0 },
+  { "I32", FMT_LEN_l, STD_EXT, NULL, FMT_LEN_none, STD_C89, 1 },
+  { "I64", FMT_LEN_ll, STD_EXT, NULL, FMT_LEN_none, STD_C89, 1 },
+  { "I", FMT_LEN_L, STD_EXT, NULL, FMT_LEN_none, STD_C89, 1 },
+  { NULL, FMT_LEN_none, STD_C89, NULL, FMT_LEN_none, STD_C89, 0 }
 };
 
 static const format_flag_spec ms_printf_flag_specs[] =
@@ -55,7 +55,7 @@ static const format_flag_spec ms_printf_flag_specs[] =
   { 'w',  0, 0, N_("field width"),     N_("field width in printf format"),     STD_C89 },
   { 'p',  0, 0, N_("precision"),       N_("precision in printf format"),       STD_C89 },
   { 'L',  0, 0, N_("length modifier"), N_("length modifier in printf format"), STD_C89 },
-  { 0, 0, 0, NULL, NULL, 0 }
+  { 0, 0, 0, NULL, NULL, STD_C89 }
 };
 
 static const format_flag_pair ms_printf_flag_pairs[] =
@@ -72,7 +72,7 @@ static const format_flag_spec ms_scanf_flag_specs[] =
   { 'w',  0, 0, N_("field width"),            N_("field width in scanf format"),              STD_C89 },
   { 'L',  0, 0, N_("length modifier"),        N_("length modifier in scanf format"),          STD_C89 },
   { '\'', 0, 0, N_("''' flag"),               N_("the ''' scanf flag"),                       STD_EXT },
-  { 0, 0, 0, NULL, NULL, 0 }
+  { 0, 0, 0, NULL, NULL, STD_C89 }
 };
 
 static const format_flag_pair ms_scanf_flag_pairs[] =
@@ -84,7 +84,7 @@ static const format_flag_pair ms_scanf_flag_pairs[] =
 static const format_flag_spec ms_strftime_flag_specs[] =
 {
   { '#', 0,   0, N_("'#' flag"),     N_("the '#' strftime flag"),          STD_EXT },
-  { 0, 0, 0, NULL, NULL, 0 }
+  { 0, 0, 0, NULL, NULL, STD_C89 }
 };
 
 static const format_flag_pair ms_strftime_flag_pairs[] =
@@ -107,7 +107,7 @@ static const format_char_info ms_print_char_table[] =
   /* X/Open conversion specifiers.  */
   { "C",   0, STD_EXT, { TEX_WI,  BADLEN,  T89_S,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN }, "-w",        "",   NULL },
   { "S",   1, STD_EXT, { TEX_W,   BADLEN,  T89_S,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN }, "-wp",       "R",  NULL },
-  { NULL,  0, 0, NOLENGTHS, NULL, NULL, NULL }
+  { NULL,  0, STD_C89, NOLENGTHS, NULL, NULL, NULL }
 };
 
 static const format_char_info ms_scan_char_table[] =
@@ -125,7 +125,7 @@ static const format_char_info ms_scan_char_table[] =
   /* X/Open conversion specifiers.  */
   { "C",     1, STD_EXT, { TEX_W,   BADLEN,  T89_S,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN }, "*w",   "W",   NULL },
   { "S",     1, STD_EXT, { TEX_W,   BADLEN,  T89_S,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN }, "*aw",  "W",   NULL },
-  { NULL, 0, 0, NOLENGTHS, NULL, NULL, NULL }
+  { NULL, 0, STD_C89, NOLENGTHS, NULL, NULL, NULL }
 };
 
 static const format_char_info ms_time_char_table[] =
@@ -142,10 +142,10 @@ static const format_char_info ms_time_char_table[] =
   { "%",		0, STD_C89, NOLENGTHS, "",       "",   NULL },
   /* C99 conversion specifiers.  */
   { "z",		0, STD_C99, NOLENGTHS, "#",      "",  NULL },
-  { NULL,		0, 0, NOLENGTHS, NULL, NULL, NULL }
+  { NULL,		0, STD_C89, NOLENGTHS, NULL, NULL, NULL }
 };
 
-const format_kind_info mingw_format_attributes[3] =
+EXPORTED_CONST format_kind_info mingw_format_attributes[3] =
 {
   { "ms_printf",   ms_printf_length_specs,  ms_print_char_table, " +#0-'", NULL,
     ms_printf_flag_specs, ms_printf_flag_pairs,
@@ -167,7 +167,7 @@ const format_kind_info mingw_format_attributes[3] =
 };
 
 /* Default overrides for printf, scanf and strftime.  */
-const target_ovr_attr mingw_format_attribute_overrides[4] =
+EXPORTED_CONST target_ovr_attr mingw_format_attribute_overrides[4] =
 {
   { "ms_printf", "printf" },
   { "ms_scanf", "scanf" },

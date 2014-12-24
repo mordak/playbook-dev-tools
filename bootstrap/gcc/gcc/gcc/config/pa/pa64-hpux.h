@@ -1,6 +1,6 @@
 /* Definitions of target machine for GNU compiler, for HPs running
    HPUX using the 64bit runtime model.
-   Copyright (C) 1999, 2000, 2001, 2002, 2004, 2005, 2007, 2008
+   Copyright (C) 1999, 2000, 2001, 2002, 2004, 2005, 2007, 2008, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -27,23 +27,25 @@ along with GCC; see the file COPYING3.  If not see
 #if ((TARGET_DEFAULT | TARGET_CPU_DEFAULT) & MASK_GNU_LD)
 #define LINK_SPEC \
   "%{!shared:%{p:-L/lib/pa20_64/libp -L/usr/lib/pa20_64/libp %{!static:\
-     %nWarning: consider linking with `-static' as system libraries with\n\
+     %nwarning: consider linking with '-static' as system libraries with\n\
      %n  profiling support are only provided in archive format}}}\
    %{!shared:%{pg:-L/lib/pa20_64/libp -L/usr/lib/pa20_64/libp %{!static:\
-     %nWarning: consider linking with `-static' as system libraries with\n\
+     %nwarning: consider linking with '-static' as system libraries with\n\
      %n  profiling support are only provided in archive format}}}\
-   %{mhp-ld:+Accept TypeMismatch -z} -E %{mlinker-opt:-O}\
+   %{!shared:%{!static:%{rdynamic:-E}}}\
+   %{mhp-ld:+Accept TypeMismatch -z} %{mlinker-opt:-O}\
    %{!shared:-u main %{!nostdlib:%{!nodefaultlibs:-u __cxa_finalize}}}\
    %{static:-a archive} %{shared:%{mhp-ld:-b}%{!mhp-ld:-shared}}"
 #else
 #define LINK_SPEC \
   "%{!shared:%{p:-L/lib/pa20_64/libp -L/usr/lib/pa20_64/libp %{!static:\
-     %nWarning: consider linking with `-static' as system libraries with\n\
+     %nwarning: consider linking with '-static' as system libraries with\n\
      %n  profiling support are only provided in archive format}}}\
    %{!shared:%{pg:-L/lib/pa20_64/libp -L/usr/lib/pa20_64/libp %{!static:\
-     %nWarning: consider linking with `-static' as system libraries with\n\
+     %nwarning: consider linking with '-static' as system libraries with\n\
      %n  profiling support are only provided in archive format}}}\
-   %{!mgnu-ld:+Accept TypeMismatch -z} -E %{mlinker-opt:-O}\
+   %{!shared:%{!static:%{rdynamic:-E}}}\
+   %{!mgnu-ld:+Accept TypeMismatch -z} %{mlinker-opt:-O}\
    %{!shared:-u main %{!nostdlib:%{!nodefaultlibs:-u __cxa_finalize}}}\
    %{static:-a archive} %{shared:%{mgnu-ld:-shared}%{!mgnu-ld:-b}}"
 #endif
@@ -57,36 +59,42 @@ along with GCC; see the file COPYING3.  If not see
 #if ((TARGET_DEFAULT | TARGET_CPU_DEFAULT) & MASK_GNU_LD)
 #define LIB_SPEC \
   "%{!shared:\
-     %{!p:%{!pg:%{static|mt|pthread:%{fopenmp:%{static:-a shared} -lrt\
-		  %{static:-a archive}} -lpthread} -lc\
-	    %{static:%{!nolibdld:-a shared -ldld -a archive -lc}}}}\
+     %{!p:%{!pg:%{fopenmp:%{static:-a shared} -lrt %{static:-a archive}}\
+	    %{mt|pthread:-lpthread} -lc\
+	    %{static:%{!nolibdld:-a shared -ldld -a archive -lc}\
+		%{!mt:%{!pthread:-a shared -lc -a archive}}}}}\
      %{p:%{!pg:%{static:%{!mhp-ld:-a shared}%{mhp-ld:-a archive_shared}}\
 	   -lprof %{static:-a archive}\
-	   %{static|mt|pthread:%{fopenmp:%{static:-a shared} -lrt\
-	     %{static:-a archive}} -lpthread} -lc\
-	   %{static:%{!nolibdld:-a shared -ldld -a archive -lc}}}}\
+	   %{fopenmp:%{static:-a shared} -lrt %{static:-a archive}}\
+	   %{mt|pthread:-lpthread} -lc\
+	   %{static:%{!nolibdld:-a shared -ldld -a archive -lc}\
+		%{!mt:%{!pthread:-a shared -lc -a archive}}}}}\
      %{pg:%{static:%{!mhp-ld:-a shared}%{mhp-ld:-a archive_shared}}\
        -lgprof %{static:-a archive}\
-       %{static|mt|pthread:%{fopenmp:%{static:-a shared} -lrt\
-	 %{static:-a archive}} -lpthread} -lc\
-       %{static:%{!nolibdld:-a shared -ldld -a archive -lc}}}}\
+       %{fopenmp:%{static:-a shared} -lrt %{static:-a archive}}\
+       %{mt|pthread:-lpthread} -lc\
+       %{static:%{!nolibdld:-a shared -ldld -a archive -lc}\
+		%{!mt:%{!pthread:-a shared -lc -a archive}}}}}\
    %{shared:%{mt|pthread:-lpthread}}"
 #else
 #define LIB_SPEC \
   "%{!shared:\
-     %{!p:%{!pg:%{static|mt|pthread:%{fopenmp:%{static:-a shared} -lrt\
-		  %{static:-a archive}} -lpthread} -lc\
-	    %{static:%{!nolibdld:-a shared -ldld -a archive -lc}}}}\
+     %{!p:%{!pg:%{fopenmp:%{static:-a shared} -lrt %{static:-a archive}}\
+	    %{mt|pthread:-lpthread} -lc\
+	    %{static:%{!nolibdld:-a shared -ldld -a archive -lc}\
+		%{!mt:%{!pthread:-a shared -lc -a archive}}}}}\
      %{p:%{!pg:%{static:%{mgnu-ld:-a shared}%{!mgnu-ld:-a archive_shared}}\
 	   -lprof %{static:-a archive}\
-	   %{static|mt|pthread:%{fopenmp:%{static:-a shared} -lrt\
-	     %{static:-a archive}} -lpthread} -lc\
-	   %{static:%{!nolibdld:-a shared -ldld -a archive -lc}}}}\
+	   %{fopenmp:%{static:-a shared} -lrt %{static:-a archive}}\
+	   %{mt|pthread:-lpthread} -lc\
+	   %{static:%{!nolibdld:-a shared -ldld -a archive -lc}\
+		%{!mt:%{!pthread:-a shared -lc -a archive}}}}}\
      %{pg:%{static:%{mgnu-ld:-a shared}%{!mgnu-ld:-a archive_shared}}\
        -lgprof %{static:-a archive}\
-       %{static|mt|pthread:%{fopenmp:%{static:-a shared} -lrt\
-	 %{static:-a archive}} -lpthread} -lc\
-       %{static:%{!nolibdld:-a shared -ldld -a archive -lc}}}}\
+       %{fopenmp:%{static:-a shared} -lrt %{static:-a archive}}\
+       %{mt|pthread:-lpthread} -lc\
+       %{static:%{!nolibdld:-a shared -ldld -a archive -lc}\
+		%{!mt:%{!pthread:-a shared -lc -a archive}}}}}\
    %{shared:%{mt|pthread:-lpthread}}"
 #endif
 

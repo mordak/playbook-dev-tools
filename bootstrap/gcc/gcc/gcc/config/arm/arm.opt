@@ -49,7 +49,8 @@ Target RejectNegative Joined
 Specify the name of the target architecture
 
 marm
-Target RejectNegative InverseMask(THUMB) Undocumented
+Target Report RejectNegative InverseMask(THUMB)
+Generate code in 32 bit ARM state.
 
 mbig-endian
 Target Report RejectNegative Mask(BIG_END)
@@ -77,6 +78,10 @@ Specify if floating point hardware should be used
 
 mfp=
 Target RejectNegative Joined Undocumented Var(target_fpe_name)
+
+mfp16-format=
+Target RejectNegative Joined Var(target_fp16_format_name)
+Specify the __fp16 floating-point format
 
 ;; Now ignored.
 mfpe
@@ -126,8 +131,8 @@ Target RejectNegative Joined Var(structure_size_string)
 Specify the minimum bit alignment of structures
 
 mthumb
-Target Report Mask(THUMB)
-Compile for the Thumb not the ARM
+Target Report RejectNegative Mask(THUMB)
+Generate code for Thumb state
 
 mthumb-interwork
 Target Report Mask(INTERWORK)

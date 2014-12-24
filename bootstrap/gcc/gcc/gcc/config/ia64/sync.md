@@ -1,5 +1,5 @@
 ;; GCC machine description for IA-64 synchronization instructions.
-;; Copyright (C) 2005, 2007, 2008, 2009
+;; Copyright (C) 2005, 2007, 2008, 2009, 2010
 ;; Free Software Foundation, Inc.
 ;;
 ;; This file is part of GCC.
@@ -135,8 +135,8 @@
   if (GET_MODE (dst) != DImode)
     dst = gen_reg_rtx (DImode);
 
-  emit_insn (gen_memory_barrier ());
   emit_insn (gen_cmpxchg_rel_<mode> (dst, operands[1], ccv, operands[3]));
+  emit_insn (gen_memory_barrier ());
 
   if (dst != operands[0])
     emit_move_insn (operands[0], gen_lowpart (<MODE>mode, dst));
@@ -151,10 +151,10 @@
         (unspec:I124MODE
 	  [(match_dup 1)
 	   (match_operand:DI 2 "ar_ccv_reg_operand" "")
-	   (match_operand:I124MODE 3 "gr_register_operand" "r")]
+	   (match_operand:I124MODE 3 "gr_reg_or_0_operand" "rO")]
 	  UNSPEC_CMPXCHG_ACQ))]
   ""
-  "cmpxchg<modesuffix>.rel %0 = %1, %3, %2"
+  "cmpxchg<modesuffix>.rel %0 = %1, %r3, %2"
   [(set_attr "itanium_class" "sem")])
 
 (define_insn "cmpxchg_rel_di"
@@ -163,19 +163,19 @@
    (set (match_dup 1)
         (unspec:DI [(match_dup 1)
 		    (match_operand:DI 2 "ar_ccv_reg_operand" "")
-		    (match_operand:DI 3 "gr_register_operand" "r")]
+		    (match_operand:DI 3 "gr_reg_or_0_operand" "rO")]
 		   UNSPEC_CMPXCHG_ACQ))]
   ""
-  "cmpxchg8.rel %0 = %1, %3, %2"
+  "cmpxchg8.rel %0 = %1, %r3, %2"
   [(set_attr "itanium_class" "sem")])
 
 (define_insn "sync_lock_test_and_set<mode>"
   [(set (match_operand:IMODE 0 "gr_register_operand" "=r")
         (match_operand:IMODE 1 "not_postinc_memory_operand" "+S"))
    (set (match_dup 1)
-        (match_operand:IMODE 2 "gr_register_operand" "r"))]
+        (match_operand:IMODE 2 "gr_reg_or_0_operand" "rO"))]
   ""
-  "xchg<modesuffix> %0 = %1, %2"
+  "xchg<modesuffix> %0 = %1, %r2"
   [(set_attr "itanium_class" "sem")])
 
 (define_expand "sync_lock_release<mode>"

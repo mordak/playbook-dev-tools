@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -28,15 +28,18 @@ package Sem_Ch6 is
 
    type Conformance_Type is
      (Type_Conformant, Mode_Conformant, Subtype_Conformant, Fully_Conformant);
+   pragma Ordered (Conformance_Type);
    --  Conformance type used in conformance checks between specs and bodies,
    --  and for overriding. The literals match the RM definitions of the
-   --  corresponding terms.
+   --  corresponding terms. This is an ordered type, since each conformance
+   --  type is stronger than the ones preceding it.
 
    procedure Analyze_Abstract_Subprogram_Declaration (N : Node_Id);
    procedure Analyze_Extended_Return_Statement       (N : Node_Id);
    procedure Analyze_Function_Call                   (N : Node_Id);
    procedure Analyze_Operator_Symbol                 (N : Node_Id);
    procedure Analyze_Parameter_Association           (N : Node_Id);
+   procedure Analyze_Parameterized_Expression        (N : Node_Id);
    procedure Analyze_Procedure_Call                  (N : Node_Id);
    procedure Analyze_Simple_Return_Statement         (N : Node_Id);
    procedure Analyze_Subprogram_Declaration          (N : Node_Id);
@@ -57,8 +60,8 @@ package Sem_Ch6 is
 
    procedure Check_Conventions (Typ : Entity_Id);
    --  Ada 2005 (AI-430): Check that the conventions of all inherited and
-   --  overridden dispatching operations of type Typ are consistent with
-   --  their respective counterparts.
+   --  overridden dispatching operations of type Typ are consistent with their
+   --  respective counterparts.
 
    procedure Check_Delayed_Subprogram (Designator : Entity_Id);
    --  Designator can be a E_Subprogram_Type, E_Procedure or E_Function. If a
@@ -69,10 +72,10 @@ package Sem_Ch6 is
      (N        : Node_Id;
       Prev     : Entity_Id;
       Prev_Loc : Node_Id);
-   --  Check that the discriminants of a full type N fully conform to
-   --  the discriminants of the corresponding partial view Prev.
-   --  Prev_Loc indicates the source location of the partial view,
-   --  which may be different than Prev in the case of private types.
+   --  Check that the discriminants of a full type N fully conform to the
+   --  discriminants of the corresponding partial view Prev. Prev_Loc indicates
+   --  the source location of the partial view, which may be different than
+   --  Prev in the case of private types.
 
    procedure Check_Fully_Conformant
      (New_Id  : Entity_Id;
@@ -116,9 +119,12 @@ package Sem_Ch6 is
       Err_Loc                  : Node_Id := Empty;
       Skip_Controlling_Formals : Boolean := False);
    --  Check that two callable entities (subprograms, entries, literals)
-   --  are subtype conformant, post error message if not (RM 6.3.1(16))
+   --  are subtype conformant, post error message if not (RM 6.3.1(16)),
    --  the flag being placed on the Err_Loc node if it is specified, and
    --  on the appropriate component of the New_Id construct if not.
+   --  Skip_Controlling_Formals is True when checking the conformance of
+   --  a subprogram that implements an interface operation. In that case,
+   --  only the non-controlling formals can (and must) be examined.
 
    procedure Check_Type_Conformant
      (New_Id  : Entity_Id;
@@ -180,9 +186,14 @@ package Sem_Ch6 is
      (Tagged_Type : Entity_Id;
       Iface_Prim  : Entity_Id;
       Prim        : Entity_Id) return Boolean;
-   --  Returns true if both primitives have a matching name and they are also
-   --  type conformant. Special management is done for functions returning
-   --  interfaces.
+   --  Returns true if both primitives have a matching name (including support
+   --  for names of inherited private primitives --which have suffix 'P'), they
+   --  are type conformant, and Prim is defined in the scope of Tagged_Type.
+   --  Special management is done for functions returning interfaces.
+
+   procedure List_Inherited_Pre_Post_Aspects (E : Entity_Id);
+   --  E is the entity for a subprogram or generic subprogram spec. This call
+   --  lists all inherited Pre/Post aspects if List_Inherited_Pre_Post is True.
 
    function Mode_Conformant (New_Id, Old_Id : Entity_Id) return Boolean;
    --  Determine whether two callable entities (subprograms, entries,
@@ -227,15 +238,21 @@ package Sem_Ch6 is
      (New_Id                   : Entity_Id;
       Old_Id                   : Entity_Id;
       Skip_Controlling_Formals : Boolean := False) return Boolean;
-   --  Determine whether two callable entities (subprograms, entries,
-   --  literals) are subtype conformant (RM6.3.1(16)).
+   --  Determine whether two callable entities (subprograms, entries, literals)
+   --  are subtype conformant (RM6.3.1(16)).  Skip_Controlling_Formals is True
+   --  when checking the conformance of a subprogram that implements an
+   --  interface operation. In that case, only the non-controlling formals
+   --  can (and must) be examined.
 
    function Type_Conformant
      (New_Id                   : Entity_Id;
       Old_Id                   : Entity_Id;
       Skip_Controlling_Formals : Boolean := False) return Boolean;
-   --  Determine whether two callable entities (subprograms, entries,
-   --  literals) are type conformant (RM6.3.1(14)).
+   --  Determine whether two callable entities (subprograms, entries, literals)
+   --  are type conformant (RM6.3.1(14)). Skip_Controlling_Formals is True when
+   --  checking the conformance of a subprogram that implements an interface
+   --  operation. In that case, only the non-controlling formals can (and must)
+   --  be examined.
 
    procedure Valid_Operator_Definition (Designator : Entity_Id);
    --  Verify that an operator definition has the proper number of formals

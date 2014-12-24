@@ -1,6 +1,6 @@
 // Wrapper of C-language FILE struct -*- C++ -*-
 
-// Copyright (C) 2000, 2001, 2002, 2003, 2004, 2006, 2007, 2009
+// Copyright (C) 2000, 2001, 2002, 2003, 2004, 2006, 2007, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -179,10 +179,12 @@ namespace
 } // anonymous namespace
 
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   // Definitions for __basic_file<char>.
-  __basic_file<char>::__basic_file(__c_lock* /*__lock*/) 
+  __basic_file<char>::__basic_file(__c_lock* /*__lock*/) throw()
   : _M_cfile(NULL), _M_cfile_created(false) { }
 
   __basic_file<char>::~__basic_file()
@@ -210,7 +212,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   }
   
   __basic_file<char>*
-  __basic_file<char>::sys_open(int __fd, ios_base::openmode __mode)
+  __basic_file<char>::sys_open(int __fd, ios_base::openmode __mode) throw ()
   {
     __basic_file* __ret = NULL;
     const char* __c_mode = fopen_mode(__mode);
@@ -247,15 +249,15 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   }
   
   bool 
-  __basic_file<char>::is_open() const 
+  __basic_file<char>::is_open() const throw ()
   { return _M_cfile != 0; }
   
   int 
-  __basic_file<char>::fd() 
+  __basic_file<char>::fd() throw ()
   { return fileno(_M_cfile); }
   
   __c_file*
-  __basic_file<char>::file() 
+  __basic_file<char>::file() throw ()
   { return _M_cfile; }
   
   __basic_file<char>* 
@@ -315,7 +317,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   }
 
   streamoff
-  __basic_file<char>::seekoff(streamoff __off, ios_base::seekdir __way)
+  __basic_file<char>::seekoff(streamoff __off, ios_base::seekdir __way) throw ()
   {
 #ifdef _GLIBCXX_USE_LFS
     return lseek64(this->fd(), __off, __way);
@@ -334,6 +336,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   streamsize
   __basic_file<char>::showmanyc()
   {
+#ifndef _GLIBCXX_NO_IOCTL
 #ifdef FIONREAD
     // Pipes and sockets.    
 #ifdef _GLIBCXX_FIONREAD_TAKES_OFF_T
@@ -344,7 +347,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     int __r = ioctl(this->fd(), FIONREAD, &__num);
     if (!__r && __num >= 0)
       return __num; 
-#endif    
+#endif
+#endif
 
 #ifdef _GLIBCXX_HAVE_POLL
     // Cheap test.
@@ -376,5 +380,6 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     return 0;
   }
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 

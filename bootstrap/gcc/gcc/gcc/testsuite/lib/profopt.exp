@@ -1,4 +1,5 @@
-# Copyright (C) 2001, 2004, 2005, 2007, 2008 Free Software Foundation, Inc.
+# Copyright (C) 2001, 2004, 2005, 2007, 2008, 2010
+# Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -177,6 +178,10 @@ proc profopt-get-options { src } {
     # dg-require-* sets dg-do-what.
     upvar dg-do-what dg-do-what 
 
+    # current_compiler_flags reads tool_flags from the same stack frame
+    # as dg-extra-tool-flags
+    set tool_flags ""
+
     set tmp [dg-get-options $src]
     foreach op $tmp {
 	set cmd [lindex $op 0]
@@ -188,13 +193,13 @@ proc profopt-get-options { src } {
 	     || [string match "dg-require-*" $cmd]  } {
 	    set status [catch "$op" errmsg]
 	    if { $status != 0 } {
-		perror "src: $errmsg for \"$op\"\n"
+		perror "$src: $errmsg for \"$op\"\n"
 		unresolved "$src: $errmsg for \"$op\""
 		return
 	    }
 	} else {
 	    # Ignore unrecognized dg- commands, but warn about them.
-	    warning "compat.exp does not support $cmd"
+	    warning "profopt.exp does not support $cmd"
 	}
     }
 
@@ -324,6 +329,10 @@ proc profopt-execute { src } {
 	lappend options "additional_flags=$option $extra_flags $feedback_option"
 	set optstr "$option $feedback_option"
 	set comp_output [${tool}_target_compile "$src" "$execname2" "executable" $options]
+
+	# Prune warnings we know are unwanted.
+	set comp_output [prune_warnings $comp_output]
+
 	if ![${tool}_check_compile "$testcase compilation" $optstr $execname2 $comp_output] {
  	    unresolved "$testcase execution,   $optstr"
 	    continue

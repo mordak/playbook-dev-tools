@@ -1,9 +1,9 @@
-/* Copyright (C) 2002, 2003, 2004, 2005, 2007, 2008, 2009
+/* Copyright (C) 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by Andy Vaught
    F2003 I/O support contributed by Jerry DeLisle
 
-This file is part of the GNU Fortran 95 runtime library (libgfortran).
+This file is part of the GNU Fortran runtime library (libgfortran).
 
 Libgfortran is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -25,9 +25,12 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 <http://www.gnu.org/licenses/>.  */
 
 #include "io.h"
+#include "fbuf.h"
+#include "unix.h"
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <stdlib.h>
 
 
 static const st_option access_opt[] = {
@@ -552,7 +555,7 @@ new_unit (st_parameter_open *opp, gfc_unit *u, unit_flags * flags)
 
   if (flags->position == POSITION_APPEND)
     {
-      if (sseek (u->s, 0, SEEK_END) < 0)
+      if (file_size (opp->file, opp->file_len) > 0 && sseek (u->s, 0, SEEK_END) < 0)
 	generate_error (&opp->common, LIBERROR_OS, NULL);
       u->endfile = AT_ENDFILE;
     }
@@ -621,7 +624,7 @@ new_unit (st_parameter_open *opp, gfc_unit *u, unit_flags * flags)
   test_endfile (u);
 
   if (flags->status == STATUS_SCRATCH && opp->file != NULL)
-    free_mem (opp->file);
+    free (opp->file);
     
   if (flags->form == FORM_FORMATTED)
     {
@@ -642,7 +645,7 @@ new_unit (st_parameter_open *opp, gfc_unit *u, unit_flags * flags)
   /* Free memory associated with a temporary filename.  */
 
   if (flags->status == STATUS_SCRATCH && opp->file != NULL)
-    free_mem (opp->file);
+    free (opp->file);
 
  fail:
 
@@ -687,7 +690,7 @@ already_open (st_parameter_open *opp, gfc_unit * u, unit_flags * flags)
 
       u->s = NULL;
       if (u->file)
-	free_mem (u->file);
+	free (u->file);
       u->file = NULL;
       u->file_len = 0;
 
@@ -775,7 +778,7 @@ st_open (st_parameter_open *opp)
     find_option (&opp->common, opp->status, opp->status_len,
 		 status_opt, "Bad STATUS parameter in OPEN statement");
 
-  /* First, we check whether the convert flag has been set via environment
+  /* First, we check wether the convert flag has been set via environment
      variable.  This overrides the convert tag in the open statement.  */
 
   conv = get_unformatted_convert (opp->common.unit);
@@ -814,7 +817,7 @@ st_open (st_parameter_open *opp)
 
   flags.convert = conv;
 
-  if (opp->common.unit < 0)
+  if (!(opp->common.flags & IOPARM_OPEN_HAS_NEWUNIT) && opp->common.unit < 0)
     generate_error (&opp->common, LIBERROR_BAD_OPTION,
 		    "Bad unit number in OPEN statement");
 
@@ -842,8 +845,13 @@ st_open (st_parameter_open *opp)
 
   if ((opp->common.flags & IOPARM_LIBRETURN_MASK) == IOPARM_LIBRETURN_OK)
     {
-      u = find_or_create_unit (opp->common.unit);
+      if ((opp->common.flags & IOPARM_OPEN_HAS_NEWUNIT))
+	{
+	  *opp->newunit = get_unique_unit_number(opp);
+	  opp->common.unit = *opp->newunit;
+	}
 
+      u = find_or_create_unit (opp->common.unit);
       if (u->s == NULL)
 	{
 	  u = new_unit (opp, u, &flags);

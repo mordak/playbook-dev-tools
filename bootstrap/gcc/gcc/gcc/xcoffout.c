@@ -1,6 +1,6 @@
 /* Output xcoff-format symbol table information from GNU compiler.
    Copyright (C) 1992, 1994, 1995, 1997, 1998, 1999, 2000, 2002, 2003, 2004,
-   2007, 2008  Free Software Foundation, Inc.
+   2007, 2008, 2010  Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -30,7 +30,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree.h"
 #include "rtl.h"
 #include "flags.h"
-#include "toplev.h"
+#include "diagnostic-core.h"
 #include "output.h"
 #include "ggc.h"
 #include "target.h"
@@ -81,8 +81,15 @@ const char *xcoff_lastfile;
 #define ASM_OUTPUT_LINE(FILE,LINENUM)					   \
   do									   \
     {									   \
+      /* Make sure we're in a function and prevent output of .line 0, as   \
+	 line # 0 is meant for symbol addresses in xcoff.  Additionally,   \
+	 line numbers are 'unsigned short' in 32-bit mode.  */		   \
       if (xcoff_begin_function_line >= 0)				   \
-	fprintf (FILE, "\t.line\t%d\n", ABS_OR_RELATIVE_LINENO (LINENUM)); \
+	{								   \
+	  int lno = ABS_OR_RELATIVE_LINENO (LINENUM);			   \
+	  if (lno > 0 && (TARGET_64BIT || lno <= (int)USHRT_MAX))	   \
+	    fprintf (FILE, "\t.line\t%d\n", lno);			   \
+	}								   \
     }									   \
   while (0)
 
@@ -145,7 +152,7 @@ static const struct xcoff_type_number xcoff_type_numbers[] = {
 
   /* ??? Should also handle built-in C++ and Obj-C types.  There perhaps
      aren't any that C doesn't already have.  */
-};    
+};
 
 /* Returns an XCOFF fundamental type number for DECL (assumed to be a
    TYPE_DECL), or 0 if dbxout.c should assign a type number normally.  */
@@ -321,7 +328,9 @@ xcoffout_source_file (FILE *file, const char *filename, int inline_p)
 /* Output a line number symbol entry for location (FILENAME, LINE).  */
 
 void
-xcoffout_source_line (unsigned int line, const char *filename)
+xcoffout_source_line (unsigned int line, const char *filename,
+                      int discriminator ATTRIBUTE_UNUSED,
+                      bool is_stmt ATTRIBUTE_UNUSED)
 {
   bool inline_p = (strcmp (xcoff_current_function_file, filename) != 0
 		   || (int) line < xcoff_begin_function_line);

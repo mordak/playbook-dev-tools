@@ -1,6 +1,6 @@
 // Hashtable implementation used by containers -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -54,8 +54,8 @@
  *  containing extensions from the HP/SGI STL subset).
  */
 
-#ifndef _HASHTABLE_H
-#define _HASHTABLE_H 1
+#ifndef _BACKWARD_HASHTABLE_H
+#define _BACKWARD_HASHTABLE_H 1
 
 // Hashtable class, used to implement the hashed associative containers
 // hash_set, hash_map, hash_multiset, and hash_multimap.
@@ -66,7 +66,9 @@
 #include <bits/stl_function.h>
 #include <backward/hash_fun.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   using std::size_t;
   using std::ptrdiff_t;
@@ -205,16 +207,16 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
     };
 
   // Note: assumes long is at least 32 bits.
-  enum { _S_num_primes = 28 };
+  enum { _S_num_primes = 29 };
 
   static const unsigned long __stl_prime_list[_S_num_primes] =
     {
-      53ul,         97ul,         193ul,       389ul,       769ul,
-      1543ul,       3079ul,       6151ul,      12289ul,     24593ul,
-      49157ul,      98317ul,      196613ul,    393241ul,    786433ul,
-      1572869ul,    3145739ul,    6291469ul,   12582917ul,  25165843ul,
-      50331653ul,   100663319ul,  201326611ul, 402653189ul, 805306457ul,
-      1610612741ul, 3221225473ul, 4294967291ul
+      5ul,          53ul,         97ul,         193ul,       389ul,
+      769ul,        1543ul,       3079ul,       6151ul,      12289ul,
+      24593ul,      49157ul,      98317ul,      196613ul,    393241ul,
+      786433ul,     1572869ul,    3145739ul,    6291469ul,   12582917ul,
+      25165843ul,   50331653ul,   100663319ul,  201326611ul, 402653189ul,
+      805306457ul,  1610612741ul, 3221225473ul, 4294967291ul
     };
 
   inline unsigned long
@@ -864,8 +866,9 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
     {
       const size_type __n = _M_bkt_num_key(__key);
       _Node* __first = _M_buckets[__n];
+      _Node* __saved_slot = 0;
       size_type __erased = 0;
-      
+
       if (__first)
 	{
 	  _Node* __cur = __first;
@@ -874,11 +877,20 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	    {
 	      if (_M_equals(_M_get_key(__next->_M_val), __key))
 		{
-		  __cur->_M_next = __next->_M_next;
-		  _M_delete_node(__next);
-		  __next = __cur->_M_next;
-		  ++__erased;
-		  --_M_num_elements;
+		  if (&_M_get_key(__next->_M_val) != &__key)
+		    {
+		      __cur->_M_next = __next->_M_next;
+		      _M_delete_node(__next);
+		      __next = __cur->_M_next;
+		      ++__erased;
+		      --_M_num_elements;
+		    }
+		  else
+		    {
+		      __saved_slot = __cur;
+		      __cur = __next;
+		      __next = __cur->_M_next;
+		    }
 		}
 	      else
 		{
@@ -890,6 +902,14 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	    {
 	      _M_buckets[__n] = __first->_M_next;
 	      _M_delete_node(__first);
+	      ++__erased;
+	      --_M_num_elements;
+	    }
+	  if (__saved_slot)
+	    {
+	      __next = __saved_slot->_M_next;
+	      __saved_slot->_M_next = __next->_M_next;
+	      _M_delete_node(__next);
 	      ++__erased;
 	      --_M_num_elements;
 	    }
@@ -1071,6 +1091,9 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
     hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::
     clear()
     {
+      if (_M_num_elements == 0)
+	return;
+
       for (size_type __i = 0; __i < _M_buckets.size(); ++__i)
 	{
 	  _Node* __cur = _M_buckets[__i];
@@ -1120,6 +1143,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	}
     }
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif

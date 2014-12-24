@@ -24,6 +24,7 @@
 
 #include "gprof.h"
 #include "libiberty.h"
+#include "filenames.h"
 #include "basic_blocks.h"
 #include "corefile.h"
 #include "gmon_io.h"
@@ -61,7 +62,7 @@ cmp_bb (const PTR lp, const PTR rp)
 
   if (left->file && right->file)
     {
-      r = strcmp (left->file->name, right->file->name);
+      r = filename_cmp (left->file->name, right->file->name);
 
       if (r)
 	return r;
@@ -319,7 +320,7 @@ print_exec_counts ()
 static void
 annotate_with_count (char *buf, unsigned int width, int line_num, PTR arg)
 {
-  Source_File *sf = arg;
+  Source_File *sf = (Source_File *) arg;
   Sym *b;
   unsigned int i;
   static unsigned long last_count;
@@ -328,7 +329,7 @@ annotate_with_count (char *buf, unsigned int width, int line_num, PTR arg)
   b = NULL;
 
   if (line_num <= sf->num_lines)
-    b = sf->line[line_num - 1];
+    b = (Sym *) sf->line[line_num - 1];
 
   if (!b)
     {
@@ -488,7 +489,7 @@ print_annotated_source ()
     {
       if (sf->num_lines > 0)
 	{
-	  sf->line = (void *) xmalloc (sf->num_lines * sizeof (sf->line[0]));
+	  sf->line = (void **) xmalloc (sf->num_lines * sizeof (sf->line[0]));
 	  memset (sf->line, 0, sf->num_lines * sizeof (sf->line[0]));
 	}
     }
@@ -502,7 +503,7 @@ print_annotated_source ()
 		  && !sym_lookup (&syms[EXCL_ANNO], sym->addr))))
 	{
 	  sym->file->ncalls += sym->ncalls;
-	  line_stats = sym->file->line[sym->line_num - 1];
+	  line_stats = (Sym *) sym->file->line[sym->line_num - 1];
 
 	  if (!line_stats)
 	    {
@@ -552,7 +553,7 @@ print_annotated_source ()
 
 	  for (i = 0; i < table_len; ++i)
 	    {
-	      sym = sf->line[i];
+	      sym = (Sym *) sf->line[i];
 
 	      if (!sym || sym->ncalls == 0)
 		  break;

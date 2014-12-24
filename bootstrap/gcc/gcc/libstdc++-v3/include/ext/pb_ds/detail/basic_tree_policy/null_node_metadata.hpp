@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -38,8 +38,8 @@
  * Contains an implementation class for tree-like classes.
  */
 
-#ifndef PB_DS_NULL_NODE_METADATA_HPP
-#define PB_DS_NULL_NODE_METADATA_HPP
+#ifndef PB_DS_0_NODE_METADATA_HPP
+#define PB_DS_0_NODE_METADATA_HPP
 
 #include <ext/pb_ds/detail/types_traits.hpp>
 

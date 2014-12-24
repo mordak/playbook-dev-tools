@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2004-2009, Free Software Foundation, Inc.         --
+--             Copyright (C) 2009, Free Software Foundation, Inc.           --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -24,28 +24,13 @@
 -- see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see    --
 -- <http://www.gnu.org/licenses/>.                                          --
 --                                                                          --
--- This unit was originally developed by Matthew J Heaney.                  --
+-- GNAT was originally developed  by the GNAT team at  New York University. --
+-- Extensive contributions were provided by Ada Core Technologies Inc.      --
+--                                                                          --
 ------------------------------------------------------------------------------
 
---  Note: source of this algorithm: GNAT.HTable.Hash (g-htable.adb)
+--  This package does not require a body, since it is an instantiation. We
+--  provide a dummy file containing a No_Body pragma so that previous versions
+--  of the body (which did exist) will not interfere.
 
-function Ada.Strings.Wide_Wide_Hash
-  (Key : Wide_Wide_String) return Containers.Hash_Type
-is
-   use Ada.Containers;
-
-   function Rotate_Left
-     (Value  : Hash_Type;
-      Amount : Natural) return Hash_Type;
-   pragma Import (Intrinsic, Rotate_Left);
-
-   Tmp : Hash_Type;
-
-begin
-   Tmp := 0;
-   for J in Key'Range loop
-      Tmp := Rotate_Left (Tmp, 3) + Wide_Wide_Character'Pos (Key (J));
-   end loop;
-
-   return Tmp;
-end Ada.Strings.Wide_Wide_Hash;
+pragma No_Body;

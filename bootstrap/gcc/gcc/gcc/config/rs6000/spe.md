@@ -1,5 +1,5 @@
 ;; e500 SPE description
-;; Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2008
+;; Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
 ;; Free Software Foundation, Inc.
 ;; Contributed by Aldy Hernandez (aldy@quesejoda.com)
 
@@ -99,7 +99,7 @@
 
 ;; Floating point conversion instructions.
 
-(define_insn "fixuns_truncdfsi2"
+(define_insn "spe_fixuns_truncdfsi2"
   [(set (match_operand:SI 0 "gpc_reg_operand" "=r")
 	(unsigned_fix:SI (match_operand:DF 1 "gpc_reg_operand" "r")))]
   "TARGET_HARD_FLOAT && TARGET_E500_DOUBLE"
@@ -164,7 +164,7 @@
 
 ;; SPE SIMD instructions
 
-(define_insn "spe_evabs"
+(define_insn "absv2si2"
   [(set (match_operand:V2SI 0 "gpc_reg_operand" "=r")
 	(abs:V2SI (match_operand:V2SI 1 "gpc_reg_operand" "r")))]
   "TARGET_SPE"
@@ -181,7 +181,7 @@
   [(set_attr "type" "vecsimple")
    (set_attr  "length" "4")])
 
-(define_insn "spe_evand"
+(define_insn "andv2si3"
   [(set (match_operand:V2SI 0 "gpc_reg_operand" "=r")
         (and:V2SI (match_operand:V2SI 1 "gpc_reg_operand" "r")
 		  (match_operand:V2SI 2 "gpc_reg_operand" "r")))]
@@ -1898,7 +1898,7 @@
   [(set_attr "type" "veccomplex")
    (set_attr  "length" "4")])
 
-(define_insn "spe_evaddw"
+(define_insn "addv2si3"
   [(set (match_operand:V2SI 0 "gpc_reg_operand" "=r")
         (plus:V2SI (match_operand:V2SI 1 "gpc_reg_operand" "r")
 		   (match_operand:V2SI 2 "gpc_reg_operand" "r")))]
@@ -1967,7 +1967,7 @@
   [(set_attr "type" "veccomplex")
    (set_attr  "length" "4")])
 
-(define_insn "spe_evsubfw"
+(define_insn "subv2si3"
   [(set (match_operand:V2SI 0 "gpc_reg_operand" "=r")
         (minus:V2SI (match_operand:V2SI 1 "gpc_reg_operand" "r")
 		    (match_operand:V2SI 2 "gpc_reg_operand" "r")))]
@@ -2028,7 +2028,7 @@
   [(set_attr "type" "veccomplex")
    (set_attr  "length" "4")])
 
-(define_insn "spe_evdivws"
+(define_insn "divv2si3"
   [(set (match_operand:V2SI 0 "gpc_reg_operand" "=r")
         (div:V2SI (match_operand:V2SI 1 "gpc_reg_operand" "r")
 		  (match_operand:V2SI 2 "gpc_reg_operand" "r")))
@@ -3156,9 +3156,9 @@
   [(match_parallel 0 "any_parallel_operand"
 		   [(clobber (reg:P 65))
 		    (use (match_operand:P 1 "symbol_ref_operand" "s"))
-		    (use (match_operand:P 2 "gpc_reg_operand" "r"))
-		    (set (match_operand:V2SI 3 "memory_operand" "=m")
-			 (match_operand:V2SI 4 "gpc_reg_operand" "r"))])]
+		    (use (reg:P 11))
+		    (set (match_operand:V2SI 2 "memory_operand" "=m")
+			 (match_operand:V2SI 3 "gpc_reg_operand" "r"))])]
   "TARGET_SPE_ABI"
   "bl %z1"
   [(set_attr "type" "branch")
@@ -3168,9 +3168,9 @@
  [(match_parallel 0 "any_parallel_operand"
 		  [(clobber (reg:P 65))
 		   (use (match_operand:P 1 "symbol_ref_operand" "s"))
-		   (use (match_operand:P 2 "gpc_reg_operand" "r"))
-		   (set (match_operand:V2SI 3 "gpc_reg_operand" "=r")
-			(match_operand:V2SI 4 "memory_operand" "m"))])]
+		   (use (reg:P 11))
+		   (set (match_operand:V2SI 2 "gpc_reg_operand" "=r")
+			(match_operand:V2SI 3 "memory_operand" "m"))])]
  "TARGET_SPE_ABI"
  "bl %z1"
  [(set_attr "type" "branch")
@@ -3181,9 +3181,9 @@
 		  [(return)
 		   (clobber (reg:P 65))
 		   (use (match_operand:P 1 "symbol_ref_operand" "s"))
-		   (use (match_operand:P 2 "gpc_reg_operand" "r"))
-		   (set (match_operand:V2SI 3 "gpc_reg_operand" "=r")
-			(match_operand:V2SI 4 "memory_operand" "m"))])]
+		   (use (reg:P 11))
+		   (set (match_operand:V2SI 2 "gpc_reg_operand" "=r")
+			(match_operand:V2SI 3 "memory_operand" "m"))])]
  "TARGET_SPE_ABI"
  "b %z1"
  [(set_attr "type" "branch")

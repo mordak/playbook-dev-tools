@@ -1,6 +1,6 @@
 /* Set up combined include path chain for the preprocessor.
    Copyright (C) 1986, 1987, 1989, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008
+   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2010
    Free Software Foundation, Inc.
 
    Broken out of cppinit.c and cppfiles.c and rewritten Mar 2003.
@@ -100,7 +100,7 @@ add_env_var_paths (const char *env_var, int chain)
 {
   char *p, *q, *path;
 
-  GET_ENVIRONMENT (q, env_var);
+  q = getenv (env_var);
 
   if (!q)
     return;
@@ -171,8 +171,8 @@ add_standard_paths (const char *sysroot, const char *iprefix,
 		   && strncmp (p->fname, cpp_PREFIX, cpp_PREFIX_len) == 0)
 	    {
  	      static const char *relocated_prefix;
-	      /* If this path starts with the configure-time prefix, 
-		 but the compiler has been relocated, replace it 
+	      /* If this path starts with the configure-time prefix,
+		 but the compiler has been relocated, replace it
 		 with the run-time prefix.  The run-time exec prefix
 		 is GCC_EXEC_PREFIX.  Compute the path from there back
 		 to the toplevel prefix.  */
@@ -182,13 +182,13 @@ add_standard_paths (const char *sysroot, const char *iprefix,
 		  /* Make relative prefix expects the first argument
 		     to be a program, not a directory.  */
 		  dummy = concat (gcc_exec_prefix, "dummy", NULL);
-		  relocated_prefix 
+		  relocated_prefix
 		    = make_relative_prefix (dummy,
 					    cpp_EXEC_PREFIX,
 					    cpp_PREFIX);
 		}
 	      str = concat (relocated_prefix,
-			    p->fname + cpp_PREFIX_len, 
+			    p->fname + cpp_PREFIX_len,
 			    NULL);
 	      str = update_path (str, p->component);
 	    }
@@ -239,7 +239,7 @@ remove_duplicates (cpp_reader *pfile, struct cpp_dir *head,
 	    }
 	}
       else if (!S_ISDIR (st.st_mode))
-	cpp_error_with_line (pfile, CPP_DL_ERROR, 0, 0,
+	cpp_error_with_line (pfile, CPP_DL_WARNING, 0, 0,
 			     "%s: not a directory", cur->name);
       else
 	{
@@ -399,7 +399,7 @@ add_path (char *path, int chain, int cxx_aware, bool user_supplied_p)
   char* end = path + pathlen - 1;
   /* Preserve the lead '/' or lead "c:/".  */
   char* start = path + (pathlen > 2 && path[1] == ':' ? 3 : 1);
-  
+
   for (; end > start && IS_DIR_SEPARATOR (*end); end--)
     *end = 0;
 #endif

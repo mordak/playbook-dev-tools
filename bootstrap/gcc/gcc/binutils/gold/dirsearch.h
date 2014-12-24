@@ -1,6 +1,6 @@
 // dirsearch.h -- directory searching for gold  -*- C++ -*-
 
-// Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -53,9 +53,14 @@ class Dirsearch
   // second one may be empty).  Return a full path name for the file,
   // or the empty string if it could not be found.  This may only be
   // called if the token is not blocked.  Set *IS_IN_SYSROOT if the
-  // file was found in a directory which is in the sysroot.
+  // file was found in a directory which is in the sysroot.  *PINDEX
+  // should be set to zero the first time this is called; it will be
+  // updated with the index of the directory where the file is found,
+  // and that value plus one may be used to find the next file with
+  // the same name(s).
   std::string
-  find(const std::string&, const std::string& n2, bool *is_in_sysroot) const;
+  find(const std::vector<std::string>& names, bool* is_in_sysroot,
+       int* pindex, std::string *found_name) const;
 
   // Return the blocker token which controls access.
   Task_token*

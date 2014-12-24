@@ -1,5 +1,5 @@
 /* Definitions for code generation pass of GNU compiler.
-   Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008
+   Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -29,44 +29,43 @@ along with GCC; see the file COPYING3.  If not see
 
    For example, add_optab applies to addition.
 
-   The insn_code slot is the enum insn_code that says how to
-   generate an insn for this operation on a particular machine mode.
-   It is CODE_FOR_nothing if there is no such insn on the target machine.
-
    The `lib_call' slot is the name of the library function that
    can be used to perform the operation.
 
-   A few optabs, such as move_optab and cmp_optab, are used
-   by special code.  */
+   A few optabs, such as move_optab, are used by special code.  */
 
 struct optab_handlers
 {
-  enum insn_code insn_code;
+  /* I - CODE_FOR_nothing, where I is either the insn code of the
+     associated insn generator or CODE_FOR_nothing if there is no such
+     insn on the target machine.  */
+  int insn_code;
 };
 
-struct optab
+struct optab_d
 {
   enum rtx_code code;
-  const char *libcall_basename;
   char libcall_suffix;
-  void (*libcall_gen)(struct optab *, const char *name, char suffix, enum machine_mode);
+  const char *libcall_basename;
+  void (*libcall_gen)(struct optab_d *, const char *name, char suffix,
+		      enum machine_mode);
   struct optab_handlers handlers[NUM_MACHINE_MODES];
 };
-typedef struct optab * optab;
+typedef struct optab_d * optab;
 
 /* A convert_optab is for some sort of conversion operation between
    modes.  The first array index is the destination mode, the second
    is the source mode.  */
-struct convert_optab
+struct convert_optab_d
 {
   enum rtx_code code;
   const char *libcall_basename;
-  void (*libcall_gen)(struct convert_optab *, const char *name,
+  void (*libcall_gen)(struct convert_optab_d *, const char *name,
 		      enum machine_mode,
 		      enum machine_mode);
   struct optab_handlers handlers[NUM_MACHINE_MODES][NUM_MACHINE_MODES];
 };
-typedef struct convert_optab *convert_optab;
+typedef struct convert_optab_d *convert_optab;
 
 /* Given an enum insn_code, access the function to construct
    the body of that kind of insn.  */
@@ -191,6 +190,11 @@ enum optab_index
   OTI_pow,
   /* Arc tangent of y/x */
   OTI_atan2,
+  /* Floating multiply/add */
+  OTI_fma,
+  OTI_fms,
+  OTI_fnma,
+  OTI_fnms,
 
   /* Move instruction.  */
   OTI_mov,
@@ -242,6 +246,8 @@ enum optab_index
   OTI_ldexp,
   /* Multiply floating-point number by integral power of radix */
   OTI_scalb,
+  /* Mantissa of a floating-point number */
+  OTI_significand,
   /* Radix-independent exponent */
   OTI_logb,
   OTI_ilogb,
@@ -271,12 +277,9 @@ enum optab_index
   /* Test for infinite value */
   OTI_isinf,
 
-  /* Compare insn; two operands.  */
+  /* Compare insn; two operands.  Used only for libcalls.  */
   OTI_cmp,
-  /* Used only for libcalls for unsigned comparisons.  */
   OTI_ucmp,
-  /* tst insn; compare one operand against 0 */
-  OTI_tst,
 
   /* Floating point comparison optabs - used primarily for libfuncs */
   OTI_eq,
@@ -290,10 +293,11 @@ enum optab_index
   /* String length */
   OTI_strlen,
 
-  /* Combined compare & jump/store flags/move operations.  */
+  /* Combined compare & jump/move/store flags/trap operations.  */
   OTI_cbranch,
   OTI_cmov,
   OTI_cstore,
+  OTI_ctrap,
 
   /* Push instruction.  */
   OTI_push,
@@ -334,7 +338,7 @@ enum optab_index
   OTI_vec_shr,
   /* Extract specified elements from vectors, for vector load.  */
   OTI_vec_realign_load,
-  /* Widening multiplication.  
+  /* Widening multiplication.
      The high/low part of the resulting vector of products is returned.  */
   OTI_vec_widen_umult_hi,
   OTI_vec_widen_umult_lo,
@@ -371,8 +375,6 @@ enum optab_index
 
   OTI_MAX
 };
-
-extern struct optab optab_table[OTI_MAX];
 
 #define ssadd_optab (&optab_table[OTI_ssadd])
 #define usadd_optab (&optab_table[OTI_usadd])
@@ -435,6 +437,10 @@ extern struct optab optab_table[OTI_MAX];
 #define umax_optab (&optab_table[OTI_umax])
 #define pow_optab (&optab_table[OTI_pow])
 #define atan2_optab (&optab_table[OTI_atan2])
+#define fma_optab (&optab_table[OTI_fma])
+#define fms_optab (&optab_table[OTI_fms])
+#define fnma_optab (&optab_table[OTI_fnma])
+#define fnms_optab (&optab_table[OTI_fnms])
 
 #define mov_optab (&optab_table[OTI_mov])
 #define movstrict_optab (&optab_table[OTI_movstrict])
@@ -464,6 +470,7 @@ extern struct optab optab_table[OTI_MAX];
 #define expm1_optab (&optab_table[OTI_expm1])
 #define ldexp_optab (&optab_table[OTI_ldexp])
 #define scalb_optab (&optab_table[OTI_scalb])
+#define significand_optab (&optab_table[OTI_significand])
 #define logb_optab (&optab_table[OTI_logb])
 #define ilogb_optab (&optab_table[OTI_ilogb])
 #define log_optab (&optab_table[OTI_log])
@@ -484,7 +491,6 @@ extern struct optab optab_table[OTI_MAX];
 
 #define cmp_optab (&optab_table[OTI_cmp])
 #define ucmp_optab (&optab_table[OTI_ucmp])
-#define tst_optab (&optab_table[OTI_tst])
 
 #define eq_optab (&optab_table[OTI_eq])
 #define ne_optab (&optab_table[OTI_ne])
@@ -499,6 +505,8 @@ extern struct optab optab_table[OTI_MAX];
 #define cbranch_optab (&optab_table[OTI_cbranch])
 #define cmov_optab (&optab_table[OTI_cmov])
 #define cstore_optab (&optab_table[OTI_cstore])
+#define ctrap_optab (&optab_table[OTI_ctrap])
+
 #define push_optab (&optab_table[OTI_push])
 #define addcc_optab (&optab_table[OTI_addcc])
 
@@ -573,8 +581,6 @@ enum convert_optab_index
   COI_MAX
 };
 
-extern struct convert_optab convert_optab_table[COI_MAX];
-
 #define sext_optab (&convert_optab_table[COI_sext])
 #define zext_optab (&convert_optab_table[COI_zext])
 #define trunc_optab (&convert_optab_table[COI_trunc])
@@ -593,94 +599,155 @@ extern struct convert_optab convert_optab_table[COI_MAX];
 #define satfract_optab (&convert_optab_table[COI_satfract])
 #define satfractuns_optab (&convert_optab_table[COI_satfractuns])
 
-/* These arrays record the insn_code of insns that may be needed to
-   perform input and output reloads of special objects.  They provide a
-   place to pass a scratch register.  */
-extern enum insn_code reload_in_optab[NUM_MACHINE_MODES];
-extern enum insn_code reload_out_optab[NUM_MACHINE_MODES];
-
 /* Contains the optab used for each rtx code.  */
 extern optab code_to_optab[NUM_RTX_CODE + 1];
 
 
 typedef rtx (*rtxfun) (rtx);
 
-/* Indexed by the rtx-code for a conditional (e.g. EQ, LT,...)
-   gives the gen_function to make a branch to test that condition.  */
-
-extern rtxfun bcc_gen_fctn[NUM_RTX_CODE];
-
-/* Indexed by the rtx-code for a conditional (e.g. EQ, LT,...)
-   gives the insn code to make a store-condition insn
-   to test that condition.  */
-
-extern enum insn_code setcc_gen_code[NUM_RTX_CODE];
-
+/* Enumerates operations that have a named .md pattern associated
+   with them, but which are not implemented as library functions.  */
+enum direct_optab_index
+{
 #ifdef HAVE_conditional_move
-/* Indexed by the machine mode, gives the insn code to make a conditional
-   move insn.  */
-
-extern enum insn_code movcc_gen_code[NUM_MACHINE_MODES];
+  /* Conditional move operations.  */
+  DOI_movcc,
 #endif
 
-/* Indexed by the machine mode, gives the insn code for vector conditional
-   operation.  */
+  /* Operations that use a scratch register to perform input and output
+     reloads of special objects.  */
+  DOI_reload_in,
+  DOI_reload_out,
 
-extern enum insn_code vcond_gen_code[NUM_MACHINE_MODES];
-extern enum insn_code vcondu_gen_code[NUM_MACHINE_MODES];
+  /* Vector conditional operations.  */
+  DOI_vcond,
+  DOI_vcondu,
 
-/* This array records the insn_code of insns to perform block moves.  */
-extern enum insn_code movmem_optab[NUM_MACHINE_MODES];
+  /* Block move operation.  */
+  DOI_movmem,
 
-/* This array records the insn_code of insns to perform block sets.  */
-extern enum insn_code setmem_optab[NUM_MACHINE_MODES];
+  /* Block set operation.  */
+  DOI_setmem,
 
-/* These arrays record the insn_code of two different kinds of insns
-   to perform block compares.  */
-extern enum insn_code cmpstr_optab[NUM_MACHINE_MODES];
-extern enum insn_code cmpstrn_optab[NUM_MACHINE_MODES];
-extern enum insn_code cmpmem_optab[NUM_MACHINE_MODES];
+  /* Various types of block compare operation.  */
+  DOI_cmpstr,
+  DOI_cmpstrn,
+  DOI_cmpmem,
 
-/* Synchronization primitives.  This first set is atomic operation for
-   which we don't care about the resulting value.  */
-extern enum insn_code sync_add_optab[NUM_MACHINE_MODES];
-extern enum insn_code sync_sub_optab[NUM_MACHINE_MODES];
-extern enum insn_code sync_ior_optab[NUM_MACHINE_MODES];
-extern enum insn_code sync_and_optab[NUM_MACHINE_MODES];
-extern enum insn_code sync_xor_optab[NUM_MACHINE_MODES];
-extern enum insn_code sync_nand_optab[NUM_MACHINE_MODES];
+  /* Synchronization primitives.  This first set is atomic operation for
+     which we don't care about the resulting value.  */
+  DOI_sync_add,
+  DOI_sync_sub,
+  DOI_sync_ior,
+  DOI_sync_and,
+  DOI_sync_xor,
+  DOI_sync_nand,
 
-/* This second set is atomic operations in which we return the value
-   that existed in memory before the operation.  */
-extern enum insn_code sync_old_add_optab[NUM_MACHINE_MODES];
-extern enum insn_code sync_old_sub_optab[NUM_MACHINE_MODES];
-extern enum insn_code sync_old_ior_optab[NUM_MACHINE_MODES];
-extern enum insn_code sync_old_and_optab[NUM_MACHINE_MODES];
-extern enum insn_code sync_old_xor_optab[NUM_MACHINE_MODES];
-extern enum insn_code sync_old_nand_optab[NUM_MACHINE_MODES];
+  /* This second set is atomic operations in which we return the value
+     that existed in memory before the operation.  */
+  DOI_sync_old_add,
+  DOI_sync_old_sub,
+  DOI_sync_old_ior,
+  DOI_sync_old_and,
+  DOI_sync_old_xor,
+  DOI_sync_old_nand,
 
-/* This third set is atomic operations in which we return the value
-   that resulted after performing the operation.  */
-extern enum insn_code sync_new_add_optab[NUM_MACHINE_MODES];
-extern enum insn_code sync_new_sub_optab[NUM_MACHINE_MODES];
-extern enum insn_code sync_new_ior_optab[NUM_MACHINE_MODES];
-extern enum insn_code sync_new_and_optab[NUM_MACHINE_MODES];
-extern enum insn_code sync_new_xor_optab[NUM_MACHINE_MODES];
-extern enum insn_code sync_new_nand_optab[NUM_MACHINE_MODES];
+  /* This third set is atomic operations in which we return the value
+     that resulted after performing the operation.  */
+  DOI_sync_new_add,
+  DOI_sync_new_sub,
+  DOI_sync_new_ior,
+  DOI_sync_new_and,
+  DOI_sync_new_xor,
+  DOI_sync_new_nand,
 
-/* Atomic compare and swap.  */
-extern enum insn_code sync_compare_and_swap[NUM_MACHINE_MODES];
-extern enum insn_code sync_compare_and_swap_cc[NUM_MACHINE_MODES];
+  /* Atomic compare and swap.  */
+  DOI_sync_compare_and_swap,
 
-/* Atomic exchange with acquire semantics.  */
-extern enum insn_code sync_lock_test_and_set[NUM_MACHINE_MODES];
+  /* Atomic exchange with acquire semantics.  */
+  DOI_sync_lock_test_and_set,
 
-/* Atomic clear with release semantics.  */
-extern enum insn_code sync_lock_release[NUM_MACHINE_MODES];
+  /* Atomic clear with release semantics.  */
+  DOI_sync_lock_release,
 
+  DOI_MAX
+};
+
+/* A structure that says which insn should be used to perform an operation
+   in a particular mode.  */
+struct direct_optab_d
+{
+  struct optab_handlers handlers[NUM_MACHINE_MODES];
+};
+typedef struct direct_optab_d *direct_optab;
+
+#ifdef HAVE_conditional_move
+#define movcc_optab (&direct_optab_table[(int) DOI_movcc])
+#endif
+#define reload_in_optab (&direct_optab_table[(int) DOI_reload_in])
+#define reload_out_optab (&direct_optab_table[(int) DOI_reload_out])
+#define vcond_optab (&direct_optab_table[(int) DOI_vcond])
+#define vcondu_optab (&direct_optab_table[(int) DOI_vcondu])
+#define movmem_optab (&direct_optab_table[(int) DOI_movmem])
+#define setmem_optab (&direct_optab_table[(int) DOI_setmem])
+#define cmpstr_optab (&direct_optab_table[(int) DOI_cmpstr])
+#define cmpstrn_optab (&direct_optab_table[(int) DOI_cmpstrn])
+#define cmpmem_optab (&direct_optab_table[(int) DOI_cmpmem])
+#define sync_add_optab (&direct_optab_table[(int) DOI_sync_add])
+#define sync_sub_optab (&direct_optab_table[(int) DOI_sync_sub])
+#define sync_ior_optab (&direct_optab_table[(int) DOI_sync_ior])
+#define sync_and_optab (&direct_optab_table[(int) DOI_sync_and])
+#define sync_xor_optab (&direct_optab_table[(int) DOI_sync_xor])
+#define sync_nand_optab (&direct_optab_table[(int) DOI_sync_nand])
+#define sync_old_add_optab (&direct_optab_table[(int) DOI_sync_old_add])
+#define sync_old_sub_optab (&direct_optab_table[(int) DOI_sync_old_sub])
+#define sync_old_ior_optab (&direct_optab_table[(int) DOI_sync_old_ior])
+#define sync_old_and_optab (&direct_optab_table[(int) DOI_sync_old_and])
+#define sync_old_xor_optab (&direct_optab_table[(int) DOI_sync_old_xor])
+#define sync_old_nand_optab (&direct_optab_table[(int) DOI_sync_old_nand])
+#define sync_new_add_optab (&direct_optab_table[(int) DOI_sync_new_add])
+#define sync_new_sub_optab (&direct_optab_table[(int) DOI_sync_new_sub])
+#define sync_new_ior_optab (&direct_optab_table[(int) DOI_sync_new_ior])
+#define sync_new_and_optab (&direct_optab_table[(int) DOI_sync_new_and])
+#define sync_new_xor_optab (&direct_optab_table[(int) DOI_sync_new_xor])
+#define sync_new_nand_optab (&direct_optab_table[(int) DOI_sync_new_nand])
+#define sync_compare_and_swap_optab \
+  (&direct_optab_table[(int) DOI_sync_compare_and_swap])
+#define sync_lock_test_and_set_optab \
+  (&direct_optab_table[(int) DOI_sync_lock_test_and_set])
+#define sync_lock_release_optab \
+  (&direct_optab_table[(int) DOI_sync_lock_release])
+
+/* Target-dependent globals.  */
+struct target_optabs {
+  /* Tables of patterns that may have an associated libcall.  */
+  struct optab_d x_optab_table[(int) OTI_MAX];
+
+  /* Tables of patterns for converting one mode to another.  */
+  struct convert_optab_d x_convert_optab_table[(int) COI_MAX];
+
+  /* Tables of patterns for direct optabs (i.e. those which cannot be
+     implemented using a libcall).  */
+  struct direct_optab_d x_direct_optab_table[(int) DOI_MAX];
+};
+
+extern struct target_optabs default_target_optabs;
+#if SWITCHABLE_TARGET
+extern struct target_optabs *this_target_optabs;
+#else
+#define this_target_optabs (&default_target_optabs)
+#endif
+
+#define optab_table \
+  (this_target_optabs->x_optab_table)
+#define convert_optab_table \
+  (this_target_optabs->x_convert_optab_table)
+#define direct_optab_table \
+  (this_target_optabs->x_direct_optab_table)
+
 /* Define functions given in optabs.c.  */
 
-extern rtx expand_widen_pattern_expr (tree exp, rtx op0, rtx op1, rtx wide_op,
+extern rtx expand_widen_pattern_expr (sepops ops, rtx op0, rtx op1, rtx wide_op,
                                       rtx target, int unsignedp);
 
 extern rtx expand_ternary_op (enum machine_mode mode, optab ternary_optab,
@@ -716,6 +783,9 @@ extern rtx expand_unop (enum machine_mode, optab, rtx, rtx, int);
 extern rtx expand_abs_nojump (enum machine_mode, rtx, rtx, int);
 extern rtx expand_abs (enum machine_mode, rtx, rtx, int, int);
 
+/* Expand the one's complement absolute value operation.  */
+extern rtx expand_one_cmpl_abs_nojump (enum machine_mode, rtx, rtx);
+
 /* Expand the copysign operation.  */
 extern rtx expand_copysign (rtx, rtx, rtx);
 
@@ -723,10 +793,6 @@ extern rtx expand_copysign (rtx, rtx, rtx);
    an input.  */
 extern void emit_unop_insn (int, rtx, rtx, enum rtx_code);
 extern bool maybe_emit_unop_insn (int, rtx, rtx, enum rtx_code);
-
-/* Emit one rtl insn to compare two rtx's.  */
-extern void emit_cmp_insn (rtx, rtx, enum rtx_code, rtx, enum machine_mode,
-			   int);
 
 /* An extra flag to control optab_for_tree_code's behavior.  This is needed to
    distinguish between machines with a vector shift that takes a scalar for the
@@ -782,20 +848,78 @@ extern void expand_fix (rtx, rtx, int);
 /* Generate code for float to integral conversion.  */
 extern bool expand_sfix_optab (rtx, rtx, convert_optab);
 
+/* Generate code for a widening multiply.  */
+extern rtx expand_widening_mult (enum machine_mode, rtx, rtx, rtx, int, optab);
+
 /* Return tree if target supports vector operations for COND_EXPR.  */
 bool expand_vec_cond_expr_p (tree, enum machine_mode);
 
 /* Generate code for VEC_COND_EXPR.  */
-extern rtx expand_vec_cond_expr (tree, rtx);
-
+extern rtx expand_vec_cond_expr (tree, tree, tree, tree, rtx);
 /* Generate code for VEC_LSHIFT_EXPR and VEC_RSHIFT_EXPR.  */
-extern rtx expand_vec_shift_expr (tree, rtx);
+extern rtx expand_vec_shift_expr (sepops, rtx);
 
-#define optab_handler(optab,mode) (&(optab)->handlers[(int) (mode)])
-#define convert_optab_handler(optab,mode,mode2) \
-	(&(optab)->handlers[(int) (mode)][(int) (mode2)])
+/* Return the insn used to implement mode MODE of OP, or CODE_FOR_nothing
+   if the target does not have such an insn.  */
 
-extern rtx optab_libfunc (optab optab, enum machine_mode mode);
+static inline enum insn_code
+optab_handler (optab op, enum machine_mode mode)
+{
+  return (enum insn_code) (op->handlers[(int) mode].insn_code
+			   + (int) CODE_FOR_nothing);
+}
+
+/* Record that insn CODE should be used to implement mode MODE of OP.  */
+
+static inline void
+set_optab_handler (optab op, enum machine_mode mode, enum insn_code code)
+{
+  op->handlers[(int) mode].insn_code = (int) code - (int) CODE_FOR_nothing;
+}
+
+/* Return the insn used to perform conversion OP from mode FROM_MODE
+   to mode TO_MODE; return CODE_FOR_nothing if the target does not have
+   such an insn.  */
+
+static inline enum insn_code
+convert_optab_handler (convert_optab op, enum machine_mode to_mode,
+		       enum machine_mode from_mode)
+{
+  return ((enum insn_code)
+	  (op->handlers[(int) to_mode][(int) from_mode].insn_code
+	   + (int) CODE_FOR_nothing));
+}
+
+/* Record that insn CODE should be used to perform conversion OP
+   from mode FROM_MODE to mode TO_MODE.  */
+
+static inline void
+set_convert_optab_handler (convert_optab op, enum machine_mode to_mode,
+			   enum machine_mode from_mode, enum insn_code code)
+{
+  op->handlers[(int) to_mode][(int) from_mode].insn_code
+    = (int) code - (int) CODE_FOR_nothing;
+}
+
+/* Return the insn used to implement mode MODE of OP, or CODE_FOR_nothing
+   if the target does not have such an insn.  */
+
+static inline enum insn_code
+direct_optab_handler (direct_optab op, enum machine_mode mode)
+{
+  return (enum insn_code) (op->handlers[(int) mode].insn_code
+			   + (int) CODE_FOR_nothing);
+}
+
+/* Record that insn CODE should be used to implement mode MODE of OP.  */
+
+static inline void
+set_direct_optab_handler (direct_optab op, enum machine_mode mode,
+			  enum insn_code code)
+{
+  op->handlers[(int) mode].insn_code = (int) code - (int) CODE_FOR_nothing;
+}
+
 extern rtx optab_libfunc (optab optab, enum machine_mode mode);
 extern rtx convert_optab_libfunc (convert_optab optab, enum machine_mode mode1,
 			          enum machine_mode mode2);

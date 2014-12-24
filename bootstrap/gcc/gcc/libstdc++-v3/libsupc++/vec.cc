@@ -1,6 +1,7 @@
 // New abi Support -*- C++ -*-
 
-// Copyright (C) 2000, 2001, 2003, 2004, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2000, 2001, 2003, 2004, 2009, 2011
+// Free Software Foundation, Inc.
 //  
 // This file is part of GCC.
 //
@@ -28,7 +29,7 @@
 #include <cxxabi.h>
 #include <new>
 #include <exception>
-#include <exception_defines.h>
+#include <bits/exception_defines.h>
 #include "unwind-cxx.h"
 
 namespace __cxxabiv1
@@ -95,16 +96,19 @@ namespace __cxxabiv1
 	reinterpret_cast <std::size_t *> (base)[-2] = element_size;
 #endif
       }
-    try
+    __try
       {
 	__cxa_vec_ctor(base, element_count, element_size,
 		       constructor, destructor);
       }
-    catch (...)
+    __catch(...)
       {
 	{
 	  uncatch_exception ue;
-	  dealloc(base - padding_size);
+	  // Core issue 901 will probably be resolved such that a
+	  // deleted operator delete means not freeing memory here.
+	  if (dealloc)
+	    dealloc(base - padding_size);
 	}
 	__throw_exception_again;
       }
@@ -133,16 +137,17 @@ namespace __cxxabiv1
 	reinterpret_cast <std::size_t *> (base)[-2] = element_size;
 #endif
       }
-    try
+    __try
       {
 	__cxa_vec_ctor(base, element_count, element_size,
 		       constructor, destructor);
       }
-    catch (...)
+    __catch(...)
       {
 	{
 	  uncatch_exception ue;
-	  dealloc(base - padding_size, size);
+	  if (dealloc)
+	    dealloc(base - padding_size, size);
 	}
 	__throw_exception_again;
       }
@@ -160,13 +165,13 @@ namespace __cxxabiv1
     std::size_t ix = 0;
     char *ptr = static_cast<char *>(array_address);
     
-    try
+    __try
       {
 	if (constructor)
 	  for (; ix != element_count; ix++, ptr += element_size)
 	    constructor(ptr);
       }
-    catch (...)
+    __catch(...)
       {
 	{
 	  uncatch_exception ue;
@@ -190,14 +195,14 @@ namespace __cxxabiv1
     char *dest_ptr = static_cast<char *>(dest_array);
     char *src_ptr = static_cast<char *>(src_array);
     
-    try
+    __try
       {
 	if (constructor)
 	  for (; ix != element_count; 
 	       ix++, src_ptr += element_size, dest_ptr += element_size)
 	    constructor(dest_ptr, src_ptr);
       }
-    catch (...)
+    __catch(...)
       {
 	{
 	  uncatch_exception ue;
@@ -222,7 +227,7 @@ namespace __cxxabiv1
 
 	ptr += element_count * element_size;
 
-	try
+	__try
 	  {
 	    while (ix--)
 	      {
@@ -230,7 +235,7 @@ namespace __cxxabiv1
 		destructor(ptr);
 	      }
 	  }
-	catch (...)
+	__catch(...)
 	  {
 	    {
 	      uncatch_exception ue;
@@ -248,7 +253,7 @@ namespace __cxxabiv1
   __cxa_vec_cleanup(void *array_address,
 		    std::size_t element_count,
 		    std::size_t element_size,
-		    __cxa_cdtor_type destructor)
+		    __cxa_cdtor_type destructor) throw()
   {
     if (destructor)
       {
@@ -257,7 +262,7 @@ namespace __cxxabiv1
 
 	ptr += element_count * element_size;
 
-	try
+	__try
 	  {
 	    while (ix--)
 	      {
@@ -265,7 +270,7 @@ namespace __cxxabiv1
 		destructor(ptr);
 	      }
 	  }
-	catch (...)
+	__catch(...)
 	  {
 	    std::terminate();
 	  }
@@ -300,12 +305,12 @@ namespace __cxxabiv1
       {
 	std::size_t element_count = reinterpret_cast<std::size_t *>(base)[-1];
 	base -= padding_size;
-	try
+	__try
 	  {
 	    __cxa_vec_dtor(array_address, element_count, element_size,
 			   destructor);
 	  }
-	catch (...)
+	__catch(...)
 	  {
 	    {
 	      uncatch_exception ue;
@@ -335,12 +340,12 @@ namespace __cxxabiv1
 	std::size_t element_count = reinterpret_cast<std::size_t *> (base)[-1];
 	base -= padding_size;
 	size = element_count * element_size + padding_size;
-	try
+	__try
 	  {
 	    __cxa_vec_dtor(array_address, element_count, element_size,
 			   destructor);
 	  }
-	catch (...)
+	__catch(...)
 	  {
 	    {
 	      uncatch_exception ue;

@@ -1,5 +1,6 @@
 /* Various declarations for language-independent pretty-print subroutines.
-   Copyright (C) 2002, 2003, 2004, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2002, 2003, 2004, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Gabriel Dos Reis <gdr@integrable-solutions.net>
 
 This file is part of GCC.
@@ -35,7 +36,7 @@ typedef struct
   va_list *args_ptr;
   int err_no;  /* for %m */
   location_t *locus;
-  tree *abstract_origin;
+  void **x_data;
 } text_info;
 
 /* How often diagnostics are prefixed by their locations:
@@ -71,9 +72,9 @@ struct chunk_info
 
 /* The output buffer datatype.  This is best seen as an abstract datatype
    whose fields should not be accessed directly by clients.  */
-typedef struct 
+typedef struct
 {
-  /* Obstack where the text is built up.  */  
+  /* Obstack where the text is built up.  */
   struct obstack formatted_obstack;
 
   /* Obstack containing a chunked representation of the format
@@ -90,7 +91,7 @@ typedef struct
   /* Where to output formatted text.  */
   FILE *stream;
 
-  /* The amount of characters output so far.  */  
+  /* The amount of characters output so far.  */
   int line_length;
 
   /* This must be large enough to hold any printed integer or
@@ -114,7 +115,7 @@ typedef struct
   diagnostic_prefixing_rule_t rule;
 
   /* The ideal upper bound of number of characters per line, as suggested
-     by front-end.  */  
+     by front-end.  */
   int line_cutoff;
 } pp_wrapping_mode_t;
 
@@ -140,13 +141,17 @@ typedef bool (*printer_fn) (pretty_printer *, text_info *, const char *,
 
 /* TRUE if a newline character needs to be added before further
    formatting.  */
-#define pp_needs_newline(PP)  pp_base (PP)->need_newline 
+#define pp_needs_newline(PP)  pp_base (PP)->need_newline
 
 /* True if PRETTY-PRINTER is in line-wrapping mode.  */
 #define pp_is_wrapping_line(PP) (pp_line_cutoff (PP) > 0)
 
 /* The amount of whitespace to be emitted when starting a new line.  */
 #define pp_indentation(PP) pp_base (PP)->indent_skip
+
+/* True if identifiers are translated to the locale character set on
+   output.  */
+#define pp_translate_identifiers(PP) pp_base (PP)->translate_identifiers
 
 /* The data structure that contains the bare minimum required to do
    proper pretty-printing.  Clients may derived from this structure
@@ -158,12 +163,12 @@ struct pretty_print_info
 
   /* The prefix for each new line.  */
   const char *prefix;
-  
+
   /* Where to put whitespace around the entity being formatted.  */
   pp_padding padding;
-  
+
   /* The real upper bound of number of characters per line, taking into
-     account the case of a very very looong prefix.  */  
+     account the case of a very very looong prefix.  */
   int maximum_length;
 
   /* Indentation count.  */
@@ -187,6 +192,10 @@ struct pretty_print_info
 
   /* Nonzero means one should emit a newline before outputting anything.  */
   bool need_newline;
+
+  /* Nonzero means identifiers are translated to the locale character
+     set on output.  */
+  bool translate_identifiers;
 };
 
 #define pp_set_line_maximum_length(PP, L) \
@@ -273,14 +282,9 @@ struct pretty_print_info
    pp_scalar (PP, HOST_WIDEST_INT_PRINT_DEC, (HOST_WIDEST_INT) I)
 #define pp_pointer(PP, P)      pp_scalar (PP, "%p", P)
 
-#define pp_identifier(PP, ID)  pp_string (PP, ID)
-#define pp_tree_identifier(PP, T)                      \
-  pp_append_text(PP, IDENTIFIER_POINTER (T), \
-                 IDENTIFIER_POINTER (T) + IDENTIFIER_LENGTH (T))
-
-#define pp_unsupported_tree(PP, T)                         \
-  pp_verbatim (pp_base (PP), "#%qs not supported by %s#", \
-               tree_code_name[(int) TREE_CODE (T)], __FUNCTION__)
+#define pp_identifier(PP, ID)  pp_string (PP, (pp_translate_identifiers (PP) \
+					  ? identifier_to_locale (ID)	\
+					  : (ID)))
 
 
 #define pp_buffer(PP) pp_base (PP)->buffer
@@ -299,7 +303,7 @@ extern const char *pp_base_last_position_in_text (const pretty_printer *);
 extern void pp_base_emit_prefix (pretty_printer *);
 extern void pp_base_append_text (pretty_printer *, const char *, const char *);
 
-/* This header may be included before toplev.h, hence the duplicate
+/* This header may be included before diagnostics-core.h, hence the duplicate
    definitions to allow for GCC-specific formats.  */
 #if GCC_VERSION >= 3005
 #define ATTRIBUTE_GCC_PPDIAG(m, n) __attribute__ ((__format__ (__gcc_diag__, m ,n))) ATTRIBUTE_NONNULL(m)
@@ -333,5 +337,9 @@ pp_set_verbatim_wrapping_ (pretty_printer *pp)
   return oldmode;
 }
 #define pp_set_verbatim_wrapping(PP) pp_set_verbatim_wrapping_ (pp_base (PP))
+
+extern const char *identifier_to_locale (const char *);
+extern void *(*identifier_to_locale_alloc) (size_t);
+extern void (*identifier_to_locale_free) (void *);
 
 #endif /* GCC_PRETTY_PRINT_H */

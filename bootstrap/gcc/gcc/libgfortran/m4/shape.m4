@@ -1,5 +1,5 @@
 `/* Implementation of the SHAPE intrinsic
-   Copyright 2002, 2006, 2007, 2009 Free Software Foundation, Inc.
+   Copyright 2002, 2006, 2007, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -42,15 +42,25 @@ shape_'rtype_kind` ('rtype` * const restrict ret,
   int n;
   index_type stride;
   index_type extent;
+  int rank;
 
-  stride = ret->dim[0].stride;
+  rank = GFC_DESCRIPTOR_RANK (array);
 
-  if (ret->dim[0].ubound < ret->dim[0].lbound)
+  if (ret->data == NULL)
+    {
+      GFC_DIMENSION_SET(ret->dim[0], 0, rank - 1, 1);
+      ret->offset = 0;
+      ret->data = internal_malloc_size (sizeof ('rtype_name`) * rank);
+    }
+
+  stride = GFC_DESCRIPTOR_STRIDE(ret,0);
+
+  if (GFC_DESCRIPTOR_EXTENT(ret,0) < 1)
     return;
 
-  for (n = 0; n < GFC_DESCRIPTOR_RANK (array); n++)
+  for (n = 0; n < rank; n++)
     {
-      extent = array->dim[n].ubound + 1 - array->dim[n].lbound;
+      extent = GFC_DESCRIPTOR_EXTENT(array,n);
       ret->data[n * stride] = extent > 0 ? extent : 0 ;
     }
 }

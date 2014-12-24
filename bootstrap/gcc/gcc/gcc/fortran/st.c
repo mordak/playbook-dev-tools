@@ -1,5 +1,5 @@
 /* Build executable statement trees.
-   Copyright (C) 2000, 2001, 2002, 2004, 2005, 2006, 2007, 2008
+   Copyright (C) 2000, 2001, 2002, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by Andy Vaught
 
@@ -80,22 +80,25 @@ gfc_append_code (gfc_code *tail, gfc_code *new_code)
 void
 gfc_free_statement (gfc_code *p)
 {
-  if (p->expr)
-    gfc_free_expr (p->expr);
+  if (p->expr1)
+    gfc_free_expr (p->expr1);
   if (p->expr2)
     gfc_free_expr (p->expr2);
 
   switch (p->op)
     {
     case EXEC_NOP:
+    case EXEC_END_BLOCK:
     case EXEC_ASSIGN:
     case EXEC_INIT_ASSIGN:
     case EXEC_GOTO:
     case EXEC_CYCLE:
     case EXEC_RETURN:
+    case EXEC_END_PROCEDURE:
     case EXEC_IF:
     case EXEC_PAUSE:
     case EXEC_STOP:
+    case EXEC_ERROR_STOP:
     case EXEC_EXIT:
     case EXEC_WHERE:
     case EXEC_IOLENGTH:
@@ -106,17 +109,28 @@ gfc_free_statement (gfc_code *p)
     case EXEC_LABEL_ASSIGN:
     case EXEC_ENTRY:
     case EXEC_ARITHMETIC_IF:
+    case EXEC_CRITICAL:
+    case EXEC_SYNC_ALL:
+    case EXEC_SYNC_IMAGES:
+    case EXEC_SYNC_MEMORY:
+      break;
+
+    case EXEC_BLOCK:
+      gfc_free_namespace (p->ext.block.ns);
+      gfc_free_association_list (p->ext.block.assoc);
       break;
 
     case EXEC_COMPCALL:
+    case EXEC_CALL_PPC:
     case EXEC_CALL:
     case EXEC_ASSIGN_CALL:
       gfc_free_actual_arglist (p->ext.actual);
       break;
 
     case EXEC_SELECT:
-      if (p->ext.case_list)
-	gfc_free_case_list (p->ext.case_list);
+    case EXEC_SELECT_TYPE:
+      if (p->ext.block.case_list)
+	gfc_free_case_list (p->ext.block.case_list);
       break;
 
     case EXEC_DO:
@@ -125,7 +139,7 @@ gfc_free_statement (gfc_code *p)
 
     case EXEC_ALLOCATE:
     case EXEC_DEALLOCATE:
-      gfc_free_alloc_list (p->ext.alloc_list);
+      gfc_free_alloc_list (p->ext.alloc.list);
       break;
 
     case EXEC_OPEN:
@@ -218,3 +232,15 @@ gfc_free_statements (gfc_code *p)
     }
 }
 
+
+/* Free an association list (of an ASSOCIATE statement).  */
+
+void
+gfc_free_association_list (gfc_association_list* assoc)
+{
+  if (!assoc)
+    return;
+
+  gfc_free_association_list (assoc->next);
+  gfc_free (assoc);
+}

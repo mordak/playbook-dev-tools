@@ -1,6 +1,6 @@
 /* BFD back-end for Irix core files.
-   Copyright 1993, 1994, 1996, 1999, 2001, 2002, 2004, 2006, 2007
-   Free Software Foundation, Inc.
+   Copyright 1993, 1994, 1996, 1999, 2001, 2002, 2004, 2005, 2006, 2007,
+   2010, 2011 Free Software Foundation, Inc.
    Written by Stu Grossman, Cygnus Support.
    Converted to back-end form by Ian Lance Taylor, Cygnus Support
 
@@ -44,6 +44,7 @@ struct sgi_core_struct
 #define core_command(bfd) (core_hdr(bfd)->cmd)
 
 #define irix_core_core_file_matches_executable_p generic_core_file_matches_executable_p
+#define irix_core_core_file_pid _bfd_nocore_core_file_pid
 
 static asection *make_bfd_asection
   (bfd *, const char *, flagword, bfd_size_type, bfd_vma, file_ptr);
@@ -292,6 +293,7 @@ const bfd_target irix_core_vec =
     0,			                                   /* symbol prefix */
     ' ',						   /* ar_pad_char */
     16,							   /* ar_max_namelen */
+    0,							   /* match_priority */
     NO_GET64, NO_GETS64, NO_PUT64,	/* 64 bit data */
     NO_GET, NO_GETS, NO_PUT,		/* 32 bit data */
     NO_GET, NO_GETS, NO_PUT,		/* 16 bit data */

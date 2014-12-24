@@ -1,6 +1,7 @@
 ## Makefile for the GNU C++ Support library.
 ##
-## Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+## Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
+## 2009, 2010, 2011
 ## Free Software Foundation, Inc.
 ##
 ## Process this file with automake to produce Makefile.in.
@@ -26,14 +27,18 @@ include $(top_srcdir)/fragment.am
 # Need this library to both be part of libstdc++.a, and installed
 # separately too.
 # 1) separate libsupc++.la
-toolexeclib_LTLIBRARIES = libsupc++.la libsupc++-ne.a 
+toolexeclib_LTLIBRARIES = libsupc++.la
 # 2) integrated libsupc++convenience.la that is to be a part of libstdc++.a
 noinst_LTLIBRARIES = libsupc++convenience.la
 
+std_HEADERS = \
+	cxxabi.h exception initializer_list new typeinfo 
 
-headers = \
-	exception new typeinfo cxxabi.h cxxabi-forced.h exception_defines.h \
-	initializer_list exception_ptr.h
+bits_HEADERS = \
+	cxxabi_forced.h hash_bytes.h \
+	exception_defines.h exception_ptr.h nested_exception.h 
+
+headers = $(std_HEADERS) $(bits_HEADERS)
 
 if GLIBCXX_HOSTED
   c_sources = \
@@ -43,6 +48,7 @@ endif
 sources = \
 	array_type_info.cc \
 	atexit_arm.cc \
+	bad_alloc.cc \
 	bad_cast.cc \
 	bad_typeid.cc \
 	class_type_info.cc \
@@ -69,6 +75,9 @@ sources = \
 	function_type_info.cc \
 	fundamental_type_info.cc \
 	guard.cc \
+	guard_error.cc \
+	hash_bytes.cc \
+	nested_exception.cc \
 	new_handler.cc \
 	new_op.cc \
 	new_opnt.cc \
@@ -85,12 +94,8 @@ sources = \
 	vmi_class_type_info.cc \
 	vterminate.cc
 
-libsupc___la_SOURCES = $(sources) $(c_sources)
-libsupc-ne___la_SOURCES = $(sources) $(c_sources)
+libsupc___la_SOURCES = $(sources) $(c_sources) 
 libsupc__convenience_la_SOURCES = $(sources) $(c_sources)
-
-glibcxxinstalldir = $(gxx_include_dir)
-glibcxxinstall_HEADERS = $(headers)
 
 # AM_CXXFLAGS needs to be in each subdirectory so that it can be
 # modified in a per-library or per-sub-library way.  Need to manually
@@ -117,8 +122,8 @@ C_COMPILE = \
 	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
 
 # LTCOMPILE is copied from LTCXXCOMPILE below.
-LTCOMPILE = $(LIBTOOL) --tag CC --tag disable-shared --mode=compile $(CC) \
-	    $(DEFS) $(C_INCLUDES) $(LIBSUPCXX_PICFLAGS) \
+LTCOMPILE = $(LIBTOOL) --tag CC --tag disable-shared $(LIBTOOLFLAGS) --mode=compile \
+	    $(CC) $(DEFS) $(C_INCLUDES) $(LIBSUPCXX_PICFLAGS) \
             $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
 
 cp-demangle.c:
@@ -130,7 +135,12 @@ cp-demangle.o: cp-demangle.c
 	$(C_COMPILE) -DIN_GLIBCPP_V3 -Wno-error -c $<
 
 
-# libstdc++ libtool notes
+nested_exception.lo: nested_exception.cc
+	$(LTCXXCOMPILE) -std=gnu++0x -c $<
+nested_exception.o: nested_exception.cc
+	$(CXXCOMPILE) -std=gnu++0x -c $<
+
+# Libtool notes
 
 # 1) Need to explicitly set LTCXXCOMPILE so that AM_CXXFLAGS is
 # last. (That way, things like -O2 passed down from the toplevel can
@@ -151,7 +161,7 @@ cp-demangle.o: cp-demangle.c
 #
 # We have to put --tag disable-shared after --tag CXX lest things
 # CXX undo the affect of disable-shared.
-LTCXXCOMPILE = $(LIBTOOL) --tag CXX --tag disable-shared \
+LTCXXCOMPILE = $(LIBTOOL) --tag CXX --tag disable-shared $(LIBTOOLFLAGS) \
 	       --mode=compile $(CXX) $(TOPLEVEL_INCLUDES) \
 	       $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) 
 
@@ -163,25 +173,47 @@ LTLDFLAGS = $(shell $(SHELL) $(top_srcdir)/../libtool-ldflags $(LDFLAGS))
 # course is problematic at this point.  So, we get the top-level
 # directory to configure libstdc++-v3 to use gcc as the C++
 # compilation driver.
-CXXLINK = $(LIBTOOL) --tag CXX --tag disable-shared \
+CXXLINK = $(LIBTOOL) --tag CXX --tag disable-shared $(LIBTOOLFLAGS) \
 	  --mode=link $(CXX) \
 	  $(OPT_LDFLAGS) $(SECTION_LDFLAGS) $(AM_CXXFLAGS) $(LTLDFLAGS) -o $@
 
+
+# Install notes
 # We have to have rules modified from the default to counteract SUN make
-# prepending each of $(glibcxxinstall_HEADERS) with VPATH below.
-install-glibcxxinstallHEADERS: $(glibcxxinstall_HEADERS)
+# prepending each of $(*_HEADERS) with VPATH below.
+stddir = $(gxx_include_dir)
+bitsdir = $(gxx_include_dir)/bits
+
+install-stdHEADERS: $(std_HEADERS)
 	@$(NORMAL_INSTALL)
-	$(mkinstalldirs) $(DESTDIR)$(glibcxxinstalldir)
-	@list='$(glibcxxinstall_HEADERS)'; for p in $$list; do \
+	$(mkinstalldirs) $(DESTDIR)$(stddir)
+	@list='$(std_HEADERS)'; for p in $$list; do \
 	  q=`echo $$p | sed -e 's,.*/,,'`; \
 	  if test -f "$$p"; then d= ; else d="$(srcdir)/"; fi; \
-	  echo " $(INSTALL_DATA) $$d$$p $(DESTDIR)$(glibcxxinstalldir)/$$q"; \
-	  $(INSTALL_DATA) $$d$$p $(DESTDIR)$(glibcxxinstalldir)/$$q; \
+	  echo " $(INSTALL_DATA) $$d$$p $(DESTDIR)$(stddir)/$$q"; \
+	  $(INSTALL_DATA) $$d$$p $(DESTDIR)$(stddir)/$$q; \
 	done
 
-uninstall-glibcxxinstallHEADERS:
-	@$(NORMAL_UNINSTALL)
-	list='$(glibcxxinstall_HEADERS)'; for p in $$list; do \
+install-bitsHEADERS: $(bits_HEADERS)
+	@$(NORMAL_INSTALL)
+	$(mkinstalldirs) $(DESTDIR)$(bitsdir)
+	@list='$(bits_HEADERS)'; for p in $$list; do \
 	  q=`echo $$p | sed -e 's,.*/,,'`; \
-	  rm -f $(DESTDIR)$(glibcxxinstalldir)/$$q; \
+	  if test -f "$$p"; then d= ; else d="$(srcdir)/"; fi; \
+	  echo " $(INSTALL_DATA) $$d$$p $(DESTDIR)$(bitsdir)/$$q"; \
+	  $(INSTALL_DATA) $$d$$p $(DESTDIR)$(bitsdir)/$$q; \
+	done
+
+uninstall-stdHEADERS:
+	@$(NORMAL_UNINSTALL)
+	list='$(std_HEADERS)'; for p in $$list; do \
+	  q=`echo $$p | sed -e 's,.*/,,'`; \
+	  rm -f $(DESTDIR)$(stddir)/$$q; \
+	done
+
+uninstall-bitsHEADERS:
+	@$(NORMAL_UNINSTALL)
+	list='$(bits_HEADERS)'; for p in $$list; do \
+	  q=`echo $$p | sed -e 's,.*/,,'`; \
+	  rm -f $(DESTDIR)$(bitsdir)/$$q; \
 	done

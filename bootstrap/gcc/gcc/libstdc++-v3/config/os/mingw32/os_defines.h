@@ -1,7 +1,7 @@
 // Specific definitions for generic platforms  -*- C++ -*-
 
 // Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
-// 2009  Free Software Foundation, Inc.
+// 2009, 2010  Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -23,9 +23,9 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file os_defines.h
+/** @file bits/os_defines.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{iosfwd}
  */
 
 #ifndef _GLIBCXX_OS_DEFINES
@@ -45,10 +45,24 @@
 #undef NOMINMAX
 #define NOMINMAX 1
 
+#if defined (_GLIBCXX_DLL)
+#define _GLIBCXX_PSEUDO_VISIBILITY_default __attribute__ ((__dllimport__))
+#else
+#define _GLIBCXX_PSEUDO_VISIBILITY_default
+#endif
+#define _GLIBCXX_PSEUDO_VISIBILITY_hidden
+
+#define _GLIBCXX_PSEUDO_VISIBILITY(V) _GLIBCXX_PSEUDO_VISIBILITY_ ## V
+
 // See libstdc++/20806.
 #define _GLIBCXX_HAVE_DOS_BASED_FILESYSTEM 1
 
 // See  libstdc++/37522.
 #define _GLIBCXX_HAVE_BROKEN_VSWPRINTF 1
+
+// See libstdc++/43738
+// On native windows targets there is no ioctl function. And the existing
+// ioctlsocket function doesn't work for normal file-descriptors.
+#define _GLIBCXX_NO_IOCTL 1
 
 #endif

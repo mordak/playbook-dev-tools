@@ -1,8 +1,8 @@
 `/* Implementation of the MAXLOC intrinsic
-   Copyright 2002, 2007, 2009 Free Software Foundation, Inc.
+   Copyright 2002, 2007, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
-This file is part of the GNU Fortran 95 runtime library (libgfortran).
+This file is part of the GNU Fortran runtime library (libgfortran).
 
 Libgfortran is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public
@@ -34,24 +34,67 @@ include(ifunction.m4)dnl
 `#if defined (HAVE_'atype_name`) && defined (HAVE_'rtype_name`)'
 
 ARRAY_FUNCTION(0,
-`  atype_name maxval;
-  maxval = atype_min;
-  result = 0;',
-`  if (*src > maxval || !result)
-    {
-      maxval = *src;
-      result = (rtype_name)n + 1;
-    }')
+`	atype_name maxval;
+#if defined ('atype_inf`)
+	maxval = -atype_inf;
+#else
+	maxval = atype_min;
+#endif
+	result = 1;',
+`#if defined ('atype_nan`)
+		if (*src >= maxval)
+		  {
+		    maxval = *src;
+		    result = (rtype_name)n + 1;
+		    break;
+		  }
+	      }
+	    for (; n < len; n++, src += delta)
+	      {
+#endif
+		if (*src > maxval)
+		  {
+		    maxval = *src;
+		    result = (rtype_name)n + 1;
+		  }', `')
 
 MASKED_ARRAY_FUNCTION(0,
-`  atype_name maxval;
-  maxval = atype_min;
-  result = 0;',
-`  if (*msrc && (*src > maxval || !result))
-    {
-      maxval = *src;
-      result = (rtype_name)n + 1;
-    }')
+`	atype_name maxval;
+#if defined ('atype_inf`)
+	maxval = -atype_inf;
+#else
+	maxval = atype_min;
+#endif
+#if defined ('atype_nan`)
+	rtype_name result2 = 0;
+#endif
+	result = 0;',
+`		if (*msrc)
+		  {
+#if defined ('atype_nan`)
+		    if (!result2)
+		      result2 = (rtype_name)n + 1;
+		    if (*src >= maxval)
+#endif
+		      {
+			maxval = *src;
+			result = (rtype_name)n + 1;
+			break;
+		      }
+		  }
+	      }
+#if defined ('atype_nan`)
+	    if (unlikely (n >= len))
+	      result = result2;
+	    else
+#endif
+	    for (; n < len; n++, src += delta, msrc += mdelta)
+	      {
+		if (*msrc && *src > maxval)
+		  {
+		    maxval = *src;
+		    result = (rtype_name)n + 1;
+		  }')
 
 SCALAR_ARRAY_FUNCTION(0)
 

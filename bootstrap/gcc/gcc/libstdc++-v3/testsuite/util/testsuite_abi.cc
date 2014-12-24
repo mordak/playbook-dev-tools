@@ -1,6 +1,7 @@
 // -*- C++ -*-
 
-// Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
+// Free Software Foundation, Inc.
 
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License as
@@ -42,13 +43,15 @@ symbol::init(string& data)
     type = symbol::function;
   else if (data.find("OBJECT") == 0)
     type = symbol::object;
+  else if (data.find("TLS") == 0)
+    type = symbol::tls;
 
   n = data.find_first_of(delim);
   if (n != npos)
     data.erase(data.begin(), data.begin() + n + 1);
 
-  // Iff object, get size info.
-  if (type == symbol::object)
+  // Iff object or TLS, get size info.
+  if (type == symbol::object || type == symbol::tls)
     {
       n = data.find_first_of(delim);
       if (n != npos)
@@ -129,6 +132,9 @@ symbol::print() const
     case object:
       type_string = "object";
       break;
+    case tls:
+      type_string = "tls";
+      break;
     case uncategorized:
       type_string = "uncategorized";
       break;
@@ -137,7 +143,7 @@ symbol::print() const
     }
   cout << "type: " << type_string << endl;
   
-  if (type == object)
+  if (type == object || type == tls)
     cout << "type size: " << size << endl;
 
   string status_string;
@@ -185,6 +191,9 @@ check_version(symbol& test, bool added)
       known_versions.push_back("GLIBCXX_3.4.11");
       known_versions.push_back("GLIBCXX_3.4.12");
       known_versions.push_back("GLIBCXX_3.4.13");
+      known_versions.push_back("GLIBCXX_3.4.14");
+      known_versions.push_back("GLIBCXX_3.4.15");
+      known_versions.push_back("GLIBCXX_3.4.16");
       known_versions.push_back("GLIBCXX_LDBL_3.4");
       known_versions.push_back("GLIBCXX_LDBL_3.4.7");
       known_versions.push_back("GLIBCXX_LDBL_3.4.10");
@@ -192,6 +201,8 @@ check_version(symbol& test, bool added)
       known_versions.push_back("CXXABI_1.3.1");
       known_versions.push_back("CXXABI_1.3.2");
       known_versions.push_back("CXXABI_1.3.3");
+      known_versions.push_back("CXXABI_1.3.4");
+      known_versions.push_back("CXXABI_1.3.5");
       known_versions.push_back("CXXABI_LDBL_1.3");
     }
   compat_list::iterator begin = known_versions.begin();
@@ -207,10 +218,14 @@ check_version(symbol& test, bool added)
       else
 	test.version_status = symbol::incompatible;
       
-      // Check that added symbols aren't added in the base version.
-      if (added && test.version_name == known_versions[0])
+      // Check that added symbols aren't added in the base versions.
+      if (added
+	  && (test.version_name == known_versions[0]
+	      || test.version_name == "CXXABI_1.3"
+	      || test.version_name == "GLIBCXX_LDBL_3.4"
+	      || test.version_name == "CXXABI_LDBL_1.3"))
 	test.version_status = symbol::incompatible;
-      
+
       // Check that long double compatibility symbols demangled as
       // __float128 are put into some _LDBL_ version name.
       if (added && test.demangled_name.find("__float128") != std::string::npos)

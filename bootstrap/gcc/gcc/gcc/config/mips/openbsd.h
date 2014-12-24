@@ -1,5 +1,6 @@
 /* Configuration for  a MIPS ABI32 OpenBSD target.
-   Copyright (C) 1999, 2003, 2004, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 1999, 2003, 2004, 2007, 2008, 2009, 2010, 2011
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -22,8 +23,6 @@ along with GCC; see the file COPYING3.  If not see
 /* GAS must know this.  */
 #undef SUBTARGET_ASM_SPEC
 #define SUBTARGET_ASM_SPEC "%{fPIC|fPIE:-KPIC}"
-
-#define AS_NEEDS_DASH_FOR_PIPED_INPUT
 
 /* CPP specific OpenBSD specs.  */
 #undef SUBTARGET_CPP_SPEC
@@ -57,16 +56,19 @@ along with GCC; see the file COPYING3.  If not see
 
 /* This must agree with <machine/ansi.h>.  */
 #undef SIZE_TYPE
-#define SIZE_TYPE "unsigned int"
+#define SIZE_TYPE "long unsigned int"
 
 #undef PTRDIFF_TYPE
-#define PTRDIFF_TYPE "int"
+#define PTRDIFF_TYPE "long int"
 
 #undef WCHAR_TYPE
 #define WCHAR_TYPE "int"
 
 #undef WCHAR_TYPE_SIZE
 #define WCHAR_TYPE_SIZE 32
+
+#undef WINT_TYPE
+#define WINT_TYPE "int"
 
 /* Controlling the compilation driver.  */
 
@@ -75,11 +77,10 @@ along with GCC; see the file COPYING3.  If not see
 #undef LINK_SPEC
 #define LINK_SPEC \
   "%{G*} %{EB} %{EL} %{mips1} %{mips2} %{mips3} \
-   %{bestGnum} %{shared} %{non_shared} \
-   %{call_shared} %{no_archive} %{exact_version} \
-   %{!shared: %{!non_shared: %{!call_shared: -non_shared}}} \
-   %{!dynamic-linker:-dynamic-linker /usr/libexec/ld.so} \
-   %{!nostdlib:%{!r*:%{!e*:-e __start}}} -dc -dp \
+   %{shared} \
+   %{!shared: -non_shared} \
+   -dynamic-linker /usr/libexec/ld.so \
+   %{!nostdlib:%{!r:%{!e*:-e __start}}} -dc -dp \
    %{static:-Bstatic} %{!static:-Bdynamic} %{assert*}"
 
 /* -G is incompatible with -KPIC which is the default, so only allow objects

@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -48,7 +48,7 @@ insert(const_reference r_val)
   _GLIBCXX_DEBUG_ONLY(assert_valid();)
   entry_pointer p_l = find_imp(PB_DS_V2F(r_val));
 
-  if (p_l != NULL)
+  if (p_l != 0)
     {
       _GLIBCXX_DEBUG_ONLY(debug_base::check_key_exists(PB_DS_V2F(r_val));)
       return std::make_pair(point_iterator(&p_l->m_value), false);

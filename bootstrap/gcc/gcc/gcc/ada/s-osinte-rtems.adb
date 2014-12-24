@@ -6,7 +6,7 @@
 --                                                                          --
 --                                  B o d y                                 --
 --                                                                          --
---            Copyright (C) 1991-2008 Florida State University              --
+--            Copyright (C) 1991-2009 Florida State University              --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -89,34 +89,18 @@ package body System.OS_Interface is
                        tv_nsec => long (Long_Long_Integer (F * 10#1#E9)));
    end To_Timespec;
 
-   function To_Duration (TV : struct_timeval) return Duration is
-   begin
-      return Duration (TV.tv_sec) + Duration (TV.tv_usec) / 10#1#E6;
-   end To_Duration;
-
-   function To_Timeval (D : Duration) return struct_timeval is
-      S : int;
-      F : Duration;
-   begin
-      S := int (Long_Long_Integer (D));
-      F := D - Duration (S);
-
-      --  If F has negative value due to a round-up, adjust for positive F
-      --  value.
-      if F < 0.0 then
-         S := S - 1;
-         F := F + 1.0;
-      end if;
-      return
-        struct_timeval'
-          (tv_sec  => S,
-           tv_usec => int (Long_Long_Integer (F * 10#1#E6)));
-   end To_Timeval;
+   ------------------
+   -- pthread_init --
+   ------------------
 
    procedure pthread_init is
    begin
       null;
    end pthread_init;
+
+   --------------------
+   -- Get_Stack_Base --
+   --------------------
 
    function Get_Stack_Base (thread : pthread_t) return Address is
       pragma Warnings (Off, thread);
@@ -125,15 +109,9 @@ package body System.OS_Interface is
       return Null_Address;
    end Get_Stack_Base;
 
-   function Get_Page_Size return size_t is
-   begin
-      return 0;
-   end Get_Page_Size;
-
-   function Get_Page_Size return Address is
-   begin
-      return 0;
-   end Get_Page_Size;
+   -----------------
+   -- sigaltstack --
+   -----------------
 
    function sigaltstack
      (ss  : not null access stack_t;

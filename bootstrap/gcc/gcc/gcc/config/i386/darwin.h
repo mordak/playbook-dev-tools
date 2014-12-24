@@ -1,5 +1,5 @@
 /* Target definitions for x86 running Darwin.
-   Copyright (C) 2001, 2002, 2004, 2005, 2006, 2007, 2008
+   Copyright (C) 2001, 2002, 2004, 2005, 2006, 2007, 2008, 2010
    Free Software Foundation, Inc.
    Contributed by Apple Computer Inc.
 
@@ -22,6 +22,9 @@ along with GCC; see the file COPYING3.  If not see
 /* Enable Mach-O bits in generic x86 code.  */
 #undef TARGET_MACHO
 #define TARGET_MACHO 1
+
+#undef DARWIN_X86
+#define DARWIN_X86 1
 
 #define TARGET_VERSION fprintf (stderr, " (i686 Darwin)");
 
@@ -60,6 +63,17 @@ along with GCC; see the file COPYING3.  If not see
 #undef WCHAR_TYPE_SIZE
 #define WCHAR_TYPE_SIZE 32
 
+/* Generate branch islands stubs if this is true.  */
+extern int darwin_emit_branch_islands;
+
+#undef TARGET_MACHO_BRANCH_ISLANDS
+#define TARGET_MACHO_BRANCH_ISLANDS darwin_emit_branch_islands
+
+/* For compatibility with OSX system tools, use the new style of pic stub
+   if this is set.  */
+#undef  MACHOPIC_ATT_STUB
+#define MACHOPIC_ATT_STUB (darwin_macho_att_stub)
+
 #undef MAX_BITS_PER_WORD
 #define MAX_BITS_PER_WORD 64
 
@@ -73,7 +87,9 @@ along with GCC; see the file COPYING3.  If not see
    Failure to ensure this will lead to a crash in the system libraries
    or dynamic loader.  */
 #undef STACK_BOUNDARY
-#define STACK_BOUNDARY 128
+#define STACK_BOUNDARY \
+ ((profile_flag || (TARGET_64BIT && ix86_abi == MS_ABI)) \
+  ? 128 : BITS_PER_WORD)
 
 #undef MAIN_STACK_BOUNDARY
 #define MAIN_STACK_BOUNDARY 128
@@ -85,7 +101,7 @@ along with GCC; see the file COPYING3.  If not see
    it's below the minimum.  */
 #undef PREFERRED_STACK_BOUNDARY
 #define PREFERRED_STACK_BOUNDARY			\
-  MAX (STACK_BOUNDARY, ix86_preferred_stack_boundary)
+  MAX (128, ix86_preferred_stack_boundary)
 
 /* We want -fPIC by default, unless we're using -static to compile for
    the kernel or some such.  */
@@ -94,10 +110,12 @@ along with GCC; see the file COPYING3.  If not see
 #define CC1_SPEC "%(cc1_cpu) \
   %{!mkernel:%{!static:%{!mdynamic-no-pic:-fPIC}}} \
   %{!mmacosx-version-min=*:-mmacosx-version-min=%(darwin_minversion)} \
-  %{g: %{!fno-eliminate-unused-debug-symbols: -feliminate-unused-debug-symbols }}"
+  %{g: %{!fno-eliminate-unused-debug-symbols: -feliminate-unused-debug-symbols }} " \
+  DARWIN_CC1_SPEC
 
 #undef ASM_SPEC
-#define ASM_SPEC "-arch %(darwin_arch) -force_cpusubtype_ALL"
+#define ASM_SPEC "-arch %(darwin_arch) -force_cpusubtype_ALL \
+  %{static}"
 
 #define DARWIN_ARCH_SPEC "%{m64:x86_64;:i386}"
 #define DARWIN_SUBARCH_SPEC DARWIN_ARCH_SPEC
@@ -113,7 +131,7 @@ along with GCC; see the file COPYING3.  If not see
 
 #undef ENDFILE_SPEC
 #define ENDFILE_SPEC \
-  "%{ffast-math|funsafe-math-optimizations:crtfastmath.o%s} \
+  "%{Ofast|ffast-math|funsafe-math-optimizations:crtfastmath.o%s} \
    %{mpc32:crtprec32.o%s} \
    %{mpc64:crtprec64.o%s} \
    %{mpc80:crtprec80.o%s}"
@@ -124,11 +142,6 @@ along with GCC; see the file COPYING3.  If not see
   { "darwin_arch", DARWIN_ARCH_SPEC },                          \
   { "darwin_crt2", "" },                                        \
   { "darwin_subarch", DARWIN_SUBARCH_SPEC },
-
-/* Use the following macro for any Darwin/x86-specific command-line option
-   translation.  */
-#define SUBTARGET_OPTION_TRANSLATE_TABLE \
-  { "", "" }
 
 /* The Darwin assembler mostly follows AT&T syntax.  */
 #undef ASSEMBLER_DIALECT
@@ -141,9 +154,14 @@ along with GCC; see the file COPYING3.  If not see
 
 #define SHIFT_DOUBLE_OMITS_COUNT 0
 
-extern void darwin_x86_file_end (void);
+/* Put all *tf routines in libgcc.  */
+#undef LIBGCC2_HAS_TF_MODE
+#define LIBGCC2_HAS_TF_MODE 1
+#define LIBGCC2_TF_CEXT q
+#define TF_SIZE 113
+
 #undef TARGET_ASM_FILE_END
-#define TARGET_ASM_FILE_END darwin_x86_file_end
+#define TARGET_ASM_FILE_END darwin_file_end
 
 /* Define the syntax of pseudo-ops, labels and comments.  */
 
@@ -162,18 +180,11 @@ extern void darwin_x86_file_end (void);
 #undef TARGET_SUBTARGET32_ISA_DEFAULT
 #define TARGET_SUBTARGET32_ISA_DEFAULT (OPTION_MASK_ISA_MMX		\
 					| OPTION_MASK_ISA_SSE		\
-					| OPTION_MASK_ISA_SSE2)
-
-#undef TARGET_SUBTARGET64_ISA_DEFAULT
-#define TARGET_SUBTARGET64_ISA_DEFAULT (OPTION_MASK_ISA_MMX		\
-					| OPTION_MASK_ISA_SSE		\
 					| OPTION_MASK_ISA_SSE2		\
 					| OPTION_MASK_ISA_SSE3)
 
-/* For now, disable dynamic-no-pic.  We'll need to go through i386.c
-   with a fine-tooth comb looking for refs to flag_pic!  */
-#define MASK_MACHO_DYNAMIC_NO_PIC 0
-#define TARGET_DYNAMIC_NO_PIC	  (target_flags & MASK_MACHO_DYNAMIC_NO_PIC)
+#undef TARGET_SUBTARGET64_ISA_DEFAULT
+#define TARGET_SUBTARGET64_ISA_DEFAULT TARGET_SUBTARGET32_ISA_DEFAULT
 
 #undef GOT_SYMBOL_NAME
 #define GOT_SYMBOL_NAME MACHOPIC_FUNCTION_BASE_NAME
@@ -182,14 +193,9 @@ extern void darwin_x86_file_end (void);
 
 #define LPREFIX "L"
 
-/* These are used by -fbranch-probabilities */
-#define HOT_TEXT_SECTION_NAME "__TEXT,__text,regular,pure_instructions"
-#define UNLIKELY_EXECUTED_TEXT_SECTION_NAME \
-                              "__TEXT,__unlikely,regular,pure_instructions"
-
 /* Assembler pseudos to introduce constants of various size.  */
 
-#define ASM_BYTE_OP "\t.byte\t"
+#define ASM_BYTE "\t.byte\t"
 #define ASM_SHORT "\t.word\t"
 #define ASM_LONG "\t.long\t"
 #define ASM_QUAD "\t.quad\t"
@@ -207,27 +213,12 @@ extern void darwin_x86_file_end (void);
         }				\
     } while (0)
 
-/* This says how to output an assembler line
-   to define a global common symbol.  */
-
-#define ASM_OUTPUT_COMMON(FILE, NAME, SIZE, ROUNDED)  \
-( fputs (".comm ", (FILE)),			\
-  assemble_name ((FILE), (NAME)),		\
-  fprintf ((FILE), ","HOST_WIDE_INT_PRINT_UNSIGNED"\n", (ROUNDED)))
-
-/* This says how to output an assembler line
-   to define a local common symbol.  */
-
-#define ASM_OUTPUT_LOCAL(FILE, NAME, SIZE, ROUNDED)  \
-( fputs (".lcomm ", (FILE)),			\
-  assemble_name ((FILE), (NAME)),		\
-  fprintf ((FILE), ","HOST_WIDE_INT_PRINT_UNSIGNED"\n", (ROUNDED)))
-
 /* Darwin profiling -- call mcount.  */
 #undef FUNCTION_PROFILER
 #define FUNCTION_PROFILER(FILE, LABELNO)				\
     do {								\
-      if (MACHOPIC_INDIRECT && !TARGET_64BIT)				\
+      if (TARGET_MACHO_BRANCH_ISLANDS 					\
+	   && MACHOPIC_INDIRECT && !TARGET_64BIT)			\
 	{								\
 	  const char *name = machopic_mcount_stub_name ();		\
 	  fprintf (FILE, "\tcall %s\n", name+1);  /*  skip '&'  */	\
@@ -240,6 +231,13 @@ extern void darwin_x86_file_end (void);
   do {									\
     SUBTARGET_C_COMMON_OVERRIDE_OPTIONS;				\
   } while (0)
+
+#undef SUBTARGET_OVERRIDE_OPTIONS
+#define SUBTARGET_OVERRIDE_OPTIONS \
+do {									\
+  if (TARGET_64BIT && MACHO_DYNAMIC_NO_PIC_P)				\
+    target_flags &= ~MASK_MACHO_DYNAMIC_NO_PIC;				\
+} while (0)
 
 /* Darwin on x86_64 uses dwarf-2 by default.  Pre-darwin9 32-bit
    compiles default to stabs+.  darwin9+ defaults to dwarf-2.  */
@@ -300,3 +298,26 @@ extern void darwin_x86_file_end (void);
    used in Mach-O.  */
 #undef MACHO_SYMBOL_FLAG_VARIABLE
 #define MACHO_SYMBOL_FLAG_VARIABLE ((SYMBOL_FLAG_MACH_DEP) << 3)
+
+#undef MACHOPIC_NL_SYMBOL_PTR_SECTION
+#define MACHOPIC_NL_SYMBOL_PTR_SECTION \
+		".section __IMPORT,__pointers,non_lazy_symbol_pointers"
+
+#define SUBTARGET32_DEFAULT_CPU "i686"
+
+#undef  SUBTARGET_INIT_BUILTINS
+#define SUBTARGET_INIT_BUILTINS					\
+do {								\
+  ix86_builtins[(int) IX86_BUILTIN_CFSTRING]			\
+    = darwin_init_cfstring_builtins ((unsigned) (IX86_BUILTIN_CFSTRING));	\
+  darwin_rename_builtins ();					\
+} while(0)
+
+/* The system ___divdc3 routine in libSystem on darwin10 is not
+   accurate to 1ulp, ours is, so we avoid ever using the system name
+   for this routine and instead install a non-conflicting name that is
+   accurate.  See darwin_rename_builtins.  */
+#ifdef L_divdc3
+#define DECLARE_LIBRARY_RENAMES \
+  asm(".text; ___divdc3: jmp ___ieee_divdc3 ; .globl ___divdc3");
+#endif

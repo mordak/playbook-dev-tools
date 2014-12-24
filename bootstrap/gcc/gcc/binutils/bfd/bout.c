@@ -1,6 +1,6 @@
 /* BFD back-end for Intel 960 b.out binaries.
    Copyright 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
-   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007
+   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
    Free Software Foundation, Inc.
    Written by Cygnus Support.
 
@@ -1094,7 +1094,6 @@ aligncode (bfd *abfd,
 	   unsigned int shrink)
 {
   bfd_vma dot = output_addr (input_section) + r->address;
-  bfd_vma gap;
   bfd_vma old_end;
   bfd_vma new_end;
   unsigned int shrink_delta;
@@ -1109,9 +1108,6 @@ aligncode (bfd *abfd,
   /* Work out where the new end will be - remember that we're smaller
      than we used to be.  */
   new_end = ((dot - shrink + size) & ~size);
-
-  /* This is the new end.  */
-  gap = old_end - ((dot + size) & ~size);
 
   shrink_delta = (old_end - new_end) - shrink;
 
@@ -1144,6 +1140,10 @@ b_out_bfd_relax_section (bfd *abfd,
   unsigned int shrink = 0 ;
   arelent **reloc_vector = NULL;
   long reloc_size = bfd_get_reloc_upper_bound (input_bfd, input_section);
+
+  if (link_info->relocatable)
+    (*link_info->callbacks->einfo)
+      (_("%P%F: --relax and -r may not be used together\n"));
 
   if (reloc_size < 0)
     return FALSE;
@@ -1382,13 +1382,17 @@ b_out_bfd_get_relocated_section_contents (bfd *output_bfd,
 #define b_out_bfd_link_hash_table_free         _bfd_generic_link_hash_table_free
 #define b_out_bfd_link_add_symbols             _bfd_generic_link_add_symbols
 #define b_out_bfd_link_just_syms               _bfd_generic_link_just_syms
+#define b_out_bfd_copy_link_hash_symbol_type \
+  _bfd_generic_copy_link_hash_symbol_type
 #define b_out_bfd_final_link                   _bfd_generic_final_link
 #define b_out_bfd_link_split_section           _bfd_generic_link_split_section
 #define b_out_bfd_gc_sections                  bfd_generic_gc_sections
+#define b_out_bfd_lookup_section_flags         bfd_generic_lookup_section_flags
 #define b_out_bfd_merge_sections               bfd_generic_merge_sections
 #define b_out_bfd_is_group_section             bfd_generic_is_group_section
 #define b_out_bfd_discard_group                bfd_generic_discard_group
 #define b_out_section_already_linked           _bfd_generic_section_already_linked
+#define b_out_bfd_define_common_symbol         bfd_generic_define_common_symbol
 #define aout_32_get_section_contents_in_window _bfd_generic_get_section_contents_in_window
 
 extern const bfd_target b_out_vec_little_host;
@@ -1406,7 +1410,7 @@ const bfd_target b_out_vec_big_host =
   '_',				/* Symbol leading char.  */
   ' ',				/* AR_pad_char.  */
   16,				/* AR_max_namelen.  */
-
+  0,				/* match priority.  */
   bfd_getl64, bfd_getl_signed_64, bfd_putl64,
      bfd_getl32, bfd_getl_signed_32, bfd_putl32,
      bfd_getl16, bfd_getl_signed_16, bfd_putl16, /* Data.  */
@@ -1448,6 +1452,7 @@ const bfd_target b_out_vec_little_host =
   '_',				/* Symbol leading char.  */
   ' ',				/* AR_pad_char.  */
   16,				/* AR_max_namelen.  */
+  0,				/* match priority.  */
   bfd_getl64, bfd_getl_signed_64, bfd_putl64,
     bfd_getl32, bfd_getl_signed_32, bfd_putl32,
      bfd_getl16, bfd_getl_signed_16, bfd_putl16, /* Data.  */

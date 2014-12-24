@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2002-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 2002-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -118,9 +118,6 @@ package body Prep is
 
    String_False : String_Id;
    --  "false", as a string_id
-
-   Name_Defined : Name_Id;
-   --  defined, as a name_id
 
    ---------------
    -- Behaviour --
@@ -260,7 +257,7 @@ package body Prep is
          Result := True_Value;
 
       elsif Index = Definition'First then
-         Fail ("invalid symbol definition """, Definition, """");
+         Fail ("invalid symbol definition """ & Definition & """");
 
       else
          --  Put the symbol in the name buffer
@@ -280,9 +277,9 @@ package body Prep is
                      null;
 
                   when others =>
-                     Fail ("illegal value """,
-                           Definition (Index + 1 .. Definition'Last),
-                           """");
+                     Fail ("illegal value """
+                           & Definition (Index + 1 .. Definition'Last)
+                           & """");
                end case;
             end loop;
          end if;
@@ -301,9 +298,9 @@ package body Prep is
       if Name_Buffer (1) not in 'a' .. 'z'
         and then Name_Buffer (1) not in 'A' .. 'Z'
       then
-         Fail ("symbol """,
-               Name_Buffer (1 .. Name_Len),
-               """ does not start with a letter");
+         Fail ("symbol """
+               & Name_Buffer (1 .. Name_Len)
+               & """ does not start with a letter");
       end if;
 
       for J in 2 .. Name_Len loop
@@ -313,20 +310,20 @@ package body Prep is
 
             when '_' =>
                if J = Name_Len then
-                  Fail ("symbol """,
-                        Name_Buffer (1 .. Name_Len),
-                        """ end with a '_'");
+                  Fail ("symbol """
+                        & Name_Buffer (1 .. Name_Len)
+                        & """ end with a '_'");
 
                elsif Name_Buffer (J + 1) = '_' then
-                  Fail ("symbol """,
-                        Name_Buffer (1 .. Name_Len),
-                        """ contains consecutive '_'");
+                  Fail ("symbol """
+                        & Name_Buffer (1 .. Name_Len)
+                        & """ contains consecutive '_'");
                end if;
 
             when others =>
-               Fail ("symbol """,
-                     Name_Buffer (1 .. Name_Len),
-                     """ contains illegal character(s)");
+               Fail ("symbol """
+                     & Name_Buffer (1 .. Name_Len)
+                     & """ contains illegal character(s)");
          end case;
       end loop;
 
@@ -414,7 +411,8 @@ package body Prep is
                   Scan.all;
 
                else
-                  Error_Msg ("`)` expected", Token_Ptr);
+                  Error_Msg -- CODEFIX
+                    ("`)` expected", Token_Ptr);
                end if;
 
             when Tok_Not =>
@@ -691,13 +689,7 @@ package body Prep is
    -- Initialize --
    ----------------
 
-   procedure Initialize
-     (Error_Msg         : Error_Msg_Proc;
-      Scan              : Scan_Proc;
-      Set_Ignore_Errors : Set_Ignore_Errors_Proc;
-      Put_Char          : Put_Char_Proc;
-      New_EOL           : New_EOL_Proc)
-   is
+   procedure Initialize is
    begin
       if not Already_Initialized then
          Start_String;
@@ -707,22 +699,12 @@ package body Prep is
          Start_String;
          Empty_String := End_String;
 
-         Name_Len := 7;
-         Name_Buffer (1 .. Name_Len) := "defined";
-         Name_Defined := Name_Find;
-
          Start_String;
          Store_String_Chars ("False");
          String_False := End_String;
 
          Already_Initialized := True;
       end if;
-
-      Prep.Error_Msg         := Error_Msg;
-      Prep.Scan              := Scan;
-      Prep.Set_Ignore_Errors := Set_Ignore_Errors;
-      Prep.Put_Char          := Put_Char;
-      Prep.New_EOL           := New_EOL;
    end Initialize;
 
    ------------------
@@ -732,8 +714,8 @@ package body Prep is
    procedure List_Symbols (Foreword : String) is
       Order : array (0 ..  Integer (Symbol_Table.Last (Mapping)))
                  of Symbol_Id;
-      --  After alphabetical sorting, this array stores the indices of
-      --  the symbols in the order they are displayed.
+      --  After alphabetical sorting, this array stores the indexes of the
+      --  symbols in the order they are displayed.
 
       function Lt (Op1, Op2 : Natural) return Boolean;
       --  Comparison routine for sort call
@@ -925,7 +907,8 @@ package body Prep is
             Scan.all;
 
             if Token /= Tok_Colon_Equal then
-               Error_Msg ("`:=` expected", Token_Ptr);
+               Error_Msg -- CODEFIX
+                 ("`:=` expected", Token_Ptr);
                goto Cleanup;
             end if;
 
@@ -945,7 +928,7 @@ package body Prep is
                   goto Cleanup;
                end if;
 
-            elsif Token = Tok_End_Of_Line or Token = Tok_EOF then
+            elsif Token = Tok_End_Of_Line or else Token = Tok_EOF then
                Data := (Symbol              => Symbol_Name,
                         Original            => Original_Name,
                         On_The_Command_Line => False,
@@ -1027,7 +1010,7 @@ package body Prep is
             <<Cleanup>>
                Set_Ignore_Errors (To => True);
 
-               while Token /= Tok_End_Of_Line and Token /= Tok_EOF loop
+               while Token /= Tok_End_Of_Line and then Token /= Tok_EOF loop
                   Scan.all;
                end loop;
 
@@ -1051,8 +1034,8 @@ package body Prep is
       Modified            : Boolean := False;
 
       procedure Output (From, To : Source_Ptr);
-      --  Output the characters with indices From .. To in the buffer
-      --  to the output file.
+      --  Output the characters with indexes From .. To in the buffer to the
+      --  output file.
 
       procedure Output_Line (From, To : Source_Ptr);
       --  Output a line or the end of a line from the buffer to the output
@@ -1077,7 +1060,7 @@ package body Prep is
 
       procedure Output_Line (From, To : Source_Ptr) is
       begin
-         if Deleting or Preprocessor_Line then
+         if Deleting or else Preprocessor_Line then
             if Blank_Deleted_Lines then
                New_EOL.all;
 
@@ -1164,8 +1147,9 @@ package body Prep is
                            New_State : constant Pp_State :=
                                          (If_Ptr     => If_Ptr,
                                           Else_Ptr   => 0,
-                                          Deleting   => Deleting or (not Cond),
-                                          Match_Seen => Deleting or Cond);
+                                          Deleting   => Deleting
+                                                          or else not Cond,
+                                          Match_Seen => Deleting or else Cond);
 
                         begin
                            Pp_States.Increment_Last;
@@ -1237,7 +1221,8 @@ package body Prep is
                      elsif
                        Pp_States.Table (Pp_States.Last).Else_Ptr /= 0
                      then
-                        Error_Msg ("duplicate ELSE line", Token_Ptr);
+                        Error_Msg -- CODEFIX
+                          ("duplicate ELSE line", Token_Ptr);
                         No_Error_Found := False;
                      end if;
 
@@ -1287,14 +1272,16 @@ package body Prep is
                      Scan.all;
 
                      if Token /= Tok_If then
-                        Error_Msg ("IF expected", Token_Ptr);
+                        Error_Msg -- CODEFIX
+                          ("IF expected", Token_Ptr);
                         No_Error_Found := False;
 
                      else
                         Scan.all;
 
                         if Token /= Tok_Semicolon then
-                           Error_Msg ("`;` Expected", Token_Ptr);
+                           Error_Msg -- CODEFIX
+                             ("`;` Expected", Token_Ptr);
                            No_Error_Found := False;
 
                         else
@@ -1330,13 +1317,15 @@ package body Prep is
                      No_Error_Found := False;
 
                      if Pp_States.Last = 0 then
-                        Error_Msg ("IF expected", Token_Ptr);
+                        Error_Msg -- CODEFIX
+                          ("IF expected", Token_Ptr);
 
                      elsif
                        Pp_States.Table (Pp_States.Last).Else_Ptr = 0
                      then
-                        Error_Msg ("IF, ELSIF, ELSE, or `END IF` expected",
-                                   Token_Ptr);
+                        Error_Msg
+                          ("IF, ELSIF, ELSE, or `END IF` expected",
+                           Token_Ptr);
 
                      else
                         Error_Msg ("IF or `END IF` expected", Token_Ptr);
@@ -1427,7 +1416,7 @@ package body Prep is
             end if;
          end if;
 
-         pragma Assert (Token = Tok_End_Of_Line or Token = Tok_EOF);
+         pragma Assert (Token = Tok_End_Of_Line or else Token = Tok_EOF);
 
          --  At this point, the token is either end of line or EOF.
          --  The line to possibly output stops just before the token.
@@ -1469,5 +1458,26 @@ package body Prep is
 
       Source_Modified := No_Error_Found and Modified;
    end Preprocess;
+
+   -----------------
+   -- Setup_Hooks --
+   -----------------
+
+   procedure Setup_Hooks
+     (Error_Msg         : Error_Msg_Proc;
+      Scan              : Scan_Proc;
+      Set_Ignore_Errors : Set_Ignore_Errors_Proc;
+      Put_Char          : Put_Char_Proc;
+      New_EOL           : New_EOL_Proc)
+   is
+   begin
+      pragma Assert (Already_Initialized);
+
+      Prep.Error_Msg         := Error_Msg;
+      Prep.Scan              := Scan;
+      Prep.Set_Ignore_Errors := Set_Ignore_Errors;
+      Prep.Put_Char          := Put_Char;
+      Prep.New_EOL           := New_EOL;
+   end Setup_Hooks;
 
 end Prep;

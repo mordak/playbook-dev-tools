@@ -4,7 +4,7 @@
 
 class A
 {
-  typedef int mytype; // { dg-error "'typedef int A::mytype' is private" "" { xfail *-*-* } }
+  typedef int mytype; // { dg-error "'typedef int A::mytype' is private" }
 };
 
 template <class T>
@@ -14,8 +14,8 @@ class B : public A
 
 template<class T>
 class B<T*> : public A
-{ // { dg-error "within this context" "" { xfail *-*-* } }
-  mytype mem;
+{
+  mytype mem; // { dg-error "within this context" }
 };
 
 B<int*> b;

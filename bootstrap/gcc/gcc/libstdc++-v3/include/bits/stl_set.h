@@ -1,7 +1,7 @@
 // Set implementation -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
-// Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
+// 2011 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -49,9 +49,9 @@
  * purpose.  It is provided "as is" without express or implied warranty.
  */
 
-/** @file stl_set.h
+/** @file bits/stl_set.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{set}
  */
 
 #ifndef _STL_SET_H
@@ -60,7 +60,9 @@
 #include <bits/concept_check.h>
 #include <initializer_list>
 
-_GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
   /**
    *  @brief A standard container made up of unique keys, which can be
@@ -91,7 +93,7 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
       __glibcxx_class_requires(_Key, _SGIAssignableConcept)
       __glibcxx_class_requires4(_Compare, bool, _Key, _Key,
 				_BinaryFunctionConcept)
-      __glibcxx_class_requires2(_Key, _Alloc_value_type, _SameTypeConcept)	
+      __glibcxx_class_requires2(_Key, _Alloc_value_type, _SameTypeConcept)
 
     public:
       // typedefs:
@@ -124,7 +126,7 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
       typedef typename _Rep_type::const_iterator            iterator;
       typedef typename _Rep_type::const_iterator            const_iterator;
       typedef typename _Rep_type::const_reverse_iterator    reverse_iterator;
-      typedef typename _Rep_type::const_reverse_iterator    const_reverse_iterator;
+      typedef typename _Rep_type::const_reverse_iterator const_reverse_iterator;
       typedef typename _Rep_type::size_type                 size_type;
       typedef typename _Rep_type::difference_type           difference_type;
       //@}
@@ -156,9 +158,9 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
        *  otherwise (where N is distance(first,last)).
        */
       template<typename _InputIterator>
-        set(_InputIterator __first, _InputIterator __last)
+	set(_InputIterator __first, _InputIterator __last)
 	: _M_t()
-        { _M_t._M_insert_unique(__first, __last); }
+	{ _M_t._M_insert_unique(__first, __last); }
 
       /**
        *  @brief  Builds a %set from a range.
@@ -172,11 +174,11 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
        *  otherwise (where N is distance(first,last)).
        */
       template<typename _InputIterator>
-        set(_InputIterator __first, _InputIterator __last,
+	set(_InputIterator __first, _InputIterator __last,
 	    const _Compare& __comp,
 	    const allocator_type& __a = allocator_type())
 	: _M_t(__comp, __a)
-        { _M_t._M_insert_unique(__first, __last); }
+	{ _M_t._M_insert_unique(__first, __last); }
 
       /**
        *  @brief  %Set copy constructor.
@@ -197,7 +199,7 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
        *  The contents of @a x are a valid, but unspecified %set.
        */
       set(set&& __x)
-      : _M_t(std::forward<_Rep_type>(__x._M_t)) { }
+      : _M_t(std::move(__x._M_t)) { }
 
       /**
        *  @brief  Builds a %set from an initializer_list.
@@ -241,10 +243,11 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
       set&
       operator=(set&& __x)
       {
+	// NB: DR 1204.
 	// NB: DR 675.
 	this->clear();
-	this->swap(__x); 
-	return *this;
+	this->swap(__x);
+      	return *this;
       }
 
       /**
@@ -383,11 +386,7 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
        *  std::swap(s1,s2) will feed to this function.
        */
       void
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-      swap(set&& __x)
-#else
-      swap(set& __x)	
-#endif
+      swap(set& __x)
       { _M_t.swap(__x._M_t); }
 
       // insert/erase
@@ -412,6 +411,16 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
 	return std::pair<iterator, bool>(__p.first, __p.second);
       }
 
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+      std::pair<iterator, bool>
+      insert(value_type&& __x)
+      {
+	std::pair<typename _Rep_type::iterator, bool> __p =
+	  _M_t._M_insert_unique(std::move(__x));
+	return std::pair<iterator, bool>(__p.first, __p.second);
+      }
+#endif
+
       /**
        *  @brief Attempts to insert an element into the %set.
        *  @param  position  An iterator that serves as a hint as to where the
@@ -426,14 +435,20 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
        *  potentially improve the performance of the insertion process.  A bad
        *  hint would cause no gains in efficiency.
        *
-       *  For more on "hinting", see:
+       *  For more on @a hinting, see:
        *  http://gcc.gnu.org/onlinedocs/libstdc++/manual/bk01pt07ch17.html
-       *  
+       *
        *  Insertion requires logarithmic time (if the hint is not taken).
        */
       iterator
-      insert(iterator __position, const value_type& __x)
+      insert(const_iterator __position, const value_type& __x)
       { return _M_t._M_insert_unique_(__position, __x); }
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+      iterator
+      insert(const_iterator __position, value_type&& __x)
+      { return _M_t._M_insert_unique_(__position, std::move(__x)); }
+#endif
 
       /**
        *  @brief A template function that attempts to insert a range
@@ -445,9 +460,9 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
        *  Complexity similar to that of the range constructor.
        */
       template<typename _InputIterator>
-        void
-        insert(_InputIterator __first, _InputIterator __last)
-        { _M_t._M_insert_unique(__first, __last); }
+	void
+	insert(_InputIterator __first, _InputIterator __last)
+	{ _M_t._M_insert_unique(__first, __last); }
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
       /**
@@ -462,6 +477,26 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
       { this->insert(__l.begin(), __l.end()); }
 #endif
 
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+      // DR 130. Associative erase should return an iterator.
+      /**
+       *  @brief Erases an element from a %set.
+       *  @param  position  An iterator pointing to the element to be erased.
+       *  @return An iterator pointing to the element immediately following
+       *          @a position prior to the element being erased. If no such
+       *          element exists, end() is returned.
+       *
+       *  This function erases an element, pointed to by the given iterator,
+       *  from a %set.  Note that this function only erases the element, and
+       *  that if the element is itself a pointer, the pointed-to memory is not
+       *  touched in any way.  Managing the pointer is the user's
+       *  responsibility.
+       */
+      iterator
+      erase(const_iterator __position)
+      { return _M_t.erase(__position); }
+#else
       /**
        *  @brief Erases an element from a %set.
        *  @param  position  An iterator pointing to the element to be erased.
@@ -469,11 +504,13 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
        *  This function erases an element, pointed to by the given iterator,
        *  from a %set.  Note that this function only erases the element, and
        *  that if the element is itself a pointer, the pointed-to memory is not
-       *  touched in any way.  Managing the pointer is the user's responsibility.
+       *  touched in any way.  Managing the pointer is the user's
+       *  responsibility.
        */
       void
       erase(iterator __position)
       { _M_t.erase(__position); }
+#endif
 
       /**
        *  @brief Erases elements according to the provided key.
@@ -490,6 +527,25 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
       erase(const key_type& __x)
       { return _M_t.erase(__x); }
 
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+      // DR 130. Associative erase should return an iterator.
+      /**
+       *  @brief Erases a [first,last) range of elements from a %set.
+       *  @param  first  Iterator pointing to the start of the range to be
+       *                 erased.
+       *  @param  last  Iterator pointing to the end of the range to be erased.
+       *  @return The iterator @a last.
+       *
+       *  This function erases a sequence of elements from a %set.
+       *  Note that this function only erases the element, and that if
+       *  the element is itself a pointer, the pointed-to memory is not touched
+       *  in any way.  Managing the pointer is the user's responsibility.
+       */
+      iterator
+      erase(const_iterator __first, const_iterator __last)
+      { return _M_t.erase(__first, __last); }
+#else
       /**
        *  @brief Erases a [first,last) range of elements from a %set.
        *  @param  first  Iterator pointing to the start of the range to be
@@ -504,6 +560,7 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
       void
       erase(iterator __first, iterator __last)
       { _M_t.erase(__first, __last); }
+#endif
 
       /**
        *  Erases all elements in a %set.  Note that this function only erases
@@ -615,12 +672,12 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
       //@}
 
       template<typename _K1, typename _C1, typename _A1>
-        friend bool
-        operator==(const set<_K1, _C1, _A1>&, const set<_K1, _C1, _A1>&);
+	friend bool
+	operator==(const set<_K1, _C1, _A1>&, const set<_K1, _C1, _A1>&);
 
       template<typename _K1, typename _C1, typename _A1>
-        friend bool
-        operator<(const set<_K1, _C1, _A1>&, const set<_K1, _C1, _A1>&);
+	friend bool
+	operator<(const set<_K1, _C1, _A1>&, const set<_K1, _C1, _A1>&);
     };
 
 
@@ -691,18 +748,6 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
     swap(set<_Key, _Compare, _Alloc>& __x, set<_Key, _Compare, _Alloc>& __y)
     { __x.swap(__y); }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-  template<typename _Key, typename _Compare, typename _Alloc>
-    inline void
-    swap(set<_Key, _Compare, _Alloc>&& __x, set<_Key, _Compare, _Alloc>& __y)
-    { __x.swap(__y); }
-
-  template<typename _Key, typename _Compare, typename _Alloc>
-    inline void
-    swap(set<_Key, _Compare, _Alloc>& __x, set<_Key, _Compare, _Alloc>&& __y)
-    { __x.swap(__y); }
-#endif
-
-_GLIBCXX_END_NESTED_NAMESPACE
-
+_GLIBCXX_END_NAMESPACE_CONTAINER
+} //namespace std
 #endif /* _STL_SET_H */

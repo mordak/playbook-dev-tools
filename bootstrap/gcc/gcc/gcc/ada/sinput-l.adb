@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -30,6 +30,7 @@ with Einfo;    use Einfo;
 with Errout;   use Errout;
 with Fname;    use Fname;
 with Hostparm;
+with Lib;      use Lib;
 with Opt;      use Opt;
 with Osint;    use Osint;
 with Output;   use Output;
@@ -364,9 +365,15 @@ package body Sinput.L is
                procedure Wchar (C : Character);
                --  Writes character or ? for control character
 
+               -----------
+               -- Wchar --
+               -----------
+
                procedure Wchar (C : Character) is
                begin
-                  if C < ' ' or C in ASCII.DEL .. Character'Val (16#9F#) then
+                  if C < ' '
+                    or else C in ASCII.DEL .. Character'Val (16#9F#)
+                  then
                      Write_Char ('?');
                   else
                      Write_Char (C);
@@ -453,6 +460,12 @@ package body Sinput.L is
          --  Preprocess the source if it needs to be preprocessed
 
          if Preprocessing_Needed then
+
+            --  Temporarily set the Source_File_Index_Table entries for the
+            --  source, to avoid crash when reporting an error.
+
+            Set_Source_File_Index_Table (X);
+
             if Opt.List_Preprocessing_Symbols then
                Get_Name_String (N);
 
@@ -494,9 +507,9 @@ package body Sinput.L is
 
                Prep_Buffer_Last := 0;
 
-               --  Initialize the preprocessor
+               --  Initialize the preprocessor hooks
 
-               Prep.Initialize
+               Prep.Setup_Hooks
                  (Error_Msg         => Errout.Error_Msg'Access,
                   Scan              => Scn.Scanner.Scan'Access,
                   Set_Ignore_Errors => Errout.Set_Ignore_Errors'Access,
@@ -518,6 +531,8 @@ package body Sinput.L is
                Save_Style_Check := Opt.Style_Check;
                Opt.Style_Check := False;
 
+               --  The actual preprocessing step
+
                Preprocess (Modified);
 
                --  Reset the scanner to its standard behavior, and restore the
@@ -538,9 +553,18 @@ package body Sinput.L is
 
                else
                   --  Output the result of the preprocessing, if requested and
-                  --  the source has been modified by the preprocessing.
+                  --  the source has been modified by the preprocessing. Only
+                  --  do that for the main unit (spec, body and subunits).
 
-                  if Generate_Processed_File and then Modified then
+                  if Generate_Processed_File
+                    and then Modified
+                    and then
+                     ((Compiler_State = Parsing
+                        and then Parsing_Main_Extended_Source)
+                       or else
+                        (Compiler_State = Analyzing
+                          and then Analysing_Subunit_Of_Main))
+                  then
                      declare
                         FD     : File_Descriptor;
                         NB     : Integer;
@@ -577,10 +601,9 @@ package body Sinput.L is
 
                         if not Status then
                            Errout.Error_Msg
-                             ("could not write processed file """ &
+                             ("?could not write processed file """ &
                               Name_Buffer (1 .. Name_Len) & '"',
                               Lo);
-                           return No_Source_File;
                         end if;
                      end;
                   end if;

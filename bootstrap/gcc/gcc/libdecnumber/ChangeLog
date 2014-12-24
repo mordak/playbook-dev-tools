@@ -1,20 +1,116 @@
-2009-10-15  Release Manager
+2012-03-01  Release Manager
 
-	* GCC 4.4.2 released.
+	* GCC 4.6.3 released.
+
+2011-10-26  Release Manager
+
+	* GCC 4.6.2 released.
+
+2011-06-27  Release Manager
+
+	* GCC 4.6.1 released.
+
+2011-03-25  Release Manager
+
+	* GCC 4.6.0 released.
+
+2010-11-24  Nathan Froyd  <froydnj@codesourcery.com>
+
+	* dconfig.h (LIBGCC2_FLOAT_WORDS_BIG_ENDIAN): Delete.
+	(WORDS_BIG_ENDIAN): Define based on value of __FLOAT_WORD_ORDER__.
+
+2010-10-23  Nathan Froyd  <froydnj@codesourcery.com>
+
+	* dconfig.h (LIBGCC2_WORDS_BIG_ENDIAN): Delete.
+	(LIBGCC2_FLOAT_WORDS_BIG_ENDIAN): Test __BYTE_ORDER__.
+
+2010-09-10  Kai Tietz  <kai.tietz@onevision.com>
+
+       * configure: Regenerated.
+
+2010-09-08  Tristan Gingold  <gingold@adacore.com>
+
+	PR 44001
+	* Makefile.in (objext): New variable.
+	(bid_OBJS): Use $(objext) for extension.
+	(libdecnumber_a_OBJS): Ditto.
+	(mostlyclean): Ditto
+	(.c.o): Ditto.
+	Update dependencies.
+
+2010-09-06  H.J. Lu  <hongjiu.lu@intel.com>
+
+	PR target/45524
+	* configure.ac (enable_decimal_float): Set to
+	$default_decimal_float.
+	* configure: Regenerated.
+
+2010-09-06  Andreas Schwab  <schwab@redhat.com>
+
+	* configure: Regenerate.
+
+2010-09-03  Andreas Krebbel  <Andreas.Krebbel@de.ibm.com>
+
+	* configure.ac: Use the GCC_AC_ENABLE_DECIMAL_FLOAT macro.
+	* Makefile.in: Add aclocal.m4 dependency to dfp.m4.
+	* configure: Regenerate.
+	* aclocal.m4: Regenerate.
+
+2010-08-21  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* configure: Regenerate.
+
+2010-04-02  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* aclocal.m4: Regenerate.
+
+2010-01-05  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	* configure: Regenerate.
+
+2009-11-28  Jakub Jelinek  <jakub@redhat.com>
+
+	* decContext.c (decContextTestEndian): Move adj definition into
+	#if DECCHECK guarded code.
+
+2009-09-09  Paolo Bonzini  <bonzini@gnu.org>
+
+	* configure: Regenerate.
+
+2009-09-08  Paolo Bonzini  <bonzini@gnu.org>
+
+	* configure: Regenerate.
+
+2009-08-24  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* configure.ac (AC_PREREQ): Bump to 2.64.
+
+2009-08-22  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* aclocal.m4: Regenerate.
+	* configure: Regenerate.
+	* config.in: Regenerate.
 
 2009-08-13  Janis Johnson  <janis187@us.ibm.com>
 
 	PR c/41046
+	* decContext.c (decContextTestEndian): Call printf only if DECCHECK.
 	* decCommon.c ( decFloatShow): Define function only for DECCHECK
 	or DECTRACE.
 
-2009-07-22  Release Manager
+2009-07-30  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
 
-	* GCC 4.4.1 released.
+	* Makefile.in (aclocal_deps): New variable.
+	($(srcdir)/aclocal.m4): Use it, for portable makefile syntax.
 
-2009-04-21  Release Manager
+2009-05-31  Ian Lance Taylor  <iant@google.com>
 
-	* GCC 4.4.0 released.
+	* decContext.h: Add extern "C" if compiling with C++.
+	* decDPD.h: Likewise.
+	* decNumber.h: Likewise.
+	* dpd/decimal32.h: Likewise.
+	* dpd/decimal64.h: Likewise.
+	* dpd/decimal128.h: Likewise.
 
 2009-04-09  Nick Clifton  <nickc@redhat.com>
 
@@ -66,6 +162,19 @@
 	3 of the GNU General Public License and to point readers at the
 	COPYING3 file and the FSF's license web page.
 	* configure.ac: Likewise.
+
+2009-04-01  Ben Elliston  <bje@au.ibm.com>
+
+        * decContext.h: Include gstdint.h instead of <stdint.h>.
+
+2009-03-30  Ben Elliston  <bje@au.ibm.com>
+
+	* decNumber.c, decNumber.h, decNumberLocal.h, decDouble.c,
+	decDouble.h, decSingle.c, decContext.c, decSingle.h, decPacked.c,
+	decCommon.c, decContext.h, decQuad.c, decPacked.h, decQuad.h,
+	decDPD.h, decBasic.c: Upgrade to decNumber 3.61.
+	* dpd/decimal128.h, dpd/decimal32.c, dpd/decimal32.h,
+	dpd/decimal64.c, dpd/decimal128.c, dpd/decimal64.h: Likewise.
 
 2009-02-10  Joseph Myers  <joseph@codesourcery.com>
 

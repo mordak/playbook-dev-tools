@@ -1,6 +1,6 @@
 /* Definitions for GCC.  Part of the machine description for CRIS.
-   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008
-   Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008,
+   2009, 2010, 2011 Free Software Foundation, Inc.
    Contributed by Axis Communications.  Written by Hans-Peter Nilsson.
 
 This file is part of GCC.
@@ -96,14 +96,6 @@ extern int cris_cpu_version;
 
 /* Node: Driver */
 
-/* When using make with defaults.mak for Sun this will handily remove
-   any "-target sun*" switches.  */
-/* We need to override any previous definitions (linux.h) */
-#undef WORD_SWITCH_TAKES_ARG
-#define WORD_SWITCH_TAKES_ARG(STR)		\
- (DEFAULT_WORD_SWITCH_TAKES_ARG (STR)		\
-  || !strcmp (STR, "target"))
-
 /* Also provide canonical vN definitions when user specifies an alias.
    Note that -melf overrides -maout.  */
 
@@ -168,12 +160,10 @@ extern int cris_cpu_version;
     " -D__CRIS_arch_tune=" CRIS_DEFAULT_TUNE "}}}}}"\
  CRIS_ARCH_CPP_DEFAULT
 
-/* Remove those Sun-make "target" switches.  */
 /* Override previous definitions (linux.h).  */
 #undef CC1_SPEC
 #define CC1_SPEC \
- "%{target*:}\
-  %{metrax4:-march=v3}\
+ "%{metrax4:-march=v3}\
   %{metrax100:-march=v8}\
   %(cc1_subtarget)"
 
@@ -202,14 +192,13 @@ extern int cris_cpu_version;
 #undef ASM_SPEC
 #define ASM_SPEC \
  MAYBE_AS_NO_MUL_BUG_ABORT \
- "%{v:-v}\
- %(asm_subtarget)\
- %{march=*:%{cpu=*:%eDo not specify both -march=... and -mcpu=...}}\
+ "%(asm_subtarget)\
+ %{march=*:%{mcpu=*:%edo not specify both -march=... and -mcpu=...}}\
  %{march=v32:--march=v32} %{mcpu=v32:--march=v32}"
 
 /* For the cris-*-elf subtarget.  */
 #define CRIS_ASM_SUBTARGET_SPEC \
- "--em=criself %{!march=*:%{!cpu=*:" CRIS_DEFAULT_ASM_ARCH_OPTION "}}"
+ "--em=criself %{!march=*:%{!mcpu=*:" CRIS_DEFAULT_ASM_ARCH_OPTION "}}"
 
 /* FIXME: We should propagate the -melf option to make the criself
    "emulation" unless a linker script is provided (-T*), but I don't know
@@ -218,11 +207,8 @@ extern int cris_cpu_version;
    time being.
 
    Note that -melf overrides -maout except that a.out-compiled libraries
-   are linked in (multilibbing).  The somewhat cryptic -rpath-link pair is
-   to avoid *only* picking up the linux multilib subdir from the "-B./"
-   option during build, while still giving it preference.  We'd need some
-   %s-variant that checked for existence of some specific file.  */
-/* Override previous definitions (svr4.h).  */
+   are linked in (multilibbing).  We'd need some %s-variant that
+   checked for existence of some specific file.  */
 #undef LINK_SPEC
 #define LINK_SPEC \
  "%{v:--verbose}\
@@ -280,9 +266,6 @@ extern int cris_cpu_version;
     }						\
   while (0)
 
-/* This needs to be at least 32 bits.  */
-extern int target_flags;
-
 /* Previously controlled by target_flags.  */
 #define TARGET_ELF 1
 
@@ -328,17 +311,6 @@ extern int target_flags;
 
 #define CRIS_SUBTARGET_HANDLE_OPTION(x, y, z)
 
-#define OVERRIDE_OPTIONS cris_override_options ()
-
-#define OPTIMIZATION_OPTIONS(OPTIMIZE, SIZE)	\
-  do						\
-    {						\
-      if ((OPTIMIZE) >= 2 || (SIZE))		\
-	flag_omit_frame_pointer = 1;		\
-    }						\
-  while (0)
-
-
 /* Node: Storage Layout */
 
 #define BITS_BIG_ENDIAN 0
@@ -352,23 +324,9 @@ extern int target_flags;
 
 #define UNITS_PER_WORD 4
 
-/* A combination of defining PROMOTE_FUNCTION_MODE,
-   TARGET_PROMOTE_FUNCTION_ARGS that always returns true
-   and *not* defining TARGET_PROMOTE_PROTOTYPES or PROMOTE_MODE gives the
-   best code size and speed for gcc, ipps and products in gcc-2.7.2.  */
 #define CRIS_PROMOTED_MODE(MODE, UNSIGNEDP, TYPE) \
  (GET_MODE_CLASS (MODE) == MODE_INT && GET_MODE_SIZE (MODE) < 4) \
   ? SImode : MODE
-
-#define PROMOTE_FUNCTION_MODE(MODE, UNSIGNEDP, TYPE)  \
-  (MODE) = CRIS_PROMOTED_MODE (MODE, UNSIGNEDP, TYPE)
-
-/* Defining PROMOTE_FUNCTION_RETURN in gcc-2.7.2 uncovers bug 981110 (even
-   if defining FUNCTION_VALUE with MODE as PROMOTED_MODE ;-)
-
-   FIXME: Report this when cris.h is part of GCC, so others can easily
-   see the problem.  Maybe check other systems that define
-   TARGET_PROMOTE_FUNCTION_RETURN that always returns true.  */
 
 /* We will be using prototype promotion, so they will be 32 bit.  */
 #define PARM_BOUNDARY 32
@@ -468,9 +426,6 @@ extern int target_flags;
    r10- for return values.  */
 #define CALL_USED_REGISTERS \
  {0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1}
-
-#define CONDITIONAL_REGISTER_USAGE cris_conditional_register_usage ()
-
 
 /* Node: Allocation Order */
 
@@ -855,19 +810,10 @@ enum reg_class
 
 /* Node: Elimination */
 
-/* Really only needed if the stack frame has variable length (alloca
-   or variable sized local arguments (GNU C extension).  See PR39499 and
-   PR38609 for the reason this isn't just 0.  */
-#define FRAME_POINTER_REQUIRED (!current_function_sp_is_unchanging)
-
 #define ELIMINABLE_REGS				\
  {{ARG_POINTER_REGNUM, STACK_POINTER_REGNUM},	\
   {ARG_POINTER_REGNUM, FRAME_POINTER_REGNUM},	\
   {FRAME_POINTER_REGNUM, STACK_POINTER_REGNUM}}
-
-/* We need not worry about when the frame-pointer is required for other
-   reasons.  */
-#define CAN_ELIMINATE(FROM, TO) 1
 
 #define INITIAL_ELIMINATION_OFFSET(FROM, TO, OFFSET) \
  (OFFSET) = cris_initial_elimination_offset (FROM, TO)
@@ -882,25 +828,8 @@ enum reg_class
 
 #define ACCUMULATE_OUTGOING_ARGS 1
 
-#define RETURN_POPS_ARGS(FUNDECL, FUNTYPE, STACKSIZE) 0
-
 
 /* Node: Register Arguments */
-
-/* The void_type_node is sent as a "closing" call.  */
-#define FUNCTION_ARG(CUM, MODE, TYPE, NAMED)			\
- ((CUM).regs < CRIS_MAX_ARGS_IN_REGS				\
-  ? gen_rtx_REG (MODE, (CRIS_FIRST_ARG_REG) + (CUM).regs)	\
-  : NULL_RTX)
-
-/* The differences between this and the previous, is that this one checks
-   that an argument is named, since incoming stdarg/varargs arguments are
-   pushed onto the stack, and we don't have to check against the "closing"
-   void_type_node TYPE parameter.  */
-#define FUNCTION_INCOMING_ARG(CUM, MODE, TYPE, NAMED)		\
- ((NAMED) && (CUM).regs < CRIS_MAX_ARGS_IN_REGS			\
-  ? gen_rtx_REG (MODE, CRIS_FIRST_ARG_REG + (CUM).regs)		\
-  : NULL_RTX)
 
 /* Contrary to what you'd believe, defining FUNCTION_ARG_CALLEE_COPIES
    seems like a (small total) loss, at least for gcc-2.7.2 compiling and
@@ -919,9 +848,6 @@ struct cum_args {int regs;};
 #define INIT_CUMULATIVE_ARGS(CUM, FNTYPE, LIBNAME, FNDECL, N_NAMED_ARGS) \
  ((CUM).regs = 0)
 
-#define FUNCTION_ARG_ADVANCE(CUM, MODE, TYPE, NAMED)		\
- ((CUM).regs += (3 + CRIS_FUNCTION_ARG_SIZE (MODE, TYPE)) / 4)
-
 #define FUNCTION_ARG_REGNO_P(REGNO)			\
  ((REGNO) >= CRIS_FIRST_ARG_REG				\
   && (REGNO) < CRIS_FIRST_ARG_REG + (CRIS_MAX_ARGS_IN_REGS))
@@ -929,14 +855,8 @@ struct cum_args {int regs;};
 
 /* Node: Scalar Return */
 
-/* Let's assume all functions return in r[CRIS_FIRST_ARG_REG] for the
-   time being.  */
-#define FUNCTION_VALUE(VALTYPE, FUNC)  \
- gen_rtx_REG (TYPE_MODE (VALTYPE), CRIS_FIRST_ARG_REG)
+#define FUNCTION_VALUE_REGNO_P(N) cris_function_value_regno_p (N)
 
-#define LIBCALL_VALUE(MODE) gen_rtx_REG (MODE, CRIS_FIRST_ARG_REG)
-
-#define FUNCTION_VALUE_REGNO_P(N) ((N) == CRIS_FIRST_ARG_REG)
 
 
 /* Node: Aggregate Return */
@@ -963,107 +883,10 @@ struct cum_args {int regs;};
 
 /* Node: Trampolines */
 
-/* This looks too complicated, and it is.  I assigned r7 to be the
-   static chain register, but it is call-saved, so we have to save it,
-   and come back to restore it after the call, so we have to save srp...
-   Anyway, trampolines are rare enough that we can cope with this
-   somewhat lack of elegance.
-    (Do not be tempted to "straighten up" whitespace in the asms; the
-   assembler #NO_APP state mandates strict spacing).  */
-#define TRAMPOLINE_TEMPLATE(FILE)				       \
-  do								       \
-    {								       \
-      if (TARGET_V32)						       \
-       {							       \
-	 /* This normally-unused nop insn acts as an instruction to    \
-	    the simulator to flush its instruction cache.  None of     \
-	    the other instructions in the trampoline template suits    \
-	    as a trigger for V32.  The pc-relative addressing mode     \
-	    works nicely as a trigger for V10.			       \
-	    FIXME: Have specific V32 template (possibly avoiding the   \
-	    use of a special instruction).  */			       \
-	 fprintf (FILE, "\tclearf x\n");			       \
-	 /* We have to use a register as an intermediate, choosing     \
-	    semi-randomly R1 (which has to not be the		       \
-	    STATIC_CHAIN_REGNUM), so we can use it for address	       \
-	    indirection and jsr target.	 */			       \
-	 fprintf (FILE, "\tmove $r1,$mof\n");			       \
-	 /* +4 */						       \
-	 fprintf (FILE, "\tmove.d 0,$r1\n");			       \
-	 fprintf (FILE, "\tmove.d $%s,[$r1]\n",			       \
-		  reg_names[STATIC_CHAIN_REGNUM]);		       \
-	 fprintf (FILE, "\taddq 6,$r1\n");			       \
-	 fprintf (FILE, "\tmove $mof,[$r1]\n");			       \
-	 fprintf (FILE, "\taddq 6,$r1\n");			       \
-	 fprintf (FILE, "\tmove $srp,[$r1]\n");			       \
-	 /* +20 */						       \
-	 fprintf (FILE, "\tmove.d 0,$%s\n",			       \
-		  reg_names[STATIC_CHAIN_REGNUM]);		       \
-	 /* +26 */						       \
-	 fprintf (FILE, "\tmove.d 0,$r1\n");			       \
-	 fprintf (FILE, "\tjsr $r1\n");				       \
-	 fprintf (FILE, "\tsetf\n");				       \
-	 /* +36 */						       \
-	 fprintf (FILE, "\tmove.d 0,$%s\n",			       \
-		  reg_names[STATIC_CHAIN_REGNUM]);		       \
-	 /* +42 */						       \
-	 fprintf (FILE, "\tmove.d 0,$r1\n");			       \
-	 /* +48 */						       \
-	 fprintf (FILE, "\tmove.d 0,$r9\n");			       \
-	 fprintf (FILE, "\tjump $r9\n");			       \
-	 fprintf (FILE, "\tsetf\n");				       \
-       }							       \
-      else							       \
-       {							       \
-	 fprintf (FILE, "\tmove.d $%s,[$pc+20]\n",		       \
-		  reg_names[STATIC_CHAIN_REGNUM]);		       \
-	 fprintf (FILE, "\tmove $srp,[$pc+22]\n");		       \
-	 fprintf (FILE, "\tmove.d 0,$%s\n",			       \
-		  reg_names[STATIC_CHAIN_REGNUM]);		       \
-	 fprintf (FILE, "\tjsr 0\n");				       \
-	 fprintf (FILE, "\tmove.d 0,$%s\n",			       \
-		  reg_names[STATIC_CHAIN_REGNUM]);		       \
-	 fprintf (FILE, "\tjump 0\n");				       \
-       }							       \
-    }								       \
-  while (0)
-
 #define TRAMPOLINE_SIZE (TARGET_V32 ? 58 : 32)
 
-/* CRIS wants instructions on word-boundary.
-   Note that due to a bug (reported) in 2.7.2 and earlier, this is
-   actually treated as alignment in _bytes_, not _bits_.  (Obviously
-   this is not fatal, only a slight waste of stack space).  */
+/* CRIS wants instructions on word-boundary.  */
 #define TRAMPOLINE_ALIGNMENT 16
-
-#define INITIALIZE_TRAMPOLINE(TRAMP, FNADDR, CXT)			\
-  do									\
-    if (TARGET_V32)							\
-      {									\
-	emit_move_insn (gen_rtx_MEM (SImode,				\
-				     plus_constant (TRAMP, 6)),		\
-		 	plus_constant (TRAMP, 38));			\
-	emit_move_insn (gen_rtx_MEM (SImode,				\
-				     plus_constant (TRAMP, 22)),	\
-			CXT);						\
-	emit_move_insn (gen_rtx_MEM (SImode,				\
-				     plus_constant (TRAMP, 28)),	\
-		 	FNADDR);					\
-      }									\
-    else								\
-      {									\
-	emit_move_insn (gen_rtx_MEM (SImode,				\
-				     plus_constant (TRAMP, 10)),	\
-			CXT);						\
-	emit_move_insn (gen_rtx_MEM (SImode,				\
-				     plus_constant (TRAMP, 16)),	\
-		 	FNADDR);					\
-      }									\
-  while (0)
-
-/* Note that there is no need to do anything with the cache for sake of
-   a trampoline.  */
-
 
 /* Node: Library Calls */
 
@@ -1075,8 +898,6 @@ struct cum_args {int regs;};
 /* Node: Addressing Modes */
 
 #define HAVE_POST_INCREMENT 1
-
-#define CONSTANT_ADDRESS_P(X) CONSTANT_P (X)
 
 /* Must be a compile-time constant, so we go with the highest value
    among all CRIS variants.  */
@@ -1194,16 +1015,6 @@ struct cum_args {int regs;};
 # define REG_OK_FOR_INDEX_P(X) REGNO_OK_FOR_INDEX_P (REGNO (X))
 #endif
 
-/* For now, don't do anything.  GCC does a good job most often.
-
-    Maybe we could do something about gcc:s misbehavior when it
-   recalculates frame offsets for local variables, from fp+offs to
-   sp+offs.  The resulting address expression gets screwed up
-   sometimes, but I'm not sure that it may be fixed here, since it is
-   already split up in several instructions (Is this still true?).
-   FIXME: Check and adjust for gcc-2.9x.  */
-#define LEGITIMIZE_ADDRESS(X, OLDX, MODE, WIN) {}
-
 /* Fix reloads known to cause suboptimal spilling.  */
 #define LEGITIMIZE_RELOAD_ADDRESS(X, MODE, OPNUM, TYPE, INDL, WIN)	\
   do									\
@@ -1212,11 +1023,6 @@ struct cum_args {int regs;};
 	goto WIN;							\
     }									\
   while (0)
-
-/* In CRIS, only the postincrement address mode depends thus,
-   since the increment depends on the size of the operand.  This is now
-   treated generically within recog.c.  */
-#define GO_IF_MODE_DEPENDENT_ADDRESS(ADDR, LABEL)
 
 #define LEGITIMATE_CONSTANT_P(X) 1
 
@@ -1231,14 +1037,6 @@ struct cum_args {int regs;};
 
 
 /* Node: Costs */
-
-#define REGISTER_MOVE_COST(MODE, FROM, TO)	\
-  cris_register_move_cost (MODE, FROM, TO)
-
-/* This isn't strictly correct for v0..3 in buswidth-8bit mode, but
-   should suffice.  */
-#define MEMORY_MOVE_COST(M, CLASS, IN) \
- (((M) == QImode) ? 4 : ((M) == HImode) ? 4 : 6)
 
 /* Regardless of the presence of delay slots, the default value of 1 for
    BRANCH_COST is the best in the range (1, 2, 3), tested with gcc-2.7.2
@@ -1396,16 +1194,6 @@ enum cris_pic_symbol_type
 #define ADDITIONAL_REGISTER_NAMES \
  {{"r14", 14}, {"r15", 15}, {"pc", 15}}
 
-#define PRINT_OPERAND(FILE, X, CODE)		\
- cris_print_operand (FILE, X, CODE)
-
-/* For delay-slot handling.  */
-#define PRINT_OPERAND_PUNCT_VALID_P(CODE)	\
- ((CODE) == '#' || (CODE) == '!' || (CODE) == ':')
-
-#define PRINT_OPERAND_ADDRESS(FILE, ADDR)	\
-   cris_print_operand_address (FILE, ADDR)
-
 /* Output an empty line to illustrate the presence of the delay slot.  */
 #define DBR_OUTPUT_SEQEND(FILE) \
   fprintf (FILE, "\n")
@@ -1538,9 +1326,6 @@ enum cris_pic_symbol_type
 #define FUNCTION_MODE QImode
 
 #define NO_IMPLICIT_EXTERN_C
-
-/* No specific purpose other than warningless compatibility.  */
-#define HANDLE_PRAGMA_PACK_PUSH_POP 1
 
 /*
  * Local variables:

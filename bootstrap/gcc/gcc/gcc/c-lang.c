@@ -1,6 +1,6 @@
 /* Language-specific hook definitions for C front end.
    Copyright (C) 1991, 1995, 1997, 1998,
-   1999, 2000, 2001, 2003, 2004, 2005, 2007, 2008
+   1999, 2000, 2001, 2003, 2004, 2005, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -26,14 +26,13 @@ along with GCC; see the file COPYING3.  If not see
 #include "tm.h"
 #include "tree.h"
 #include "c-tree.h"
-#include "c-common.h"
-#include "ggc.h"
+#include "c-family/c-common.h"
 #include "langhooks.h"
 #include "langhooks-def.h"
 #include "tree-inline.h"
-#include "diagnostic.h"
+#include "diagnostic-core.h"
 #include "c-objc-common.h"
-#include "c-pragma.h"
+#include "c-family/c-pragma.h"
 
 enum c_language_kind c_language = clk_c;
 
@@ -46,13 +45,6 @@ enum c_language_kind c_language = clk_c;
 #define LANG_HOOKS_INIT c_objc_common_init
 
 /* Each front end provides its own lang hook initializer.  */
-const struct lang_hooks lang_hooks = LANG_HOOKS_INITIALIZER;
-
-/* Final processing of file-scope data.  The Objective-C version of
-   this function still does something.  */
-void
-finish_file (void)
-{
-}
+struct lang_hooks lang_hooks = LANG_HOOKS_INITIALIZER;
 
 #include "gtype-c.h"

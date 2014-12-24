@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---                     Copyright (C) 2002-2008, AdaCore                     --
+--                     Copyright (C) 2002-2010, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -150,7 +150,7 @@ package body MLib.Utl is
          end if;
 
          if Ar_Exec = null then
-            Fail (Ar_Name.all, " not found in path");
+            Fail (Ar_Name.all & " not found in path");
 
          elsif Opt.Verbose_Mode then
             Write_Str  ("found ");
@@ -275,7 +275,7 @@ package body MLib.Utl is
       end if;
 
       if not Success then
-         Fail (Ar_Name.all, " execution error.");
+         Fail (Ar_Name.all & " execution error.");
       end if;
 
       --  If we have found ranlib, run it over the library
@@ -293,7 +293,7 @@ package body MLib.Utl is
             Success);
 
          if not Success then
-            Fail (Ranlib_Name.all, " execution error.");
+            Fail (Ranlib_Name.all & " execution error.");
          end if;
       end if;
    end Ar;
@@ -418,7 +418,7 @@ package body MLib.Utl is
             Gcc_Exec := Locate_Exec_On_Path (Gcc_Name.all);
 
             if Gcc_Exec = null then
-               Fail (Gcc_Name.all, " not found in path");
+               Fail (Gcc_Name.all & " not found in path");
             end if;
          end if;
 
@@ -428,7 +428,7 @@ package body MLib.Utl is
          Driver := Locate_Exec_On_Path (Get_Name_String (Driver_Name));
 
          if Driver = null then
-            Fail (Get_Name_String (Driver_Name), " not found in path");
+            Fail (Get_Name_String (Driver_Name) & " not found in path");
          end if;
       end if;
 
@@ -460,11 +460,25 @@ package body MLib.Utl is
       end loop;
 
       if not Opt.Quiet_Output then
-         Write_Str (Driver.all);
+         if Opt.Verbose_Mode then
+            Write_Str (Driver.all);
+
+         elsif Driver_Name /= No_Name then
+            Write_Str (Get_Name_String (Driver_Name));
+
+         else
+            Write_Str (Gcc_Name.all);
+         end if;
 
          for J in 1 .. A loop
-            Write_Char (' ');
-            Write_Str  (Arguments (J).all);
+            if Opt.Verbose_Mode or else J < 4 then
+               Write_Char (' ');
+               Write_Str  (Arguments (J).all);
+
+            else
+               Write_Str (" ...");
+               exit;
+            end if;
          end loop;
 
          --  Do not display all the object files if not in verbose mode, only
@@ -480,10 +494,19 @@ package body MLib.Utl is
             elsif Position = Second then
                Write_Str (" ...");
                Position := Last;
+               exit;
             end if;
          end loop;
 
          for J in Options_2'Range loop
+            if not Opt.Verbose_Mode then
+               if Position = Second then
+                  Write_Str (" ...");
+               end if;
+
+               exit;
+            end if;
+
             Write_Char (' ');
             Write_Str (Options_2 (J).all);
          end loop;
@@ -586,9 +609,9 @@ package body MLib.Utl is
 
       if not Success then
          if Driver_Name = No_Name then
-            Fail (Gcc_Name.all, " execution error");
+            Fail (Gcc_Name.all & " execution error");
          else
-            Fail (Get_Name_String (Driver_Name), " execution error");
+            Fail (Get_Name_String (Driver_Name) & " execution error");
          end if;
       end if;
    end Gcc;

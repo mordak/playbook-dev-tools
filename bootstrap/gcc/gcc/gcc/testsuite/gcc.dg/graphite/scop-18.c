@@ -1,4 +1,4 @@
-/* { dg-options "-O2 -fgraphite -fdump-tree-graphite-all" } */
+/* { dg-require-effective-target size32plus } */
 
 #define N 24
 #define M 1000

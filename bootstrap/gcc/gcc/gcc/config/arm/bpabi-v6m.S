@@ -1,6 +1,6 @@
 /* Miscellaneous BPABI functions.  ARMv6M implementation
 
-   Copyright (C) 2006, 2008, 2009  Free Software Foundation, Inc.
+   Copyright (C) 2006, 2008, 2009, 2010  Free Software Foundation, Inc.
    Contributed by CodeSourcery.
 
    This file is free software; you can redistribute it and/or modify it
@@ -21,6 +21,16 @@
    a copy of the GCC Runtime Library Exception along with this program;
    see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
    <http://www.gnu.org/licenses/>.  */
+
+#ifdef __ARM_EABI__
+/* Some attributes that are common to all routines in this file.  */
+	/* Tag_ABI_align_needed: This code does not require 8-byte
+	   alignment from the caller.  */
+	/* .eabi_attribute 24, 0  -- default setting.  */
+	/* Tag_ABI_align_preserved: This code preserves 8-byte
+	   alignment in any callee.  */
+	.eabi_attribute 25, 1
+#endif /* __ARM_EABI__ */
 
 #ifdef L_aeabi_lcmp
 
@@ -69,9 +79,52 @@ FUNC_START aeabi_ulcmp
 
 #endif /* L_aeabi_ulcmp */
 
+.macro test_div_by_zero signed
+	cmp	yyh, #0
+	bne	7f
+	cmp	yyl, #0
+	bne	7f
+	cmp	xxh, #0
+	bne	2f
+	cmp	xxl, #0
+2:
+	.ifc	\signed, unsigned
+	beq	3f
+	mov	xxh, #0
+	mvn	xxh, xxh		@ 0xffffffff
+	mov	xxl, xxh
+3:
+	.else
+	beq	5f
+	blt	6f
+	mov	xxl, #0
+	mvn	xxl, xxl		@ 0xffffffff
+	lsr	xxh, xxl, #1		@ 0x7fffffff
+	b	5f
+6:	mov	xxh, #0x80
+	lsl	xxh, xxh, #24		@ 0x80000000
+	mov	xxl, #0
+5:
+	.endif
+	@ tailcalls are tricky on v6-m.
+	push	{r0, r1, r2}
+	ldr	r0, 1f
+	adr	r1, 1f
+	add	r0, r1
+	str	r0, [sp, #8]
+	@ We know we are not on armv4t, so pop pc is safe.
+	pop	{r0, r1, pc}
+	.align	2
+1:
+	.word	__aeabi_ldiv0 - 1b
+7:
+.endm
+
 #ifdef L_aeabi_ldivmod
 
 FUNC_START aeabi_ldivmod
+	test_div_by_zero signed
+
 	push {r0, r1}
 	mov r0, sp
 	push {r0, lr}
@@ -89,6 +142,8 @@ FUNC_START aeabi_ldivmod
 #ifdef L_aeabi_uldivmod
 
 FUNC_START aeabi_uldivmod
+	test_div_by_zero unsigned
+
 	push {r0, r1}
 	mov r0, sp
 	push {r0, lr}

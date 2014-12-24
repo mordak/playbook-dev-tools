@@ -1,26 +1,30 @@
 /* { dg-do compile } */
 /* { dg-options "-O3 -fipa-cp -fipa-cp-clone -fdump-ipa-cp -fno-early-inlining"  } */
-/* { dg-skip-if "PR 25442" { "*-*-*" } { "-fpic" "-fPIC" } { "" } } */
+/* { dg-add-options bind_pic_locally } */
 
 
 /* Double constants.  */
 
 #include <stdio.h>
+void t(void);
 int g (double b, double c)
 {
-  return (int)(b+c);  
+  t();
+  return (int)(b+c);
 }
 int f (double a)
 {
   if (a > 0)
     g (a, 3.1);
   else
-    g (a, 3.1); 	
+    g (a, 3.1);
 }
 int main ()
 {
-  f (7.44);
-  return 0;	
+  int i;
+  for (i = 0; i < 100; i++)
+    f (7.44);
+  return 0;
 }
 
 

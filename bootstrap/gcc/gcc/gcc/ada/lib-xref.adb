@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1998-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1998-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -33,6 +33,7 @@ with Opt;      use Opt;
 with Restrict; use Restrict;
 with Rident;   use Rident;
 with Sem;      use Sem;
+with Sem_Aux;  use Sem_Aux;
 with Sem_Prag; use Sem_Prag;
 with Sem_Util; use Sem_Util;
 with Sem_Warn; use Sem_Warn;
@@ -91,6 +92,16 @@ package body Lib.Xref is
      Table_Initial        => Alloc.Xrefs_Initial,
      Table_Increment      => Alloc.Xrefs_Increment,
      Table_Name           => "Xrefs");
+
+   ------------------------
+   --  Local Subprograms --
+   ------------------------
+
+   procedure Generate_Prim_Op_References (Typ : Entity_Id);
+   --  For a tagged type, generate implicit references to its primitive
+   --  operations, for source navigation. This is done right before emitting
+   --  cross-reference information rather than at the freeze point of the type
+   --  in order to handle late bodies that are primitive operations.
 
    -------------------------
    -- Generate_Definition --
@@ -194,6 +205,60 @@ package body Lib.Xref is
          Set_Referenced (First_Subtype (T));
       end if;
    end Generate_Operator_Reference;
+
+   ---------------------------------
+   -- Generate_Prim_Op_References --
+   ---------------------------------
+
+   procedure Generate_Prim_Op_References (Typ : Entity_Id) is
+      Base_T    : Entity_Id;
+      Prim      : Elmt_Id;
+      Prim_List : Elist_Id;
+
+   begin
+      --  Handle subtypes of synchronized types
+
+      if Ekind (Typ) = E_Protected_Subtype
+        or else Ekind (Typ) = E_Task_Subtype
+      then
+         Base_T := Etype (Typ);
+      else
+         Base_T := Typ;
+      end if;
+
+      --  References to primitive operations are only relevant for tagged types
+
+      if not Is_Tagged_Type (Base_T)
+        or else Is_Class_Wide_Type (Base_T)
+      then
+         return;
+      end if;
+
+      --  Ada 2005 (AI-345): For synchronized types generate reference
+      --  to the wrapper that allow us to dispatch calls through their
+      --  implemented abstract interface types.
+
+      --  The check for Present here is to protect against previously
+      --  reported critical errors.
+
+      Prim_List := Primitive_Operations (Base_T);
+
+      if No (Prim_List) then
+         return;
+      end if;
+
+      Prim := First_Elmt (Prim_List);
+      while Present (Prim) loop
+
+         --  If the operation is derived, get the original for cross-reference
+         --  reference purposes (it is the original for which we want the xref
+         --  and for which the comes_from_source test must be performed).
+
+         Generate_Reference
+           (Typ, Ultimate_Alias (Node (Prim)), 'p', Set_Ref => False);
+         Next_Elmt (Prim);
+      end loop;
+   end Generate_Prim_Op_References;
 
    ------------------------
    -- Generate_Reference --
@@ -396,11 +461,23 @@ package body Lib.Xref is
 
       if Comes_From_Source (N)
         and then Is_Ada_2005_Only (E)
-        and then Ada_Version < Ada_05
+        and then Ada_Version < Ada_2005
         and then Warn_On_Ada_2005_Compatibility
-        and then (Typ = 'm' or else Typ = 'r')
+        and then (Typ = 'm' or else Typ = 'r' or else Typ = 's')
       then
          Error_Msg_NE ("& is only defined in Ada 2005?", N, E);
+      end if;
+
+      --  Warn if reference to Ada 2012 entity not in Ada 2012 mode. We only
+      --  detect real explicit references (modifications and references).
+
+      if Comes_From_Source (N)
+        and then Is_Ada_2012_Only (E)
+        and then Ada_Version < Ada_2012
+        and then Warn_On_Ada_2012_Compatibility
+        and then (Typ = 'm' or else Typ = 'r')
+      then
+         Error_Msg_NE ("& is only defined in Ada 2012?", N, E);
       end if;
 
       --  Never collect references if not in main source unit. However, we omit
@@ -563,6 +640,15 @@ package body Lib.Xref is
                   Set_Referenced_As_LHS (E, False);
                end if;
 
+            --  Don't count a recursive reference within a subprogram as a
+            --  reference (that allows detection of a recursive subprogram
+            --  whose only references are recursive calls as unreferenced).
+
+            elsif Is_Subprogram (E)
+              and then E = Nearest_Dynamic_Scope (Current_Scope)
+            then
+               null;
+
             --  Any other occurrence counts as referencing the entity
 
             elsif OK_To_Set_Referenced then
@@ -580,7 +666,7 @@ package body Lib.Xref is
          --  Check for pragma Unreferenced given and reference is within
          --  this source unit (occasion for possible warning to be issued).
 
-         if Has_Pragma_Unreferenced (E)
+         if Has_Unreferenced (E)
            and then In_Same_Extended_Unit (E, N)
          then
             --  A reference as a named parameter in a call does not count
@@ -613,7 +699,7 @@ package body Lib.Xref is
                   BE := First_Entity (Current_Scope);
                   while Present (BE) loop
                      if Chars (BE) = Chars (E) then
-                        Error_Msg_NE
+                        Error_Msg_NE -- CODEFIX
                           ("?pragma Unreferenced given for&!", N, BE);
                         exit;
                      end if;
@@ -625,7 +711,8 @@ package body Lib.Xref is
             --  Here we issue the warning, since this is a real reference
 
             else
-               Error_Msg_NE ("?pragma Unreferenced given for&!", N, E);
+               Error_Msg_NE -- CODEFIX
+                 ("?pragma Unreferenced given for&!", N, E);
             end if;
          end if;
 
@@ -657,9 +744,11 @@ package body Lib.Xref is
          and then Sloc (E) > No_Location
          and then Sloc (N) > No_Location
 
-         --  We ignore references from within an instance
+         --  We ignore references from within an instance, except for default
+         --  subprograms, for which we generate an implicit reference.
 
-         and then Instantiation_Location (Sloc (N)) = No_Location
+         and then
+           (Instantiation_Location (Sloc (N)) = No_Location or else Typ = 'i')
 
          --  Ignore dummy references
 
@@ -758,7 +847,7 @@ package body Lib.Xref is
 
          if Typ = 'p'
            and then Is_Subprogram (N)
-           and then Is_Overriding_Operation (N)
+           and then Present (Overridden_Operation (N))
          then
             Xrefs.Table (Indx).Typ := 'P';
          else
@@ -1071,6 +1160,26 @@ package body Lib.Xref is
          return;
       end if;
 
+      --  First we add references to the primitive operations of tagged
+      --  types declared in the main unit.
+
+      Handle_Prim_Ops : declare
+         Ent  : Entity_Id;
+
+      begin
+         for J in 1 .. Xrefs.Last loop
+            Ent := Xrefs.Table (J).Ent;
+
+            if Is_Type (Ent)
+              and then Is_Tagged_Type (Ent)
+              and then Is_Base_Type (Ent)
+              and then In_Extended_Main_Source_Unit (Ent)
+            then
+               Generate_Prim_Op_References (Ent);
+            end if;
+         end loop;
+      end Handle_Prim_Ops;
+
       --  Before we go ahead and output the references we have a problem
       --  that needs dealing with. So far we have captured things that are
       --  definitely referenced by the main unit, or defined in the main
@@ -1172,7 +1281,7 @@ package body Lib.Xref is
             if Is_Type (Ent)
               and then Is_Tagged_Type (Ent)
               and then Is_Derived_Type (Ent)
-              and then Ent = Base_Type (Ent)
+              and then Is_Base_Type (Ent)
               and then In_Extended_Main_Source_Unit (Ent)
             then
                declare
@@ -1186,9 +1295,11 @@ package body Lib.Xref is
 
                   function Parent_Op (E : Entity_Id) return Entity_Id is
                      Orig_Op : constant Entity_Id := Alias (E);
+
                   begin
                      if No (Orig_Op) then
                         return Empty;
+
                      elsif not Comes_From_Source (E)
                        and then not Has_Xref_Entry (Orig_Op)
                        and then Comes_From_Source (Orig_Op)
@@ -1354,7 +1465,6 @@ package body Lib.Xref is
 
             if Name_Len /= Curlen then
                return True;
-
             else
                return Name_Buffer (1 .. Curlen) /= Curnam (1 .. Curlen);
             end if;
@@ -1433,7 +1543,7 @@ package body Lib.Xref is
                --  Used for {} or <> or () for type reference
 
                procedure Check_Type_Reference
-                 (Ent : Entity_Id;
+                 (Ent            : Entity_Id;
                   List_Interface : Boolean);
                --  Find whether there is a meaningful type reference for
                --  Ent, and display it accordingly. If List_Interface is
@@ -1455,7 +1565,7 @@ package body Lib.Xref is
                --------------------------
 
                procedure Check_Type_Reference
-                 (Ent : Entity_Id;
+                 (Ent            : Entity_Id;
                   List_Interface : Boolean)
                is
                begin
@@ -1586,8 +1696,17 @@ package body Lib.Xref is
                   if No (Old_E) then
                      return;
 
+                  --  Follow alias chain if one is present
+
                   elsif Present (Alias (Old_E)) then
-                     Op := Alias (Old_E);
+
+                     --  The subprogram may have been implicitly inherited
+                     --  through several levels of derivation, so find the
+                     --  ultimate (source) ancestor.
+
+                     Op := Ultimate_Alias (Old_E);
+
+                  --  Normal case of no alias present
 
                   else
                      Op := Old_E;
@@ -1683,27 +1802,25 @@ package body Lib.Xref is
                      Ctyp := '*';
                   end if;
 
-                  --  Special handling for access parameter
+                  --  Special handling for access parameters and objects of
+                  --  an anonymous access type.
 
-                  declare
-                     K : constant Entity_Kind := Ekind (Etype (XE.Ent));
-
-                  begin
-                     if (K = E_Anonymous_Access_Type
-                           or else
-                         K = E_Anonymous_Access_Subprogram_Type
-                            or else K =
-                         E_Anonymous_Access_Protected_Subprogram_Type)
-                       and then Is_Formal (XE.Ent)
+                  if Ekind_In (Etype (XE.Ent),
+                               E_Anonymous_Access_Type,
+                               E_Anonymous_Access_Subprogram_Type,
+                               E_Anonymous_Access_Protected_Subprogram_Type)
+                  then
+                     if Is_Formal (XE.Ent)
+                       or else Ekind_In (XE.Ent, E_Variable, E_Constant)
                      then
                         Ctyp := 'p';
-
-                        --  Special handling for Boolean
-
-                     elsif Ctyp = 'e' and then Is_Boolean_Type (Ent) then
-                        Ctyp := 'b';
                      end if;
-                  end;
+
+                     --  Special handling for Boolean
+
+                  elsif Ctyp = 'e' and then Is_Boolean_Type (Ent) then
+                     Ctyp := 'b';
+                  end if;
                end if;
 
                --  Special handling for abstract types and operations
@@ -2016,6 +2133,7 @@ package body Lib.Xref is
 
                         begin
                            Write_Info_Char ('[');
+
                            if Curru /= Gen_U then
                               Write_Info_Nat (Dependency_Num (Gen_U));
                               Write_Info_Char ('|');
@@ -2045,8 +2163,8 @@ package body Lib.Xref is
                            end loop;
                         end;
 
-                     --  For array types, list index types as well.
-                     --  (This is not C, indices have distinct types).
+                     --  For array types, list index types as well. (This is
+                     --  not C, indexes have distinct types).
 
                      elsif Is_Array_Type (XE.Ent) then
                         declare
@@ -2065,7 +2183,7 @@ package body Lib.Xref is
                      --  on operation that was overridden.
 
                      if Is_Subprogram (XE.Ent)
-                       and then Is_Overriding_Operation (XE.Ent)
+                       and then Present (Overridden_Operation (XE.Ent))
                      then
                         Output_Overridden_Op (Overridden_Operation (XE.Ent));
                      end if;
@@ -2109,7 +2227,7 @@ package body Lib.Xref is
                         Output_Import_Export_Info (XE.Ent);
                      end if;
 
-                     Write_Info_Nat  (Int (Get_Column_Number (XE.Loc)));
+                     Write_Info_Nat (Int (Get_Column_Number (XE.Loc)));
 
                      Output_Instantiation_Refs (Sloc (XE.Ent));
                   end if;

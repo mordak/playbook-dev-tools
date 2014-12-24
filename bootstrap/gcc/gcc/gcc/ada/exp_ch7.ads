@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -75,8 +75,8 @@ package Exp_Ch7 is
    --  E is an entity representing a controlled object, a controlled type or a
    --  scope. If Ref is not empty, it is a reference to a controlled record,
    --  the closest Final list is in the controller component of the record
-   --  containing Ref otherwise this function returns a reference to the final
-   --  list attached to the closest dynamic scope (that can be E itself)
+   --  containing Ref, otherwise this function returns a reference to the final
+   --  list attached to the closest dynamic scope (which can be E itself),
    --  creating this final list if necessary.
 
    function Has_New_Controlled_Component (E : Entity_Id) return Boolean;
@@ -229,11 +229,11 @@ package Exp_Ch7 is
 
    procedure Store_Before_Actions_In_Scope (L : List_Id);
    --  Append the list L of actions to the end of the before-actions store in
-   --  the top of the scope stack
+   --  the top of the scope stack.
 
    procedure Store_After_Actions_In_Scope (L : List_Id);
    --  Append the list L of actions to the beginning of the after-actions store
-   --  in the top of the scope stack
+   --  in the top of the scope stack.
 
    procedure Wrap_Transient_Declaration (N : Node_Id);
    --  N is an object declaration. Expand the finalization calls after the

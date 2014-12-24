@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -29,7 +29,6 @@ with Debug;    use Debug;
 with Einfo;    use Einfo;
 with Errout;   use Errout;
 with Exp_Ch11; use Exp_Ch11;
-with Exp_Tss;  use Exp_Tss;
 with Exp_Util; use Exp_Util;
 with Expander; use Expander;
 with Namet;    use Namet;
@@ -270,8 +269,8 @@ package body Exp_Prag is
    --------------------------
 
    procedure Expand_Pragma_Check (N : Node_Id) is
-      Loc  : constant Source_Ptr := Sloc (N);
       Cond : constant Node_Id    := Arg2 (N);
+      Loc  : constant Source_Ptr := Sloc (Cond);
       Nam  : constant Name_Id    := Chars (Arg1 (N));
       Msg  : Node_Id;
 
@@ -295,7 +294,7 @@ package body Exp_Prag is
       --  where Str is the message if one is present, or the default of
       --  name failed at file:line if no message is given (the "name failed
       --  at" is omitted for name = Assertion, since it is redundant, given
-      --  that the name of the exception is Assert_Failure.
+      --  that the name of the exception is Assert_Failure.)
 
       --  An alternative expansion is used when the No_Exception_Propagation
       --  restriction is active and there is a local Assert_Failure handler.
@@ -311,6 +310,9 @@ package body Exp_Prag is
       --  be able to handle the assert error (which would not be the case if a
       --  call is made to the Raise_Assert_Failure procedure).
 
+      --  We also generate the direct raise if the Suppress_Exception_Locations
+      --  is active, since we don't want to generate messages in this case.
+
       --  Note that the reason we do not always generate a direct raise is that
       --  the form in which the procedure is called allows for more efficient
       --  breakpointing of assertion errors.
@@ -321,9 +323,10 @@ package body Exp_Prag is
 
       --  Case where we generate a direct raise
 
-      if (Debug_Flag_Dot_G
+      if ((Debug_Flag_Dot_G
            or else Restriction_Active (No_Exception_Propagation))
-        and then Present (Find_Local_Handler (RTE (RE_Assert_Failure), N))
+          and then Present (Find_Local_Handler (RTE (RE_Assert_Failure), N)))
+        or else (Opt.Exception_Locations_Suppressed and then No (Arg3 (N)))
       then
          Rewrite (N,
            Make_If_Statement (Loc,
@@ -338,29 +341,62 @@ package body Exp_Prag is
       --  Case where we call the procedure
 
       else
-         --  First, we need to prepare the string argument
-
          --  If we have a message given, use it
 
          if Present (Arg3 (N)) then
-            Msg := Arg3 (N);
+            Msg := Get_Pragma_Arg (Arg3 (N));
 
-         --  Otherwise string is "name failed at location" except in the case
-         --  of Assertion where "name failed at" is omitted.
+         --  Here we have no string, so prepare one
 
          else
-            if Nam = Name_Assertion then
-               Name_Len := 0;
-            else
-               Get_Name_String (Nam);
-               Set_Casing (Identifier_Casing (Current_Source_File));
-               Add_Str_To_Name_Buffer (" failed at ");
-            end if;
+            declare
+               Msg_Loc : constant String := Build_Location_String (Loc);
 
-            Build_Location_String (Loc);
-            Msg :=
-              Make_String_Literal (Loc,
-                Strval => String_From_Name_Buffer);
+            begin
+               Name_Len := 0;
+
+               --  For Assert, we just use the location
+
+               if Nam = Name_Assertion then
+                  null;
+
+               --  For predicate, we generate the string "predicate failed
+               --  at yyy". We prefer all lower case for predicate.
+
+               elsif Nam = Name_Predicate then
+                  Add_Str_To_Name_Buffer ("predicate failed at ");
+
+               --  For special case of Precondition/Postcondition the string is
+               --  "failed xx from yy" where xx is precondition/postcondition
+               --  in all lower case. The reason for this different wording is
+               --  that the failure is not at the point of occurrence of the
+               --  pragma, unlike the other Check cases.
+
+               elsif Nam = Name_Precondition
+                       or else
+                     Nam = Name_Postcondition
+               then
+                  Get_Name_String (Nam);
+                  Insert_Str_In_Name_Buffer ("failed ", 1);
+                  Add_Str_To_Name_Buffer (" from ");
+
+               --  For all other checks, the string is "xxx failed at yyy"
+               --  where xxx is the check name with current source file casing.
+
+               else
+                  Get_Name_String (Nam);
+                  Set_Casing (Identifier_Casing (Current_Source_File));
+                  Add_Str_To_Name_Buffer (" failed at ");
+               end if;
+
+               --  In all cases, add location string
+
+               Add_Str_To_Name_Buffer (Msg_Loc);
+
+               --  Build the message
+
+               Msg := Make_String_Literal (Loc, Name_Buffer (1 .. Name_Len));
+            end;
          end if;
 
          --  Now rewrite as an if statement
@@ -374,7 +410,7 @@ package body Exp_Prag is
                Make_Procedure_Call_Statement (Loc,
                  Name =>
                    New_Reference_To (RTE (RE_Raise_Assert_Failure), Loc),
-                 Parameter_Associations => New_List (Msg)))));
+                 Parameter_Associations => New_List (Relocate_Node (Msg))))));
       end if;
 
       Analyze (N);
@@ -393,7 +429,7 @@ package body Exp_Prag is
          then
             return;
          elsif Nam = Name_Assertion then
-            Error_Msg_N ("?assertion will fail at run-time", N);
+            Error_Msg_N ("?assertion will fail at run time", N);
          else
             Error_Msg_N ("?check will fail at run time", N);
          end if;
@@ -485,29 +521,17 @@ package body Exp_Prag is
 
    procedure Expand_Pragma_Import_Or_Interface (N : Node_Id) is
       Def_Id    : constant Entity_Id := Entity (Arg2 (N));
-      Typ       : Entity_Id;
       Init_Call : Node_Id;
 
    begin
       if Ekind (Def_Id) = E_Variable then
-         Typ  := Etype (Def_Id);
 
-         --  Iterate from declaration of object to import pragma, to find
-         --  generated initialization call for object, if any.
+         --  Find generated initialization call for object, if any
 
-         Init_Call := Next (Parent (Def_Id));
-         while Present (Init_Call) and then Init_Call /= N loop
-            if Has_Non_Null_Base_Init_Proc (Typ)
-              and then Nkind (Init_Call) = N_Procedure_Call_Statement
-              and then Is_Entity_Name (Name (Init_Call))
-              and then Entity (Name (Init_Call)) = Base_Init_Proc (Typ)
-            then
-               Remove (Init_Call);
-               exit;
-            else
-               Next (Init_Call);
-            end if;
-         end loop;
+         Init_Call := Find_Init_Call (Def_Id, Rep_Clause => N);
+         if Present (Init_Call) then
+            Remove (Init_Call);
+         end if;
 
          --  Any default initialization expression should be removed
          --  (e.g., null defaults for access objects, zero initialization
@@ -515,9 +539,7 @@ package body Exp_Prag is
          --  have explicit initialization, so the expression must have
          --  been generated by the compiler.
 
-         if Init_Call = N
-           and then Present (Expression (Parent (Def_Id)))
-         then
+         if No (Init_Call) and then Present (Expression (Parent (Def_Id))) then
             Set_Expression (Parent (Def_Id), Empty);
          end if;
       end if;
@@ -551,18 +573,14 @@ package body Exp_Prag is
       begin
          if Present (Call) then
             declare
-               Excep_Internal : constant Node_Id :=
-                                 Make_Defining_Identifier
-                                  (Loc, New_Internal_Name ('V'));
+               Excep_Internal : constant Node_Id := Make_Temporary (Loc, 'V');
                Export_Pragma  : Node_Id;
                Excep_Alias    : Node_Id;
                Excep_Object   : Node_Id;
-               Excep_Image : String_Id;
-               Exdata      : List_Id;
-               Lang1       : Node_Id;
-               Lang2       : Node_Id;
-               Lang3       : Node_Id;
-               Code        : Node_Id;
+               Excep_Image    : String_Id;
+               Exdata         : List_Id;
+               Lang_Char      : Node_Id;
+               Code           : Node_Id;
 
             begin
                if Present (Interface_Name (Id)) then
@@ -576,30 +594,16 @@ package body Exp_Prag is
                Exdata := Component_Associations (Expression (Parent (Id)));
 
                if Is_VMS_Exception (Id) then
-                  Lang1 := Next (First (Exdata));
-                  Lang2 := Next (Lang1);
-                  Lang3 := Next (Lang2);
+                  Lang_Char := Next (First (Exdata));
 
-                  Rewrite (Expression (Lang1),
+                  --  Change the one-character language designator to 'V'
+
+                  Rewrite (Expression (Lang_Char),
                     Make_Character_Literal (Loc,
                       Chars => Name_uV,
                       Char_Literal_Value =>
                         UI_From_Int (Character'Pos ('V'))));
-                  Analyze (Expression (Lang1));
-
-                  Rewrite (Expression (Lang2),
-                    Make_Character_Literal (Loc,
-                      Chars => Name_uM,
-                      Char_Literal_Value =>
-                        UI_From_Int (Character'Pos ('M'))));
-                  Analyze (Expression (Lang2));
-
-                  Rewrite (Expression (Lang3),
-                    Make_Character_Literal (Loc,
-                      Chars => Name_uS,
-                      Char_Literal_Value =>
-                        UI_From_Int (Character'Pos ('S'))));
-                  Analyze (Expression (Lang3));
+                  Analyze (Expression (Lang_Char));
 
                   if Exception_Code (Id) /= No_Uint then
                      Code :=
@@ -644,28 +648,20 @@ package body Exp_Prag is
                          (Loc,
                           Name_Export,
                           New_List
-                            (Make_Pragma_Argument_Association
-                               (Sloc => Loc,
-                                Expression => Make_Identifier (Loc, Name_C)),
+                            (Make_Pragma_Argument_Association (Loc,
+                               Expression => Make_Identifier (Loc, Name_C)),
 
-                             Make_Pragma_Argument_Association
-                               (Sloc => Loc,
-                                Expression =>
-                                  New_Reference_To (Excep_Internal, Loc)),
+                             Make_Pragma_Argument_Association (Loc,
+                               Expression =>
+                                 New_Reference_To (Excep_Internal, Loc)),
 
-                             Make_Pragma_Argument_Association
-                               (Sloc => Loc,
-                                Expression =>
-                                  Make_String_Literal
-                                    (Sloc => Loc,
-                                     Strval => Excep_Image)),
+                             Make_Pragma_Argument_Association (Loc,
+                               Expression =>
+                                 Make_String_Literal (Loc, Excep_Image)),
 
-                             Make_Pragma_Argument_Association
-                               (Sloc => Loc,
+                             Make_Pragma_Argument_Association (Loc,
                                 Expression =>
-                                  Make_String_Literal
-                                    (Sloc => Loc,
-                                     Strval => Excep_Image))));
+                                  Make_String_Literal (Loc, Excep_Image))));
 
                      Insert_Action (N, Export_Pragma);
                      Analyze (Export_Pragma);

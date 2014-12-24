@@ -1,6 +1,6 @@
 /* Code to maintain a C++ template repository.
    Copyright (C) 1995, 1996, 1997, 1998, 2000, 2001, 2002, 2003, 2004, 2005,
-   2006, 2007, 2008  Free Software Foundation, Inc.
+   2006, 2007, 2008, 2009, 2010  Free Software Foundation, Inc.
    Contributed by Jason Merrill (jason@cygnus.com)
 
 This file is part of GCC.
@@ -34,16 +34,16 @@ along with GCC; see the file COPYING3.  If not see
 #include "input.h"
 #include "obstack.h"
 #include "toplev.h"
-#include "diagnostic.h"
+#include "diagnostic-core.h"
 #include "flags.h"
 
-static char *extract_string (char **);
+static const char *extract_string (const char **);
 static const char *get_base_filename (const char *);
 static FILE *open_repo_file (const char *);
 static char *afgets (FILE *);
 static FILE *reopen_repo_file_for_write (void);
 
-static GTY(()) tree pending_repo;
+static GTY(()) VEC(tree,gc) *pending_repo;
 static char *repo_name;
 
 static const char *old_args, *old_dir, *old_main;
@@ -53,10 +53,10 @@ static bool temporary_obstack_initialized_p;
 
 /* Parse a reasonable subset of shell quoting syntax.  */
 
-static char *
-extract_string (char **pp)
+static const char *
+extract_string (const char **pp)
 {
-  char *p = *pp;
+  const char *p = *pp;
   int backquote = 0;
   int inside = 0;
 
@@ -89,16 +89,24 @@ extract_string (char **pp)
 static const char *
 get_base_filename (const char *filename)
 {
-  char *p = getenv ("COLLECT_GCC_OPTIONS");
-  char *output = NULL;
+  const char *p = getenv ("COLLECT_GCC_OPTIONS");
+  const char *output = NULL;
   int compiling = 0;
 
   while (p && *p)
     {
-      char *q = extract_string (&p);
+      const char *q = extract_string (&p);
 
       if (strcmp (q, "-o") == 0)
-	output = extract_string (&p);
+	{
+	  if (flag_compare_debug)
+	    /* Just in case aux_base_name was based on a name with two
+	       or more '.'s, add an arbitrary extension that will be
+	       stripped by the caller.  */
+	    output = concat (aux_base_name, ".o", NULL);
+	  else
+	    output = extract_string (&p);
+	}
       else if (strcmp (q, "-c") == 0)
 	compiling = 1;
     }
@@ -153,6 +161,7 @@ void
 init_repo (void)
 {
   char *buf;
+  const char *p;
   FILE *repo_file;
 
   if (! flag_use_repository)
@@ -204,8 +213,8 @@ init_repo (void)
   fclose (repo_file);
 
   if (old_args && !get_random_seed (true)
-      && (buf = strstr (old_args, "'-frandom-seed=")))
-    set_random_seed (extract_string (&buf) + strlen ("-frandom-seed="));
+      && (p = strstr (old_args, "'-frandom-seed=")))
+    set_random_seed (extract_string (&p) + strlen ("-frandom-seed="));
 }
 
 static FILE *
@@ -215,7 +224,7 @@ reopen_repo_file_for_write (void)
 
   if (repo_file == 0)
     {
-      error ("can't create repository information file %qs", repo_name);
+      error ("can%'t create repository information file %qs", repo_name);
       flag_use_repository = 0;
     }
 
@@ -227,14 +236,15 @@ reopen_repo_file_for_write (void)
 void
 finish_repo (void)
 {
-  tree t;
+  tree val;
   char *dir, *args;
   FILE *repo_file;
+  unsigned ix;
 
-  if (!flag_use_repository)
+  if (!flag_use_repository || flag_compare_debug)
     return;
 
-  if (errorcount || sorrycount)
+  if (seen_error ())
     return;
 
   repo_file = reopen_repo_file_for_write ();
@@ -257,9 +267,8 @@ finish_repo (void)
       fprintf (repo_file, "\n");
     }
 
-  for (t = pending_repo; t; t = TREE_CHAIN (t))
+  FOR_EACH_VEC_ELT_REVERSE (tree, pending_repo, ix, val)
     {
-      tree val = TREE_VALUE (t);
       tree name = DECL_ASSEMBLER_NAME (val);
       char type = IDENTIFIER_REPO_CHOSEN (name) ? 'C' : 'O';
       fprintf (repo_file, "%c %s\n", type, IDENTIFIER_POINTER (name));
@@ -310,7 +319,7 @@ repo_emit_p (tree decl)
 	 available.  Still record them into *.rpo files, so if they
 	 weren't actually emitted and collect2 requests them, they can
 	 be provided.  */
-      if (DECL_INTEGRAL_CONSTANT_VAR_P (decl)
+      if (decl_maybe_constant_var_p (decl)
 	  && DECL_CLASS_SCOPE_P (decl))
 	ret = 2;
     }
@@ -343,7 +352,7 @@ repo_emit_p (tree decl)
   if (!DECL_REPO_AVAILABLE_P (decl))
     {
       DECL_REPO_AVAILABLE_P (decl) = 1;
-      pending_repo = tree_cons (NULL_TREE, decl, pending_repo);
+      VEC_safe_push (tree, gc, pending_repo, decl);
     }
 
   return IDENTIFIER_REPO_CHOSEN (DECL_ASSEMBLER_NAME (decl)) ? 1 : ret;

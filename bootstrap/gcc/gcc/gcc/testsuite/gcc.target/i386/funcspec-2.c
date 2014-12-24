@@ -1,20 +1,20 @@
-/* Test whether using target specific options, we can generate SSE5 code.  */
+/* Test whether using target specific options, we can generate FMA4 code.  */
 /* { dg-do compile } */
 /* { dg-require-effective-target lp64 } */
 /* { dg-options "-O2 -march=k8" } */
 
 extern void exit (int);
 
-#define SSE5_ATTR __attribute__((__target__("sse5,fused-madd")))
-extern float  flt_mul_add     (float a, float b, float c) SSE5_ATTR;
-extern float  flt_mul_sub     (float a, float b, float c) SSE5_ATTR;
-extern float  flt_neg_mul_add (float a, float b, float c) SSE5_ATTR;
-extern float  flt_neg_mul_sub (float a, float b, float c) SSE5_ATTR;
+#define FMA4_ATTR __attribute__((__target__("fma4")))
+extern float  flt_mul_add     (float a, float b, float c) FMA4_ATTR;
+extern float  flt_mul_sub     (float a, float b, float c) FMA4_ATTR;
+extern float  flt_neg_mul_add (float a, float b, float c) FMA4_ATTR;
+extern float  flt_neg_mul_sub (float a, float b, float c) FMA4_ATTR;
 
-extern double dbl_mul_add     (double a, double b, double c) SSE5_ATTR;
-extern double dbl_mul_sub     (double a, double b, double c) SSE5_ATTR;
-extern double dbl_neg_mul_add (double a, double b, double c) SSE5_ATTR;
-extern double dbl_neg_mul_sub (double a, double b, double c) SSE5_ATTR;
+extern double dbl_mul_add     (double a, double b, double c) FMA4_ATTR;
+extern double dbl_mul_sub     (double a, double b, double c) FMA4_ATTR;
+extern double dbl_neg_mul_add (double a, double b, double c) FMA4_ATTR;
+extern double dbl_neg_mul_sub (double a, double b, double c) FMA4_ATTR;
 
 float
 flt_mul_add (float a, float b, float c)
@@ -81,14 +81,14 @@ int main ()
   exit (0);
 }
 
-/* { dg-final { scan-assembler "fmaddss" } } */
-/* { dg-final { scan-assembler "fmaddsd" } } */
-/* { dg-final { scan-assembler "fmsubss" } } */
-/* { dg-final { scan-assembler "fmsubsd" } } */
-/* { dg-final { scan-assembler "fnmaddss" } } */
-/* { dg-final { scan-assembler "fnmaddsd" } } */
-/* { dg-final { scan-assembler "fnmsubss" } } */
-/* { dg-final { scan-assembler "fnmsubsd" } } */
+/* { dg-final { scan-assembler "vfmaddss" } } */
+/* { dg-final { scan-assembler "vfmaddsd" } } */
+/* { dg-final { scan-assembler "vfmsubss" } } */
+/* { dg-final { scan-assembler "vfmsubsd" } } */
+/* { dg-final { scan-assembler "vfnmaddss" } } */
+/* { dg-final { scan-assembler "vfnmaddsd" } } */
+/* { dg-final { scan-assembler "vfnmsubss" } } */
+/* { dg-final { scan-assembler "vfnmsubsd" } } */
 /* { dg-final { scan-assembler "call\t(.*)flt_mul_add" } } */
 /* { dg-final { scan-assembler "call\t(.*)flt_mul_sub" } } */
 /* { dg-final { scan-assembler "call\t(.*)flt_neg_mul_add" } } */

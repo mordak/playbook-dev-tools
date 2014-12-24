@@ -35,11 +35,11 @@
 
 --  This capability is currently supported on the following targets:
 
---     HP-UX
+--     HP-UX hppa and ia64
 --     IRIX
---     GNU/Linux x86
+--     GNU/Linux x86, x86_64, ia64
 --     AIX
---     Solaris sparc
+--     Solaris sparc and x86
 --     Tru64
 --     OpenVMS/Alpha
 --     Windows NT/XP/Vista

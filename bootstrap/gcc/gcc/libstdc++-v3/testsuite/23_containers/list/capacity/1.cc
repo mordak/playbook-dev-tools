@@ -15,54 +15,12 @@
 // with this library; see the file COPYING3.  If not see
 // <http://www.gnu.org/licenses/>.
 
-// 23.2.2.2 list capacity [lib.list.capacity]
-
+#include "1.h"
 #include <list>
-#include <testsuite_hooks.h>
-
-bool test __attribute__((unused)) = true;
-
-// This test verifies the following.
-//
-// 23.2.2       bool empty() const
-// 23.2.2       size_type size() const
-// 23.2.2       iterator begin()
-// 23.2.2       iterator end()
-// 23.2.2.3     void push_back(const T&)
-// 23.2.2       size_type max_size() const
-// 23.2.2.2     void resize(size_type s, T c = T())
-//
-void
-test01()
-{
-  std::list<int> list0101;
-  VERIFY(list0101.empty());
-  VERIFY(list0101.size() == 0);
-
-  list0101.push_back(1);
-  VERIFY(!list0101.empty());
-  VERIFY(list0101.size() == 1);
-
-  list0101.resize(3, 2);
-  VERIFY(!list0101.empty());
-  VERIFY(list0101.size() == 3);
-
-  std::list<int>::iterator i = list0101.begin();
-  VERIFY(*i == 1); ++i;
-  VERIFY(*i == 2); ++i;
-  VERIFY(*i == 2); ++i;
-  VERIFY(i == list0101.end());
-
-  list0101.resize(0);
-  VERIFY(list0101.empty());
-  VERIFY(list0101.size() == 0);
-}
 
 int
 main()
 {
-  test01();
+  capacity01<std::list<int> >();
   return 0;
 }
-
-// vi:set sw=2 ts=2:

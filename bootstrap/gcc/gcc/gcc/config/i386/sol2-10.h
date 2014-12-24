@@ -1,5 +1,6 @@
 /* Solaris 10 configuration.
-   Copyright (C) 2004, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+   Copyright (C) 2004, 2006, 2007, 2008, 2009, 2010, 2011
+   Free Software Foundation, Inc.
    Contributed by CodeSourcery, LLC.
 
 This file is part of GCC.
@@ -25,11 +26,10 @@ along with GCC; see the file COPYING3.  If not see
    assembler requires -xarch=generic or -xarch=generic64 instead.  */
 #undef ASM_SPEC
 #ifdef USE_GAS
-#define ASM_SPEC "%{v:-V} %{Qy:} %{!Qn:-Qy} %{n} %{T} %{Ym,*} %{Yd,*} " \
-		 "%{Wa,*:%*} %{m32:--32} %{m64:--64} -s %(asm_cpu)"
+#define ASM_SPEC "%{m32:--32} %{m64:--64} -s %(asm_cpu)"
 #else
-#define ASM_SPEC "%{v:-V} %{Qy:} %{!Qn:-Qy} %{n} %{T} %{Ym,*} %{Yd,*} " \
-		 "%{Wa,*:%*} %{m32:-xarch=generic} %{m64:-xarch=generic64} " \
+#define ASM_SPEC "%{v:-V} %{Qy:} %{!Qn:-Qy} %{Ym,*} " \
+		 "%{m32:-xarch=generic} %{m64:-xarch=generic64} " \
 		 "-s %(asm_cpu)"
 #endif
 
@@ -50,6 +50,20 @@ along with GCC; see the file COPYING3.  If not see
   } while (0)
 #endif
 
+/* As in sol2.h, override the default from i386/x86-64.h to work around
+   Sun as TLS bug.  */
+#undef  ASM_OUTPUT_ALIGNED_COMMON
+#define ASM_OUTPUT_ALIGNED_COMMON(FILE, NAME, SIZE, ALIGN)		\
+  do									\
+    {									\
+      if (TARGET_SUN_TLS						\
+	  && in_section							\
+	  && ((in_section->common.flags & SECTION_TLS) == SECTION_TLS))	\
+	switch_to_section (bss_section);				\
+      x86_elf_aligned_common (FILE, NAME, SIZE, ALIGN);			\
+    }									\
+  while  (0)
+
 #undef NO_PROFILE_COUNTERS
 
 #undef MCOUNT_NAME
@@ -65,25 +79,18 @@ along with GCC; see the file COPYING3.  If not see
 #undef WINT_TYPE_SIZE
 #define WINT_TYPE_SIZE 32
 
-#define SUBTARGET_OVERRIDE_OPTIONS				\
-  do								\
-    {								\
-      if (flag_omit_frame_pointer == 2)				\
-	flag_omit_frame_pointer = 0;				\
-    }								\
-  while (0)
+#define USE_IX86_FRAME_POINTER 1
+#define USE_X86_64_FRAME_POINTER 1
 
+/* Override i386/sol2.h version: return 8-byte vectors in MMX registers if
+   possible, matching Sun Studio 12 Update 1+ compilers and other x86
+   targets.  */
 #undef TARGET_SUBTARGET_DEFAULT
-#define TARGET_SUBTARGET_DEFAULT (MASK_80387 | MASK_IEEE_FP	\
-				  | MASK_FLOAT_RETURNS)
+#define TARGET_SUBTARGET_DEFAULT \
+	(MASK_80387 | MASK_IEEE_FP | MASK_FLOAT_RETURNS)
 
-#define SUBTARGET_OPTIMIZATION_OPTIONS			\
-  do							\
-    {							\
-      if (optimize >= 1)				\
-	target_flags |= MASK_OMIT_LEAF_FRAME_POINTER;	\
-    }							\
-  while (0)
+#define SUBTARGET_OPTIMIZATION_OPTIONS				\
+  { OPT_LEVELS_1_PLUS, OPT_momit_leaf_frame_pointer, NULL, 1 }
 
 #define MULTILIB_DEFAULTS { "m32" }
 
@@ -104,7 +111,18 @@ along with GCC; see the file COPYING3.  If not see
 #define LINK_ARCH64_SPEC LINK_ARCH64_SPEC_BASE
 
 #ifdef TARGET_GNU_LD
-#define TARGET_LD_EMULATION "%{m64:-m elf_x86_64}%{!m64:-m elf_i386} "
+/* Since binutils 2.21, GNU ld supports new *_sol2 emulations to strictly
+   follow the Solaris 2 ABI.  Prefer them if present.  */
+#ifdef HAVE_LD_SOL2_EMULATION
+#define I386_EMULATION "elf_i386_sol2"
+#define X86_64_EMULATION "elf_x86_64_sol2"
+#else
+#define I386_EMULATION "elf_i386"
+#define X86_64_EMULATION "elf_x86_64"
+#endif
+
+#define TARGET_LD_EMULATION "%{m64:-m " X86_64_EMULATION "}" \
+			    "%{!m64:-m " I386_EMULATION "} "
 #else
 #define TARGET_LD_EMULATION ""
 #endif
@@ -118,7 +136,3 @@ along with GCC; see the file COPYING3.  If not see
 
 #undef TARGET_ASM_NAMED_SECTION
 #define TARGET_ASM_NAMED_SECTION i386_solaris_elf_named_section
-
-#undef SUBTARGET_RETURN_IN_MEMORY
-#define SUBTARGET_RETURN_IN_MEMORY(TYPE, FNTYPE) \
-	ix86_sol10_return_in_memory (TYPE, FNTYPE)

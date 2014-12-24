@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---           Copyright (C) 2000-2008, Free Software Foundation, Inc.        --
+--           Copyright (C) 2000-2010, Free Software Foundation, Inc.        --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -24,6 +24,7 @@
 ------------------------------------------------------------------------------
 
 with Atree;    use Atree;
+with Errout;   use Errout;
 with Sinfo;    use Sinfo;
 with Fname.UF; use Fname.UF;
 with Lib;      use Lib;
@@ -54,7 +55,7 @@ package body Impunit is
    Non_Imp_File_Names_95 : constant File_List := (
 
    ------------------------------------------------------
-   -- Ada Hierarchy Units from Ada-83 Reference Manual --
+   -- Ada Hierarchy Units from Ada-95 Reference Manual --
    ------------------------------------------------------
 
      "a-astaco",    -- Ada.Asynchronous_Task_Control
@@ -172,6 +173,16 @@ package body Impunit is
      "a-wichun",    -- Ada.Wide_Characters.Unicode
      "a-widcha",    -- Ada.Wide_Characters
 
+      --  Note: strictly the following should be Ada 2012 units, but it seems
+      --  harmless (and useful) to make then available in Ada 95 mode, since
+      --  they do not deal with Wide_Wide_Character.
+
+     "a-wichha",    -- Ada.Wide_Characters.Handling
+     "a-stuten",    -- Ada.Strings.UTF_Encoding
+     "a-suenco",    -- Ada.Strings.UTF_Encoding.Conversions
+     "a-suenst",    -- Ada.Strings.UTF_Encoding.Strings
+     "a-suewst",    -- Ada.Strings.UTF_Encoding.Wide_Strings
+
    ---------------------------
    -- GNAT Special IO Units --
    ---------------------------
@@ -249,6 +260,8 @@ package body Impunit is
      "g-io    ",    -- GNAT.IO
      "g-io_aux",    -- GNAT.IO_Aux
      "g-locfil",    -- GNAT.Lock_Files
+     "g-mbdira",    -- GNAT.MBBS_Discrete_Random
+     "g-mbflra",    -- GNAT.MBBS_Float_Random
      "g-md5   ",    -- GNAT.MD5
      "g-memdum",    -- GNAT.Memory_Dump
      "g-moreex",    -- GNAT.Most_Recent_Exception
@@ -262,6 +275,10 @@ package body Impunit is
      "g-sercom",    -- GNAT.Serial_Communications
      "g-sestin",    -- GNAT.Secondary_Stack_Info
      "g-sha1  ",    -- GNAT.SHA1
+     "g-sha224",    -- GNAT.SHA224
+     "g-sha256",    -- GNAT.SHA256
+     "g-sha384",    -- GNAT.SHA384
+     "g-sha512",    -- GNAT.SHA512
      "g-signal",    -- GNAT.Signals
      "g-socket",    -- GNAT.Sockets
      "g-souinf",    -- GNAT.Source_Info
@@ -274,6 +291,8 @@ package body Impunit is
      "g-sptavs",    -- GNAT.Spitbol.Table_Vstring
      "g-string",    -- GNAT.Strings
      "g-strspl",    -- GNAT.String_Split
+     "g-sse   ",    -- GNAT.SSE
+     "g-ssvety",    -- GNAT.SSE.Vector_Types
      "g-table ",    -- GNAT.Table
      "g-tasloc",    -- GNAT.Task_Lock
      "g-thread",    -- GNAT.Threads
@@ -300,6 +319,8 @@ package body Impunit is
    ------------------------------------------
 
      "i-cexten",    -- Interfaces.C.Extensions
+     "i-cil   ",    -- Interfaces.CIL
+     "i-cilobj",    -- Interfaces.CIL.Object
      "i-cpp   ",    -- Interfaces.CPP
      "i-cstrea",    -- Interfaces.C.Streams
      "i-java  ",    -- Interfaces.Java
@@ -325,7 +346,6 @@ package body Impunit is
      "s-addima",    -- System.Address_Image
      "s-assert",    -- System.Assertions
      "s-memory",    -- System.Memory
-     "s-os_lib",    -- System.Os_Lib
      "s-parint",    -- System.Partition_Interface
      "s-pooglo",    -- System.Pool_Global
      "s-pooloc",    -- System.Pool_Local
@@ -374,8 +394,10 @@ package body Impunit is
      "a-disedf",    -- Ada.Dispatching.EDF
      "a-dispat",    -- Ada.Dispatching
      "a-envvar",    -- Ada.Environment_Variables
+     "a-etgrbu",    -- Ada.Execution_Time.Group_Budgets
      "a-exetim",    -- Ada.Execution_Time
      "a-extiti",    -- Ada.Execution_Time.Timers
+     "a-izteio",    -- Ada.Integer_Wide_Wide_Text_IO
      "a-rttiev",    -- Ada.Real_Time.Timing_Events
      "a-ngcoar",    -- Ada.Numerics.Generic_Complex_Arrays
      "a-ngrear",    -- Ada.Numerics.Generic_Real_Arrays
@@ -406,6 +428,7 @@ package body Impunit is
      "a-wwboio",    -- Ada.Wide_Text_IO.Wide_Bounded_IO
      "a-wwunio",    -- Ada.Wide_Text_IO.Wide_Unbounded_IO
      "a-zchara",    -- Ada.Wide_Wide_Characters
+     "a-zchhan",    -- Ada.Wide_Wide_Characters.Handling
      "a-ztcoio",    -- Ada.Wide_Wide_Text_IO.Complex_IO
      "a-ztedit",    -- Ada.Wide_Wide_Text_IO.Editing
      "a-zttest",    -- Ada.Wide_Wide_Text_IO.Text_Streams
@@ -449,6 +472,11 @@ package body Impunit is
      "a-szuzti",    -- Ada.Strings.Wide_Wide_Unbounded.Wide_Wide_Text_IO
      "a-zchuni",    -- Ada.Wide_Wide_Characters.Unicode
 
+      --  Note: strictly the following should be Ada 2012 units, but it seems
+      --  harmless (and useful) to make then available in Ada 2005 mode.
+
+     "a-suezst",    -- Ada.Strings.UTF_Encoding.Wide_Wide_Strings
+
    ---------------------------
    -- GNAT Special IO Units --
    ---------------------------
@@ -470,6 +498,62 @@ package body Impunit is
      "g-zspche",    -- GNAT.Wide_Wide_Spelling_Checker
      "g-zstspl");   -- GNAT.Wide_Wide_String_Split
 
+   --------------------
+   -- Ada 2012 Units --
+   --------------------
+
+   --  The following units should be used only in Ada 2012 mode
+
+   Non_Imp_File_Names_12 : constant File_List := (
+     "s-multip",    -- System.Multiprocessors
+     "s-mudido",    -- System.Multiprocessors.Dispatching_Domains
+     "a-cobove",    -- Ada.Containers.Bounded_Vectors
+     "a-cbdlli",    -- Ada.Containers.Bounded_Doubly_Linked_Lists
+     "a-cborse",    -- Ada.Containers.Bounded_Ordered_Sets
+     "a-cborma",    -- Ada.Containers.Bounded_Ordered_Maps
+     "a-cbhase",    -- Ada.Containers.Bounded_Hashed_Sets
+     "a-cbhama");   -- Ada.Containers.Bounded_Hashed_Maps
+
+   -----------------------
+   -- Alternative Units --
+   -----------------------
+
+   --  For some implementation units, there is a unit in the GNAT library
+   --  that has identical functionality that is usable. If we have such a
+   --  case we record the appropriate Unit name in Error_Msg_String.
+
+   type Aunit_Record is record
+      Fname : String (1 .. 6);
+      Aname : String_Ptr;
+   end record;
+
+   --  Array of alternative unit names
+
+   Scasuti : aliased String := "GNAT.Case_Util";
+   Scrc32  : aliased String := "GNAT.CRC32";
+   Shtable : aliased String := "GNAT.HTable";
+   Sos_lib : aliased String := "GNAT.OS_Lib";
+   Sregexp : aliased String := "GNAT.Regexp";
+   Sregpat : aliased String := "GNAT.Regpat";
+   Sstring : aliased String := "GNAT.Strings";
+   Sstusta : aliased String := "GNAT.Task_Stack_Usage";
+   Stasloc : aliased String := "GNAT.Task_Lock";
+   Sutf_32 : aliased String := "GNAT.UTF_32";
+
+   --  Array giving mapping
+
+   Map_Array : constant array (1 .. 10) of Aunit_Record := (
+                 ("casuti", Scasuti'Access),
+                 ("crc32 ", Scrc32 'Access),
+                 ("htable", Shtable'Access),
+                 ("os_lib", Sos_lib'Access),
+                 ("regexp", Sregexp'Access),
+                 ("regpat", Sregpat'Access),
+                 ("string", Sstring'Access),
+                 ("stusta", Sstusta'Access),
+                 ("tasloc", Stasloc'Access),
+                 ("utf_32", Sutf_32'Access));
+
    ----------------------
    -- Get_Kind_Of_Unit --
    ----------------------
@@ -478,6 +562,8 @@ package body Impunit is
       Fname : constant File_Name_Type := Unit_File_Name (U);
 
    begin
+      Error_Msg_Strlen := 0;
+
       --  If length of file name is greater than 12, not predefined.
       --  The value 12 here is an 8 char name with extension .ads.
 
@@ -527,11 +613,19 @@ package body Impunit is
          end if;
       end loop;
 
-      --  See if name is in 05 list
+      --  See if name is in 2005 list
 
       for J in Non_Imp_File_Names_05'Range loop
          if Name_Buffer (1 .. 8) = Non_Imp_File_Names_05 (J) then
-            return Ada_05_Unit;
+            return Ada_2005_Unit;
+         end if;
+      end loop;
+
+      --  See if name is in 2012 list
+
+      for J in Non_Imp_File_Names_12'Range loop
+         if Name_Buffer (1 .. 8) = Non_Imp_File_Names_12 (J) then
+            return Ada_2012_Unit;
          end if;
       end loop;
 
@@ -558,7 +652,28 @@ package body Impunit is
          return Ada_95_Unit;
       end if;
 
-      --  All tests failed, this is definitely an implementation unit
+      --  All tests failed, this is definitely an implementation unit. See if
+      --  we have an alternative name.
+
+      Get_Name_String (Fname);
+
+      if Name_Len in 11 .. 12
+        and then Name_Buffer (1 .. 2) = "s-"
+        and then Name_Buffer (Name_Len - 3 .. Name_Len) = ".ads"
+      then
+         for J in Map_Array'Range loop
+            if (Name_Len = 12 and then
+                 Name_Buffer (3 .. 8) = Map_Array (J).Fname)
+              or else
+               (Name_Len = 11 and then
+                 Name_Buffer (3 .. 7) = Map_Array (J).Fname (1 .. 5))
+            then
+               Error_Msg_Strlen := Map_Array (J).Aname'Length;
+               Error_Msg_String (1 .. Error_Msg_Strlen) :=
+                 Map_Array (J).Aname.all;
+            end if;
+         end loop;
+      end if;
 
       return Implementation_Unit;
    end Get_Kind_Of_Unit;

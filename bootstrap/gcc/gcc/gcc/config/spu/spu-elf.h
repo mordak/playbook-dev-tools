@@ -1,4 +1,4 @@
-/* Copyright (C) 2006, 2007, 2008 Free Software Foundation, Inc.
+/* Copyright (C) 2006, 2007, 2008, 2009, 2011 Free Software Foundation, Inc.
 
    This file is free software; you can redistribute it and/or modify it under
    the terms of the GNU General Public License as published by the Free
@@ -48,8 +48,9 @@
    object constructed before entering `main'.  */
 
 #undef  STARTFILE_SPEC 
-#define STARTFILE_SPEC "%{mstdmain: crt2.o%s} %{!mstdmain: crt1.o%s} \
-			crti.o%s crtbegin.o%s"
+#define STARTFILE_SPEC "%{mstdmain: %{pg|p:gcrt2.o%s;:crt2.o%s}}\
+                        %{!mstdmain: %{pg|p:gcrt1.o%s;:crt1.o%s}}\
+                        crti.o%s crtbegin.o%s"
 
 #undef  ENDFILE_SPEC
 #define ENDFILE_SPEC   "crtend.o%s crtn.o%s"
@@ -68,10 +69,12 @@
 
 #define LINK_SPEC "%{mlarge-mem: --defsym __stack=0xfffffff0 }"
 
-#define LIB_SPEC \
-	"-( %{!shared:%{g*:-lg}} -lc -lgloss -)"
-
-/* Turn off warnings in the assembler too. */
-#undef ASM_SPEC
-#define ASM_SPEC  "%{w:-W}"
+#define LIB_SPEC "-( %{!shared:%{g*:-lg}} -lc -lgloss -) \
+    %{mno-atomic-updates:-lgcc_cachemgr_nonatomic; :-lgcc_cachemgr} \
+    %{mcache-size=128:-lgcc_cache128k; \
+      mcache-size=64 :-lgcc_cache64k; \
+      mcache-size=32 :-lgcc_cache32k; \
+      mcache-size=16 :-lgcc_cache16k; \
+      mcache-size=8  :-lgcc_cache8k; \
+                     :-lgcc_cache64k}"
 

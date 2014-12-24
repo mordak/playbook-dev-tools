@@ -1,6 +1,6 @@
 /* Prototypes for exported functions defined in crx.c
    Copyright (C) 1991, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001,
-   2002, 2003, 2004, 2007 Free Software Foundation, Inc.
+   2002, 2003, 2004, 2007, 2010 Free Software Foundation, Inc.
 
    This file is part of GCC.
 
@@ -32,10 +32,8 @@ extern enum reg_class crx_secondary_reload_class (enum reg_class, enum machine_m
 /* Passing function arguments.  */
 extern int crx_function_arg_regno_p (int);
 #ifdef TREE_CODE
-extern void crx_function_arg_advance (CUMULATIVE_ARGS *, enum machine_mode, tree, int);
 #ifdef RTX_CODE
 extern void crx_init_cumulative_args (CUMULATIVE_ARGS *, tree, rtx);
-extern rtx crx_function_arg (struct cumulative_args *, enum machine_mode, tree, int);
 #endif /* RTX_CODE */
 #endif /* TREE_CODE */
 
@@ -53,7 +51,6 @@ enum crx_addrtype
 };
 
 extern enum crx_addrtype crx_decompose_address (rtx addr, struct crx_address *out);
-extern int crx_legitimate_address_p (enum machine_mode, rtx, int);
 
 extern int crx_const_double_ok (rtx op);
 
@@ -62,10 +59,6 @@ extern void crx_print_operand (FILE *, rtx, int);
 extern void crx_print_operand_address (FILE *, rtx);
 
 /* Misc functions called from crx.md.  */
-extern rtx crx_expand_compare (enum rtx_code, enum machine_mode);
-extern void crx_expand_branch (enum rtx_code, rtx);
-extern void crx_expand_scond (enum rtx_code, rtx);
-
 extern void crx_expand_movmem_single (rtx, rtx, rtx, rtx, rtx, unsigned HOST_WIDE_INT *);
 extern int crx_expand_movmem (rtx, rtx, rtx, rtx);
 #endif /* RTX_CODE */

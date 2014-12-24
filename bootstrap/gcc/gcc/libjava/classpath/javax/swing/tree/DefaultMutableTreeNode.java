@@ -101,7 +101,7 @@ public class DefaultMutableTreeNode
 
   /**
    * Creates a <code>DefaultMutableTreeNode</code> object with the given
-   * user object attached to it. This is equivalent to 
+   * user object attached to it. This is equivalent to
    * <code>DefaultMutableTreeNode(userObject, true)</code>.
    *
    * @param userObject the user object (<code>null</code> permitted).
@@ -126,7 +126,7 @@ public class DefaultMutableTreeNode
   }
 
   /**
-   * Returns a clone of the node.  The clone contains a shallow copy of the 
+   * Returns a clone of the node.  The clone contains a shallow copy of the
    * user object, and does not copy the parent node or the child nodes.
    *
    * @return A clone of the node.
@@ -159,24 +159,24 @@ public class DefaultMutableTreeNode
    *
    * @param child the child node (<code>null</code> not permitted).
    *
-   * @throws IllegalStateException if {@link #getAllowsChildren()} returns 
+   * @throws IllegalStateException if {@link #getAllowsChildren()} returns
    *     <code>false</code>.
    * @throws IllegalArgumentException if {@link #isNodeAncestor} returns
-   *     <code>true</code>. 
-   * @throws IllegalArgumentException if <code>child</code> is 
+   *     <code>true</code>.
+   * @throws IllegalArgumentException if <code>child</code> is
    *     <code>null</code>.
    */
   public void add(MutableTreeNode child)
   {
     if (! allowsChildren)
       throw new IllegalStateException();
-    
+
     if (child == null)
       throw new IllegalArgumentException();
 
     if (isNodeAncestor(child))
       throw new IllegalArgumentException("Cannot add ancestor node.");
-    
+
     children.add(child);
     child.setParent(this);
   }
@@ -194,10 +194,10 @@ public class DefaultMutableTreeNode
   /**
    * Removes the child with the given index from this node.
    *
-   * @param index the index (in the range <code>0</code> to 
+   * @param index the index (in the range <code>0</code> to
    *     <code>getChildCount() - 1</code>).
-   *     
-   * @throws ArrayIndexOutOfBoundsException if <code>index</code> is outside 
+   *
+   * @throws ArrayIndexOutOfBoundsException if <code>index</code> is outside
    *         the valid range.
    */
   public void remove(int index)
@@ -207,12 +207,12 @@ public class DefaultMutableTreeNode
   }
 
   /**
-   * Removes the given child from this node and sets its parent to 
+   * Removes the given child from this node and sets its parent to
    * <code>null</code>.
    *
    * @param node the child node (<code>null</code> not permitted).
-   * 
-   * @throws IllegalArgumentException if <code>node</code> is not a child of 
+   *
+   * @throws IllegalArgumentException if <code>node</code> is not a child of
    *     this node.
    * @throws IllegalArgumentException if <code>node</code> is null.
    */
@@ -259,8 +259,8 @@ public class DefaultMutableTreeNode
    *
    * @param node the child node (<code>null</code> not permitted).
    * @param index the index.
-   * 
-   * @throws IllegalArgumentException if <code>node</code> is 
+   *
+   * @throws IllegalArgumentException if <code>node</code> is
    *     </code>null</code>.
    */
   public void insert(MutableTreeNode node, int index)
@@ -270,7 +270,7 @@ public class DefaultMutableTreeNode
 
     if (node == null)
       throw new IllegalArgumentException("Null 'node' argument.");
-    
+
     if (isNodeAncestor(node))
       throw new IllegalArgumentException("Cannot insert ancestor node.");
 
@@ -293,11 +293,12 @@ public class DefaultMutableTreeNode
    *
    * @return an enumeration of tree nodes
    */
+  @SuppressWarnings("unchecked") // Required for API compatibility
   public Enumeration children()
   {
     if (children.size() == 0)
       return EMPTY_ENUMERATION;
-    
+
     return children.elements();
   }
 
@@ -320,7 +321,7 @@ public class DefaultMutableTreeNode
    */
   public TreeNode getChildAt(int index)
   {
-    return (TreeNode) children.elementAt(index);
+    return children.elementAt(index);
   }
 
   /**
@@ -336,11 +337,11 @@ public class DefaultMutableTreeNode
   /**
    * Returns the index of the specified child node, or -1 if the node is not
    * in fact a child of this node.
-   * 
+   *
    * @param node  the node (<code>null</code> not permitted).
-   * 
+   *
    * @return The index of the specified child node, or -1.
-   * 
+   *
    * @throws IllegalArgumentException if <code>node</code> is <code>null</code>.
    */
   public int getIndex(TreeNode node)
@@ -351,7 +352,7 @@ public class DefaultMutableTreeNode
   }
 
   /**
-   * Sets the flag that controls whether or not this node allows the addition / 
+   * Sets the flag that controls whether or not this node allows the addition /
    * insertion of child nodes.  If the flag is set to <code>false</code>, any
    * existing children are removed.
    *
@@ -421,9 +422,9 @@ public class DefaultMutableTreeNode
    * <li>the parent node (if there is one);</li>
    * <li>any ancestor of the parent node;</li>
    * </ul>
-   * If <code>node</code> is <code>null</code>, this method returns 
+   * If <code>node</code> is <code>null</code>, this method returns
    * <code>false</code>.
-   * 
+   *
    * @param node  the node (<code>null</code> permitted).
    *
    * @return A boolean.
@@ -449,9 +450,9 @@ public class DefaultMutableTreeNode
    * <li>the child nodes belonging to this tree node, if there are any;</li>
    * <li>any descendants of the child nodes;</li>
    * </ul>
-   * If <code>node</code> is <code>null</code>, this method returns 
+   * If <code>node</code> is <code>null</code>, this method returns
    * <code>false</code>.
-   * 
+   *
    * @param node  the node (<code>null</code> permitted).
    *
    * @return A boolean.
@@ -462,7 +463,7 @@ public class DefaultMutableTreeNode
       return false;
 
     TreeNode current = node;
-    
+
     while (current != null
            && current != this)
       current = current.getParent();
@@ -532,7 +533,7 @@ public class DefaultMutableTreeNode
     TreeNode node = getChildAt(0);
     int depth = 0;
     int current = 1;
-    
+
     while (! stack.empty())
       {
         if (node.getChildCount() != 0)
@@ -548,7 +549,7 @@ public class DefaultMutableTreeNode
 
             int size;
             int index;
-            
+
             do
               {
                 node = node.getParent();
@@ -605,7 +606,7 @@ public class DefaultMutableTreeNode
       {
         if (depth == 0)
           return null;
-        
+
         return new TreeNode[depth];
       }
 
@@ -623,7 +624,7 @@ public class DefaultMutableTreeNode
   {
     TreeNode[] path = getPathToRoot(this, 0);
     Object[] object = new Object[path.length];
-    
+
     for (int index = 0; index < path.length; ++index)
       object[index] = ((DefaultMutableTreeNode) path[index]).getUserObject();
 
@@ -639,7 +640,7 @@ public class DefaultMutableTreeNode
   {
     TreeNode current = this;
     TreeNode check = current.getParent();
-    
+
     while (check != null)
       {
         current = check;
@@ -674,7 +675,7 @@ public class DefaultMutableTreeNode
     // Return next sibling (if needed the sibling of some parent).
     DefaultMutableTreeNode node = this;
     DefaultMutableTreeNode sibling;
-    
+
     do
       {
         sibling = node.getNextSibling();
@@ -682,7 +683,7 @@ public class DefaultMutableTreeNode
       }
     while (sibling == null &&
            node != null);
-    
+
     // Return sibling.
     return sibling;
   }
@@ -697,7 +698,7 @@ public class DefaultMutableTreeNode
     // Return null if no parent.
     if (parent == null)
       return null;
-    
+
     DefaultMutableTreeNode sibling = getPreviousSibling();
 
     // Return parent if no sibling.
@@ -717,6 +718,7 @@ public class DefaultMutableTreeNode
    *
    * @return Enumeration
    */
+  @SuppressWarnings("unchecked") // Required for API compatibility
   public Enumeration preorderEnumeration()
   {
     return new PreorderEnumeration(this);
@@ -727,6 +729,7 @@ public class DefaultMutableTreeNode
    *
    * @return Enumeration
    */
+  @SuppressWarnings("unchecked") // Required for API compatibility
   public Enumeration postorderEnumeration()
   {
     return new PostorderEnumeration(this);
@@ -737,6 +740,7 @@ public class DefaultMutableTreeNode
    *
    * @return Enumeration
    */
+  @SuppressWarnings("unchecked") // Required for API compatibility
   public Enumeration breadthFirstEnumeration()
   {
     return new BreadthFirstEnumeration(this);
@@ -747,6 +751,7 @@ public class DefaultMutableTreeNode
    *
    * @return Enumeration
    */
+  @SuppressWarnings("unchecked") // Required for API compatibility
   public Enumeration depthFirstEnumeration()
   {
     return postorderEnumeration();
@@ -759,11 +764,12 @@ public class DefaultMutableTreeNode
    *
    * @return Enumeration
    */
+  @SuppressWarnings("unchecked") // Required for API compatibility
   public Enumeration pathFromAncestorEnumeration(TreeNode node)
   {
     if (node == null)
       throw new IllegalArgumentException();
-    
+
     TreeNode parent = this;
     Vector<TreeNode> nodes = new Vector<TreeNode>();
     nodes.add(this);
@@ -776,13 +782,13 @@ public class DefaultMutableTreeNode
 
     if (parent != node)
       throw new IllegalArgumentException();
-    
+
     return nodes.elements();
   }
 
   /**
-   * Returns <code>true</code> if <code>node</code> is a child of this tree 
-   * node, and <code>false</code> otherwise.  If <code>node</code> is 
+   * Returns <code>true</code> if <code>node</code> is a child of this tree
+   * node, and <code>false</code> otherwise.  If <code>node</code> is
    * <code>null</code>, this method returns <code>false</code>.
    *
    * @param node  the node (<code>null</code> permitted).
@@ -801,36 +807,36 @@ public class DefaultMutableTreeNode
    * Returns the first child node belonging to this tree node.
    *
    * @return The first child node.
-   * 
+   *
    * @throws NoSuchElementException if this tree node has no children.
    */
   public TreeNode getFirstChild()
   {
-    return (TreeNode) children.firstElement();
+    return children.firstElement();
   }
 
   /**
    * Returns the last child node belonging to this tree node.
    *
    * @return The last child node.
-   * 
+   *
    * @throws NoSuchElementException if this tree node has no children.
    */
   public TreeNode getLastChild()
   {
-    return (TreeNode) children.lastElement();
+    return children.lastElement();
   }
 
   /**
-   * Returns the next child after the specified <code>node</code>, or 
-   * <code>null</code> if there is no child after the specified 
+   * Returns the next child after the specified <code>node</code>, or
+   * <code>null</code> if there is no child after the specified
    * <code>node</code>.
    *
    * @param node  a child of this node (<code>null</code> not permitted).
    *
    * @return The next child, or <code>null</code>.
-   * 
-   * @throws IllegalArgumentException if <code>node</code> is not a child of 
+   *
+   * @throws IllegalArgumentException if <code>node</code> is not a child of
    *     this node, or is <code>null</code>.
    */
   public TreeNode getChildAfter(TreeNode node)
@@ -847,15 +853,15 @@ public class DefaultMutableTreeNode
   }
 
   /**
-   * Returns the previous child before the specified <code>node</code>, or 
-   * <code>null</code> if there is no child before the specified 
+   * Returns the previous child before the specified <code>node</code>, or
+   * <code>null</code> if there is no child before the specified
    * <code>node</code>.
    *
    * @param node  a child of this node (<code>null</code> not permitted).
    *
    * @return The previous child, or <code>null</code>.
-   * 
-   * @throws IllegalArgumentException if <code>node</code> is not a child of 
+   *
+   * @throws IllegalArgumentException if <code>node</code> is not a child of
    *     this node, or is <code>null</code>.
    */
   public TreeNode getChildBefore(TreeNode node)
@@ -907,8 +913,8 @@ public class DefaultMutableTreeNode
 
   /**
    * Returns the next sibling for this tree node.  If this node has no parent,
-   * or this node is the last child of its parent, this method returns 
-   * <code>null</code>.  
+   * or this node is the last child of its parent, this method returns
+   * <code>null</code>.
    *
    * @return The next sibling, or <code>null</code>.
    */
@@ -918,7 +924,7 @@ public class DefaultMutableTreeNode
       return null;
 
     int index = parent.getIndex(this) + 1;
-    
+
     if (index == parent.getChildCount())
       return null;
 
@@ -926,9 +932,9 @@ public class DefaultMutableTreeNode
   }
 
   /**
-   * Returns the previous sibling for this tree node.  If this node has no 
-   * parent, or this node is the first child of its parent, this method returns 
-   * <code>null</code>.  
+   * Returns the previous sibling for this tree node.  If this node has no
+   * parent, or this node is the first child of its parent, this method returns
+   * <code>null</code>.
    *
    * @return The previous sibling, or <code>null</code>.
    */
@@ -946,7 +952,7 @@ public class DefaultMutableTreeNode
   }
 
   /**
-   * Returns <code>true</code> if this tree node is a lead node (that is, it 
+   * Returns <code>true</code> if this tree node is a lead node (that is, it
    * has no children), and <code>false</otherwise>.
    *
    * @return A boolean.
@@ -957,8 +963,8 @@ public class DefaultMutableTreeNode
   }
 
   /**
-   * Returns the first leaf node that is a descendant of this node.  Recall 
-   * that a node is its own descendant, so if this node has no children then 
+   * Returns the first leaf node that is a descendant of this node.  Recall
+   * that a node is its own descendant, so if this node has no children then
    * it is returned as the first leaf.
    *
    * @return The first leaf node.
@@ -966,7 +972,7 @@ public class DefaultMutableTreeNode
   public DefaultMutableTreeNode getFirstLeaf()
   {
     TreeNode current = this;
-    
+
     while (current.getChildCount() > 0)
       current = current.getChildAt(0);
 
@@ -974,8 +980,8 @@ public class DefaultMutableTreeNode
   }
 
   /**
-   * Returns the last leaf node that is a descendant of this node.  Recall 
-   * that a node is its own descendant, so if this node has no children then 
+   * Returns the last leaf node that is a descendant of this node.  Recall
+   * that a node is its own descendant, so if this node has no children then
    * it is returned as the last leaf.
    *
    * @return The first leaf node.
@@ -984,7 +990,7 @@ public class DefaultMutableTreeNode
   {
     TreeNode current = this;
     int size = current.getChildCount();
-    
+
     while (size > 0)
       {
         current = current.getChildAt(size - 1);
@@ -995,7 +1001,7 @@ public class DefaultMutableTreeNode
   }
 
   /**
-   * Returns the next leaf node after this tree node. 
+   * Returns the next leaf node after this tree node.
    *
    * @return The next leaf node, or <code>null</code>.
    */
@@ -1036,12 +1042,12 @@ public class DefaultMutableTreeNode
   public int getLeafCount()
   {
     int count = 0;
-    Enumeration e = depthFirstEnumeration();
+    Enumeration<?> e = depthFirstEnumeration();
 
     while (e.hasMoreElements())
       {
         TreeNode current = (TreeNode) e.nextElement();
-        
+
         if (current.isLeaf())
           count++;
       }
@@ -1076,7 +1082,7 @@ public class DefaultMutableTreeNode
           TreeNode node = queue.removeFirst();
 
           Enumeration<TreeNode> children =
-	    (Enumeration<TreeNode>) node.children();
+            (Enumeration<TreeNode>) node.children();
           while (children.hasMoreElements())
               queue.add(children.nextElement());
 
@@ -1089,10 +1095,10 @@ public class DefaultMutableTreeNode
    */
   static class PreorderEnumeration implements Enumeration<TreeNode>
   {
-	  TreeNode next;
+          TreeNode next;
 
       Stack<Enumeration<TreeNode>> childrenEnums =
-	new Stack<Enumeration<TreeNode>>();
+        new Stack<Enumeration<TreeNode>>();
 
       @SuppressWarnings("unchecked")
       PreorderEnumeration(TreeNode node)
@@ -1132,7 +1138,7 @@ public class DefaultMutableTreeNode
 
               return child;
           }
-          
+
           // If no children are left, we return to a higher level.
           childrenEnums.pop();
 
@@ -1155,7 +1161,7 @@ public class DefaultMutableTreeNode
 
        Stack<TreeNode> nodes = new Stack<TreeNode>();
        Stack<Enumeration<TreeNode>> childrenEnums =
-	 new Stack<Enumeration<TreeNode>>();
+         new Stack<Enumeration<TreeNode>>();
 
        @SuppressWarnings("unchecked")
        PostorderEnumeration(TreeNode node)
@@ -1188,7 +1194,7 @@ public class DefaultMutableTreeNode
                nodes.push(node);
 
                Enumeration<TreeNode> newChildren =
-		 (Enumeration<TreeNode>) node.children();
+                 (Enumeration<TreeNode>) node.children();
                childrenEnums.push(newChildren);
 
                return traverse(newChildren);

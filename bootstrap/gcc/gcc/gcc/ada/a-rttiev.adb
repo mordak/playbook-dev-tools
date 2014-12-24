@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---           Copyright (C) 2005-2009, Free Software Foundation, Inc.        --
+--           Copyright (C) 2005-2010, Free Software Foundation, Inc.        --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -32,6 +32,7 @@
 with System.Task_Primitives.Operations;
 with System.Tasking.Utilities;
 with System.Soft_Links;
+with System.Interrupt_Management.Operations;
 
 with Ada.Containers.Doubly_Linked_Lists;
 pragma Elaborate_All (Ada.Containers.Doubly_Linked_Lists);
@@ -75,9 +76,9 @@ package body Ada.Real_Time.Timing_Events is
    --  with mutually exclusive access via Event_Queue_Lock.
 
    procedure Remove_From_Queue (This : Any_Timing_Event);
-   --  Remove the specified event pointer from the queue of pending events
-   --  with mutually exclusive access via Event_Queue_Lock.
-   --  This procedure is used by the client-side routines (Set_Handler, etc.).
+   --  Remove the specified event pointer from the queue of pending events with
+   --  mutually exclusive access via Event_Queue_Lock. This procedure is used
+   --  by the client-side routines (Set_Handler, etc.).
 
    -----------
    -- Timer --
@@ -94,8 +95,15 @@ package body Ada.Real_Time.Timing_Events is
       --  selected is arbitrary and could be changed to suit the application
       --  requirements. Obviously a shorter period would give better resolution
       --  at the cost of more overhead.
+
    begin
       System.Tasking.Utilities.Make_Independent;
+
+      --  Since this package may be elaborated before System.Interrupt,
+      --  we need to call Setup_Interrupt_Mask explicitly to ensure that
+      --  this task has the proper signal mask.
+
+      System.Interrupt_Management.Operations.Setup_Interrupt_Mask;
 
       --  We await the call to Start to ensure that Event_Queue_Lock has been
       --  initialized by the package executable part prior to accessing it in
@@ -171,6 +179,7 @@ package body Ada.Real_Time.Timing_Events is
 
          declare
             Handler : constant Timing_Event_Handler := Next_Event.Handler;
+
          begin
             --  The first act is to clear the event, per D.15(13/2). Besides,
             --  we cannot clear the handler pointer *after* invoking the
@@ -205,10 +214,16 @@ package body Ada.Real_Time.Timing_Events is
       package By_Timeout is new Events.Generic_Sorting (Sooner);
       --  Used to keep the events in ascending order by timeout value
 
+      ------------
+      -- Sooner --
+      ------------
+
       function Sooner (Left, Right : Any_Timing_Event) return Boolean is
       begin
          return Left.Timeout < Right.Timeout;
       end Sooner;
+
+   --  Start of processing for Insert_Into_Queue
 
    begin
       SSL.Abort_Defer.all;
@@ -236,12 +251,14 @@ package body Ada.Real_Time.Timing_Events is
    procedure Remove_From_Queue (This : Any_Timing_Event) is
       use Events;
       Location : Cursor;
+
    begin
       SSL.Abort_Defer.all;
 
       Write_Lock (Event_Queue_Lock'Access);
 
       Location := All_Events.Find (This);
+
       if Location /= No_Element then
          All_Events.Delete (Location);
       end if;
@@ -332,7 +349,9 @@ package body Ada.Real_Time.Timing_Events is
 
    function Time_Of_Event (Event : Timing_Event) return Time is
    begin
-      return Event.Timeout;
+      --  RM D.15(18/2): Time_First must be returned in the event is not set
+
+      return (if Event.Handler = null then Time_First else Event.Timeout);
    end Time_Of_Event;
 
    --------------

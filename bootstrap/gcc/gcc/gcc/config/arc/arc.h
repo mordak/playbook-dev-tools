@@ -1,6 +1,6 @@
 /* Definitions of target machine for GNU compiler, Argonaut ARC cpu.
    Copyright (C) 1994, 1995, 1997, 1998, 1999, 2000, 2001, 2002, 2004, 2005,
-   2007, 2008 Free Software Foundation, Inc.
+   2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -29,6 +29,7 @@ along with GCC; see the file COPYING3.  If not see
 
 #undef ASM_SPEC
 #undef LINK_SPEC
+#undef LIB_SPEC
 #undef STARTFILE_SPEC
 #undef ENDFILE_SPEC
 #undef SIZE_TYPE
@@ -62,9 +63,11 @@ along with GCC; see the file COPYING3.  If not see
 %{EB:-mbig-endian} %{EL:-mlittle-endian} \
 "
 
-#define ASM_SPEC "%{v} %{EB} %{EL}"
+#define ASM_SPEC "%{EB} %{EL}"
 
 #define LINK_SPEC "%{v} %{EB} %{EL}"
+
+#define LIB_SPEC "-lc"
 
 #define STARTFILE_SPEC "%{!shared:crt0.o%s} crtinit.o%s"
 
@@ -82,24 +85,9 @@ extern int arc_cpu_type;
 /* Check if CPU is an extension and set `arc_cpu_type' and `arc_mangle_cpu'
    appropriately.  The result should be nonzero if the cpu is recognized,
    otherwise zero.  This is intended to be redefined in a cover file.
-   This is used by arc_init.  */
+   This is used by arc_handle_option.  */
 #define ARC_EXTENSION_CPU(cpu) 0
 
-/* Sometimes certain combinations of command options do not make
-   sense on a particular target machine.  You can define a macro
-   `OVERRIDE_OPTIONS' to take account of this.  This macro, if
-   defined, is executed once just after all the command options have
-   been parsed.
-
-   Don't use this macro to turn on various extra optimizations for
-   `-O'.  That is what `OPTIMIZATION_OPTIONS' is for.  */
-
-
-#define OVERRIDE_OPTIONS \
-do {				\
-  /* These need to be done at start up.  It's convenient to do them here.  */ \
-  arc_init ();			\
-} while (0)
 
 /* Target machine storage layout.  */
 
@@ -113,14 +101,6 @@ do {				\
 /* Define this if most significant word of a multiword number is the lowest
    numbered.  */
 #define WORDS_BIG_ENDIAN (TARGET_BIG_ENDIAN)
-
-/* Define this to set the endianness to use in libgcc2.c, which can
-   not depend on target_flags.  */
-#ifdef __big_endian__
-#define LIBGCC2_WORDS_BIG_ENDIAN 1
-#else
-#define LIBGCC2_WORDS_BIG_ENDIAN 0
-#endif
 
 /* Width of a word, in units (bytes).  */
 #define UNITS_PER_WORD 4
@@ -283,16 +263,6 @@ if (GET_MODE_CLASS (MODE) == MODE_INT		\
   48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61,		\
   27, 28, 29, 30 }
 
-/* Macro to conditionally modify fixed_regs/call_used_regs.  */
-#define CONDITIONAL_REGISTER_USAGE			\
-do {							\
-  if (PIC_OFFSET_TABLE_REGNUM != INVALID_REGNUM)	\
-    {							\
-      fixed_regs[PIC_OFFSET_TABLE_REGNUM] = 1;		\
-      call_used_regs[PIC_OFFSET_TABLE_REGNUM] = 1;	\
-    }							\
-} while (0)
-
 /* Return number of consecutive hard regs needed starting at reg REGNO
    to hold something of mode MODE.
    This is ordinarily the length in words of a value of mode MODE
@@ -390,13 +360,6 @@ extern enum reg_class arc_regno_reg_class[FIRST_PSEUDO_REGISTER];
 ((REGNO) < 32 || (unsigned) reg_renumber[REGNO] < 32)
 #define REGNO_OK_FOR_INDEX_P(REGNO) \
 ((REGNO) < 32 || (unsigned) reg_renumber[REGNO] < 32)
-
-/* Given an rtx X being reloaded into a reg required to be
-   in class CLASS, return the class of reg to actually use.
-   In general this is just CLASS; but on some machines
-   in some cases it is preferable to use a more restrictive class.  */
-#define PREFERRED_RELOAD_CLASS(X,CLASS) \
-(CLASS)
 
 /* Return the maximum number of consecutive registers
    needed to represent mode MODE in a register of class CLASS.  */
@@ -516,12 +479,6 @@ extern enum reg_class arc_regno_reg_class[FIRST_PSEUDO_REGISTER];
    not be a register used by the prologue.  */
 #define STATIC_CHAIN_REGNUM 24
 
-/* A C expression which is nonzero if a function must have and use a
-   frame pointer.  This expression is evaluated in the reload pass.
-   If its value is nonzero the function will have a frame pointer.  */
-#define FRAME_POINTER_REQUIRED \
-(cfun->calls_alloca)
-
 /* C statement to store the difference between the frame pointer
    and the stack pointer values immediately after the function prologue.  */
 #define INITIAL_FRAME_POINTER_OFFSET(VAR) \
@@ -535,14 +492,6 @@ extern enum reg_class arc_regno_reg_class[FIRST_PSEUDO_REGISTER];
    onto the stack for each call; instead, the function prologue should
    increase the stack frame size by this amount.  */
 #define ACCUMULATE_OUTGOING_ARGS 1
-
-/* Value is the number of bytes of arguments automatically
-   popped when returning from a subroutine call.
-   FUNDECL is the declaration node of the function (as a tree),
-   FUNTYPE is the data type of the function (as a tree),
-   or for a library call it is an identifier node for the subroutine name.
-   SIZE is the number of bytes of arguments passed on the stack.  */
-#define RETURN_POPS_ARGS(DECL, FUNTYPE, SIZE) 0
 
 /* Define a data type for recording info about an argument list
    during the scan of that argument list.  This data type should
@@ -564,68 +513,6 @@ extern enum reg_class arc_regno_reg_class[FIRST_PSEUDO_REGISTER];
 #define FUNCTION_ARG_REGNO_P(N) \
 ((unsigned) (N) < MAX_ARC_PARM_REGS)
 
-/* The ROUND_ADVANCE* macros are local to this file.  */
-/* Round SIZE up to a word boundary.  */
-#define ROUND_ADVANCE(SIZE) \
-(((SIZE) + UNITS_PER_WORD - 1) / UNITS_PER_WORD)
-
-/* Round arg MODE/TYPE up to the next word boundary.  */
-#define ROUND_ADVANCE_ARG(MODE, TYPE) \
-((MODE) == BLKmode				\
- ? ROUND_ADVANCE (int_size_in_bytes (TYPE))	\
- : ROUND_ADVANCE (GET_MODE_SIZE (MODE)))
-
-/* Round CUM up to the necessary point for argument MODE/TYPE.  */
-#define ROUND_ADVANCE_CUM(CUM, MODE, TYPE) \
-((((MODE) == BLKmode ? TYPE_ALIGN (TYPE) : GET_MODE_BITSIZE (MODE)) \
-  > BITS_PER_WORD)	\
- ? (((CUM) + 1) & ~1)	\
- : (CUM))
-
-/* Return boolean indicating arg of type TYPE and mode MODE will be passed in
-   a reg.  This includes arguments that have to be passed by reference as the
-   pointer to them is passed in a reg if one is available (and that is what
-   we're given).
-   This macro is only used in this file.  */
-#define PASS_IN_REG_P(CUM, MODE, TYPE) \
-((CUM) < MAX_ARC_PARM_REGS						\
- && ((ROUND_ADVANCE_CUM ((CUM), (MODE), (TYPE))				\
-      + ROUND_ADVANCE_ARG ((MODE), (TYPE))				\
-      <= MAX_ARC_PARM_REGS)))
-
-/* Determine where to put an argument to a function.
-   Value is zero to push the argument on the stack,
-   or a hard register in which to store the argument.
-
-   MODE is the argument's machine mode.
-   TYPE is the data type of the argument (as a tree).
-    This is null for libcalls where that information may
-    not be available.
-   CUM is a variable of type CUMULATIVE_ARGS which gives info about
-    the preceding args and about the function being called.
-   NAMED is nonzero if this argument is a named parameter
-    (otherwise it is an extra parameter matching an ellipsis).  */
-/* On the ARC the first MAX_ARC_PARM_REGS args are normally in registers
-   and the rest are pushed.  */
-#define FUNCTION_ARG(CUM, MODE, TYPE, NAMED) \
-(PASS_IN_REG_P ((CUM), (MODE), (TYPE))					\
- ? gen_rtx_REG ((MODE), ROUND_ADVANCE_CUM ((CUM), (MODE), (TYPE)))	\
- : 0)
-
-/* Update the data in CUM to advance over an argument
-   of mode MODE and data type TYPE.
-   (TYPE is null for libcalls where that information may not be available.)  */
-#define FUNCTION_ARG_ADVANCE(CUM, MODE, TYPE, NAMED) \
-((CUM) = (ROUND_ADVANCE_CUM ((CUM), (MODE), (TYPE)) \
-	  + ROUND_ADVANCE_ARG ((MODE), (TYPE))))
-
-/* If defined, a C expression that gives the alignment boundary, in bits,
-   of an argument with the specified mode and type.  If it is not defined, 
-   PARM_BOUNDARY is used for all arguments.  */
-#define FUNCTION_ARG_BOUNDARY(MODE, TYPE) \
-(((TYPE) ? TYPE_ALIGN (TYPE) : GET_MODE_BITSIZE (MODE)) <= PARM_BOUNDARY \
- ? PARM_BOUNDARY \
- : 2 * PARM_BOUNDARY)
 
 /* Function results.  */
 
@@ -663,39 +550,8 @@ arc_eligible_for_epilogue_delay (TRIAL, SLOTS_FILLED)
    for profiling a function entry.  */
 #define FUNCTION_PROFILER(FILE, LABELNO)
 
-/* Trampolines.  */
-/* ??? This doesn't work yet because GCC will use as the address of a nested
-   function the address of the trampoline.  We need to use that address
-   right shifted by 2.  It looks like we'll need PSImode after all. :-(  */
-
-/* Output assembler code for a block containing the constant parts
-   of a trampoline, leaving space for the variable parts.  */
-/* On the ARC, the trampoline is quite simple as we have 32-bit immediate
-   constants.
-
-	mov r24,STATIC
-	j.nd FUNCTION
-*/
-#define TRAMPOLINE_TEMPLATE(FILE) \
-do { \
-  assemble_aligned_integer (UNITS_PER_WORD, GEN_INT (0x631f7c00)); \
-  assemble_aligned_integer (UNITS_PER_WORD, const0_rtx); \
-  assemble_aligned_integer (UNITS_PER_WORD, GEN_INT (0x381f0000)); \
-  assemble_aligned_integer (UNITS_PER_WORD, const0_rtx); \
-} while (0)
-
-/* Length in units of the trampoline for entering a nested function.  */
+#define TRAMPOLINE_ALIGNMENT 32
 #define TRAMPOLINE_SIZE 16
-
-/* Emit RTL insns to initialize the variable parts of a trampoline.
-   FNADDR is an RTX for the address of the function's pure code.
-   CXT is an RTX for the static chain value for the function.  */
-#define INITIALIZE_TRAMPOLINE(TRAMP, FNADDR, CXT) \
-do { \
-  emit_move_insn (gen_rtx_MEM (SImode, plus_constant (TRAMP, 4)), CXT); \
-  emit_move_insn (gen_rtx_MEM (SImode, plus_constant (TRAMP, 12)), FNADDR); \
-  emit_insn (gen_flush_icache (validize_mem (gen_rtx_MEM (SImode, TRAMP)))); \
-} while (0)
 
 /* Addressing modes, and classification of registers for them.  */
 
@@ -795,10 +651,6 @@ do { \
       && RTX_OK_FOR_BASE_P (XEXP ((X), 0)))		\
     goto ADDR;						\
 }
-
-/* Go to LABEL if ADDR (a legitimate address expression)
-   has an effect that depends on the machine mode it is used for.  */
-#define GO_IF_MODE_DEPENDENT_ADDRESS(ADDR, LABEL)
 
 /* Given a comparison code (EQ, NE, etc.) and the first operand of a COMPARE,
    return the mode to be used for the comparison.  */
@@ -1071,11 +923,6 @@ do { if ((LOG) != 0) fprintf (FILE, "\t.align %d\n", 1 << (LOG)); } while (0)
 /* ??? Not defined in tm.texi.  */
 #define SETJMP_VIA_SAVE_AREA
 
-/* Define the information needed to generate branch and scc insns.  This is
-   stored from the compare operation.  Note that we can't use "rtx" here
-   since it hasn't been defined!  */
-extern struct rtx_def *arc_compare_op0, *arc_compare_op1;
-
 /* ARC function types.  */
 enum arc_function_type {
   ARC_FUNCTION_UNKNOWN, ARC_FUNCTION_NORMAL,

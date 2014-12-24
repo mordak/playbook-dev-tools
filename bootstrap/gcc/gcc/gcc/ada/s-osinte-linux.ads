@@ -7,7 +7,7 @@
 --                                  S p e c                                 --
 --                                                                          --
 --             Copyright (C) 1991-1994, Florida State University            --
---          Copyright (C) 1995-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1995-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -227,19 +227,6 @@ package System.OS_Interface is
 
    function To_Timespec (D : Duration) return timespec;
    pragma Inline (To_Timespec);
-
-   type struct_timeval is private;
-
-   function To_Duration (TV : struct_timeval) return Duration;
-   pragma Inline (To_Duration);
-
-   function To_Timeval (D : Duration) return struct_timeval;
-   pragma Inline (To_Timeval);
-
-   function gettimeofday
-     (tv : access struct_timeval;
-      tz : System.Address := System.Null_Address) return int;
-   pragma Import (C, gettimeofday, "gettimeofday");
 
    function sysconf (name : int) return long;
    pragma Import (C, sysconf);
@@ -464,6 +451,9 @@ package System.OS_Interface is
    function pthread_self return pthread_t;
    pragma Import (C, pthread_self, "pthread_self");
 
+   function lwp_self return System.Address;
+   pragma Import (C, lwp_self, "__gnat_lwp_self");
+
    --------------------------
    -- POSIX.1c  Section 17 --
    --------------------------
@@ -500,19 +490,32 @@ package System.OS_Interface is
      (thread     : pthread_t;
       cpusetsize : size_t;
       cpuset     : access cpu_set_t) return int;
-   pragma Import (C, pthread_setaffinity_np, "__gnat_pthread_setaffinity_np");
+   pragma Import (C, pthread_setaffinity_np, "pthread_setaffinity_np");
+   pragma Weak_External (pthread_setaffinity_np);
+   --  Use a weak symbol because this function may be available or not,
+   --  depending on the version of the system.
+
+   function pthread_attr_setaffinity_np
+     (attr       : access pthread_attr_t;
+      cpusetsize : size_t;
+      cpuset     : access cpu_set_t) return int;
+   pragma Import (C, pthread_attr_setaffinity_np,
+                    "pthread_attr_setaffinity_np");
+   pragma Weak_External (pthread_attr_setaffinity_np);
+   --  Use a weak symbol because this function may be available or not,
+   --  depending on the version of the system.
 
 private
 
-   type sigset_t is array (0 .. 127) of Interfaces.C.unsigned_char;
+   type sigset_t is array (0 .. 127) of unsigned_char;
    pragma Convention (C, sigset_t);
    for sigset_t'Alignment use Interfaces.C.unsigned_long'Alignment;
 
    pragma Warnings (Off);
    for struct_sigaction use record
-      sa_handler at                  0 range 0 .. Standard'Address_Size - 1;
-      sa_mask    at Linux.sa_mask_pos  range 0 .. 1023;
-      sa_flags   at Linux.sa_flags_pos range 0 .. Standard'Address_Size - 1;
+      sa_handler at Linux.sa_handler_pos range 0 .. Standard'Address_Size - 1;
+      sa_mask    at Linux.sa_mask_pos    range 0 .. 1023;
+      sa_flags   at Linux.sa_flags_pos   range 0 .. Standard'Address_Size - 1;
    end record;
    --  We intentionally leave sa_restorer unspecified and let the compiler
    --  append it after the last field, so disable corresponding warning.
@@ -527,12 +530,6 @@ private
       tv_nsec : long;
    end record;
    pragma Convention (C, timespec);
-
-   type struct_timeval is record
-      tv_sec  : time_t;
-      tv_usec : time_t;
-   end record;
-   pragma Convention (C, struct_timeval);
 
    type pthread_attr_t is record
       detachstate   : int;
@@ -559,8 +556,12 @@ private
 
    type pthread_mutex_t is new System.Linux.pthread_mutex_t;
 
+   type unsigned_long_long_t is mod 2 ** 64;
+   --  Interfaces.C.Extensions isn't preelaborated so cannot be with-ed
+
    type pthread_cond_t is array (0 .. 47) of unsigned_char;
    pragma Convention (C, pthread_cond_t);
+   for pthread_cond_t'Alignment use unsigned_long_long_t'Alignment;
 
    type pthread_key_t is new unsigned;
 

@@ -1,5 +1,6 @@
 /* Encoding of types for Objective C.
-   Copyright (C) 1993, 1997, 2002, 2004, 2009 Free Software Foundation, Inc.
+   Copyright (C) 1993, 1997, 2002, 2004, 2009, 2010
+   Free Software Foundation, Inc.
 
 Author: Kresten Krab Thorup
 
@@ -28,6 +29,11 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #ifndef __encoding_INCLUDE_GNU
 #define __encoding_INCLUDE_GNU
 
+/* This file is to be used with the "traditional" GNU Objective-C
+   Runtime API (the one declared in objc/objc-api.h).  If you are
+   using the "modern" GNU Objective-C Runtime API, then the useful
+   functions from this file are declared in objc/runtime.h.  */
+
 #include "objc-api.h"
 #include <ctype.h>
 
@@ -35,6 +41,8 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 extern "C" {
 #endif /* __cplusplus */
 
+/* The following are used in encode strings to describe some
+   qualifiers of method and ivar types.  */
 #define _C_CONST	'r'
 #define _C_IN		'n'
 #define _C_INOUT	'N'
@@ -42,8 +50,9 @@ extern "C" {
 #define _C_BYCOPY	'O'
 #define _C_BYREF	'R'
 #define _C_ONEWAY	'V'
-#define _C_GCINVISIBLE	'!'
+#define _C_GCINVISIBLE	'|'
 
+/* The same when used as flags.  */
 #define _F_CONST	0x01
 #define _F_IN		0x01
 #define _F_OUT		0x02
@@ -53,7 +62,6 @@ extern "C" {
 #define _F_ONEWAY	0x10
 #define _F_GCINVISIBLE	0x20
 
-int objc_aligned_size (const char *type);
 int objc_sizeof_type (const char *type);
 int objc_alignof_type (const char *type);
 int objc_aligned_size (const char *type);
@@ -63,9 +71,15 @@ const char *objc_skip_type_qualifiers (const char *type);
 const char *objc_skip_typespec (const char *type);
 const char *objc_skip_offset (const char *type);
 const char *objc_skip_argspec (const char *type);
+unsigned objc_get_type_qualifiers (const char *type);
+
+/* The following functions are replaced, in the modern API, by
+   method_getNumberOfArguments(), method_getArgumentType().  */
 int method_get_number_of_arguments (struct objc_method *);
 int method_get_sizeof_arguments (struct objc_method *);
 
+/* The following functions are deprecated and they use arglist_t which
+   is deprecated.  */
 char *method_get_first_argument (struct objc_method *,
 				 arglist_t argframe, 
 				 const char **type);
@@ -76,10 +90,7 @@ char *method_get_nth_argument (struct objc_method *m,
 			       int arg, 
 			       const char **type);
 
-unsigned objc_get_type_qualifiers (const char *type);
-
-
-struct objc_struct_layout 
+struct objc_struct_layout
 {
   const char *original_type;
   const char *type;

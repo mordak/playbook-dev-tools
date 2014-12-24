@@ -1,3 +1,22 @@
+;; Copyright (C) 2002, 2003, 2004, 2005, 2006,
+;; 2007 Free Software Foundation, Inc.
+;;
+;; This file is part of GCC.
+;;
+;; GCC is free software; you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation; either version 3, or (at your option)
+;; any later version.
+;;
+;; GCC is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+;;
+;; You should have received a copy of the GNU General Public License
+;; along with GCC; see the file COPYING3.  If not see
+;; <http://www.gnu.org/licenses/>.
+;;
 ;; AMD Athlon Scheduling
 ;;
 ;; The Athlon does contain three pipelined FP units, three integer units and
@@ -779,7 +798,7 @@
 			 "athlon-direct,athlon-fploadk8,athlon-fadd")
 (define_insn_reservation "athlon_ssecomi" 4
 			 (and (eq_attr "cpu" "athlon,k8,generic64")
-			      (eq_attr "type" "ssecmp"))
+			      (eq_attr "type" "ssecomi"))
 			 "athlon-vector,athlon-fpsched,athlon-fadd")
 (define_insn_reservation "athlon_ssecomi_amdfam10" 3
 			 (and (eq_attr "cpu" "amdfam10")

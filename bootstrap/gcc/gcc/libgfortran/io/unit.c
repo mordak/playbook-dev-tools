@@ -1,8 +1,9 @@
-/* Copyright (C) 2002, 2003, 2005, 2007, 2008, 2009 Free Software Foundation, Inc.
+/* Copyright (C) 2002, 2003, 2005, 2007, 2008, 2009, 2010 
+   Free Software Foundation, Inc.
    Contributed by Andy Vaught
    F2003 I/O support contributed by Jerry DeLisle
 
-This file is part of the GNU Fortran 95 runtime library (libgfortran).
+This file is part of the GNU Fortran runtime library (libgfortran).
 
 Libgfortran is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -24,6 +25,9 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 <http://www.gnu.org/licenses/>.  */
 
 #include "io.h"
+#include "fbuf.h"
+#include "format.h"
+#include "unix.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -67,6 +71,8 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 /* Subroutines related to units */
 
+GFC_INTEGER_4 next_available_newunit;
+#define GFC_FIRST_NEWUNIT -10
 
 #define CACHE_SIZE 3
 static gfc_unit *unit_cache[CACHE_SIZE];
@@ -129,7 +135,6 @@ rotate_right (gfc_unit * t)
 
   return temp;
 }
-
 
 
 static int
@@ -206,7 +211,7 @@ static void
 destroy_unit_mutex (gfc_unit * u)
 {
   __gthread_mutex_destroy (&u->lock);
-  free_mem (u);
+  free (u);
 }
 
 
@@ -418,9 +423,16 @@ get_internal_unit (st_parameter_dt *dtp)
     }
 
   /* Set initial values for unit parameters.  */
+  if (dtp->common.unit)
+    {
+      iunit->s = open_internal4 (dtp->internal_unit - start_record,
+				 dtp->internal_unit_len, -start_record);
+      fbuf_init (iunit, 256);
+    }
+  else
+    iunit->s = open_internal (dtp->internal_unit - start_record,
+			      dtp->internal_unit_len, -start_record);
 
-  iunit->s = open_internal (dtp->internal_unit - start_record,
-			    dtp->internal_unit_len, -start_record);
   iunit->bytes_left = iunit->recl;
   iunit->last_record=0;
   iunit->maxrec=0;
@@ -440,6 +452,7 @@ get_internal_unit (st_parameter_dt *dtp)
   iunit->flags.decimal = DECIMAL_POINT;
   iunit->flags.encoding = ENCODING_DEFAULT;
   iunit->flags.async = ASYNC_NO;
+  iunit->flags.round = ROUND_COMPATIBLE;
 
   /* Initialize the data transfer parameters.  */
 
@@ -465,13 +478,16 @@ free_internal_unit (st_parameter_dt *dtp)
   if (!is_internal_unit (dtp))
     return;
 
+  if (unlikely (is_char4_unit (dtp)))
+    fbuf_destroy (dtp->u.p.current_unit);
+
   if (dtp->u.p.current_unit != NULL)
     {
       if (dtp->u.p.current_unit->ls != NULL)
-	free_mem (dtp->u.p.current_unit->ls);
+	free (dtp->u.p.current_unit->ls);
   
       if (dtp->u.p.current_unit->s)
-	free_mem (dtp->u.p.current_unit->s);
+	free (dtp->u.p.current_unit->s);
   
       destroy_unit_mutex (dtp->u.p.current_unit);
     }
@@ -480,16 +496,16 @@ free_internal_unit (st_parameter_dt *dtp)
 
 
 /* get_unit()-- Returns the unit structure associated with the integer
- * unit or the internal file. */
+   unit or the internal file.  */
 
 gfc_unit *
 get_unit (st_parameter_dt *dtp, int do_create)
 {
 
   if ((dtp->common.flags & IOPARM_DT_HAS_INTERNAL_UNIT) != 0)
-    return get_internal_unit(dtp);
+    return get_internal_unit (dtp);
 
-  /* Has to be an external unit */
+  /* Has to be an external unit.  */
 
   dtp->u.p.unit_is_internal = 0;
   dtp->internal_unit_desc = NULL;
@@ -499,7 +515,7 @@ get_unit (st_parameter_dt *dtp, int do_create)
 
 
 /*************************/
-/* Initialize everything */
+/* Initialize everything.  */
 
 void
 init_units (void)
@@ -510,6 +526,8 @@ init_units (void)
 #ifndef __GTHREAD_MUTEX_INIT
   __GTHREAD_MUTEX_INIT_FUNCTION (&unit_lock);
 #endif
+
+  next_available_newunit = GFC_FIRST_NEWUNIT;
 
   if (options.stdin_unit >= 0)
     {				/* STDIN */
@@ -528,6 +546,7 @@ init_units (void)
       u->flags.decimal = DECIMAL_POINT;
       u->flags.encoding = ENCODING_DEFAULT;
       u->flags.async = ASYNC_NO;
+      u->flags.round = ROUND_COMPATIBLE;
      
       u->recl = options.default_recl;
       u->endfile = NO_ENDFILE;
@@ -557,6 +576,7 @@ init_units (void)
       u->flags.decimal = DECIMAL_POINT;
       u->flags.encoding = ENCODING_DEFAULT;
       u->flags.async = ASYNC_NO;
+      u->flags.round = ROUND_COMPATIBLE;
 
       u->recl = options.default_recl;
       u->endfile = AT_ENDFILE;
@@ -586,6 +606,7 @@ init_units (void)
       u->flags.decimal = DECIMAL_POINT;
       u->flags.encoding = ENCODING_DEFAULT;
       u->flags.async = ASYNC_NO;
+      u->flags.round = ROUND_COMPATIBLE;
 
       u->recl = options.default_recl;
       u->endfile = AT_ENDFILE;
@@ -601,10 +622,8 @@ init_units (void)
     }
 
   /* Calculate the maximum file offset in a portable manner.
-   * max will be the largest signed number for the type gfc_offset.
-   *
-   * set a 1 in the LSB and keep a running sum, stopping at MSB-1 bit. */
-
+     max will be the largest signed number for the type gfc_offset.
+     set a 1 in the LSB and keep a running sum, stopping at MSB-1 bit.  */
   max_offset = 0;
   for (i = 0; i < sizeof (max_offset) * 8 - 1; i++)
     max_offset = max_offset + ((gfc_offset) 1 << i);
@@ -634,10 +653,11 @@ close_unit_1 (gfc_unit *u, int locked)
   delete_unit (u);
 
   if (u->file)
-    free_mem (u->file);
+    free (u->file);
   u->file = NULL;
   u->file_len = 0;
 
+  free_format_hash_table (u);  
   fbuf_destroy (u);
 
   if (!locked)
@@ -662,8 +682,8 @@ unlock_unit (gfc_unit *u)
 }
 
 /* close_unit()-- Close a unit.  The stream is closed, and any memory
- * associated with the stream is freed.  Returns nonzero on I/O error.
- * Should be called with the u->lock locked. */
+   associated with the stream is freed.  Returns nonzero on I/O error.
+   Should be called with the u->lock locked. */
 
 int
 close_unit (gfc_unit *u)
@@ -673,11 +693,11 @@ close_unit (gfc_unit *u)
 
 
 /* close_units()-- Delete units on completion.  We just keep deleting
- * the root of the treap until there is nothing left.
- * Not sure what to do with locking here.  Some other thread might be
- * holding some unit's lock and perhaps hold it indefinitely
- * (e.g. waiting for input from some pipe) and close_units shouldn't
- * delay the program too much.  */
+   the root of the treap until there is nothing left.
+   Not sure what to do with locking here.  Some other thread might be
+   holding some unit's lock and perhaps hold it indefinitely
+   (e.g. waiting for input from some pipe) and close_units shouldn't
+   delay the program too much.  */
 
 void
 close_units (void)
@@ -694,12 +714,19 @@ close_units (void)
 void
 update_position (gfc_unit *u)
 {
-  if (stell (u->s) == 0)
-    u->flags.position = POSITION_REWIND;
-  else if (file_length (u->s) == stell (u->s))
-    u->flags.position = POSITION_APPEND;
-  else
-    u->flags.position = POSITION_ASIS;
+  /* If unit is not seekable, this makes no sense (and the standard is
+     silent on this matter), and thus we don't change the position for
+     a non-seekable file.  */
+  if (is_seekable (u->s))
+    {
+      gfc_offset cur = stell (u->s);
+      if (cur == 0)
+	u->flags.position = POSITION_REWIND;
+      else if (cur != -1 && (file_length (u->s) == cur))
+	u->flags.position = POSITION_APPEND;
+      else
+	u->flags.position = POSITION_ASIS;
+    }
 }
 
 
@@ -812,3 +839,22 @@ finish_last_advance_record (gfc_unit *u)
   fbuf_flush (u, u->mode);
 }
 
+/* Assign a negative number for NEWUNIT in OPEN statements.  */
+GFC_INTEGER_4
+get_unique_unit_number (st_parameter_open *opp)
+{
+  GFC_INTEGER_4 num;
+
+  __gthread_mutex_lock (&unit_lock);
+  num = next_available_newunit--;
+
+  /* Do not allow NEWUNIT numbers to wrap.  */
+  if (next_available_newunit >=  GFC_FIRST_NEWUNIT )
+    {
+      __gthread_mutex_unlock (&unit_lock);
+      generate_error (&opp->common, LIBERROR_INTERNAL, "NEWUNIT exhausted");
+      return 0;
+    }
+  __gthread_mutex_unlock (&unit_lock);
+  return num;
+}

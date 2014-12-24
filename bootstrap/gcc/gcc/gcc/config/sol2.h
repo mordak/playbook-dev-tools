@@ -1,6 +1,7 @@
 /* Operating system specific defines to be used when targeting GCC for any
    Solaris 2 system.
-   Copyright 2002, 2003, 2004, 2007, 2008 Free Software Foundation, Inc.
+   Copyright 2002, 2003, 2004, 2007, 2008, 2009, 2010, 2011
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -38,7 +39,39 @@ along with GCC; see the file COPYING3.  If not see
 #undef	WINT_TYPE_SIZE
 #define	WINT_TYPE_SIZE BITS_PER_WORD
 
-#define TARGET_HANDLE_PRAGMA_REDEFINE_EXTNAME 1
+#define SIG_ATOMIC_TYPE "int"
+
+/* ??? This definition of int8_t follows the system header but does
+   not conform to C99.  Likewise int_fast8_t, int_least8_t.  */
+#define INT8_TYPE "char"
+#define INT16_TYPE "short int"
+#define INT32_TYPE "int"
+#define INT64_TYPE (LONG_TYPE_SIZE == 64 ? "long int" : "long long int")
+#define UINT8_TYPE "unsigned char"
+#define UINT16_TYPE "short unsigned int"
+#define UINT32_TYPE "unsigned int"
+#define UINT64_TYPE (LONG_TYPE_SIZE == 64 ? "long unsigned int" : "long long unsigned int")
+
+#define INT_LEAST8_TYPE "char"
+#define INT_LEAST16_TYPE "short int"
+#define INT_LEAST32_TYPE "int"
+#define INT_LEAST64_TYPE (LONG_TYPE_SIZE == 64 ? "long int" : "long long int")
+#define UINT_LEAST8_TYPE "unsigned char"
+#define UINT_LEAST16_TYPE "short unsigned int"
+#define UINT_LEAST32_TYPE "unsigned int"
+#define UINT_LEAST64_TYPE (LONG_TYPE_SIZE == 64 ? "long unsigned int" : "long long unsigned int")
+
+#define INT_FAST8_TYPE "char"
+#define INT_FAST16_TYPE "int"
+#define INT_FAST32_TYPE "int"
+#define INT_FAST64_TYPE (LONG_TYPE_SIZE == 64 ? "long int" : "long long int")
+#define UINT_FAST8_TYPE "unsigned char"
+#define UINT_FAST16_TYPE "unsigned int"
+#define UINT_FAST32_TYPE "unsigned int"
+#define UINT_FAST64_TYPE (LONG_TYPE_SIZE == 64 ? "long unsigned int" : "long long unsigned int")
+
+#define INTPTR_TYPE (LONG_TYPE_SIZE == 64 ? "long int" : "int")
+#define UINTPTR_TYPE (LONG_TYPE_SIZE == 64 ? "long unsigned int" : "unsigned int")
 
 /* ??? Note: in order for -compat-bsd to work fully,
    we must somehow arrange to fixincludes /usr/ucbinclude
@@ -66,7 +99,8 @@ along with GCC; see the file COPYING3.  If not see
 	   library.  */					\
 	if (c_dialect_cxx ())				\
 	  {						\
-	    builtin_define ("_XOPEN_SOURCE=500");	\
+	    builtin_define ("__STDC_VERSION__=199901L");\
+	    builtin_define ("_XOPEN_SOURCE=600");	\
 	    builtin_define ("_LARGEFILE_SOURCE=1");	\
 	    builtin_define ("_LARGEFILE64_SOURCE=1");	\
 	    builtin_define ("__EXTENSIONS__");		\
@@ -77,24 +111,30 @@ along with GCC; see the file COPYING3.  If not see
 /* The system headers under Solaris 2 are C++-aware since 2.0.  */
 #define NO_IMPLICIT_EXTERN_C
 
-/* The sun bundled assembler doesn't accept -Yd, (and neither does gas).
-   It's safe to pass -s always, even if -g is not used.  */
+/* It's safe to pass -s always, even if -g is not used.  */
 #undef ASM_SPEC
 #define ASM_SPEC "\
-%{v:-V} %{Qy:} %{!Qn:-Qy} %{n} %{T} %{Ym,*} %{Wa,*:%*} -s \
+%{v:-V} %{Qy:} %{!Qn:-Qy} %{Ym,*} -s \
 %{fpic|fpie|fPIC|fPIE:-K PIC} \
 %(asm_cpu) \
 "
+
+#ifndef CROSS_DIRECTORY_STRUCTURE
+#undef MD_EXEC_PREFIX
+#define MD_EXEC_PREFIX "/usr/ccs/bin/"
+
+#undef MD_STARTFILE_PREFIX
+#define MD_STARTFILE_PREFIX "/usr/ccs/lib/"
+#endif
 
 /* We don't use the standard LIB_SPEC only because we don't yet support c++.  */
 #undef LIB_SPEC
 #define LIB_SPEC \
   "%{compat-bsd:-lucb -lsocket -lnsl -lelf -laio} \
-   %{!shared:\
-     %{!symbolic:\
-       %{pthreads|pthread:-lpthread} \
-       %{!pthreads:%{!pthread:%{threads:-lthread}}} \
-       %{p|pg:-ldl} -lc}}"
+   %{!symbolic:\
+     %{pthreads|pthread:-lpthread " LIB_TLS_SPEC "} \
+     %{!pthreads:%{!pthread:%{threads:-lthread}}} \
+     %{p|pg:-ldl} -lc}"
 
 #undef  ENDFILE_SPEC
 #define ENDFILE_SPEC "crtend.o%s crtn.o%s"
@@ -123,12 +163,12 @@ along with GCC; see the file COPYING3.  If not see
    %{YP,*} \
    %{R*} \
    %{compat-bsd: \
-     %{!YP,*:%{p|pg:-Y P,/usr/ucblib:/usr/ccs/lib/libp:/usr/lib/libp:/usr/ccs/lib:/usr/lib} \
-             %{!p:%{!pg:-Y P,/usr/ucblib:/usr/ccs/lib:/usr/lib}}} \
-             -R /usr/ucblib} \
+     %{!YP,*:%{p|pg:-Y P,%R/usr/ucblib:%R/usr/ccs/lib/libp:%R/usr/lib/libp:%R/usr/ccs/lib:%R/usr/lib} \
+             %{!p:%{!pg:-Y P,%R/usr/ucblib:%R/usr/ccs/lib:%R/usr/lib}}} \
+             -R %R/usr/ucblib} \
    %{!compat-bsd: \
-     %{!YP,*:%{p|pg:-Y P,/usr/ccs/lib/libp:/usr/lib/libp:/usr/ccs/lib:/usr/lib} \
-             %{!p:%{!pg:-Y P,/usr/ccs/lib:/usr/lib}}}}"
+     %{!YP,*:%{p|pg:-Y P,%R/usr/ccs/lib/libp:%R/usr/lib/libp:%R/usr/ccs/lib:%R/usr/lib} \
+             %{!p:%{!pg:-Y P,%R/usr/ccs/lib:%R/usr/lib}}}}"
 
 #undef LINK_ARCH32_SPEC
 #define LINK_ARCH32_SPEC LINK_ARCH32_SPEC_BASE
@@ -136,16 +176,19 @@ along with GCC; see the file COPYING3.  If not see
 #undef LINK_ARCH_SPEC
 #define LINK_ARCH_SPEC LINK_ARCH32_SPEC
 
-/* This should be the same as in svr4.h, except with -R added.  */
 #undef  LINK_SPEC
 #define LINK_SPEC \
   "%{h*} %{v:-V} \
-   %{b} \
+   %{!shared:%{!static:%{rdynamic: " RDYNAMIC_SPEC "}}} \
    %{static:-dn -Bstatic} \
    %{shared:-G -dy %{!mimpure-text:-z text}} \
    %{symbolic:-Bsymbolic -G -dy -z text} \
+   %{pthreads|pthread|threads:" LIB_THREAD_LDFLAGS_SPEC "} \
    %(link_arch) \
    %{Qy:} %{!Qn:-Qy}"
+
+/* With Sun ld, -rdynamic is a no-op.  */
+#define RDYNAMIC_SPEC ""
 
 /* The Solaris linker doesn't understand constructor priorities.  (The
    GNU linker does support constructor priorities, so GNU ld
@@ -153,14 +196,9 @@ along with GCC; see the file COPYING3.  If not see
 #undef SUPPORTS_INIT_PRIORITY
 #define SUPPORTS_INIT_PRIORITY 0
 
-/* This defines which switch letters take arguments.
-   It is as in svr4.h but with -R added.  */
-#undef SWITCH_TAKES_ARG
-#define SWITCH_TAKES_ARG(CHAR) \
-  (DEFAULT_SWITCH_TAKES_ARG(CHAR) \
-   || (CHAR) == 'R' \
-   || (CHAR) == 'h' \
-   || (CHAR) == 'z')
+/* collect2.c can only parse GNU nm -n output.  Solaris nm needs -png to
+   produce the same format.  */
+#define NM_FLAGS "-png"
 
 #define STDC_0_IN_SYSTEM_HEADERS 1
 
@@ -221,6 +259,10 @@ __enable_execute_stack (void *addr)					\
   { "init",      0, 0, true,  false,  false, NULL },			\
   { "fini",      0, 0, true,  false,  false, NULL }
 
+/* Solaris/x86 as and gas support the common ELF .section/.pushsection
+   syntax.  */
+#define PUSHSECTION_FORMAT	"\t.pushsection\t%s\n"
+
 /* This is how to declare the size of a function.  For Solaris, we output
    any .init or .fini entries here.  */
 #undef ASM_DECLARE_FUNCTION_SIZE
@@ -233,9 +275,36 @@ __enable_execute_stack (void *addr)					\
     }								\
   while (0)
 
+/* Solaris 'as' has a bug: a .common directive in .tbss or .tdata section
+   behaves as .tls_common rather than normal non-TLS .common.  */
+#undef  ASM_OUTPUT_ALIGNED_COMMON
+#define ASM_OUTPUT_ALIGNED_COMMON(FILE, NAME, SIZE, ALIGN)		\
+  do									\
+    {									\
+      if (TARGET_SUN_TLS						\
+	  && in_section							\
+	  && ((in_section->common.flags & SECTION_TLS) == SECTION_TLS))	\
+	switch_to_section (bss_section);				\
+      fprintf ((FILE), "%s", COMMON_ASM_OP);				\
+      assemble_name ((FILE), (NAME));					\
+      fprintf ((FILE), ","HOST_WIDE_INT_PRINT_UNSIGNED",%u\n",		\
+	       (SIZE), (ALIGN) / BITS_PER_UNIT);			\
+    }									\
+  while (0)
+
+#ifndef USE_GAS
+#undef TARGET_ASM_ASSEMBLE_VISIBILITY
+#define TARGET_ASM_ASSEMBLE_VISIBILITY solaris_assemble_visibility
+
+#define AS_NEEDS_DASH_FOR_PIPED_INPUT
+
+#endif
+
 extern GTY(()) tree solaris_pending_aligns;
 extern GTY(()) tree solaris_pending_inits;
 extern GTY(()) tree solaris_pending_finis;
 
 /* Allow macro expansion in #pragma pack.  */
 #define HANDLE_PRAGMA_PACK_WITH_EXPANSION
+
+#define TARGET_POSIX_IO

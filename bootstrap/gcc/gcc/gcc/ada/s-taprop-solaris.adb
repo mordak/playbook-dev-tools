@@ -6,7 +6,7 @@
 --                                                                          --
 --                                  B o d y                                 --
 --                                                                          --
---         Copyright (C) 1992-2009, Free Software Foundation, Inc.          --
+--         Copyright (C) 1992-2010, Free Software Foundation, Inc.          --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -42,6 +42,7 @@ with Ada.Unchecked_Deallocation;
 
 with Interfaces.C;
 
+with System.Multiprocessors;
 with System.Tasking.Debug;
 with System.Interrupt_Management;
 with System.OS_Primitives;
@@ -96,6 +97,9 @@ package body System.Task_Primitives.Operations is
    --  We start at 100, to reserve some special values for
    --  using in error checking.
    --  The following are internal configuration constants needed.
+
+   Abort_Handler_Installed : Boolean := False;
+   --  True if a handler for the abort signal is installed
 
    ----------------------
    -- Priority Support --
@@ -256,8 +260,10 @@ package body System.Task_Primitives.Operations is
       pragma Warnings (Off, Result);
 
    begin
-      --  It is not safe to raise an exception when using ZCX and the GCC
-      --  exception handling mechanism.
+      --  It's not safe to raise an exception when using GCC ZCX mechanism.
+      --  Note that we still need to install a signal handler, since in some
+      --  cases (e.g. shutdown of the Server_Task in System.Interrupts) we
+      --  need to send the Abort signal to a task.
 
       if ZCX_By_Default and then GCC_ZCX_Support then
          return;
@@ -479,9 +485,15 @@ package body System.Task_Primitives.Operations is
 
       Initialize_Lock (Single_RTS_Lock'Access, RTS_Lock_Level);
 
+      --  Make environment task known here because it doesn't go through
+      --  Activate_Tasks, which does it for all other tasks.
+
+      Known_Tasks (Known_Tasks'First) := Environment_Task;
+      Environment_Task.Known_Tasks_Index := Known_Tasks'First;
+
       Enter_Task (Environment_Task);
 
-      --  Install the abort-signal handler
+      Configure_Processors;
 
       if State
           (System.Interrupt_Management.Abort_Task_Interrupt) /= Default
@@ -507,9 +519,8 @@ package body System.Task_Primitives.Operations is
               act'Unchecked_Access,
               old_act'Unchecked_Access);
          pragma Assert (Result = 0);
+         Abort_Handler_Installed := True;
       end if;
-
-      Configure_Processors;
    end Initialize;
 
    ---------------------
@@ -856,12 +867,30 @@ package body System.Task_Primitives.Operations is
       Last_Proc : processorid_t;  --  Last processor #
 
       use System.Task_Info;
+      use type System.Multiprocessors.CPU_Range;
+
    begin
       Self_ID.Common.LL.Thread := thr_self;
 
       Self_ID.Common.LL.LWP := lwp_self;
 
-      if Self_ID.Common.Task_Info /= null then
+      --  pragma CPU
+
+      if Self_ID.Common.Base_CPU /=
+         System.Multiprocessors.Not_A_Specific_CPU
+      then
+         --  The CPU numbering in pragma CPU starts at 1 while the subprogram
+         --  to set the affinity starts at 0, therefore we must subtract 1.
+
+         Result :=
+           processor_bind
+             (P_LWPID, P_MYID, processorid_t (Self_ID.Common.Base_CPU) - 1,
+              null);
+         pragma Assert (Result = 0);
+
+      --  Task_Info
+
+      elsif Self_ID.Common.Task_Info /= null then
          if Self_ID.Common.Task_Info.New_LWP
            and then Self_ID.Common.Task_Info.CPU /= CPU_UNCHANGED
          then
@@ -900,18 +929,6 @@ package body System.Task_Primitives.Operations is
 
       --  We need the above code even if we do direct fetch of Task_Id in Self
       --  for the main task on Sun, x86 Solaris and for gcc 2.7.2.
-
-      Lock_RTS;
-
-      for J in Known_Tasks'Range loop
-         if Known_Tasks (J) = null then
-            Known_Tasks (J) := Self_ID;
-            Self_ID.Known_Tasks_Index := J;
-            exit;
-         end if;
-      end loop;
-
-      Unlock_RTS;
    end Enter_Task;
 
    --------------
@@ -1101,12 +1118,14 @@ package body System.Task_Primitives.Operations is
    procedure Abort_Task (T : Task_Id) is
       Result : Interfaces.C.int;
    begin
-      pragma Assert (T /= Self);
-      Result :=
-        thr_kill
-          (T.Common.LL.Thread,
-           Signal (System.Interrupt_Management.Abort_Task_Interrupt));
-      pragma Assert (Result = 0);
+      if Abort_Handler_Installed then
+         pragma Assert (T /= Self);
+         Result :=
+           thr_kill
+             (T.Common.LL.Thread,
+              Signal (System.Interrupt_Management.Abort_Task_Interrupt));
+         pragma Assert (Result = 0);
+      end if;
    end Abort_Task;
 
    -----------
@@ -1142,7 +1161,7 @@ package body System.Task_Primitives.Operations is
    --  System.Real_Time.Time_Span in the same way, i.e., as a 64-bit count of
    --  nanoseconds.
 
-   --  This allows us to always pass the timeout value as a Duration.
+   --  This allows us to always pass the timeout value as a Duration
 
    --  ???
    --  We are taking liberties here with the semantics of the delays. That is,
@@ -1226,15 +1245,13 @@ package body System.Task_Primitives.Operations is
       Timedout := True;
       Yielded := False;
 
-      if Mode = Relative then
-         Abs_Time := Duration'Min (Time, Max_Sensible_Delay) + Check_Time;
-      else
-         Abs_Time := Duration'Min (Check_Time + Max_Sensible_Delay, Time);
-      end if;
+      Abs_Time :=
+        (if Mode = Relative
+         then Duration'Min (Time, Max_Sensible_Delay) + Check_Time
+         else Duration'Min (Check_Time + Max_Sensible_Delay, Time));
 
       if Abs_Time > Check_Time then
          Request := To_Timespec (Abs_Time);
-
          loop
             exit when Self_ID.Pending_ATC_Level < Self_ID.ATC_Nesting_Level;
 
@@ -1294,11 +1311,10 @@ package body System.Task_Primitives.Operations is
 
       Write_Lock (Self_ID);
 
-      if Mode = Relative then
-         Abs_Time := Time + Check_Time;
-      else
-         Abs_Time := Duration'Min (Check_Time + Max_Sensible_Delay, Time);
-      end if;
+      Abs_Time :=
+        (if Mode = Relative
+         then Time + Check_Time
+         else Duration'Min (Check_Time + Max_Sensible_Delay, Time));
 
       if Abs_Time > Check_Time then
          Request := To_Timespec (Abs_Time);
@@ -1824,7 +1840,16 @@ package body System.Task_Primitives.Operations is
             S.State := False;
          else
             S.Waiting := True;
-            Result := cond_wait (S.CV'Access, S.L'Access);
+
+            loop
+               --  Loop in case pthread_cond_wait returns earlier than expected
+               --  (e.g. in case of EINTR caused by a signal).
+
+               Result := cond_wait (S.CV'Access, S.L'Access);
+               pragma Assert (Result = 0 or else Result = EINTR);
+
+               exit when not S.Waiting;
+            end loop;
          end if;
 
          Result := mutex_unlock (S.L'Access);

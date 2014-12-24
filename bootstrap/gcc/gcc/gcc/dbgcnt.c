@@ -1,5 +1,5 @@
 /* Debug counter for debugging support
-   Copyright (C) 2006, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -15,14 +15,14 @@ for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING3.  If not see
-<http://www.gnu.org/licenses/>.  
+<http://www.gnu.org/licenses/>.
 
 See dbgcnt.def for usage information.  */
 
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "errors.h"
+#include "diagnostic-core.h"
 #include "tm.h"
 #include "rtl.h"
 #include "output.h"
@@ -62,7 +62,7 @@ dbg_cnt (enum debug_counter index)
 {
   count[index]++;
   if (dump_file && count[index] == limit[index])
-    fprintf (dump_file, "***dbgcnt: limit reached for %s.***\n", 
+    fprintf (dump_file, "***dbgcnt: limit reached for %s.***\n",
 	     map[index].name);
 
   return dbg_cnt_is_enabled (index);
@@ -82,13 +82,14 @@ dbg_cnt_set_limit_by_name (const char *name, int len, int value)
 {
   int i;
   for (i = debug_counter_number_of_counters - 1; i >= 0; i--)
-    if (!strncmp (map[i].name, name, len))
+    if (strncmp (map[i].name, name, len) == 0
+        && map[i].name[len] == '\0')
       break;
 
   if (i < 0)
     return false;
 
-  dbg_cnt_set_limit_by_index (i, value);
+  dbg_cnt_set_limit_by_index ((enum debug_counter) i, value);
   return true;
 }
 
@@ -100,10 +101,10 @@ dbg_cnt_set_limit_by_name (const char *name, int len, int value)
 static const char *
 dbg_cnt_process_single_pair (const char *arg)
 {
-   char *colon = strchr (arg, ':');
+   const char *colon = strchr (arg, ':');
    char *endptr = NULL;
    int value;
-   
+
    if (colon == NULL)
      return NULL;
 
@@ -112,7 +113,7 @@ dbg_cnt_process_single_pair (const char *arg)
    if (endptr != NULL && endptr != colon + 1
        && dbg_cnt_set_limit_by_name (arg, colon - arg, value))
      return endptr;
-   
+
    return NULL;
 }
 
@@ -131,7 +132,7 @@ dbg_cnt_process_opt (const char *arg)
      {
        char *buffer = XALLOCAVEC (char, arg - start + 2);
        sprintf (buffer, "%*c", (int)(1 + (arg - start)), '^');
-       error ("Can not find a valid counter:value pair:");
+       error ("cannot find a valid counter:value pair:");
        error ("-fdbg-cnt=%s", start);
        error ("          %s", buffer);
      }
@@ -139,7 +140,7 @@ dbg_cnt_process_opt (const char *arg)
 
 /* Print name, limit and count of all counters.   */
 
-void 
+void
 dbg_cnt_list_all_counters (void)
 {
   int i;

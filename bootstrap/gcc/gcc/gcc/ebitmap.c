@@ -1,5 +1,5 @@
 /* Sparse array-based bitmaps.
-   Copyright (C) 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Daniel Berlin <dberlin@dberlin.org>
 
 This file is part of GCC.
@@ -21,10 +21,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "tm.h"
-#include "rtl.h"
-#include "flags.h"
-#include "obstack.h"
 #include "ebitmap.h"
 
 /* The ebitmap data structure is a sparse bitmap structure that works
@@ -88,7 +84,7 @@ ebitmap_last_set_bit (ebitmap map)
   unsigned int i = 0;
   ebitmap_iterator ebi;
   bool foundbit = false;
-  
+
   /* This is not the fastest way to do this, we could simply look for
      the popcount, and start there, but this function is not used
      anywhere speed critical.  */
@@ -96,7 +92,7 @@ ebitmap_last_set_bit (ebitmap map)
     {
       foundbit = true;
     }
-  
+
 
   if (foundbit)
     return i;
@@ -176,7 +172,7 @@ ebitmap_array_init (ebitmap map, unsigned int size)
 static inline void
 ebitmap_array_clear (ebitmap map)
 {
-  if (map->elts) 
+  if (map->elts)
     {
       free (map->elts);
       map->elts = NULL;
@@ -225,7 +221,7 @@ ebitmap_clear_bit (ebitmap map, unsigned int bit)
   unsigned int bitindex, shift;
   bool have_eltwordindex = false;
   EBITMAP_ELT_TYPE *elt_ptr;
-  
+
   /* If the bit can't exist in our bitmap, just return.  */
   if (map->numwords == 0)
     return;
@@ -233,7 +229,7 @@ ebitmap_clear_bit (ebitmap map, unsigned int bit)
   if (wordindex >= map->wordmask->n_bits
       || !TEST_BIT (map->wordmask, wordindex))
     return;
-  
+
   if (map->cache != NULL && map->cacheindex == wordindex)
     elt_ptr = map->cache;
   else
@@ -242,10 +238,10 @@ ebitmap_clear_bit (ebitmap map, unsigned int bit)
       elt_ptr = &map->elts[eltwordindex];
       have_eltwordindex = true;
     }
-  
+
   bitindex = bit % EBITMAP_ELT_BITS;
   shift = bitindex;
-  
+
   *(elt_ptr) &= ~(((EBITMAP_ELT_TYPE)1) << shift);
 
   /* Clear out the empty words.  */
@@ -253,9 +249,14 @@ ebitmap_clear_bit (ebitmap map, unsigned int bit)
     {
       if (!have_eltwordindex)
 	eltwordindex = sbitmap_popcount (map->wordmask, wordindex);
-      
-      if (map->cache != NULL && map->cacheindex == eltwordindex)
-	map->cache = NULL;
+
+      if (map->cache != NULL)
+        {
+          if (map->cacheindex == wordindex)
+            map->cache = NULL;
+          else if (map->cacheindex > wordindex)
+            map->cache = map->cache - 1;
+        }
 
       RESET_BIT (map->wordmask, wordindex);
 
@@ -405,7 +406,7 @@ dump_ebitmap (FILE *file, ebitmap bmap)
 
 /* Dump ebitmap BMAP to stderr.  */
 
-void
+DEBUG_FUNCTION void
 debug_ebitmap (ebitmap bmap)
 {
   dump_ebitmap (stderr, bmap);
@@ -457,7 +458,7 @@ ebitmap_and_into (ebitmap dst, ebitmap src)
     for (i = 0; i <  dst->numwords; i++)
       gcc_assert (dst->elts[i] != 0);
 
-    verify_popcount (dst->wordmask);
+    sbitmap_verify_popcount (dst->wordmask);
     gcc_assert (sbitmap_popcount (dst->wordmask,
 				  dst->wordmask->n_bits) == dst->numwords);
   }
@@ -529,7 +530,7 @@ ebitmap_and (ebitmap dst, ebitmap src1, ebitmap src2)
     for (i = 0; i <  dst->numwords; i++)
       gcc_assert (dst->elts[i] != 0);
 
-    verify_popcount (dst->wordmask);
+    sbitmap_verify_popcount (dst->wordmask);
     gcc_assert (sbitmap_popcount (dst->wordmask,
 				  dst->wordmask->n_bits) == dst->numwords);
   }
@@ -652,7 +653,7 @@ ebitmap_ior_into (ebitmap dst, ebitmap src)
     EXECUTE_IF_SET_IN_EBITMAP (dstcopy, 0, i, ebi)
       gcc_assert (ebitmap_bit_p (dst, i));
 
-    verify_popcount (dst->wordmask);
+    sbitmap_verify_popcount (dst->wordmask);
     gcc_assert (changed == !ebitmap_equal_p (dst, dstcopy));
     gcc_assert (sbitmap_popcount (dst->wordmask,
 				  dst->wordmask->n_bits) == dst->numwords);
@@ -772,7 +773,7 @@ ebitmap_ior (ebitmap dst, ebitmap src1, ebitmap src2)
     EXECUTE_IF_SET_IN_EBITMAP (src2, 0, i, ebi)
       gcc_assert (ebitmap_bit_p (dst, i));
   }
-  verify_popcount (dst->wordmask);
+  sbitmap_verify_popcount (dst->wordmask);
   gcc_assert (changed == !ebitmap_equal_p (dst, dstcopy));
   gcc_assert (sbitmap_popcount (dst->wordmask,
 				dst->wordmask->n_bits) == dst->numwords);
@@ -848,7 +849,7 @@ ebitmap_and_compl_into (ebitmap dst, ebitmap src)
 
     gcc_assert (sbitmap_popcount (dst->wordmask,
 				  dst->wordmask->n_bits) == neweltindex);
-    verify_popcount (dst->wordmask);
+    sbitmap_verify_popcount (dst->wordmask);
     gcc_assert (changed == !ebitmap_equal_p (dst, dstcopy));
     gcc_assert (sbitmap_popcount (dst->wordmask,
 				  dst->wordmask->n_bits) == dst->numwords);
@@ -950,7 +951,7 @@ ebitmap_and_compl (ebitmap dst, ebitmap src1, ebitmap src2)
   for (i = 0; i <  dst->numwords; i++)
     gcc_assert (dst->elts[i] != 0);
 
-  verify_popcount (dst->wordmask);
+  sbitmap_verify_popcount (dst->wordmask);
   gcc_assert (sbitmap_popcount (dst->wordmask,
 				dst->wordmask->n_bits) == dst->numwords);
   }

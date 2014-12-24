@@ -1,3 +1,21 @@
+/* Copyright (C) 2004, 2005, 2007, 2008, 2010 Free Software Foundation, Inc.
+
+This file is part of GCC.
+
+GCC is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free
+Software Foundation; either version 3, or (at your option) any later
+version.
+
+GCC is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+for more details.
+
+You should have received a copy of the GNU General Public License
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
+
 /* DEFINE_MATH_BUILTIN (CODE, NAME, ARGTYPE)
    NAME	  The name of the builtin
    SNAME  The name of the builtin as a string
@@ -30,6 +48,24 @@ DEFINE_MATH_BUILTIN   (Y1,    "y1",     0)
 DEFINE_MATH_BUILTIN   (YN,    "yn",     2)
 DEFINE_MATH_BUILTIN   (ERF,   "erf",    0)
 DEFINE_MATH_BUILTIN   (ERFC,  "erfc",   0)
-DEFINE_MATH_BUILTIN   (GAMMA, "tgamma", 0)
+DEFINE_MATH_BUILTIN   (TGAMMA,"tgamma", 0)
 DEFINE_MATH_BUILTIN   (LGAMMA,"lgamma", 0)
 DEFINE_MATH_BUILTIN   (HYPOT, "hypot",  1)
+
+/* OTHER_BUILTIN (CODE, NAME, PROTOTYPE_TYPE, CONST)
+   For floating-point builtins that do not directly correspond to a
+   Fortran intrinsic. This is used to map the different variants (float,
+   double and long double) and to build the quad-precision decls.  */
+OTHER_BUILTIN (CABS,      "cabs",      cabs,    true)
+OTHER_BUILTIN (COPYSIGN,  "copysign",  2,       true)
+OTHER_BUILTIN (CPOW,      "cpow",      cpow,    true)
+OTHER_BUILTIN (FABS,      "fabs",      1,       true)
+OTHER_BUILTIN (FMOD,      "fmod",      2,       true)
+OTHER_BUILTIN (FREXP,     "frexp",     frexp,   false)
+OTHER_BUILTIN (LLROUND,   "llround",   llround, true)
+OTHER_BUILTIN (LROUND,    "lround",    lround,  true)
+OTHER_BUILTIN (NEXTAFTER, "nextafter", 2,       true)
+OTHER_BUILTIN (POW,       "pow",       1,       true)
+OTHER_BUILTIN (ROUND,     "round",     1,       true)
+OTHER_BUILTIN (SCALBN,    "scalbn",    scalbn,  true)
+OTHER_BUILTIN (TRUNC,     "trunc",     1,       true)

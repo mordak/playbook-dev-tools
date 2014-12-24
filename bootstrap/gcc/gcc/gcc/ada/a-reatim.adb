@@ -7,7 +7,7 @@
 --                                 B o d y                                  --
 --                                                                          --
 --             Copyright (C) 1991-1994, Florida State University            --
---                     Copyright (C) 1995-2006, AdaCore                     --
+--                     Copyright (C) 1995-2010, AdaCore                     --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -31,6 +31,8 @@
 -- Extensive contributions were provided by Ada Core Technologies, Inc.     --
 --                                                                          --
 ------------------------------------------------------------------------------
+
+with System.Tasking;
 
 package body Ada.Real_Time is
 
@@ -189,19 +191,12 @@ package body Ada.Real_Time is
       --  Special-case for Time_First, whose absolute value is anomalous,
       --  courtesy of two's complement.
 
-      if T = Time_First then
-         T_Val := abs (Time_Last);
-      else
-         T_Val := abs (T);
-      end if;
+      T_Val := (if T = Time_First then abs (Time_Last) else abs (T));
 
       --  Extract the integer part of T, truncating towards zero
 
-      if T_Val < 0.5 then
-         SC := 0;
-      else
-         SC := Seconds_Count (Time_Span'(T_Val - 0.5));
-      end if;
+      SC :=
+        (if T_Val < 0.5 then 0 else Seconds_Count (Time_Span'(T_Val - 0.5)));
 
       if T < 0.0 then
          SC := -SC;
@@ -249,4 +244,10 @@ package body Ada.Real_Time is
       return Time_Span (D);
    end To_Time_Span;
 
+begin
+   --  Ensure that the tasking run time is initialized when using clock and/or
+   --  delay operations. The initialization routine has the required machinery
+   --  to prevent multiple calls to Initialize.
+
+   System.Tasking.Initialize;
 end Ada.Real_Time;

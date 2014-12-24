@@ -36,13 +36,16 @@
 #ifndef _MINGW32_H
 #define _MINGW32_H
 
+#include <_mingw.h>
+
 /* The unicode support is activated by default starting with the 3.9 MingW
    version. It is not possible to use it with previous version due to a bug
    in the MingW runtime.  */
 
 #if (((__MINGW32_MAJOR_VERSION == 3 \
 		   && __MINGW32_MINOR_VERSION >= 9) \
-     || (__MINGW32_MAJOR_VERSION >= 4)) \
+     || (__MINGW32_MAJOR_VERSION >= 4) \
+     || defined (__MINGW64))	       \
      && !defined (RTX))
 #define GNAT_UNICODE_SUPPORT
 
@@ -61,7 +64,13 @@
 #define UNICODE  /* For Win32 API */
 #endif
 
+/* We need functionality available only starting with Windows XP */
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0501
+#endif
+
 #include <tchar.h>
+#include <windows.h>
 
 /* After including this file it is possible to use the character t as prefix
    to routines. If GNAT_UNICODE_SUPPORT is defined then the unicode enabled
@@ -71,15 +80,29 @@
    the proper translations using the UTF-8 encoding.  */
 
 #ifdef GNAT_UNICODE_SUPPORT
+
+extern UINT CurrentCodePage;
+
+/*  Macros to convert to/from the code page specified in CurrentCodePage.  */
+#define S2WSC(wstr,str,len) \
+   MultiByteToWideChar (CurrentCodePage,0,str,-1,wstr,len)
+#define WS2SC(str,wstr,len) \
+   WideCharToMultiByte (CurrentCodePage,0,wstr,-1,str,len,NULL,NULL)
+
+/*  Macros to convert to/from UTF-8 code page.  */
 #define S2WSU(wstr,str,len) \
    MultiByteToWideChar (CP_UTF8,0,str,-1,wstr,len)
 #define WS2SU(str,wstr,len) \
    WideCharToMultiByte (CP_UTF8,0,wstr,-1,str,len,NULL,NULL)
+
+/*  Macros to convert to/from Windows default code page.  */
 #define S2WS(wstr,str,len) \
    MultiByteToWideChar (CP_ACP,0,str,-1,wstr,len)
 #define WS2S(str,wstr,len) \
    WideCharToMultiByte (CP_ACP,0,wstr,-1,str,len,NULL,NULL)
 #else
+#define S2WSC(wstr,str,len) strncpy(wstr,str,len)
+#define WS2SC(str,wstr,len) strncpy(str,wstr,len)
 #define S2WSU(wstr,str,len) strncpy(wstr,str,len)
 #define WS2SU(str,wstr,len) strncpy(str,wstr,len)
 #define S2WS(wstr,str,len) strncpy(wstr,str,len)

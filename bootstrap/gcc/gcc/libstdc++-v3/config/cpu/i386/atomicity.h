@@ -24,9 +24,10 @@
 
 #include <ext/atomicity.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
-#ifndef __QNXNTO__
   template<int __inst>
     struct _Atomicity_lock
     {
@@ -37,13 +38,11 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
   volatile _Atomic_word _Atomicity_lock<__inst>::_S_atomicity_lock = 0;
 
   template volatile _Atomic_word _Atomicity_lock<0>::_S_atomicity_lock;
-#endif 
   
   _Atomic_word 
   __attribute__ ((__unused__))
-  __exchange_and_add(volatile _Atomic_word* __mem, int __val)
+  __exchange_and_add(volatile _Atomic_word* __mem, int __val) throw ()
   {
-#ifndef __QNXNTO__
     register _Atomic_word __result, __tmp = 1;
     
     // Obtain the atomic exchange/add spin lock.
@@ -63,28 +62,12 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
     _Atomicity_lock<0>::_S_atomicity_lock = 0;
     
     return __result;
-#else
-    register _Atomic_word __result;
-    __asm__ __volatile__ ("lock; xadd{l} {%0,%1|%1,%0}"
-                          : "=r" (__result), "=m" (*__mem)
-                          : "0" (__val), "m" (*__mem));
-     return __result;
-#endif
   }
- 
-#ifndef __QNXNTO__ 
+  
   void
   __attribute__ ((__unused__))
-  __atomic_add(volatile _Atomic_word* __mem, int __val)
+  __atomic_add(volatile _Atomic_word* __mem, int __val) throw ()
   { __exchange_and_add(__mem, __val); }
-#else 
 
-  void
-  __attribute__ ((__unused__))
-  __atomic_add(volatile _Atomic_word* __mem, int __val)
-  {
-    __asm__ __volatile__ ("lock; add{l} {%1,%0|%0,%1}"
-                          : "=m" (*__mem) : "ir" (__val), "m" (*__mem));
-  }
-#endif
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace

@@ -1,6 +1,6 @@
 // <system_error> implementation file
 
-// Copyright (C) 2007, 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -34,6 +34,8 @@ namespace
   
   struct generic_error_category : public std::error_category
   {
+    generic_error_category() {}
+
     virtual const char*
     name() const 
     { return "generic"; }
@@ -49,6 +51,8 @@ namespace
 
   struct system_error_category : public std::error_category
   {
+    system_error_category() {}
+
     virtual const char*
     name() const
     { return "system"; }
@@ -66,15 +70,21 @@ namespace
   const system_error_category system_category_instance;
 }
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
+  error_category::error_category() = default;
+
+  error_category::~error_category() = default;
 
   const error_category& 
-  system_category() { return system_category_instance; }
+  system_category() throw() { return system_category_instance; }
 
   const error_category& 
-  generic_category() { return generic_category_instance; }
+  generic_category() throw() { return generic_category_instance; }
   
-  system_error::~system_error() throw() { }
+  system_error::~system_error() throw() = default;
 
   error_condition 
   error_category::default_error_condition(int __i) const
@@ -92,4 +102,5 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   error_code::default_error_condition() const
   { return category().default_error_condition(value()); }
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace

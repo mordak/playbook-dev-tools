@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1999-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1999-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -32,6 +32,26 @@ with Table;
 with Types; use Types;
 
 package Sem_Warn is
+
+   -------------------
+   -- Warning Flags --
+   -------------------
+
+   --  These flags are activated or deactivated by -gnatw switches and control
+   --  whether warnings of a given class will be generated or not.
+
+   --  Note: most of these flags are still in opt, but the plan is to move them
+   --  here as time goes by.
+
+   Warn_On_Record_Holes : Boolean := False;
+   --  Warn when explicit record component clauses leave uncovered holes (gaps)
+   --  in a record layout. Off by default, set by -gnatw.h (but not -gnatwa).
+
+   Warn_On_Overridden_Size : Boolean := False;
+   --  Warn when explicit record component clause or array component_size
+   --  clause specifies a size that overrides a size for the type which was
+   --  set with an explicit size clause. Off by default, set by -gnatw.s (but
+   --  not -gnatwa).
 
    ------------------------
    -- Warnings Off Table --
@@ -76,6 +96,10 @@ package Sem_Warn is
    --  given character preceded by a dot. Used to process a -gnatw. switch on
    --  the command line or .C in a string literal in pragma Warnings. Returns
    --  True for valid warning character C, False for invalid character.
+
+   procedure Set_GNAT_Mode_Warnings;
+   --  This is called in -gnatg mode to set the warnings for gnat mode. It is
+   --  also used to set the proper warning statuses for -gnatw.g.
 
    ------------------------------------------
    -- Routines to Handle Unused References --
@@ -134,7 +158,7 @@ package Sem_Warn is
    -- Output Routines --
    ---------------------
 
-   procedure Output_Non_Modifed_In_Out_Warnings;
+   procedure Output_Non_Modified_In_Out_Warnings;
    --  Warnings about IN OUT parameters that could be IN are collected till
    --  the end of the compilation process (see body of this routine for a
    --  discussion of why this is done). This procedure outputs the warnings.
@@ -166,7 +190,16 @@ package Sem_Warn is
 
    procedure Check_Infinite_Loop_Warning (Loop_Statement : Node_Id);
    --  N is the node for a loop statement. This procedure checks if a warning
-   --  should be given for a possible infinite loop, and if so issues it.
+   --  for a possible infinite loop should be given for a suspicious WHILE or
+   --  EXIT WHEN condition.
+
+   procedure Check_Low_Bound_Tested (Expr : Node_Id);
+   --  Expr is the node for a comparison operation. This procedure checks if
+   --  the comparison is a source comparison of P'First with some other value
+   --  and if so, sets the Low_Bound_Tested flag on entity P to suppress
+   --  warnings about improper low bound assumptions (we assume that if the
+   --  code has a test that explicitly checks P'First, then it is not operating
+   --  in blind assumption mode).
 
    procedure Warn_On_Known_Condition (C : Node_Id);
    --  C is a node for a boolean expression resulting from a relational
@@ -197,6 +230,11 @@ package Sem_Warn is
    --  Returns True if we should activate warnings for entity E being modified
    --  as an out parameter. True if either Warn_On_Modified_Unread is set for
    --  an only OUT parameter, or if Warn_On_All_Unread_Out_Parameters is set.
+
+   procedure Warn_On_Overlapping_Actuals (Subp : Entity_Id; N : Node_Id);
+   --  Called on a subprogram call. Checks whether an IN OUT actual that is
+   --  not by-copy may overlap with another actual, thus leading to aliasing
+   --  in the body of the called subprogram.
 
    procedure Warn_On_Suspicious_Index (Name : Entity_Id; X : Node_Id);
    --  This is called after resolving an indexed component or a slice. Name

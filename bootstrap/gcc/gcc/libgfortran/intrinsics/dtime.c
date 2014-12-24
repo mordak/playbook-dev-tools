@@ -1,7 +1,8 @@
 /* Implementation of the dtime intrinsic.
-   Copyright (C) 2004, 2005, 2006, 2007, 2009 Free Software Foundation, Inc.
+   Copyright (C) 2004, 2005, 2006, 2007, 2009, 2011 Free Software
+   Foundation, Inc.
 
-This file is part of the GNU Fortran 95 runtime library (libgfortran).
+This file is part of the GNU Fortran runtime library (libgfortran).
 
 Libgfortran is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public
@@ -43,11 +44,11 @@ dtime_sub (gfc_array_r4 *t, GFC_REAL_4 *result)
   static long us = 0, uu = 0, ss = 0 , su = 0;
   GFC_REAL_4 tu, ts, tt;
 
-  if (((t->dim[0].ubound + 1 - t->dim[0].lbound)) < 2)
+  if (((GFC_DESCRIPTOR_EXTENT(t,0))) < 2)
     runtime_error ("Insufficient number of elements in TARRAY.");
 
   __gthread_mutex_lock (&dtime_update_lock);
-  if (__time_1 (&user_sec, &user_usec, &system_sec, &system_usec) == 0)
+  if (gf_cputime (&user_sec, &user_usec, &system_sec, &system_usec) == 0)
     {
       tu = (GFC_REAL_4) ((user_sec - us) + 1.e-6 * (user_usec - uu));
       ts = (GFC_REAL_4) ((system_sec - ss) + 1.e-6 * (system_usec - su));
@@ -67,7 +68,7 @@ dtime_sub (gfc_array_r4 *t, GFC_REAL_4 *result)
   tp = t->data;
 
   *tp = tu;
-  tp += t->dim[0].stride;
+  tp += GFC_DESCRIPTOR_STRIDE(t,0);
   *tp = ts;
   *result = tt;
   __gthread_mutex_unlock (&dtime_update_lock);

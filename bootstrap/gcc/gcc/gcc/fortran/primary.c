@@ -1,5 +1,5 @@
 /* Primary expression subroutines
-   Copyright (C) 2000, 2001, 2002, 2004, 2005, 2006, 2007, 2008
+   Copyright (C) 2000, 2001, 2002, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by Andy Vaught
 
@@ -26,19 +26,25 @@ along with GCC; see the file COPYING3.  If not see
 #include "arith.h"
 #include "match.h"
 #include "parse.h"
-#include "toplev.h"
+#include "constructor.h"
+
+int matching_actual_arglist = 0;
 
 /* Matches a kind-parameter expression, which is either a named
    symbolic constant or a nonnegative integer constant.  If
-   successful, sets the kind value to the correct integer.  */
+   successful, sets the kind value to the correct integer.
+   The argument 'is_iso_c' signals whether the kind is an ISO_C_BINDING
+   symbol like e.g. 'c_int'.  */
 
 static match
-match_kind_param (int *kind)
+match_kind_param (int *kind, int *is_iso_c)
 {
   char name[GFC_MAX_SYMBOL_LEN + 1];
   gfc_symbol *sym;
   const char *p;
   match m;
+
+  *is_iso_c = 0;
 
   m = gfc_match_small_literal_int (kind, NULL);
   if (m != MATCH_NO)
@@ -54,7 +60,12 @@ match_kind_param (int *kind)
   if (sym == NULL)
     return MATCH_NO;
 
+  *is_iso_c = sym->attr.is_iso_c;
+
   if (sym->attr.flavor != FL_PARAMETER)
+    return MATCH_NO;
+
+  if (sym->value == NULL)
     return MATCH_NO;
 
   p = gfc_extract_int (sym->value, kind);
@@ -72,20 +83,24 @@ match_kind_param (int *kind)
 
 /* Get a trailing kind-specification for non-character variables.
    Returns:
-      the integer kind value or:
-      -1 if an error was generated
-      -2 if no kind was found */
+     * the integer kind value or
+     * -1 if an error was generated,
+     * -2 if no kind was found.
+   The argument 'is_iso_c' signals whether the kind is an ISO_C_BINDING
+   symbol like e.g. 'c_int'.  */
 
 static int
-get_kind (void)
+get_kind (int *is_iso_c)
 {
   int kind;
   match m;
 
+  *is_iso_c = 0;
+
   if (gfc_match_char ('_') != MATCH_YES)
     return -2;
 
-  m = match_kind_param (&kind);
+  m = match_kind_param (&kind, is_iso_c);
   if (m == MATCH_NO)
     gfc_error ("Missing kind-parameter at %C");
 
@@ -183,7 +198,7 @@ match_digits (int signflag, int radix, char *buffer)
 static match
 match_integer_constant (gfc_expr **result, int signflag)
 {
-  int length, kind;
+  int length, kind, is_iso_c;
   locus old_loc;
   char *buffer;
   gfc_expr *e;
@@ -203,7 +218,7 @@ match_integer_constant (gfc_expr **result, int signflag)
 
   match_digits (signflag, 10, buffer);
 
-  kind = get_kind ();
+  kind = get_kind (&is_iso_c);
   if (kind == -2)
     kind = gfc_default_integer_kind;
   if (kind == -1)
@@ -216,6 +231,7 @@ match_integer_constant (gfc_expr **result, int signflag)
     }
 
   e = gfc_convert_integer (buffer, kind, 10, &gfc_current_locus);
+  e->ts.is_c_interop = is_iso_c;
 
   if (gfc_range_check (e) != ARITH_OK)
     {
@@ -239,7 +255,7 @@ match_hollerith_constant (gfc_expr **result)
   locus old_loc;
   gfc_expr *e = NULL;
   const char *msg;
-  int num;
+  int num, pad;
   int i;  
 
   old_loc = gfc_current_locus;
@@ -273,14 +289,17 @@ match_hollerith_constant (gfc_expr **result)
       else
 	{
 	  gfc_free_expr (e);
-	  e = gfc_constant_result (BT_HOLLERITH, gfc_default_character_kind,
-				   &gfc_current_locus);
+	  e = gfc_get_constant_expr (BT_HOLLERITH, gfc_default_character_kind,
+				     &gfc_current_locus);
 
-	  e->representation.string = XCNEWVEC (char, num + 1);
+	  /* Calculate padding needed to fit default integer memory.  */
+	  pad = gfc_default_integer_kind - (num % gfc_default_integer_kind);
+
+	  e->representation.string = XCNEWVEC (char, num + pad + 1);
 
 	  for (i = 0; i < num; i++)
 	    {
-	      gfc_char_t c = gfc_next_char_literal (1);
+	      gfc_char_t c = gfc_next_char_literal (INSTRING_WARN);
 	      if (! gfc_wide_fits_in_byte (c))
 		{
 		  gfc_error ("Invalid Hollerith constant at %L contains a "
@@ -291,8 +310,13 @@ match_hollerith_constant (gfc_expr **result)
 	      e->representation.string[i] = (unsigned char) c;
 	    }
 
-	  e->representation.string[num] = '\0';
-	  e->representation.length = num;
+	  /* Now pad with blanks and end with a null char.  */
+	  for (i = 0; i < pad; i++)
+	    e->representation.string[num + i] = ' ';
+
+	  e->representation.string[num + i] = '\0';
+	  e->representation.length = num + pad;
+	  e->ts.u.pad = pad;
 
 	  *result = e;
 	  return MATCH_YES;
@@ -460,7 +484,7 @@ backup:
 static match
 match_real_constant (gfc_expr **result, int signflag)
 {
-  int kind, count, seen_dp, seen_digits;
+  int kind, count, seen_dp, seen_digits, is_iso_c;
   locus old_loc, temp_loc;
   char *p, *buffer, c, exp_char;
   gfc_expr *e;
@@ -528,6 +552,17 @@ match_real_constant (gfc_expr **result, int signflag)
     goto done;
   exp_char = c;
 
+
+  if (c == 'q')
+    {
+      if (gfc_notify_std (GFC_STD_GNU, "Extension: exponent-letter 'q' in "
+			 "real-literal-constant at %C") == FAILURE)
+	return MATCH_ERROR;
+      else if (gfc_option.warn_real_q_constant)
+	gfc_warning("Extension: exponent-letter 'q' in real-literal-constant "
+		    "at %C");
+    }
+
   /* Scan exponent.  */
   c = gfc_next_ascii_char ();
   count++;
@@ -587,7 +622,7 @@ done:
       c = gfc_next_ascii_char ();
     }
 
-  kind = get_kind ();
+  kind = get_kind (&is_iso_c);
   if (kind == -1)
     goto cleanup;
 
@@ -601,6 +636,30 @@ done:
 	  goto cleanup;
 	}
       kind = gfc_default_double_kind;
+      break;
+
+    case 'q':
+      if (kind != -2)
+	{
+	  gfc_error ("Real number at %C has a 'q' exponent and an explicit "
+		     "kind");
+	  goto cleanup;
+	}
+
+      /* The maximum possible real kind type parameter is 16.  First, try
+	 that for the kind, then fallback to trying kind=10 (Intel 80 bit)
+	 extended precision.  If neither value works, just given up.  */
+      kind = 16;
+      if (gfc_validate_kind (BT_REAL, kind, true) < 0)
+	{
+	  kind = 10;
+          if (gfc_validate_kind (BT_REAL, kind, true) < 0)
+	    {
+	      gfc_error ("Invalid exponent-letter 'q' in "
+			 "real-literal-constant at %C");
+	      goto cleanup;
+	    }
+	}
       break;
 
     default:
@@ -617,6 +676,7 @@ done:
   e = gfc_convert_real (buffer, kind, &gfc_current_locus);
   if (negate)
     mpfr_neg (e->value.real, e->value.real, GFC_RND_MODE);
+  e->ts.is_c_interop = is_iso_c;
 
   switch (gfc_range_check (e))
     {
@@ -708,7 +768,7 @@ match_substring (gfc_charlen *cl, int init, gfc_ref **result)
 
       ref->type = REF_SUBSTRING;
       if (start == NULL)
-	start = gfc_int_expr (1);
+	start = gfc_get_int_expr (gfc_default_integer_kind, NULL, 1);
       ref->u.ss.start = start;
       if (end == NULL && cl)
 	end = gfc_copy_expr (cl->length);
@@ -748,7 +808,7 @@ next_string_char (gfc_char_t delimiter, int *ret)
   locus old_locus;
   gfc_char_t c;
 
-  c = gfc_next_char_literal (1);
+  c = gfc_next_char_literal (INSTRING_WARN);
   *ret = 0;
 
   if (c == '\n')
@@ -772,7 +832,7 @@ next_string_char (gfc_char_t delimiter, int *ret)
     return c;
 
   old_locus = gfc_current_locus;
-  c = gfc_next_char_literal (0);
+  c = gfc_next_char_literal (NONSTRING);
 
   if (c == delimiter)
     return c;
@@ -829,7 +889,7 @@ match_charkind_name (char *name)
 
       if (!ISALNUM (c)
 	  && c != '_'
-	  && (gfc_option.flag_dollar_ok && c != '$'))
+	  && (c != '$' || !gfc_option.flag_dollar_ok))
 	break;
 
       *name++ = c;
@@ -864,12 +924,11 @@ match_string_constant (gfc_expr **result)
 
   gfc_gobble_whitespace ();
 
-  start_locus = gfc_current_locus;
-
   c = gfc_next_char ();
   if (c == '\'' || c == '"')
     {
       kind = gfc_default_character_kind;
+      start_locus = gfc_current_locus;
       goto got_delim;
     }
 
@@ -913,11 +972,12 @@ match_string_constant (gfc_expr **result)
     goto no_match;
 
   gfc_gobble_whitespace ();
-  start_locus = gfc_current_locus;
 
   c = gfc_next_char ();
   if (c != '\'' && c != '"')
     goto no_match;
+
+  start_locus = gfc_current_locus;
 
   if (kind == -1)
     {
@@ -966,28 +1026,19 @@ got_delim:
   if (peek == 'b' || peek == 'o' || peek =='z' || peek == 'x')
     goto no_match;
 
-
-  e = gfc_get_expr ();
-
-  e->expr_type = EXPR_CONSTANT;
+  e = gfc_get_character_expr (kind, &start_locus, NULL, length);
   e->ref = NULL;
-  e->ts.type = BT_CHARACTER;
-  e->ts.kind = kind;
   e->ts.is_c_interop = 0;
   e->ts.is_iso_c = 0;
-  e->where = start_locus;
-
-  e->value.character.string = p = gfc_get_wide_string (length + 1);
-  e->value.character.length = length;
 
   gfc_current_locus = start_locus;
-  gfc_next_char ();		/* Skip delimiter */
 
   /* We disable the warning for the following loop as the warning has already
      been printed in the loop above.  */
   warn_ampersand = gfc_option.warn_ampersand;
   gfc_option.warn_ampersand = 0;
 
+  p = e->value.character.string;
   for (i = 0; i < length; i++)
     {
       c = next_string_char (delimiter, &ret);
@@ -1063,13 +1114,13 @@ static match
 match_logical_constant (gfc_expr **result)
 {
   gfc_expr *e;
-  int i, kind;
+  int i, kind, is_iso_c;
 
   i = match_logical_constant_string ();
   if (i == -1)
     return MATCH_NO;
 
-  kind = get_kind ();
+  kind = get_kind (&is_iso_c);
   if (kind == -1)
     return MATCH_ERROR;
   if (kind == -2)
@@ -1081,15 +1132,9 @@ match_logical_constant (gfc_expr **result)
       return MATCH_ERROR;
     }
 
-  e = gfc_get_expr ();
-
-  e->expr_type = EXPR_CONSTANT;
-  e->value.logical = i;
-  e->ts.type = BT_LOGICAL;
-  e->ts.kind = kind;
-  e->ts.is_c_interop = 0;
+  e = gfc_get_logical_expr (kind, &gfc_current_locus, i);
+  e->ts.is_c_interop = is_iso_c;
   e->ts.is_iso_c = 0;
-  e->where = gfc_current_locus;
 
   *result = e;
   return MATCH_YES;
@@ -1344,6 +1389,25 @@ gfc_match_literal_constant (gfc_expr **result, int signflag)
 }
 
 
+/* This checks if a symbol is the return value of an encompassing function.
+   Function nesting can be maximally two levels deep, but we may have
+   additional local namespaces like BLOCK etc.  */
+
+bool
+gfc_is_function_return_value (gfc_symbol *sym, gfc_namespace *ns)
+{
+  if (!sym->attr.function || (sym->result != sym))
+    return false;
+  while (ns)
+    {
+      if (ns->proc_name == sym)
+	return true;
+      ns = ns->parent;
+    }
+  return false;
+}
+
+
 /* Match a single actual argument value.  An actual argument is
    usually an expression, but can also be a procedure name.  If the
    argument is a single name, it is not always possible to tell
@@ -1388,7 +1452,7 @@ match_actual_arg (gfc_expr **result)
 	 have a function argument.  */
       if (symtree == NULL)
 	{
-	  gfc_get_sym_tree (name, NULL, &symtree);
+	  gfc_get_sym_tree (name, NULL, &symtree, false);
 	  gfc_set_sym_referenced (symtree->n.sym);
 	}
       else
@@ -1412,9 +1476,7 @@ match_actual_arg (gfc_expr **result)
 	     is being defined, then we have a variable.  */
 	  if (sym->attr.function && sym->result == sym)
 	    {
-	      if (gfc_current_ns->proc_name == sym
-		  || (gfc_current_ns->parent != NULL
-		      && gfc_current_ns->parent->proc_name == sym))
+	      if (gfc_is_function_return_value (sym, gfc_current_ns))
 		break;
 
 	      if (sym->attr.entry
@@ -1597,6 +1659,8 @@ gfc_match_actual_arglist (int sub_flag, gfc_actual_arglist **argp)
     return MATCH_YES;
   head = NULL;
 
+  matching_actual_arglist++;
+
   for (;;)
     {
       if (head == NULL)
@@ -1671,6 +1735,7 @@ gfc_match_actual_arglist (int sub_flag, gfc_actual_arglist **argp)
     }
 
   *argp = head;
+  matching_actual_arglist--;
   return MATCH_YES;
 
 syntax:
@@ -1679,7 +1744,7 @@ syntax:
 cleanup:
   gfc_free_actual_arglist (head);
   gfc_current_locus = old_loc;
-
+  matching_actual_arglist--;
   return MATCH_ERROR;
 }
 
@@ -1708,10 +1773,13 @@ extend_ref (gfc_expr *primary, gfc_ref *tail)
    variable like member references or substrings.  If equiv_flag is
    set we only match stuff that is allowed inside an EQUIVALENCE
    statement.  sub_flag tells whether we expect a type-bound procedure found
-   to be a subroutine as part of CALL or a FUNCTION.  */
+   to be a subroutine as part of CALL or a FUNCTION. For procedure pointer
+   components, 'ppc_arg' determines whether the PPC may be called (with an
+   argument list), or whether it may just be referred to as a pointer.  */
 
 match
-gfc_match_varspec (gfc_expr *primary, int equiv_flag, bool sub_flag)
+gfc_match_varspec (gfc_expr *primary, int equiv_flag, bool sub_flag,
+		   bool ppc_arg)
 {
   char name[GFC_MAX_SYMBOL_LEN + 1];
   gfc_ref *substring, *tail;
@@ -1723,7 +1791,38 @@ gfc_match_varspec (gfc_expr *primary, int equiv_flag, bool sub_flag)
   tail = NULL;
 
   gfc_gobble_whitespace ();
-  if ((equiv_flag && gfc_peek_ascii_char () == '(') || sym->attr.dimension)
+
+  if (gfc_peek_ascii_char () == '[')
+    {
+      if (sym->attr.dimension)
+	{
+	  gfc_error ("Array section designator, e.g. '(:)', is required "
+		     "besides the coarray designator '[...]' at %C");
+	  return MATCH_ERROR;
+	}
+      if (!sym->attr.codimension)
+	{
+	  gfc_error ("Coarray designator at %C but '%s' is not a coarray",
+		     sym->name);
+	  return MATCH_ERROR;
+	}
+    }
+
+  /* For associate names, we may not yet know whether they are arrays or not.
+     Thus if we have one and parentheses follow, we have to assume that it
+     actually is one for now.  The final decision will be made at
+     resolution time, of course.  */
+  if (sym->assoc && gfc_peek_ascii_char () == '(')
+    sym->attr.dimension = 1;
+
+  if ((equiv_flag && gfc_peek_ascii_char () == '(')
+      || gfc_peek_ascii_char () == '[' || sym->attr.codimension
+      || (sym->attr.dimension && sym->ts.type != BT_CLASS
+	  && !sym->attr.proc_pointer && !gfc_is_proc_ptr_comp (primary, NULL)
+	  && !(gfc_matching_procptr_assignment
+	       && sym->attr.flavor == FL_PROCEDURE))
+      || (sym->ts.type == BT_CLASS && sym->attr.class_ok
+	  && CLASS_DATA (sym)->attr.dimension))
     {
       /* In EQUIVALENCE, we don't know yet whether we are seeing
 	 an array, character variable or array of character
@@ -1732,7 +1831,11 @@ gfc_match_varspec (gfc_expr *primary, int equiv_flag, bool sub_flag)
       tail->type = REF_ARRAY;
 
       m = gfc_match_array_ref (&tail->u.ar, equiv_flag ? NULL : sym->as,
-			       equiv_flag);
+			       equiv_flag,
+			       sym->ts.type == BT_CLASS
+			       ? (CLASS_DATA (sym)->as
+				  ? CLASS_DATA (sym)->as->corank : 0)
+			       : (sym->as ? sym->as->corank : 0));
       if (m != MATCH_YES)
 	return m;
 
@@ -1742,7 +1845,7 @@ gfc_match_varspec (gfc_expr *primary, int equiv_flag, bool sub_flag)
 	  tail = extend_ref (primary, tail);
 	  tail->type = REF_ARRAY;
 
-	  m = gfc_match_array_ref (&tail->u.ar, NULL, equiv_flag);
+	  m = gfc_match_array_ref (&tail->u.ar, NULL, equiv_flag, 0);
 	  if (m != MATCH_YES)
 	    return m;
 	}
@@ -1754,13 +1857,14 @@ gfc_match_varspec (gfc_expr *primary, int equiv_flag, bool sub_flag)
     return MATCH_YES;
 
   if (sym->ts.type == BT_UNKNOWN && gfc_peek_ascii_char () == '%'
-      && gfc_get_default_type (sym, sym->ns)->type == BT_DERIVED)
+      && gfc_get_default_type (sym->name, sym->ns)->type == BT_DERIVED)
     gfc_set_default_type (sym, 0, sym->ns);
 
-  if (sym->ts.type != BT_DERIVED || gfc_match_char ('%') != MATCH_YES)
+  if ((sym->ts.type != BT_DERIVED && sym->ts.type != BT_CLASS)
+      || gfc_match_char ('%') != MATCH_YES)
     goto check_substring;
 
-  sym = sym->ts.derived;
+  sym = sym->ts.u.derived;
 
   for (;;)
     {
@@ -1774,7 +1878,7 @@ gfc_match_varspec (gfc_expr *primary, int equiv_flag, bool sub_flag)
 	return MATCH_ERROR;
 
       if (sym->f2k_derived)
-	tbp = gfc_find_typebound_proc (sym, &t, name, false);
+	tbp = gfc_find_typebound_proc (sym, &t, name, false, &gfc_current_locus);
       else
 	tbp = NULL;
 
@@ -1786,21 +1890,27 @@ gfc_match_varspec (gfc_expr *primary, int equiv_flag, bool sub_flag)
 	    return MATCH_ERROR;
 
 	  gcc_assert (!tail || !tail->next);
-	  gcc_assert (primary->expr_type == EXPR_VARIABLE);
+	  gcc_assert (primary->expr_type == EXPR_VARIABLE
+		      || (primary->expr_type == EXPR_STRUCTURE
+			  && primary->symtree && primary->symtree->n.sym
+			  && primary->symtree->n.sym->attr.flavor));
 
-	  if (tbp->typebound->is_generic)
+	  if (tbp->n.tb->is_generic)
 	    tbp_sym = NULL;
 	  else
-	    tbp_sym = tbp->typebound->u.specific->n.sym;
+	    tbp_sym = tbp->n.tb->u.specific->n.sym;
 
 	  primary->expr_type = EXPR_COMPCALL;
-	  primary->value.compcall.tbp = tbp->typebound;
+	  primary->value.compcall.tbp = tbp->n.tb;
 	  primary->value.compcall.name = tbp->name;
+	  primary->value.compcall.ignore_pass = 0;
+	  primary->value.compcall.assign = 0;
+	  primary->value.compcall.base_object = NULL;
 	  gcc_assert (primary->symtree->n.sym->attr.referenced);
 	  if (tbp_sym)
 	    primary->ts = tbp_sym->ts;
 
-	  m = gfc_match_actual_arglist (tbp->typebound->subroutine,
+	  m = gfc_match_actual_arglist (tbp->n.tb->subroutine,
 					&primary->value.compcall.actual);
 	  if (m == MATCH_ERROR)
 	    return MATCH_ERROR;
@@ -1814,8 +1924,6 @@ gfc_match_varspec (gfc_expr *primary, int equiv_flag, bool sub_flag)
 		  return MATCH_ERROR;
 		}
 	    }
-
-	  gfc_set_sym_referenced (tbp->n.sym);
 
 	  break;
 	}
@@ -1832,28 +1940,65 @@ gfc_match_varspec (gfc_expr *primary, int equiv_flag, bool sub_flag)
 
       primary->ts = component->ts;
 
-      if (component->as != NULL)
+      if (component->attr.proc_pointer && ppc_arg
+	  && !gfc_matching_procptr_assignment)
+	{
+	  /* Procedure pointer component call: Look for argument list.  */
+	  m = gfc_match_actual_arglist (sub_flag,
+					&primary->value.compcall.actual);
+	  if (m == MATCH_ERROR)
+	    return MATCH_ERROR;
+
+	  if (m == MATCH_NO && !gfc_matching_ptr_assignment
+	      && !matching_actual_arglist)
+	    {
+	      gfc_error ("Procedure pointer component '%s' requires an "
+			 "argument list at %C", component->name);
+	      return MATCH_ERROR;
+	    }
+
+	  if (m == MATCH_YES)
+	    primary->expr_type = EXPR_PPC;
+
+          break;
+	}
+
+      if (component->as != NULL && !component->attr.proc_pointer)
 	{
 	  tail = extend_ref (primary, tail);
 	  tail->type = REF_ARRAY;
 
-	  m = gfc_match_array_ref (&tail->u.ar, component->as, equiv_flag);
+	  m = gfc_match_array_ref (&tail->u.ar, component->as, equiv_flag,
+			  component->as->corank);
+	  if (m != MATCH_YES)
+	    return m;
+	}
+      else if (component->ts.type == BT_CLASS
+	       && CLASS_DATA (component)->as != NULL
+	       && !component->attr.proc_pointer)
+	{
+	  tail = extend_ref (primary, tail);
+	  tail->type = REF_ARRAY;
+
+	  m = gfc_match_array_ref (&tail->u.ar, CLASS_DATA (component)->as,
+				   equiv_flag,
+				   CLASS_DATA (component)->as->corank);
 	  if (m != MATCH_YES)
 	    return m;
 	}
 
-      if (component->ts.type != BT_DERIVED
+      if ((component->ts.type != BT_DERIVED && component->ts.type != BT_CLASS)
 	  || gfc_match_char ('%') != MATCH_YES)
 	break;
 
-      sym = component->ts.derived;
+      sym = component->ts.u.derived;
     }
 
 check_substring:
   unknown = false;
-  if (primary->ts.type == BT_UNKNOWN)
+  if (primary->ts.type == BT_UNKNOWN && sym->attr.flavor != FL_DERIVED)
     {
-      if (gfc_get_default_type (sym, sym->ns)->type == BT_CHARACTER)
+      if (gfc_get_default_type (sym->name, sym->ns)->type == BT_CHARACTER)
        {
 	 gfc_set_default_type (sym, 0, sym->ns);
 	 primary->ts = sym->ts;
@@ -1863,7 +2008,7 @@ check_substring:
 
   if (primary->ts.type == BT_CHARACTER)
     {
-      switch (match_substring (primary->ts.cl, equiv_flag, &substring))
+      switch (match_substring (primary->ts.u.cl, equiv_flag, &substring))
 	{
 	case MATCH_YES:
 	  if (tail == NULL)
@@ -1875,7 +2020,7 @@ check_substring:
 	    primary->expr_type = EXPR_SUBSTRING;
 
 	  if (substring)
-	    primary->ts.cl = NULL;
+	    primary->ts.u.cl = NULL;
 
 	  break;
 
@@ -1890,6 +2035,13 @@ check_substring:
 	case MATCH_ERROR:
 	  return MATCH_ERROR;
 	}
+    }
+
+  /* F2008, C727.  */
+  if (primary->expr_type == EXPR_PPC && gfc_is_coindexed (primary))
+    {
+      gfc_error ("Coindexed procedure-pointer component at %C");
+      return MATCH_ERROR;
     }
 
   return MATCH_YES;
@@ -1919,25 +2071,36 @@ gfc_variable_attr (gfc_expr *expr, gfc_typespec *ts)
   int dimension, pointer, allocatable, target;
   symbol_attribute attr;
   gfc_ref *ref;
+  gfc_symbol *sym;
+  gfc_component *comp;
 
-  if (expr->expr_type != EXPR_VARIABLE)
+  if (expr->expr_type != EXPR_VARIABLE && expr->expr_type != EXPR_FUNCTION)
     gfc_internal_error ("gfc_variable_attr(): Expression isn't a variable");
 
-  ref = expr->ref;
-  attr = expr->symtree->n.sym->attr;
+  sym = expr->symtree->n.sym;
+  attr = sym->attr;
 
-  dimension = attr.dimension;
-  pointer = attr.pointer;
-  allocatable = attr.allocatable;
+  if (sym->ts.type == BT_CLASS && sym->attr.class_ok)
+    {
+      dimension = CLASS_DATA (sym)->attr.dimension;
+      pointer = CLASS_DATA (sym)->attr.class_pointer;
+      allocatable = CLASS_DATA (sym)->attr.allocatable;
+    }
+  else
+    {
+      dimension = attr.dimension;
+      pointer = attr.pointer;
+      allocatable = attr.allocatable;
+    }
 
   target = attr.target;
-  if (pointer)
+  if (pointer || attr.proc_pointer)
     target = 1;
 
   if (ts != NULL && expr->ts.type == BT_UNKNOWN)
-    *ts = expr->symtree->n.sym->ts;
+    *ts = sym->ts;
 
-  for (; ref; ref = ref->next)
+  for (ref = expr->ref; ref; ref = ref->next)
     switch (ref->type)
       {
       case REF_ARRAY:
@@ -1954,7 +2117,9 @@ gfc_variable_attr (gfc_expr *expr, gfc_typespec *ts)
 	    break;
 
 	  case AR_ELEMENT:
-	    allocatable = pointer = 0;
+	    /* Handle coarrays.  */
+	    if (ref->u.ar.dimen > 0)
+	      allocatable = pointer = 0;
 	    break;
 
 	  case AR_UNKNOWN:
@@ -1964,20 +2129,29 @@ gfc_variable_attr (gfc_expr *expr, gfc_typespec *ts)
 	break;
 
       case REF_COMPONENT:
-	attr = ref->u.c.component->attr;
+	comp = ref->u.c.component;
+	attr = comp->attr;
 	if (ts != NULL)
 	  {
-	    *ts = ref->u.c.component->ts;
+	    *ts = comp->ts;
 	    /* Don't set the string length if a substring reference
 	       follows.  */
 	    if (ts->type == BT_CHARACTER
 		&& ref->next && ref->next->type == REF_SUBSTRING)
-		ts->cl = NULL;
+		ts->u.cl = NULL;
 	  }
 
-	pointer = ref->u.c.component->attr.pointer;
-	allocatable = ref->u.c.component->attr.allocatable;
-	if (pointer)
+	if (comp->ts.type == BT_CLASS)
+	  {
+	    pointer = CLASS_DATA (comp)->attr.class_pointer;
+	    allocatable = CLASS_DATA (comp)->attr.allocatable;
+	  }
+	else
+	  {
+	    pointer = comp->attr.pointer;
+	    allocatable = comp->attr.allocatable;
+	  }
+	if (pointer || attr.proc_pointer)
 	  target = 1;
 
 	break;
@@ -1991,6 +2165,7 @@ gfc_variable_attr (gfc_expr *expr, gfc_typespec *ts)
   attr.pointer = pointer;
   attr.allocatable = allocatable;
   attr.target = target;
+  attr.save = sym->attr.save;
 
   return attr;
 }
@@ -2013,7 +2188,18 @@ gfc_expr_attr (gfc_expr *e)
       gfc_clear_attr (&attr);
 
       if (e->value.function.esym != NULL)
-	attr = e->value.function.esym->result->attr;
+	{
+	  gfc_symbol *sym = e->value.function.esym->result;
+	  attr = sym->attr;
+	  if (sym->ts.type == BT_CLASS)
+	    {
+	      attr.dimension = CLASS_DATA (sym)->attr.dimension;
+	      attr.pointer = CLASS_DATA (sym)->attr.class_pointer;
+	      attr.allocatable = CLASS_DATA (sym)->attr.allocatable;
+	    }
+	}
+      else
+	attr = gfc_variable_attr (e, NULL);
 
       /* TODO: NULL() returns pointers.  May have to take care of this
 	 here.  */
@@ -2048,6 +2234,7 @@ gfc_free_structure_ctor_component (gfc_structure_ctor_component *comp)
 {
   gfc_free (comp->name);
   gfc_free_expr (comp->val);
+  gfc_free (comp);
 }
 
 
@@ -2057,10 +2244,9 @@ gfc_free_structure_ctor_component (gfc_structure_ctor_component *comp)
    for components without explicit value given.  */
 static gfc_try
 build_actual_constructor (gfc_structure_ctor_component **comp_head,
-			  gfc_constructor **ctor_head, gfc_symbol *sym)
+			  gfc_constructor_base *ctor_head, gfc_symbol *sym)
 {
   gfc_structure_ctor_component *comp_iter;
-  gfc_constructor *ctor_tail = NULL;
   gfc_component *comp;
 
   for (comp = sym->components; comp; comp = comp->next)
@@ -2081,20 +2267,19 @@ build_actual_constructor (gfc_structure_ctor_component **comp_head,
 	 a value expression for the parent derived type and calling self.  */
       if (!comp_iter && comp == sym->components && sym->attr.extension)
 	{
-	  value = gfc_get_expr ();
-	  value->expr_type = EXPR_STRUCTURE;
-	  value->value.constructor = NULL;
+	  value = gfc_get_structure_constructor_expr (comp->ts.type,
+						      comp->ts.kind,
+						      &gfc_current_locus);
 	  value->ts = comp->ts;
-	  value->where = gfc_current_locus;
 
 	  if (build_actual_constructor (comp_head, &value->value.constructor,
-					comp->ts.derived) == FAILURE)
+					comp->ts.u.derived) == FAILURE)
 	    {
 	      gfc_free_expr (value);
 	      return FAILURE;
 	    }
-	  *ctor_head = ctor_tail = gfc_get_constructor ();
-	  ctor_tail->expr = value;
+
+	  gfc_constructor_append_expr (ctor_head, value, NULL);
 	  continue;
 	}
 
@@ -2121,15 +2306,7 @@ build_actual_constructor (gfc_structure_ctor_component **comp_head,
 	value = comp_iter->val;
 
       /* Add the value to the constructor chain built.  */
-      if (ctor_tail)
-	{
-	  ctor_tail->next = gfc_get_constructor ();
-	  ctor_tail = ctor_tail->next;
-	}
-      else
-	*ctor_head = ctor_tail = gfc_get_constructor ();
-      gcc_assert (value);
-      ctor_tail->expr = value;
+      gfc_constructor_append_expr (ctor_head, value, NULL);
 
       /* Remove the entry from the component list.  We don't want the expression
 	 value to be free'd, so set it to NULL.  */
@@ -2148,7 +2325,7 @@ gfc_match_structure_constructor (gfc_symbol *sym, gfc_expr **result,
 				 bool parent)
 {
   gfc_structure_ctor_component *comp_tail, *comp_head, *comp_iter;
-  gfc_constructor *ctor_head, *ctor_tail;
+  gfc_constructor_base ctor_head = NULL;
   gfc_component *comp; /* Is set NULL when named component is first seen */
   gfc_expr *e;
   locus where;
@@ -2156,7 +2333,6 @@ gfc_match_structure_constructor (gfc_symbol *sym, gfc_expr **result,
   const char* last_name = NULL;
 
   comp_tail = comp_head = NULL;
-  ctor_head = ctor_tail = NULL;
 
   if (!parent && gfc_match_char ('(') != MATCH_YES)
     goto syntax;
@@ -2180,6 +2356,12 @@ gfc_match_structure_constructor (gfc_symbol *sym, gfc_expr **result,
       do
 	{
 	  gfc_component *this_comp = NULL;
+
+	  if (comp == sym->components && sym->attr.extension
+	      && comp->ts.type == BT_DERIVED
+	      && comp->ts.u.derived->attr.zero_comp)
+	    /* Skip empty parents.  */ 
+	    comp = comp->next;
 
 	  if (!comp_head)
 	    comp_tail = comp_head = gfc_get_structure_ctor_component ();
@@ -2260,19 +2442,28 @@ gfc_match_structure_constructor (gfc_symbol *sym, gfc_expr **result,
 	  if (m == MATCH_ERROR)
 	    goto cleanup;
 
+	  /* F2008, R457/C725, for PURE C1283.  */
+          if (this_comp->attr.pointer && gfc_is_coindexed (comp_tail->val))
+	    {
+	      gfc_error ("Coindexed expression to pointer component '%s' in "
+			 "structure constructor at %C!", comp_tail->name);
+	      goto cleanup;
+ 	    }
+
+
 	  /* If not explicitly a parent constructor, gather up the components
 	     and build one.  */
 	  if (comp && comp == sym->components
 		&& sym->attr.extension
 		&& (comp_tail->val->ts.type != BT_DERIVED
 		      ||
-		    comp_tail->val->ts.derived != this_comp->ts.derived))
+		    comp_tail->val->ts.u.derived != this_comp->ts.u.derived))
 	    {
 	      gfc_current_locus = where;
 	      gfc_free_expr (comp_tail->val);
 	      comp_tail->val = NULL;
 
-	      m = gfc_match_structure_constructor (comp->ts.derived, 
+	      m = gfc_match_structure_constructor (comp->ts.u.derived, 
 						   &comp_tail->val, true);
 	      if (m == MATCH_NO)
 		goto syntax;
@@ -2299,8 +2490,9 @@ gfc_match_structure_constructor (gfc_symbol *sym, gfc_expr **result,
   /* No component should be left, as this should have caused an error in the
      loop constructing the component-list (name that does not correspond to any
      component in the structure definition).  */
-  if (comp_head && sym->attr.extension)
+  if (comp_head)
     {
+      gcc_assert (sym->attr.extension);
       for (comp_iter = comp_head; comp_iter; comp_iter = comp_iter->next)
 	{
 	  gfc_error ("component '%s' at %L has already been set by a "
@@ -2309,17 +2501,9 @@ gfc_match_structure_constructor (gfc_symbol *sym, gfc_expr **result,
 	}
       goto cleanup;
     }
-  else
-    gcc_assert (!comp_head);
 
-  e = gfc_get_expr ();
-
-  e->expr_type = EXPR_STRUCTURE;
-
-  e->ts.type = BT_DERIVED;
-  e->ts.derived = sym;
-  e->where = where;
-
+  e = gfc_get_structure_constructor_expr (BT_DERIVED, 0, &where);
+  e->ts.u.derived = sym;
   e->value.constructor = ctor_head;
 
   *result = e;
@@ -2335,7 +2519,7 @@ cleanup:
       gfc_free_structure_ctor_component (comp_iter);
       comp_iter = next;
     }
-  gfc_free_constructor (ctor_head);
+  gfc_constructor_free (ctor_head);
   return MATCH_ERROR;
 }
 
@@ -2353,12 +2537,36 @@ check_for_implicit_index (gfc_symtree **st, gfc_symbol **sym)
       && !(*sym)->attr.use_assoc)
     {
       int i;
-      i = gfc_get_sym_tree ((*sym)->name, NULL, st);
+      i = gfc_get_sym_tree ((*sym)->name, NULL, st, false);
       if (i)
 	return MATCH_ERROR;
       *sym = (*st)->n.sym;
     }
   return MATCH_YES;
+}
+
+
+/* Procedure pointer as function result: Replace the function symbol by the
+   auto-generated hidden result variable named "ppr@".  */
+
+static gfc_try
+replace_hidden_procptr_result (gfc_symbol **sym, gfc_symtree **st)
+{
+  /* Check for procedure pointer result variable.  */
+  if ((*sym)->attr.function && !(*sym)->attr.external
+      && (*sym)->result && (*sym)->result != *sym
+      && (*sym)->result->attr.proc_pointer
+      && (*sym) == gfc_current_ns->proc_name
+      && (*sym) == (*sym)->result->ns->proc_name
+      && strcmp ("ppr@", (*sym)->result->name) == 0)
+    {
+      /* Automatic replacement with "hidden" result variable.  */
+      (*sym)->result->attr.referenced = (*sym)->attr.referenced;
+      *sym = (*sym)->result;
+      *st = gfc_find_symtree ((*sym)->ns->sym_root, (*sym)->name);
+      return SUCCESS;
+    }
+  return FAILURE;
 }
 
 
@@ -2387,7 +2595,7 @@ gfc_match_rvalue (gfc_expr **result)
 
   if (gfc_find_state (COMP_INTERFACE) == SUCCESS
       && !gfc_current_ns->has_import_set)
-    i = gfc_get_sym_tree (name, NULL, &symtree);
+    i = gfc_get_sym_tree (name, NULL, &symtree, false);
   else
     i = gfc_get_ha_sym_tree (name, &symtree);
 
@@ -2397,6 +2605,8 @@ gfc_match_rvalue (gfc_expr **result)
   sym = symtree->n.sym;
   e = NULL;
   where = gfc_current_locus;
+
+  replace_hidden_procptr_result (&sym, &symtree);
 
   /* If this is an implicit do loop index and implicitly typed,
      it should not be host associated.  */
@@ -2423,9 +2633,7 @@ gfc_match_rvalue (gfc_expr **result)
 	  return MATCH_ERROR;
 	}
 
-      if (gfc_current_ns->proc_name == sym
-	  || (gfc_current_ns->parent != NULL
-	      && gfc_current_ns->parent->proc_name == sym))
+      if (gfc_is_function_return_value (sym, gfc_current_ns))
 	goto variable;
 
       if (sym->attr.entry
@@ -2458,7 +2666,7 @@ gfc_match_rvalue (gfc_expr **result)
       e->expr_type = EXPR_VARIABLE;
       e->symtree = symtree;
 
-      m = gfc_match_varspec (e, 0, false);
+      m = gfc_match_varspec (e, 0, false, true);
       break;
 
     case FL_PARAMETER:
@@ -2475,7 +2683,7 @@ gfc_match_rvalue (gfc_expr **result)
 	}
 
       e->symtree = symtree;
-      m = gfc_match_varspec (e, 0, false);
+      m = gfc_match_varspec (e, 0, false, true);
 
       if (sym->ts.is_c_interop || sym->ts.is_iso_c)
 	break;
@@ -2521,7 +2729,7 @@ gfc_match_rvalue (gfc_expr **result)
       if (gfc_matching_procptr_assignment)
 	{
 	  gfc_gobble_whitespace ();
-	  if (gfc_peek_ascii_char () == '(')
+	  if (!sym->attr.dimension && gfc_peek_ascii_char () == '(')
 	    /* Parse functions returning a procptr.  */
 	    goto function0;
 
@@ -2531,7 +2739,7 @@ gfc_match_rvalue (gfc_expr **result)
 	  e = gfc_get_expr ();
 	  e->expr_type = EXPR_VARIABLE;
 	  e->symtree = symtree;
-	  m = gfc_match_varspec (e, 0, false);
+	  m = gfc_match_varspec (e, 0, false, true);
 	  break;
 	}
 
@@ -2558,7 +2766,7 @@ gfc_match_rvalue (gfc_expr **result)
 	  e->symtree = symtree;
 	  e->expr_type = EXPR_VARIABLE;
 
-	  m = gfc_match_varspec (e, 0, false);
+	  m = gfc_match_varspec (e, 0, false, true);
 	  break;
 	}
 
@@ -2586,6 +2794,8 @@ gfc_match_rvalue (gfc_expr **result)
 
       gfc_get_ha_sym_tree (name, &symtree);	/* Can't fail */
       sym = symtree->n.sym;
+
+      replace_hidden_procptr_result (&sym, &symtree);
 
       e = gfc_get_expr ();
       e->symtree = symtree;
@@ -2636,7 +2846,7 @@ gfc_match_rvalue (gfc_expr **result)
 
       if (gfc_peek_ascii_char () == '%'
 	  && sym->ts.type == BT_UNKNOWN
-	  && gfc_get_default_type (sym, sym->ns)->type == BT_DERIVED)
+	  && gfc_get_default_type (sym->name, sym->ns)->type == BT_DERIVED)
 	gfc_set_default_type (sym, 0, sym->ns);
 
       /* If the symbol has a dimension attribute, the expression is a
@@ -2654,7 +2864,7 @@ gfc_match_rvalue (gfc_expr **result)
 	  e = gfc_get_expr ();
 	  e->symtree = symtree;
 	  e->expr_type = EXPR_VARIABLE;
-	  m = gfc_match_varspec (e, 0, false);
+	  m = gfc_match_varspec (e, 0, false, true);
 	  break;
 	}
 
@@ -2679,7 +2889,7 @@ gfc_match_rvalue (gfc_expr **result)
 
 	  /*FIXME:??? gfc_match_varspec does set this for us: */
 	  e->ts = sym->ts;
-	  m = gfc_match_varspec (e, 0, false);
+	  m = gfc_match_varspec (e, 0, false, true);
 	  break;
 	}
 
@@ -2703,7 +2913,7 @@ gfc_match_rvalue (gfc_expr **result)
 	  implicit_char = false;
 	  if (sym->ts.type == BT_UNKNOWN)
 	    {
-	      ts = gfc_get_default_type (sym,NULL);
+	      ts = gfc_get_default_type (sym->name, NULL);
 	      if (ts->type == BT_CHARACTER)
 		implicit_char = true;
 	    }
@@ -2712,7 +2922,7 @@ gfc_match_rvalue (gfc_expr **result)
 	     that we're not sure is a variable yet.  */
 
 	  if ((implicit_char || sym->ts.type == BT_CHARACTER)
-	      && match_substring (sym->ts.cl, 0, &e->ref) == MATCH_YES)
+	      && match_substring (sym->ts.u.cl, 0, &e->ref) == MATCH_YES)
 	    {
 
 	      e->expr_type = EXPR_VARIABLE;
@@ -2734,7 +2944,7 @@ gfc_match_rvalue (gfc_expr **result)
 
 	      e->ts = sym->ts;
 	      if (e->ref)
-		e->ts.cl = NULL;
+		e->ts.u.cl = NULL;
 	      m = MATCH_YES;
 	      break;
 	    }
@@ -2742,7 +2952,7 @@ gfc_match_rvalue (gfc_expr **result)
 
       /* Give up, assume we have a function.  */
 
-      gfc_get_sym_tree (name, NULL, &symtree);	/* Can't fail */
+      gfc_get_sym_tree (name, NULL, &symtree, false);	/* Can't fail */
       sym = symtree->n.sym;
       e->expr_type = EXPR_FUNCTION;
 
@@ -2768,14 +2978,14 @@ gfc_match_rvalue (gfc_expr **result)
       /* If our new function returns a character, array or structure
 	 type, it might have subsequent references.  */
 
-      m = gfc_match_varspec (e, 0, false);
+      m = gfc_match_varspec (e, 0, false, true);
       if (m == MATCH_NO)
 	m = MATCH_YES;
 
       break;
 
     generic_function:
-      gfc_get_sym_tree (name, NULL, &symtree);	/* Can't fail */
+      gfc_get_sym_tree (name, NULL, &symtree, false);	/* Can't fail */
 
       e = gfc_get_expr ();
       e->symtree = symtree;
@@ -2851,11 +3061,7 @@ match_variable (gfc_expr **result, int equiv_flag, int host_flag)
   switch (sym->attr.flavor)
     {
     case FL_VARIABLE:
-      if (sym->attr.is_protected && sym->attr.use_assoc)
-	{
-	  gfc_error ("Assigning to PROTECTED variable at %C");
-	  return MATCH_ERROR;
-	}
+      /* Everything is alright.  */
       break;
 
     case FL_UNKNOWN:
@@ -2887,36 +3093,36 @@ match_variable (gfc_expr **result, int equiv_flag, int host_flag)
 
     case FL_PARAMETER:
       if (equiv_flag)
-	gfc_error ("Named constant at %C in an EQUIVALENCE");
-      else
-	gfc_error ("Cannot assign to a named constant at %C");
-      return MATCH_ERROR;
+	{
+	  gfc_error ("Named constant at %C in an EQUIVALENCE");
+	  return MATCH_ERROR;
+	}
+      /* Otherwise this is checked for and an error given in the
+	 variable definition context checks.  */
       break;
 
     case FL_PROCEDURE:
       /* Check for a nonrecursive function result variable.  */
       if (sym->attr.function
-          && !sym->attr.external
-          && sym->result == sym
-          && ((sym == gfc_current_ns->proc_name
-               && sym == gfc_current_ns->proc_name->result)
-              || (gfc_current_ns->parent
-                  && sym == gfc_current_ns->parent->proc_name->result)
-              || (sym->attr.entry
-                  && sym->ns == gfc_current_ns)
-              || (sym->attr.entry
-                  && sym->ns == gfc_current_ns->parent)))
+	  && !sym->attr.external
+	  && sym->result == sym
+	  && (gfc_is_function_return_value (sym, gfc_current_ns)
+	      || (sym->attr.entry
+		  && sym->ns == gfc_current_ns)
+	      || (sym->attr.entry
+		  && sym->ns == gfc_current_ns->parent)))
 	{
 	  /* If a function result is a derived type, then the derived
 	     type may still have to be resolved.  */
 
 	  if (sym->ts.type == BT_DERIVED
-	      && gfc_use_derived (sym->ts.derived) == NULL)
+	      && gfc_use_derived (sym->ts.u.derived) == NULL)
 	    return MATCH_ERROR;
 	  break;
 	}
 
-      if (sym->attr.proc_pointer)
+      if (sym->attr.proc_pointer
+	  || replace_hidden_procptr_result (&sym, &st) == SUCCESS)
 	break;
 
       /* Fall through to error */
@@ -2940,7 +3146,7 @@ match_variable (gfc_expr **result, int equiv_flag, int host_flag)
 	
       if (gfc_peek_ascii_char () == '%'
 	  && sym->ts.type == BT_UNKNOWN
-	  && gfc_get_default_type (sym, implicit_ns)->type == BT_DERIVED)
+	  && gfc_get_default_type (sym->name, implicit_ns)->type == BT_DERIVED)
 	gfc_set_default_type (sym, 0, implicit_ns);
     }
 
@@ -2952,7 +3158,7 @@ match_variable (gfc_expr **result, int equiv_flag, int host_flag)
   expr->where = where;
 
   /* Now see if we have to do more.  */
-  m = gfc_match_varspec (expr, equiv_flag, false);
+  m = gfc_match_varspec (expr, equiv_flag, false, false);
   if (m != MATCH_YES)
     {
       gfc_free_expr (expr);

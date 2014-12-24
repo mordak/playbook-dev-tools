@@ -1,6 +1,6 @@
 /* Definitions of target machine for GNU compiler. NEC V850 series
    Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-   2007, 2008  Free Software Foundation, Inc.
+   2007, 2008, 2009, 2010  Free Software Foundation, Inc.
    Contributed by Jeff Law (law@cygnus.com).
 
    This file is part of GCC.
@@ -22,8 +22,12 @@
 #ifndef GCC_V850_H
 #define GCC_V850_H
 
-/* These are defined in svr4.h but we want to override them.  */
+extern GTY(()) rtx v850_compare_op0;
+extern GTY(()) rtx v850_compare_op1;
+
 #undef LIB_SPEC
+#define LIB_SPEC "%{!shared:%{!symbolic:--start-group -lc -lgcc --end-group}}"
+
 #undef ENDFILE_SPEC
 #undef LINK_SPEC
 #undef STARTFILE_SPEC
@@ -31,7 +35,10 @@
 
 #define TARGET_CPU_generic 	1
 #define TARGET_CPU_v850e   	2
-#define TARGET_CPU_v850e1  	3
+#define TARGET_CPU_v850e1	3
+#define TARGET_CPU_v850e2	4
+#define TARGET_CPU_v850e2v3	5
+
 
 #ifndef TARGET_CPU_DEFAULT
 #define TARGET_CPU_DEFAULT	TARGET_CPU_generic
@@ -58,17 +65,48 @@
 
 #if TARGET_CPU_DEFAULT == TARGET_CPU_v850e1
 #undef  MASK_DEFAULT
-#define MASK_DEFAULT            MASK_V850E	/* No practical difference.  */
+#define MASK_DEFAULT            MASK_V850E     /* No practical difference.  */     
 #undef  SUBTARGET_ASM_SPEC
-#define SUBTARGET_ASM_SPEC 	"%{!mv*:-mv850e1}"
+#define SUBTARGET_ASM_SPEC	"%{!mv*:-mv850e1}"
 #undef  SUBTARGET_CPP_SPEC
-#define SUBTARGET_CPP_SPEC 	"%{!mv*:-D__v850e1__} %{mv850e1:-D__v850e1__}"
+#define SUBTARGET_CPP_SPEC	"%{!mv*:-D__v850e1__} %{mv850e1:-D__v850e1__}"
 #undef  TARGET_VERSION
-#define TARGET_VERSION 		fprintf (stderr, " (NEC V850E1)");
+#define TARGET_VERSION		fprintf (stderr, " (NEC V850E1)");
 #endif
 
-#define ASM_SPEC "%{mv*:-mv%*}"
-#define CPP_SPEC		"%{mv850e:-D__v850e__} %{mv850:-D__v850__} %(subtarget_cpp_spec)"
+#if TARGET_CPU_DEFAULT == TARGET_CPU_v850e2
+#undef  MASK_DEFAULT
+#define MASK_DEFAULT            MASK_V850E2	
+#undef  SUBTARGET_ASM_SPEC
+#define SUBTARGET_ASM_SPEC 	"%{!mv*:-mv850e2}"
+#undef  SUBTARGET_CPP_SPEC
+#define SUBTARGET_CPP_SPEC 	"%{!mv*:-D__v850e2__} %{mv850e2:-D__v850e2__}"
+#undef  TARGET_VERSION
+#define TARGET_VERSION 		fprintf (stderr, " (NEC V850E2)");
+#endif
+
+#if TARGET_CPU_DEFAULT == TARGET_CPU_v850e2v3
+#undef  MASK_DEFAULT
+#define MASK_DEFAULT            MASK_V850E2V3
+#undef  SUBTARGET_ASM_SPEC
+#define SUBTARGET_ASM_SPEC	"%{!mv*:-mv850e2v3}"
+#undef  SUBTARGET_CPP_SPEC
+#define SUBTARGET_CPP_SPEC	"%{!mv*:-D__v850e2v3__} %{mv850e2v3:-D__v850e2v3__}"
+#undef  TARGET_VERSION
+#define TARGET_VERSION		fprintf (stderr, " (NEC V850E2V3)");
+#endif
+
+#define TARGET_V850E2_ALL      (TARGET_V850E2 || TARGET_V850E2V3) 
+
+#define ASM_SPEC "%{mv850es:-mv850e1}%{!mv850es:%{mv*:-mv%*}}"
+#define CPP_SPEC "\
+  %{mv850e2v3:-D__v850e2v3__} \
+  %{mv850e2:-D__v850e2__} \
+  %{mv850es:-D__v850e1__} \
+  %{mv850e1:-D__v850e1__} \
+  %{mv850:-D__v850__} \
+  %(subtarget_cpp_spec)" \
+  " %{mep:-D__EP__}"
 
 #define EXTRA_SPECS \
  { "subtarget_asm_spec", SUBTARGET_ASM_SPEC }, \
@@ -76,7 +114,7 @@
 
 /* Names to predefine in the preprocessor for this target machine.  */
 #define TARGET_CPU_CPP_BUILTINS() do {		\
-  builtin_define( "__v851__" );			\
+  builtin_define( "__v851__" );                        \
   builtin_define( "__v850" );			\
   builtin_assert( "machine=v850" );		\
   builtin_assert( "cpu=v850" );			\
@@ -104,43 +142,6 @@ enum small_memory_type {
 };
 
 extern struct small_memory_info small_memory[(int)SMALL_MEMORY_max];
-
-/* Show we can debug even without a frame pointer.  */
-#define CAN_DEBUG_WITHOUT_FP
-
-/* Some machines may desire to change what optimizations are
-   performed for various optimization levels.   This macro, if
-   defined, is executed once just after the optimization level is
-   determined and before the remainder of the command options have
-   been parsed.  Values set in this macro are used as the default
-   values for the other command line options.
-
-   LEVEL is the optimization level specified; 2 if `-O2' is
-   specified, 1 if `-O' is specified, and 0 if neither is specified.
-
-   SIZE is nonzero if `-Os' is specified, 0 otherwise.  
-
-   You should not use this macro to change options that are not
-   machine-specific.  These should uniformly selected by the same
-   optimization level on all supported machines.  Use this macro to
-   enable machine-specific optimizations.
-
-   *Do not examine `write_symbols' in this macro!* The debugging
-   options are not supposed to alter the generated code.  */
-
-#define OPTIMIZATION_OPTIONS(LEVEL,SIZE)				\
-{									\
-  target_flags |= MASK_STRICT_ALIGN;					\
-  if (LEVEL)								\
-    /* Note - we no longer enable MASK_EP when optimizing.  This is	\
-       because of a hardware bug which stops the SLD and SST instructions\
-       from correctly detecting some hazards.  If the user is sure that \
-       their hardware is fixed or that their program will not encounter \
-       the conditions that trigger the bug then they can enable -mep by \
-       hand.  */							\
-    target_flags |= MASK_PROLOG_FUNCTION;				\
-}
-
 
 /* Target machine storage layout */
 
@@ -196,12 +197,24 @@ extern struct small_memory_info small_memory[(int)SMALL_MEMORY_max];
 
 /* Define this if move instructions will actually fail to work
    when given unaligned data.  */
-#define STRICT_ALIGNMENT  TARGET_STRICT_ALIGN
+#define STRICT_ALIGNMENT  (!TARGET_NO_STRICT_ALIGN)
 
 /* Define this as 1 if `char' should by default be signed; else as 0.
 
    On the NEC V850, loads do sign extension, so make this default.  */
 #define DEFAULT_SIGNED_CHAR 1
+
+#undef  SIZE_TYPE
+#define SIZE_TYPE "unsigned int"
+
+#undef  PTRDIFF_TYPE
+#define PTRDIFF_TYPE "int"
+
+#undef  WCHAR_TYPE
+#define WCHAR_TYPE "long int"
+
+#undef  WCHAR_TYPE_SIZE
+#define WCHAR_TYPE_SIZE BITS_PER_WORD
 
 /* Standard register usage.  */
 
@@ -212,16 +225,17 @@ extern struct small_memory_info small_memory[(int)SMALL_MEMORY_max];
    All registers that the compiler knows about must be given numbers,
    even those that are not normally considered general registers.  */
 
-#define FIRST_PSEUDO_REGISTER 34
+#define FIRST_PSEUDO_REGISTER 36
 
 /* 1 for registers that have pervasive standard uses
    and are not available for the register allocator.  */
 
 #define FIXED_REGISTERS \
-  { 1, 1, 0, 1, 1, 0, 0, 0, \
+  { 1, 1, 1, 1, 1, 1, 0, 0, \
     0, 0, 0, 0, 0, 0, 0, 0, \
     0, 0, 0, 0, 0, 0, 0, 0, \
     0, 0, 0, 0, 0, 0, 1, 0, \
+    1, 1,	\
     1, 1}
 
 /* 1 for registers not available across function calls.
@@ -233,10 +247,11 @@ extern struct small_memory_info small_memory[(int)SMALL_MEMORY_max];
    like.  */
 
 #define CALL_USED_REGISTERS \
-  { 1, 1, 0, 1, 1, 1, 1, 1, \
+  { 1, 1, 1, 1, 1, 1, 1, 1, \
     1, 1, 1, 1, 1, 1, 1, 1, \
     1, 1, 1, 1, 0, 0, 0, 0, \
     0, 0, 0, 0, 0, 0, 1, 1, \
+    1, 1,	\
     1, 1}
 
 /* List the order in which to allocate registers.  Each register must be
@@ -254,18 +269,8 @@ extern struct small_memory_info small_memory[(int)SMALL_MEMORY_max];
    6,  7,  8,  9, 31,			/* argument registers */	\
   29, 28, 27, 26, 25, 24, 23, 22,	/* saved registers */		\
   21, 20,  2,								\
-   0,  1,  3,  4,  5, 30, 32, 33	/* fixed registers */		\
-}
-
-/* If TARGET_APP_REGS is not defined then add r2 and r5 to
-   the pool of fixed registers. See PR 14505.  */
-#define CONDITIONAL_REGISTER_USAGE  \
-{                                                       \
-  if (!TARGET_APP_REGS)                                 \
-    {                                                   \
-      fixed_regs[2] = 1;  call_used_regs[2] = 1;        \
-      fixed_regs[5] = 1;  call_used_regs[5] = 1;        \
-    }                                                   \
+   0,  1,  3,  4,  5, 30, 32, 33,      /* fixed registers */           \
+  34, 35								\
 }
 
 /* Return number of consecutive hard regs needed starting at reg REGNO
@@ -281,7 +286,7 @@ extern struct small_memory_info small_memory[(int)SMALL_MEMORY_max];
    MODE.  */
 
 #define HARD_REGNO_MODE_OK(REGNO, MODE) \
- ((((REGNO) & 1) == 0) || (GET_MODE_SIZE (MODE) <= 4))
+ ((GET_MODE_SIZE (MODE) <= 4) || (((REGNO) & 1) == 0 && (REGNO) != 0))
 
 /* Value is 1 if it is a good idea to tie two pseudo registers
    when one has mode MODE1 and one has mode MODE2.
@@ -313,7 +318,7 @@ extern struct small_memory_info small_memory[(int)SMALL_MEMORY_max];
    
 enum reg_class
 {
-  NO_REGS, GENERAL_REGS, ALL_REGS, LIM_REG_CLASSES
+  NO_REGS, GENERAL_REGS, EVEN_REGS, ALL_REGS, LIM_REG_CLASSES
 };
 
 #define N_REG_CLASSES (int) LIM_REG_CLASSES
@@ -326,17 +331,18 @@ enum reg_class
 /* Give names of register classes as strings for dump file.  */
 
 #define REG_CLASS_NAMES \
-{ "NO_REGS", "GENERAL_REGS", "ALL_REGS", "LIM_REGS" }
+{ "NO_REGS", "GENERAL_REGS", "EVEN_REGS", "ALL_REGS", "LIM_REGS" }
 
 /* Define which registers fit in which classes.
    This is an initializer for a vector of HARD_REG_SET
    of length N_REG_CLASSES.  */
 
-#define REG_CLASS_CONTENTS  		\
-{					\
-  { 0x00000000 }, /* NO_REGS      */	\
-  { 0xffffffff }, /* GENERAL_REGS */   	\
-  { 0xffffffff }, /* ALL_REGS 	*/	\
+#define REG_CLASS_CONTENTS                     \
+{                                              \
+  { 0x00000000,0x0 }, /* NO_REGS      */       \
+  { 0xffffffff,0x0 }, /* GENERAL_REGS */       \
+  { 0x55555554,0x0 }, /* EVEN_REGS */          \
+  { 0xffffffff,0x0 }, /* ALL_REGS      */      \
 }
 
 /* The same information, inverted:
@@ -344,16 +350,12 @@ enum reg_class
    reg number REGNO.  This could be a conditional expression
    or could index an array.  */
 
-#define REGNO_REG_CLASS(REGNO)  GENERAL_REGS
+#define REGNO_REG_CLASS(REGNO)  ((REGNO == CC_REGNUM || REGNO == FCC_REGNUM) ? NO_REGS : GENERAL_REGS)
 
 /* The class value for index registers, and the one for base regs.  */
 
 #define INDEX_REG_CLASS NO_REGS
 #define BASE_REG_CLASS  GENERAL_REGS
-
-/* Get reg_class from a letter such as appears in the machine description.  */
-
-#define REG_CLASS_FROM_LETTER(C) (NO_REGS)
 
 /* Macros to check register numbers against specific register classes.  */
 
@@ -363,17 +365,13 @@ enum reg_class
    Since they use reg_renumber, they are safe only once reg_renumber
    has been allocated, which happens in local-alloc.c.  */
  
-#define REGNO_OK_FOR_BASE_P(regno) \
-  ((regno) < FIRST_PSEUDO_REGISTER || reg_renumber[regno] >= 0)
+#define REGNO_OK_FOR_BASE_P(regno)             \
+  (((regno) < FIRST_PSEUDO_REGISTER            \
+    && (regno) != CC_REGNUM                    \
+    && (regno) != FCC_REGNUM)                  \
+   || reg_renumber[regno] >= 0)
 
 #define REGNO_OK_FOR_INDEX_P(regno) 0
-
-/* Given an rtx X being reloaded into a reg required to be
-   in class CLASS, return the class of reg to actually use.
-   In general this is just CLASS; but on some machines
-   in some cases it is preferable to use a more restrictive class.  */
-
-#define PREFERRED_RELOAD_CLASS(X,CLASS)  (CLASS)
 
 /* Return the maximum number of consecutive registers
    needed to represent mode MODE in a register of class CLASS.  */
@@ -381,62 +379,22 @@ enum reg_class
 #define CLASS_MAX_NREGS(CLASS, MODE)	\
   ((GET_MODE_SIZE (MODE) + UNITS_PER_WORD - 1) / UNITS_PER_WORD)
 
-/* The letters I, J, K, L, M, N, O, P in a register constraint string
-   can be used to stand for particular ranges of immediate operands.
-   This macro defines what the ranges are.
-   C is the letter, and VALUE is a constant value.
-   Return 1 if VALUE is in the range specified by C.  */
+/* Convenience wrappers around insn_const_int_ok_for_constraint.  */
 
-#define INT_7_BITS(VALUE) ((unsigned) (VALUE) + 0x40 < 0x80)
-#define INT_8_BITS(VALUE) ((unsigned) (VALUE) + 0x80 < 0x100)
-/* zero */
-#define CONST_OK_FOR_I(VALUE) ((VALUE) == 0)
-/* 5-bit signed immediate */
-#define CONST_OK_FOR_J(VALUE) ((unsigned) (VALUE) + 0x10 < 0x20)
-/* 16-bit signed immediate */
-#define CONST_OK_FOR_K(VALUE) ((unsigned) (VALUE) + 0x8000 < 0x10000)
-/* valid constant for movhi instruction.  */
+#define CONST_OK_FOR_I(VALUE) \
+  insn_const_int_ok_for_constraint (VALUE, CONSTRAINT_I)
+#define CONST_OK_FOR_J(VALUE) \
+  insn_const_int_ok_for_constraint (VALUE, CONSTRAINT_J)
+#define CONST_OK_FOR_K(VALUE) \
+  insn_const_int_ok_for_constraint (VALUE, CONSTRAINT_K)
 #define CONST_OK_FOR_L(VALUE) \
-  (((unsigned) ((int) (VALUE) >> 16) + 0x8000 < 0x10000) \
-   && CONST_OK_FOR_I ((VALUE & 0xffff)))
-/* 16-bit unsigned immediate */
-#define CONST_OK_FOR_M(VALUE) ((unsigned)(VALUE) < 0x10000)
-/* 5-bit unsigned immediate in shift instructions */
-#define CONST_OK_FOR_N(VALUE) ((unsigned) (VALUE) <= 31)
-/* 9-bit signed immediate for word multiply instruction.  */
-#define CONST_OK_FOR_O(VALUE) ((unsigned) (VALUE) + 0x100 < 0x200)
-
-#define CONST_OK_FOR_P(VALUE) 0
-
-#define CONST_OK_FOR_LETTER_P(VALUE, C)  \
-  ((C) == 'I' ? CONST_OK_FOR_I (VALUE) : \
-   (C) == 'J' ? CONST_OK_FOR_J (VALUE) : \
-   (C) == 'K' ? CONST_OK_FOR_K (VALUE) : \
-   (C) == 'L' ? CONST_OK_FOR_L (VALUE) : \
-   (C) == 'M' ? CONST_OK_FOR_M (VALUE) : \
-   (C) == 'N' ? CONST_OK_FOR_N (VALUE) : \
-   (C) == 'O' ? CONST_OK_FOR_O (VALUE) : \
-   (C) == 'P' ? CONST_OK_FOR_P (VALUE) : \
-   0)
-
-/* Similar, but for floating constants, and defining letters G and H.
-   Here VALUE is the CONST_DOUBLE rtx itself. 
-     
-  `G' is a zero of some form.  */
-
-#define CONST_DOUBLE_OK_FOR_G(VALUE)					\
-  ((GET_MODE_CLASS (GET_MODE (VALUE)) == MODE_FLOAT			\
-    && (VALUE) == CONST0_RTX (GET_MODE (VALUE)))			\
-   || (GET_MODE_CLASS (GET_MODE (VALUE)) == MODE_INT			\
-       && CONST_DOUBLE_LOW (VALUE) == 0					\
-       && CONST_DOUBLE_HIGH (VALUE) == 0))
-
-#define CONST_DOUBLE_OK_FOR_H(VALUE) 0
-
-#define CONST_DOUBLE_OK_FOR_LETTER_P(VALUE, C)				\
-  ((C) == 'G'   ? CONST_DOUBLE_OK_FOR_G (VALUE)				\
-   : (C) == 'H' ? CONST_DOUBLE_OK_FOR_H (VALUE)				\
-   : 0)
+  insn_const_int_ok_for_constraint (VALUE, CONSTRAINT_L)
+#define CONST_OK_FOR_M(VALUE) \
+  insn_const_int_ok_for_constraint (VALUE, CONSTRAINT_M)
+#define CONST_OK_FOR_N(VALUE) \
+  insn_const_int_ok_for_constraint (VALUE, CONSTRAINT_N)
+#define CONST_OK_FOR_O(VALUE) \
+  insn_const_int_ok_for_constraint (VALUE, CONSTRAINT_O)
 
 
 /* Stack layout; function entry, exit and calling.  */
@@ -470,13 +428,13 @@ enum reg_class
    The values of these macros are register numbers.  */
 
 /* Register to use for pushing function arguments.  */
-#define STACK_POINTER_REGNUM 3
+#define STACK_POINTER_REGNUM SP_REGNUM
 
 /* Base register for access to local variables of the function.  */
-#define FRAME_POINTER_REGNUM 32
+#define FRAME_POINTER_REGNUM 34
 
 /* Register containing return address from latest function call.  */
-#define LINK_POINTER_REGNUM 31
+#define LINK_POINTER_REGNUM LP_REGNUM
      
 /* On some machines the offset between the frame pointer and starting
    offset of the automatic variables is not known until after register
@@ -501,16 +459,10 @@ enum reg_class
 #define HARD_FRAME_POINTER_REGNUM 29
 
 /* Base register for access to arguments of the function.  */
-#define ARG_POINTER_REGNUM 33
+#define ARG_POINTER_REGNUM 35
 
 /* Register in which static-chain is passed to a function.  */
 #define STATIC_CHAIN_REGNUM 20
-
-/* Value should be nonzero if functions must have frame pointers.
-   Zero means the frame pointer need not be set up (and parms
-   may be accessed via the stack pointer) in functions that seem suitable.
-   This is computed in `reload', in reload1.c.  */
-#define FRAME_POINTER_REQUIRED 0
 
 /* If defined, this macro specifies a table of register pairs used to
    eliminate unneeded registers that point into the stack frame.  If
@@ -544,16 +496,6 @@ enum reg_class
  { ARG_POINTER_REGNUM,	 STACK_POINTER_REGNUM },			\
  { ARG_POINTER_REGNUM,   HARD_FRAME_POINTER_REGNUM }}			\
 
-/* A C expression that returns nonzero if the compiler is allowed to
-   try to replace register number FROM-REG with register number
-   TO-REG.  This macro need only be defined if `ELIMINABLE_REGS' is
-   defined, and will usually be the constant 1, since most of the
-   cases preventing register elimination are things that the compiler
-   already knows about.  */
-
-#define CAN_ELIMINATE(FROM, TO) \
- ((TO) == STACK_POINTER_REGNUM ? ! frame_pointer_needed : 1)
-
 /* This macro is similar to `INITIAL_FRAME_POINTER_OFFSET'.  It
    specifies the initial difference between the specified pair of
    registers.  This macro must be defined if `ELIMINABLE_REGS' is
@@ -572,15 +514,6 @@ enum reg_class
 /* Keep the stack pointer constant throughout the function.  */
 #define ACCUMULATE_OUTGOING_ARGS 1
 
-/* Value is the number of bytes of arguments automatically
-   popped when returning from a subroutine call.
-   FUNDECL is the declaration node of the function (as a tree),
-   FUNTYPE is the data type of the function (as a tree),
-   or for a library call it is an identifier node for the subroutine name.
-   SIZE is the number of bytes of arguments passed on the stack.  */
-
-#define RETURN_POPS_ARGS(FUNDECL,FUNTYPE,SIZE) 0
-
 #define RETURN_ADDR_RTX(COUNT, FP) v850_return_addr (COUNT)
 
 /* Define a data type for recording info about an argument list
@@ -592,22 +525,6 @@ enum reg_class
 #define CUMULATIVE_ARGS struct cum_arg
 struct cum_arg { int nbytes; int anonymous_args; };
 
-/* Define where to put the arguments to a function.
-   Value is zero to push the argument on the stack,
-   or a hard register in which to store the argument.
-
-   MODE is the argument's machine mode.
-   TYPE is the data type of the argument (as a tree).
-    This is null for libcalls where that information may
-    not be available.
-   CUM is a variable of type CUMULATIVE_ARGS which gives info about
-    the preceding args and about the function being called.
-   NAMED is nonzero if this argument is a named parameter
-    (otherwise it is an extra parameter matching an ellipsis).  */
-
-#define FUNCTION_ARG(CUM, MODE, TYPE, NAMED) \
-  function_arg (&CUM, MODE, TYPE, NAMED)
-
 /* Initialize a variable CUM of type CUMULATIVE_ARGS
    for a call to a function whose data type is FNTYPE.
    For a library call, FNTYPE is 0.  */
@@ -615,44 +532,19 @@ struct cum_arg { int nbytes; int anonymous_args; };
 #define INIT_CUMULATIVE_ARGS(CUM, FNTYPE, LIBNAME, INDIRECT, N_NAMED_ARGS) \
  ((CUM).nbytes = 0, (CUM).anonymous_args = 0)
 
-/* Update the data in CUM to advance over an argument
-   of mode MODE and data type TYPE.
-   (TYPE is null for libcalls where that information may not be available.)  */
-
-#define FUNCTION_ARG_ADVANCE(CUM, MODE, TYPE, NAMED)	\
- ((CUM).nbytes += ((MODE) != BLKmode			\
-  ? (GET_MODE_SIZE (MODE) + UNITS_PER_WORD - 1) & -UNITS_PER_WORD	\
-  : (int_size_in_bytes (TYPE) + UNITS_PER_WORD - 1) & -UNITS_PER_WORD))
-
 /* When a parameter is passed in a register, stack space is still
    allocated for it.  */
-#define REG_PARM_STACK_SPACE(DECL) (!TARGET_GHS ? 16 : 0)
-
-/* Define this if the above stack space is to be considered part of the
-   space allocated by the caller.  */
-#define OUTGOING_REG_PARM_STACK_SPACE(FNTYPE) 1
+#define REG_PARM_STACK_SPACE(DECL) 0
 
 /* 1 if N is a possible register number for function argument passing.  */
 
 #define FUNCTION_ARG_REGNO_P(N) (N >= 6 && N <= 9)
-
-/* Define how to find the value returned by a function.
-   VALTYPE is the data type of the value (as a tree).
-   If the precise function being called is known, FUNC is its FUNCTION_DECL;
-   otherwise, FUNC is 0.  */
-   
-#define FUNCTION_VALUE(VALTYPE, FUNC) \
-  gen_rtx_REG (TYPE_MODE (VALTYPE), 10)
 
 /* Define how to find the value returned by a library function
    assuming the value has mode MODE.  */
 
 #define LIBCALL_VALUE(MODE) \
   gen_rtx_REG (MODE, 10)
-
-/* 1 if N is a possible register number for a function value.  */
-
-#define FUNCTION_VALUE_REGNO_P(N) ((N) == 10)
 
 #define DEFAULT_PCC_STRUCT_RETURN 0
 
@@ -674,32 +566,9 @@ struct cum_arg { int nbytes; int anonymous_args; };
 
 #define FUNCTION_PROFILER(FILE, LABELNO) ;
 
-#define TRAMPOLINE_TEMPLATE(FILE)			\
-  do {							\
-    fprintf (FILE, "\tjarl .+4,r12\n");			\
-    fprintf (FILE, "\tld.w 12[r12],r20\n");		\
-    fprintf (FILE, "\tld.w 16[r12],r12\n");		\
-    fprintf (FILE, "\tjmp [r12]\n");			\
-    fprintf (FILE, "\tnop\n");				\
-    fprintf (FILE, "\t.long 0\n");			\
-    fprintf (FILE, "\t.long 0\n");			\
-  } while (0)
-
 /* Length in units of the trampoline for entering a nested function.  */
 
 #define TRAMPOLINE_SIZE 24
-
-/* Emit RTL insns to initialize the variable parts of a trampoline.
-   FNADDR is an RTX for the address of the function's pure code.
-   CXT is an RTX for the static chain value for the function.  */
-
-#define INITIALIZE_TRAMPOLINE(TRAMP, FNADDR, CXT)			\
-{									\
-  emit_move_insn (gen_rtx_MEM (SImode, plus_constant ((TRAMP), 16)),	\
- 		 (CXT));						\
-  emit_move_insn (gen_rtx_MEM (SImode, plus_constant ((TRAMP), 20)),	\
-		 (FNADDR));						\
-}
 
 /* Addressing modes, and classification of registers for them.  */
 
@@ -709,9 +578,7 @@ struct cum_arg { int nbytes; int anonymous_args; };
 /* ??? This seems too exclusive.  May get better code by accepting more
    possibilities here, in particular, should accept ZDA_NAME SYMBOL_REFs.  */
 
-#define CONSTANT_ADDRESS_P(X)   \
-  (GET_CODE (X) == CONST_INT				\
-   && CONST_OK_FOR_K (INTVAL (X)))
+#define CONSTANT_ADDRESS_P(X) constraint_satisfied_p (X, CONSTRAINT_K)
 
 /* Maximum number of registers that can appear in a valid memory address.  */
 
@@ -752,36 +619,6 @@ struct cum_arg { int nbytes; int anonymous_args; };
 
 #endif
 
-/* A C expression that defines the optional machine-dependent
-   constraint letters that can be used to segregate specific types of
-   operands, usually memory references, for the target machine.
-   Normally this macro will not be defined.  If it is required for a
-   particular target machine, it should return 1 if VALUE corresponds
-   to the operand type represented by the constraint letter C.  If C
-   is not defined as an extra constraint, the value returned should
-   be 0 regardless of VALUE.
-
-   For example, on the ROMP, load instructions cannot have their
-   output in r0 if the memory reference contains a symbolic address.
-   Constraint letter `Q' is defined as representing a memory address
-   that does *not* contain a symbolic address.  An alternative is
-   specified with a `Q' constraint on the input and `r' on the
-   output.  The next alternative specifies `m' on the input and a
-   register class that does not include r0 on the output.  */
-
-#define EXTRA_CONSTRAINT(OP, C)						\
- ((C) == 'Q'   ? ep_memory_operand (OP, GET_MODE (OP), FALSE)		\
-  : (C) == 'R' ? special_symbolref_operand (OP, VOIDmode)		\
-  : (C) == 'S' ? (GET_CODE (OP) == SYMBOL_REF				\
-		  && !SYMBOL_REF_ZDA_P (OP))				\
-  : (C) == 'T' ? ep_memory_operand (OP, GET_MODE (OP), TRUE)		\
-  : (C) == 'U' ? ((GET_CODE (OP) == SYMBOL_REF				\
-		   && SYMBOL_REF_ZDA_P (OP))				\
-		  || (GET_CODE (OP) == CONST				\
-		      && GET_CODE (XEXP (OP, 0)) == PLUS		\
-		      && GET_CODE (XEXP (XEXP (OP, 0), 0)) == SYMBOL_REF \
-		      && SYMBOL_REF_ZDA_P (XEXP (XEXP (OP, 0), 0))))	\
-  : 0)
 
 /* GO_IF_LEGITIMATE_ADDRESS recognizes an RTL expression
    that is a valid memory address for an instruction.
@@ -821,7 +658,7 @@ do {									\
      goto ADDR;								\
   if (GET_CODE (X) == PLUS						\
       && RTX_OK_FOR_BASE_P (XEXP (X, 0)) 				\
-      && CONSTANT_ADDRESS_P (XEXP (X, 1))				\
+      && constraint_satisfied_p (XEXP (X,1), CONSTRAINT_K)		\
       && ((MODE == QImode || INTVAL (XEXP (X, 1)) % 2 == 0)		\
 	   && CONST_OK_FOR_K (INTVAL (XEXP (X, 1)) 			\
                               + (GET_MODE_NUNITS (MODE) * UNITS_PER_WORD)))) \
@@ -829,11 +666,6 @@ do {									\
 } while (0)
 
 
-/* Go to LABEL if ADDR (a legitimate address expression)
-   has an effect that depends on the machine mode it is used for.  */
-
-#define GO_IF_MODE_DEPENDENT_ADDRESS(ADDR,LABEL)  {}
-
 /* Nonzero if the constant value X is a legitimate general operand.
    It is given that X satisfies CONSTANT_P or is a CONST_DOUBLE.  */
 
@@ -844,7 +676,18 @@ do {									\
 	&& GET_CODE (XEXP (XEXP (X, 0), 0)) == SYMBOL_REF		\
 	&& GET_CODE (XEXP (XEXP (X, 0), 1)) == CONST_INT		\
 	&& ! CONST_OK_FOR_K (INTVAL (XEXP (XEXP (X, 0), 1)))))
-
+
+/* Given a comparison code (EQ, NE, etc.) and the first operand of a COMPARE,
+   return the mode to be used for the comparison.
+
+   For floating-point equality comparisons, CCFPEQmode should be used.
+   VOIDmode should be used in all other cases.
+
+   For integer comparisons against zero, reduce to CCNOmode or CCZmode if
+   possible, to allow for more combinations.  */
+
+#define SELECT_CC_MODE(OP, X, Y)       v850_select_cc_mode (OP, X, Y)
+
 /* Tell final.c how to eliminate redundant test instructions.  */
 
 /* Here we define machine-dependent flags and fields in cc_status
@@ -950,38 +793,25 @@ typedef enum
 /* How to refer to registers in assembler output.
    This sequence is indexed by compiler's hard-register-number (see above).  */
 
-#define REGISTER_NAMES							\
-{  "r0",  "r1",  "r2",  "sp",  "gp",  "r5",  "r6" , "r7",		\
-   "r8",  "r9", "r10", "r11", "r12", "r13", "r14", "r15",		\
-  "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23",		\
-  "r24", "r25", "r26", "r27", "r28", "r29",  "ep", "r31",		\
+#define REGISTER_NAMES                                         \
+{  "r0",  "r1",  "r2",  "sp",  "gp",  "r5",  "r6" , "r7",      \
+   "r8",  "r9", "r10", "r11", "r12", "r13", "r14", "r15",      \
+  "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23",      \
+  "r24", "r25", "r26", "r27", "r28", "r29",  "ep", "r31",      \
+  "psw", "fcc",      \
   ".fp", ".ap"}
 
-#define ADDITIONAL_REGISTER_NAMES					\
-{ { "zero",	0 },							\
-  { "hp",	2 },							\
-  { "r3",	3 },							\
-  { "r4",	4 },							\
-  { "tp",	5 },							\
-  { "fp",	29 },							\
-  { "r30",	30 },							\
-  { "lp",	31} }
+/* Register numbers */
 
-/* Print an instruction operand X on file FILE.
-   look in v850.c for details */
-
-#define PRINT_OPERAND(FILE, X, CODE)  print_operand (FILE, X, CODE)
-
-#define PRINT_OPERAND_PUNCT_VALID_P(CODE) \
-  ((CODE) == '.')
-
-/* Print a memory operand whose address is X, on file FILE.
-   This uses a function in output-vax.c.  */
-
-#define PRINT_OPERAND_ADDRESS(FILE, ADDR) print_operand_address (FILE, ADDR)
-
-#define ASM_OUTPUT_REG_PUSH(FILE,REGNO)
-#define ASM_OUTPUT_REG_POP(FILE,REGNO)
+#define ADDITIONAL_REGISTER_NAMES              \
+{ { "zero",    ZERO_REGNUM },                  \
+  { "hp",      2 },                            \
+  { "r3",      3 },                            \
+  { "r4",      4 },                            \
+  { "tp",      5 },                            \
+  { "fp",      29 },                           \
+  { "r30",     30 },                           \
+  { "lp",      LP_REGNUM} }
 
 /* This is how to output an element of a case-vector that is absolute.  */
 
@@ -993,12 +823,13 @@ typedef enum
 
 /* Disable the shift, which is for the currently disabled "switch"
    opcode.  Se casesi in v850.md.  */
+
 #define ASM_OUTPUT_ADDR_DIFF_ELT(FILE, BODY, VALUE, REL) 		\
   fprintf (FILE, "\t%s %s.L%d-.L%d%s\n",				\
 	   (TARGET_BIG_SWITCH ? ".long" : ".short"),			\
-	   (0 && ! TARGET_BIG_SWITCH && TARGET_V850E ? "(" : ""),		\
+	   (0 && ! TARGET_BIG_SWITCH && (TARGET_V850E || TARGET_V850E2_ALL) ? "(" : ""),             \
 	   VALUE, REL,							\
-	   (0 && ! TARGET_BIG_SWITCH && TARGET_V850E ? ")>>1" : ""))
+	   (0 && ! TARGET_BIG_SWITCH && (TARGET_V850E || TARGET_V850E2_ALL) ? ")>>1" : ""))
 
 #define ASM_OUTPUT_ALIGN(FILE, LOG)	\
   if ((LOG) != 0)			\
@@ -1023,9 +854,8 @@ typedef enum
 
 /* The switch instruction requires that the jump table immediately follow
    it.  */
-#define JUMP_TABLES_IN_TEXT_SECTION 1
+#define JUMP_TABLES_IN_TEXT_SECTION (!TARGET_JUMP_TABLES_IN_DATA_SECTION)
 
-/* svr4.h defines this assuming that 4 byte alignment is required.  */
 #undef ASM_OUTPUT_BEFORE_CASE_LABEL
 #define ASM_OUTPUT_BEFORE_CASE_LABEL(FILE,PREFIX,NUM,TABLE) \
   ASM_OUTPUT_ALIGN ((FILE), (TARGET_BIG_SWITCH ? 2 : 1));
@@ -1147,5 +977,11 @@ extern union tree_node * GHS_current_section_names [(int) COUNT_OF_GHS_SECTION_K
 #define SYMBOL_REF_SDA_P(X)	((SYMBOL_REF_FLAGS (X) & SYMBOL_FLAG_SDA) != 0)
 
 #define TARGET_ASM_INIT_SECTIONS v850_asm_init_sections
+
+/* Define this so that the cc1plus will not think that system header files
+   need an implicit 'extern "C" { ... }' assumed.  This breaks testing C++
+   in a build directory where the libstdc++ header files are found via a
+   -isystem <path-to-build-dir>.  */
+#define NO_IMPLICIT_EXTERN_C
 
 #endif /* ! GCC_V850_H */

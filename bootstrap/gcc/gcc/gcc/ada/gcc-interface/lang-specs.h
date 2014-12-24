@@ -6,7 +6,7 @@
  *                                                                          *
  *                              C Header File                               *
  *                                                                          *
- *           Copyright (C) 1992-2008, Free Software Foundation, Inc.        *
+ *           Copyright (C) 1992-2010, Free Software Foundation, Inc.        *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -35,11 +35,9 @@
  gnat1 %{I*} %{k8:-gnatk8} %{Wall:-gnatwa} %{w:-gnatws} %{!Q:-quiet}\
     %{nostdinc*} %{nostdlib*}\
     -dumpbase %{.adb:%b.adb}%{.ads:%b.ads}%{!.adb:%{!.ads:%b.ada}}\
-    %{O*} %{W*} %{w} %{p} %{pg:-p} %{a} %{d*} %{f*}\
+    %{c|S:%{o*:-auxbase-strip %*}%{!o*:-auxbase %b}}%{!c:%{!S:-auxbase %b}} \
+    %{O*} %{W*} %{w} %{p} %{pg:-p} %{d*} %{f*}\
     %{coverage:-fprofile-arcs -ftest-coverage} "
-#if CONFIG_DUAL_EXCEPTIONS
-   "%{fRTS=sjlj:-fsjlj} "
-#endif
    "%{gnatea:-gnatez} %{g*&m*} "
 #if defined(TARGET_VXWORKS_RTP)
    "%{fRTS=rtp:-mrtp} "

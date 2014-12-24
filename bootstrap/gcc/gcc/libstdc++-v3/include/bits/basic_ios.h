@@ -1,7 +1,7 @@
 // Iostreams base classes -*- C++ -*-
 
 // Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-// 2006, 2007, 2008, 2009
+// 2006, 2007, 2008, 2009, 2010, 2011
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -24,9 +24,9 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file basic_ios.h
+/** @file bits/basic_ios.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{ios}
  */
 
 #ifndef _BASIC_IOS_H
@@ -39,7 +39,9 @@
 #include <bits/locale_facets.h>
 #include <bits/streambuf_iterator.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   template<typename _Facet>
     inline const _Facet&
@@ -106,7 +108,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *  @brief  The quick-and-easy status check.
        *
        *  This allows you to write constructs such as
-       *  "if (!a_stream) ..." and "while (a_stream) ..."
+       *  <code>if (!a_stream) ...</code> and <code>while (a_stream) ...</code>
       */
       operator void*() const
       { return this->fail() ? 0 : const_cast<basic_ios*>(this); }
@@ -351,7 +353,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       copyfmt(const basic_ios& __rhs);
 
       /**
-       *  @brief  Retrieves the "empty" character.
+       *  @brief  Retrieves the @a empty character.
        *  @return  The current fill character.
        *
        *  It defaults to a space (' ') in the current locale.
@@ -368,7 +370,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       }
 
       /**
-       *  @brief  Sets a new "empty" character.
+       *  @brief  Sets a new @a empty character.
        *  @param  ch  The new character.
        *  @return  The previous fill character.
        *
@@ -465,10 +467,9 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       _M_cache_locale(const locale& __loc);
     };
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
-#ifndef _GLIBCXX_EXPORT_TEMPLATE
 #include <bits/basic_ios.tcc>
-#endif
 
 #endif /* _BASIC_IOS_H */

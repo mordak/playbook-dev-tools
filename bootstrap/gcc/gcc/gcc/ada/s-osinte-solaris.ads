@@ -7,7 +7,7 @@
 --                                  S p e c                                 --
 --                                                                          --
 --             Copyright (C) 1991-1994, Florida State University            --
---          Copyright (C) 1995-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1995-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -168,15 +168,6 @@ package System.OS_Interface is
    --  More analysis is needed, after which these declarations may need to
    --  be changed.
 
-   FPE_INTDIV  : constant := 1; --  integer divide by zero
-   FPE_INTOVF  : constant := 2; --  integer overflow
-   FPE_FLTDIV  : constant := 3; --  floating point divide by zero
-   FPE_FLTOVF  : constant := 4; --  floating point overflow
-   FPE_FLTUND  : constant := 5; --  floating point underflow
-   FPE_FLTRES  : constant := 6; --  floating point inexact result
-   FPE_FLTINV  : constant := 7; --  invalid floating point operation
-   FPE_FLTSUB  : constant := 8; --  subscript out of range
-
    type greg_t is new int;
 
    type gregset_t is array (0 .. 18) of greg_t;
@@ -271,16 +262,6 @@ package System.OS_Interface is
 
    function To_Timespec (D : Duration) return timespec;
    pragma Inline (To_Timespec);
-
-   type struct_timeval is private;
-   --  This is needed on systems that do not have clock_gettime()
-   --  but do have gettimeofday().
-
-   function To_Duration (TV : struct_timeval) return Duration;
-   pragma Inline (To_Duration);
-
-   function To_Timeval (D : Duration) return struct_timeval;
-   pragma Inline (To_Timeval);
 
    -------------
    -- Process --
@@ -536,12 +517,6 @@ private
 
    type clockid_t is new int;
    CLOCK_REALTIME : constant clockid_t := 0;
-
-   type struct_timeval is record
-      tv_sec  : long;
-      tv_usec : long;
-   end record;
-   pragma Convention (C, struct_timeval);
 
    type array_type_9 is array (0 .. 3) of unsigned_char;
    type record_type_3 is record

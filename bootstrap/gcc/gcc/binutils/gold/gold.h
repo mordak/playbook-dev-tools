@@ -1,6 +1,6 @@
 // gold.h -- general definitions for gold   -*- C++ -*-
 
-// Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -27,13 +27,16 @@
 #include "ansidecl.h"
 
 #include <cstddef>
+#include <cstdlib>
+#include <cstring>
+#include <stdint.h>
 #include <sys/types.h>
 
 #ifndef ENABLE_NLS
   // The Solaris version of locale.h always includes libintl.h.  If we
   // have been configured with --disable-nls then ENABLE_NLS will not
   // be defined and the dummy definitions of bindtextdomain (et al)
-  // below will conflict with the defintions in libintl.h.  So we
+  // below will conflict with the definitions in libintl.h.  So we
   // define these values to prevent the bogus inclusion of libintl.h.
 # define _LIBINTL_H
 # define _LIBGETTEXT_H
@@ -63,7 +66,8 @@
 
 // Figure out how to get a hash set and a hash map.
 
-#if defined(HAVE_TR1_UNORDERED_SET) && defined(HAVE_TR1_UNORDERED_MAP)
+#if defined(HAVE_TR1_UNORDERED_SET) && defined(HAVE_TR1_UNORDERED_MAP) \
+    && defined(HAVE_TR1_UNORDERED_MAP_REHASH)
 
 #include <tr1/unordered_set>
 #include <tr1/unordered_map>
@@ -72,6 +76,9 @@
 
 #define Unordered_set std::tr1::unordered_set
 #define Unordered_map std::tr1::unordered_map
+#define Unordered_multimap std::tr1::unordered_multimap
+
+#define reserve_unordered_map(map, n) ((map)->rehash(n))
 
 #elif defined(HAVE_EXT_HASH_MAP) && defined(HAVE_EXT_HASH_SET)
 
@@ -81,6 +88,7 @@
 
 #define Unordered_set __gnu_cxx::hash_set
 #define Unordered_map __gnu_cxx::hash_map
+#define Unordered_multimap __gnu_cxx::hash_multimap
 
 namespace __gnu_cxx
 {
@@ -103,6 +111,8 @@ struct hash<T*>
 
 }
 
+#define reserve_unordered_map(map, n) ((map)->resize(n))
+
 #else
 
 // The fallback is to just use set and map.
@@ -112,11 +122,30 @@ struct hash<T*>
 
 #define Unordered_set std::set
 #define Unordered_map std::map
+#define Unordered_multimap std::multimap
+
+#define reserve_unordered_map(map, n)
 
 #endif
 
 #ifndef HAVE_PREAD
 extern "C" ssize_t pread(int, void*, size_t, off_t);
+#endif
+
+#ifndef HAVE_FTRUNCATE
+extern "C" int ftruncate(int, off_t);
+#endif
+
+#ifndef HAVE_FFSLL
+extern "C" int ffsll(long long);
+#endif
+
+#if !HAVE_DECL_MEMMEM
+extern "C" void *memmem(const void *, size_t, const void *, size_t);
+#endif
+
+#if !HAVE_DECL_STRNDUP
+extern "C" char *strndup(const char *, size_t);
 #endif
 
 namespace gold
@@ -126,7 +155,6 @@ namespace gold
 
 class General_options;
 class Command_line;
-class Input_argument_list;
 class Dirsearch;
 class Input_objects;
 class Mapfile;
@@ -138,6 +166,15 @@ class Workqueue;
 class Output_file;
 template<int size, bool big_endian>
 struct Relocate_info;
+
+// Exit status codes.
+
+enum Exit_status
+{
+  GOLD_OK = EXIT_SUCCESS,
+  GOLD_ERR = EXIT_FAILURE,
+  GOLD_FALLBACK = EXIT_FAILURE + 1
+};
 
 // Some basic types.  For these we use lower case initial letters.
 
@@ -156,7 +193,7 @@ extern const char* program_name;
 // This function is called to exit the program.  Status is true to
 // exit success (0) and false to exit failure (1).
 extern void
-gold_exit(bool status) ATTRIBUTE_NORETURN;
+gold_exit(Exit_status status) ATTRIBUTE_NORETURN;
 
 // This function is called to emit an error message and then
 // immediately exit with failure.
@@ -175,6 +212,13 @@ gold_warning(const char* msg, ...) ATTRIBUTE_PRINTF_1;
 // This function is called to print an informational message.
 extern void
 gold_info(const char* msg, ...) ATTRIBUTE_PRINTF_1;
+
+// This function is called to emit an error message and then
+// immediately exit with fallback status (e.g., when
+// --incremental-update fails and the link needs to be restarted
+// with --incremental-full).
+extern void
+gold_fallback(const char* format, ...) ATTRIBUTE_NORETURN ATTRIBUTE_PRINTF_1;
 
 // Work around a bug in gcc 4.3.0.  http://gcc.gnu.org/PR35546 .  This
 // can probably be removed after the bug has been fixed for a while.
@@ -200,22 +244,43 @@ gold_warning_at_location(const Relocate_info<size, big_endian>*,
 			 size_t, off_t, const char* format, ...)
   TEMPLATE_ATTRIBUTE_PRINTF_4;
 
-// This function is called to report an undefined symbol.
+// This function is called to report an undefined symbol without
+// a relocation (e.g., referenced by a dynamic object).  SYM is
+// the undefined symbol.  The file name associated with the SYM
+// is used to print a location for the undefined symbol.
+extern void
+gold_undefined_symbol(const Symbol*);
+
+// This function is called to report an undefined symbol resulting
+// from a relocation.  SYM is the undefined symbol.  RELINFO is the
+// general relocation info.  RELNUM is the number of the reloc,
+// and RELOFFSET is the reloc's offset.
 template<int size, bool big_endian>
 extern void
-gold_undefined_symbol(const Symbol*,
-		      const Relocate_info<size, big_endian>*,
-		      size_t, off_t);
+gold_undefined_symbol_at_location(const Symbol*,
+		                  const Relocate_info<size, big_endian>*,
+		                  size_t, off_t);
 
 // This is function is called in some cases if we run out of memory.
 extern void
 gold_nomem() ATTRIBUTE_NORETURN;
 
+// In versions of gcc before 4.3, using __FUNCTION__ in a template
+// function can cause gcc to get confused about whether or not the
+// function can return.  See http://gcc.gnu.org/PR30988.  Use a macro
+// to avoid the problem.  This can be removed when we no longer need
+// to care about gcc versions before 4.3.
+#if defined(__GNUC__) && GCC_VERSION < 4003
+#define FUNCTION_NAME static_cast<const char*>(__FUNCTION__)
+#else 
+#define FUNCTION_NAME __FUNCTION__
+#endif
+
 // This macro and function are used in cases which can not arise if
 // the code is written correctly.
 
 #define gold_unreachable() \
-  (gold::do_gold_unreachable(__FILE__, __LINE__, __FUNCTION__))
+  (gold::do_gold_unreachable(__FILE__, __LINE__, FUNCTION_NAME))
 
 extern void do_gold_unreachable(const char*, int, const char*)
   ATTRIBUTE_NORETURN;
@@ -259,6 +324,18 @@ queue_initial_tasks(const General_options&,
 		    Layout*,
 		    Mapfile*);
 
+// Queue up the set of tasks to be done before
+// the middle set of tasks.  Only used when garbage
+// collection is to be done.
+extern void
+queue_middle_gc_tasks(const General_options&,
+                      const Task*,
+                      const Input_objects*,
+                      Symbol_table*,
+                      Layout*,
+                      Workqueue*,
+                      Mapfile*);
+
 // Queue up the middle set of tasks.
 extern void
 queue_middle_tasks(const General_options&,
@@ -277,6 +354,73 @@ queue_final_tasks(const General_options&,
 		  Layout*,
 		  Workqueue*,
 		  Output_file* of);
+
+inline bool
+is_prefix_of(const char* prefix, const char* str)
+{
+  return strncmp(prefix, str, strlen(prefix)) == 0;
+}
+
+const char* const cident_section_start_prefix = "__start_";
+const char* const cident_section_stop_prefix = "__stop_";
+
+// Returns true if the name is a valid C identifier
+inline bool
+is_cident(const char* name)
+{
+  return (name[strspn(name,
+	 	      ("0123456789"
+		       "ABCDEFGHIJKLMNOPWRSTUVWXYZ"
+		       "abcdefghijklmnopqrstuvwxyz"
+		       "_"))]
+	  == '\0');
+}
+
+// We sometimes need to hash strings.  Ideally we should use std::tr1::hash or
+// __gnu_cxx::hash on some systems but there is no guarantee that either
+// one is available.  For portability, we define simple string hash functions.
+
+template<typename Char_type>
+inline size_t
+string_hash(const Char_type* s, size_t length)
+{
+  // This is the hash function used by the dynamic linker for
+  // DT_GNU_HASH entries.  I compared this to a Fowler/Noll/Vo hash
+  // for a C++ program with 385,775 global symbols.  This hash
+  // function was very slightly worse.  However, it is much faster to
+  // compute.  Overall wall clock time was a win.
+  const unsigned char* p = reinterpret_cast<const unsigned char*>(s);
+  size_t h = 5381;
+  for (size_t i = 0; i < length * sizeof(Char_type); ++i)
+    h = h * 33 + *p++;
+  return h;
+}
+
+// Same as above except we expect the string to be zero terminated.
+
+template<typename Char_type>
+inline size_t
+string_hash(const Char_type* s)
+{
+  const unsigned char* p = reinterpret_cast<const unsigned char*>(s);
+  size_t h = 5381;
+  for (size_t i = 0; s[i] != 0; ++i)
+    {
+      for (size_t j = 0; j < sizeof(Char_type); j++)
+	h = h * 33 + *p++;
+    }
+
+  return h;
+}
+
+// Return whether STRING contains a wildcard character.  This is used
+// to speed up matching.
+
+inline bool
+is_wildcard_string(const char* s)
+{
+  return strpbrk(s, "?*[") != NULL;
+}
 
 } // End namespace gold.
 

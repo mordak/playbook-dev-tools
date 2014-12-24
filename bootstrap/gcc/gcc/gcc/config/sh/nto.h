@@ -122,8 +122,8 @@ do                                                                     \
 #define LINK_SPEC \
 "%{!mb:-EL}%{mb:-EB} -z now %{!mb:-m shlelf_nto}%{mb:-m shelf_nto} \
  %{mrelax:-relax} -YP,%$QNX_TARGET/lib -YP,%$QNX_TARGET/usr/lib \
- %{MAP:-Map mapfile} %{static:-dn -Bstatic} %{shared:-G -dy -z text} \
- %{symbolic: -Bsymbolic -G -dy -z text} %{G:-G} \
+ %{MAP:-Map mapfile} %{static:-dn -Bstatic} %{shared:-G -dy} \
+ %{symbolic: -Bsymbolic -G -dy} %{G:-G} \
  %{!shared: --dynamic-linker /usr/lib/ldqnx.so.2}"
 
 #undef  LIB_SPEC

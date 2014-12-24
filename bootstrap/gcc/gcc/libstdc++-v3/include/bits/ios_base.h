@@ -1,7 +1,7 @@
 // Iostreams base classes -*- C++ -*-
 
 // Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-// 2006, 2007, 2008, 2009
+// 2006, 2007, 2008, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -24,9 +24,9 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file ios_base.h
+/** @file bits/ios_base.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{ios}
  */
 
 //
@@ -42,16 +42,9 @@
 #include <bits/localefwd.h>
 #include <bits/locale_classes.h>
 
-#ifndef _GLIBCXX_STDIO_MACROS
-# include <cstdio>   // For SEEK_CUR, SEEK_END
-# define _IOS_BASE_SEEK_CUR SEEK_CUR
-# define _IOS_BASE_SEEK_END SEEK_END
-#else
-# define _IOS_BASE_SEEK_CUR 1
-# define _IOS_BASE_SEEK_END 2
-#endif
-
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   // The following definitions of bitmask types are enums, not ints,
   // as permitted (but not required) in the standard, in order to provide
@@ -80,33 +73,33 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       _S_ios_fmtflags_end = 1L << 16 
     };
 
-  inline _Ios_Fmtflags
+  inline _GLIBCXX_CONSTEXPR _Ios_Fmtflags
   operator&(_Ios_Fmtflags __a, _Ios_Fmtflags __b)
   { return _Ios_Fmtflags(static_cast<int>(__a) & static_cast<int>(__b)); }
 
-  inline _Ios_Fmtflags
+  inline _GLIBCXX_CONSTEXPR _Ios_Fmtflags
   operator|(_Ios_Fmtflags __a, _Ios_Fmtflags __b)
   { return _Ios_Fmtflags(static_cast<int>(__a) | static_cast<int>(__b)); }
 
-  inline _Ios_Fmtflags
+  inline _GLIBCXX_CONSTEXPR _Ios_Fmtflags
   operator^(_Ios_Fmtflags __a, _Ios_Fmtflags __b)
   { return _Ios_Fmtflags(static_cast<int>(__a) ^ static_cast<int>(__b)); }
 
-  inline _Ios_Fmtflags&
+  inline _GLIBCXX_CONSTEXPR _Ios_Fmtflags
+  operator~(_Ios_Fmtflags __a)
+  { return _Ios_Fmtflags(~static_cast<int>(__a)); }
+
+  inline const _Ios_Fmtflags&
   operator|=(_Ios_Fmtflags& __a, _Ios_Fmtflags __b)
   { return __a = __a | __b; }
 
-  inline _Ios_Fmtflags&
+  inline const _Ios_Fmtflags&
   operator&=(_Ios_Fmtflags& __a, _Ios_Fmtflags __b)
   { return __a = __a & __b; }
 
-  inline _Ios_Fmtflags&
+  inline const _Ios_Fmtflags&
   operator^=(_Ios_Fmtflags& __a, _Ios_Fmtflags __b)
   { return __a = __a ^ __b; }
-
-  inline _Ios_Fmtflags
-  operator~(_Ios_Fmtflags __a)
-  { return _Ios_Fmtflags(~static_cast<int>(__a)); }
 
 
   enum _Ios_Openmode 
@@ -120,33 +113,33 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       _S_ios_openmode_end = 1L << 16 
     };
 
-  inline _Ios_Openmode
+  inline _GLIBCXX_CONSTEXPR _Ios_Openmode
   operator&(_Ios_Openmode __a, _Ios_Openmode __b)
   { return _Ios_Openmode(static_cast<int>(__a) & static_cast<int>(__b)); }
 
-  inline _Ios_Openmode
+  inline _GLIBCXX_CONSTEXPR _Ios_Openmode
   operator|(_Ios_Openmode __a, _Ios_Openmode __b)
   { return _Ios_Openmode(static_cast<int>(__a) | static_cast<int>(__b)); }
 
-  inline _Ios_Openmode
+  inline _GLIBCXX_CONSTEXPR _Ios_Openmode
   operator^(_Ios_Openmode __a, _Ios_Openmode __b)
   { return _Ios_Openmode(static_cast<int>(__a) ^ static_cast<int>(__b)); }
 
-  inline _Ios_Openmode&
+  inline _GLIBCXX_CONSTEXPR _Ios_Openmode
+  operator~(_Ios_Openmode __a)
+  { return _Ios_Openmode(~static_cast<int>(__a)); }
+
+  inline const _Ios_Openmode&
   operator|=(_Ios_Openmode& __a, _Ios_Openmode __b)
   { return __a = __a | __b; }
 
-  inline _Ios_Openmode&
+  inline const _Ios_Openmode&
   operator&=(_Ios_Openmode& __a, _Ios_Openmode __b)
   { return __a = __a & __b; }
 
-  inline _Ios_Openmode&
+  inline const _Ios_Openmode&
   operator^=(_Ios_Openmode& __a, _Ios_Openmode __b)
   { return __a = __a ^ __b; }
-
-  inline _Ios_Openmode
-  operator~(_Ios_Openmode __a)
-  { return _Ios_Openmode(~static_cast<int>(__a)); }
 
 
   enum _Ios_Iostate
@@ -158,39 +151,40 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       _S_ios_iostate_end = 1L << 16 
     };
 
-  inline _Ios_Iostate
+  inline _GLIBCXX_CONSTEXPR _Ios_Iostate
   operator&(_Ios_Iostate __a, _Ios_Iostate __b)
   { return _Ios_Iostate(static_cast<int>(__a) & static_cast<int>(__b)); }
 
-  inline _Ios_Iostate
+  inline _GLIBCXX_CONSTEXPR _Ios_Iostate
   operator|(_Ios_Iostate __a, _Ios_Iostate __b)
   { return _Ios_Iostate(static_cast<int>(__a) | static_cast<int>(__b)); }
 
-  inline _Ios_Iostate
+  inline _GLIBCXX_CONSTEXPR _Ios_Iostate
   operator^(_Ios_Iostate __a, _Ios_Iostate __b)
   { return _Ios_Iostate(static_cast<int>(__a) ^ static_cast<int>(__b)); }
 
-  inline _Ios_Iostate&
+  inline _GLIBCXX_CONSTEXPR _Ios_Iostate
+  operator~(_Ios_Iostate __a)
+  { return _Ios_Iostate(~static_cast<int>(__a)); }
+
+  inline const _Ios_Iostate&
   operator|=(_Ios_Iostate& __a, _Ios_Iostate __b)
   { return __a = __a | __b; }
 
-  inline _Ios_Iostate&
+  inline const _Ios_Iostate&
   operator&=(_Ios_Iostate& __a, _Ios_Iostate __b)
   { return __a = __a & __b; }
 
-  inline _Ios_Iostate&
+  inline const  _Ios_Iostate&
   operator^=(_Ios_Iostate& __a, _Ios_Iostate __b)
   { return __a = __a ^ __b; }
 
-  inline _Ios_Iostate
-  operator~(_Ios_Iostate __a)
-  { return _Ios_Iostate(~static_cast<int>(__a)); }
 
   enum _Ios_Seekdir 
     { 
       _S_beg = 0,
-      _S_cur = _IOS_BASE_SEEK_CUR,
-      _S_end = _IOS_BASE_SEEK_END,
+      _S_cur = _GLIBCXX_STDIO_SEEK_CUR,
+      _S_end = _GLIBCXX_STDIO_SEEK_END,
       _S_ios_seekdir_end = 1L << 16 
     };
 
@@ -238,7 +232,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     /**
      *  @brief This is a bitmask type.
      *
-     *  @c "_Ios_Fmtflags" is implementation-defined, but it is valid to
+     *  @c @a _Ios_Fmtflags is implementation-defined, but it is valid to
      *  perform bitwise operations on these values and expect the Right
      *  Thing to happen.  Defined objects of type fmtflags are:
      *  - boolalpha
@@ -327,7 +321,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     /**
      *  @brief This is a bitmask type.
      *
-     *  @c "_Ios_Iostate" is implementation-defined, but it is valid to
+     *  @c @a _Ios_Iostate is implementation-defined, but it is valid to
      *  perform bitwise operations on these values and expect the Right
      *  Thing to happen.  Defined objects of type iostate are:
      *  - badbit
@@ -356,7 +350,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     /**
      *  @brief This is a bitmask type.
      *
-     *  @c "_Ios_Openmode" is implementation-defined, but it is valid to
+     *  @c @a _Ios_Openmode is implementation-defined, but it is valid to
      *  perform bitwise operations on these values and expect the Right
      *  Thing to happen.  Defined objects of type openmode are:
      *  - app
@@ -392,7 +386,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     /**
      *  @brief This is an enumerated type.
      *
-     *  @c "_Ios_Seekdir" is implementation-defined.  Defined values
+     *  @c @a _Ios_Seekdir is implementation-defined.  Defined values
      *  of type seekdir are:
      *  - beg
      *  - cur, equivalent to @c SEEK_CUR in the C standard library.
@@ -457,16 +451,11 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     register_callback(event_callback __fn, int __index);
 
   protected:
-    //@{
-    /**
-     *  ios_base data members (doc me)
-    */
     streamsize		_M_precision;
     streamsize		_M_width;
     fmtflags		_M_flags;
     iostate		_M_exception;
     iostate		_M_streambuf_state;
-    //@}
 
     // 27.4.2.6  Members for callbacks
     // 27.4.2.6  ios_base callbacks
@@ -488,7 +477,16 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       // 0 => OK to delete.
       int
       _M_remove_reference() 
-      { return __gnu_cxx::__exchange_and_add_dispatch(&_M_refcount, -1); }
+      {
+        // Be race-detector-friendly.  For more info see bits/c++config.
+        _GLIBCXX_SYNCHRONIZATION_HAPPENS_BEFORE(&_M_refcount);
+        int __res = __gnu_cxx::__exchange_and_add_dispatch(&_M_refcount, -1);
+        if (__res == 0)
+          {
+            _GLIBCXX_SYNCHRONIZATION_HAPPENS_AFTER(&_M_refcount);
+          }
+        return __res;
+      }
     };
 
      _Callback_list*	_M_callbacks;
@@ -497,7 +495,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     _M_call_callbacks(event __ev) throw();
 
     void
-    _M_dispose_callbacks(void);
+    _M_dispose_callbacks(void) throw();
 
     // 27.4.2.5  Members for iword/pword storage
     struct _Words
@@ -526,7 +524,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     locale		_M_ios_locale;
 
     void
-    _M_init();
+    _M_init() throw();
 
   public:
 
@@ -618,7 +616,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
      *  @brief  Flags access.
      *  @return  The precision to generate on certain output operations.
      *
-     *  Be careful if you try to give a definition of "precision" here; see
+     *  Be careful if you try to give a definition of @a precision here; see
      *  DR 189.
     */
     streamsize
@@ -642,7 +640,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
      *  @brief  Flags access.
      *  @return  The minimum field width to generate on output operations.
      *
-     *  "Minimum field width" refers to the number of characters.
+     *  <em>Minimum field width</em> refers to the number of characters.
     */
     streamsize
     width() const
@@ -685,7 +683,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
      *  with imbue_event.
     */
     locale
-    imbue(const locale& __loc);
+    imbue(const locale& __loc) throw();
 
     /**
      *  @brief  Locale access
@@ -782,7 +780,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     virtual ~ios_base();
 
   protected:
-    ios_base();
+    ios_base() throw ();
 
   // _GLIBCXX_RESOLVE_LIB_DEFECTS
   // 50.  Copy constructor and assignment operator of ios_base
@@ -973,10 +971,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     return __base;
   }
 
-_GLIBCXX_END_NAMESPACE
-
-#undef _IOS_BASE_SEEK_CUR
-#undef _IOS_BASE_SEEK_END
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif /* _IOS_BASE_H */
-

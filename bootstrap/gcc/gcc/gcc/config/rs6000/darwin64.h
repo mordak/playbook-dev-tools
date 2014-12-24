@@ -1,5 +1,5 @@
 /* Target definitions for PowerPC running Darwin (Mac OS X).
-   Copyright (C) 2006, 2007 Free Software Foundation, Inc.
+   Copyright (C) 2006, 2007, 2010 Free Software Foundation, Inc.
    Contributed by Apple Computer Inc.
 
    This file is part of GCC.
@@ -26,7 +26,7 @@
 			| MASK_MULTIPLE	| MASK_NEW_MNEMONICS | MASK_PPC_GFXOPT)
 
 #undef DARWIN_ARCH_SPEC
-#define DARWIN_ARCH_SPEC "ppc64"
+#define DARWIN_ARCH_SPEC "%{m32:ppc;:ppc64}"
 
 #undef DARWIN_SUBARCH_SPEC
 #define DARWIN_SUBARCH_SPEC DARWIN_ARCH_SPEC

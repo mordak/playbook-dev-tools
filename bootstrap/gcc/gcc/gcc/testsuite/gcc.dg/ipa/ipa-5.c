@@ -1,24 +1,29 @@
 /* { dg-do compile } */
 /* { dg-options "-O3 -fipa-cp -fipa-cp-clone -fdump-ipa-cp -fno-early-inlining"  } */
-/* { dg-skip-if "PR 25442" { "*-*-*" } { "-fpic" "-fPIC" } { "" } } */
+/* { dg-add-options bind_pic_locally } */
 
 /* Float & short constants.  */
 
 #include <stdio.h>
+void t(void);
 int g (float b, short c)
 {
+  t();
   return c + (int)b;
 }
 int f (float a)
 {
+  t();
   /* a is modified.  */
   if (a++ > 0)
     g (a, 3);
 }
 int main ()
 {
-  f (7.6);
-  return 0;	
+  int i;
+  for (i = 0; i < 100; i++)
+    f (7.6);
+  return 0;
 }
 
 

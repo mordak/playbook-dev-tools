@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -59,13 +59,6 @@ package Errout is
    --  have fully expanded some items, due to high integrity violations (i.e.
    --  the use of constructs not permitted by the library in use, or improper
    --  constructs in No_Run_Time mode).
-
-   type Compiler_State_Type is (Parsing, Analyzing);
-   Compiler_State : Compiler_State_Type;
-   --  Indicates current state of compilation. This is put in the Errout spec
-   --  because it affects the action of the error message handling. In
-   --  particular, an attempt is made by Errout to suppress cascaded error
-   --  messages in Parsing mode, but not in the other modes.
 
    Current_Error_Source_File : Source_File_Index
      renames Err_Vars.Current_Error_Source_File;
@@ -209,10 +202,14 @@ package Errout is
    --      are that an RM reference may follow in the form (RM .....) and a
    --      right parenthesis may immediately follow the #. In the case of
    --      continued messages, # can only appear at the end of a group of
-   --      continuation messsages, except that \\ messages which always start
+   --      continuation messages, except that \\ messages which always start
    --      a new line end the sequence from the point of view of this rule.
    --      The idea is that for any use of -gnatj, it will still be the case
    --      that a location reference appears only at the end of a line.
+
+   --      Note: the output of the string "at " is suppressed if the string
+   --      " from" or " from " immediately precedes the insertion character #.
+   --      Certain messages read better with from than at.
 
    --    Insertion character } (Right brace: insert type reference)
    --      The character } is replaced by a string describing the type
@@ -269,8 +266,10 @@ package Errout is
 
    --      Normally warning messages issued in other than the main unit are
    --      suppressed. If the message ends with !! then this suppression is
-   --      avoided. This is currently only used by the Compile_Time_Warning
-   --      pragma to ensure the message for a with'ed unit is output.
+   --      avoided. This is currently used by the Compile_Time_Warning pragma
+   --      to ensure the message for a with'ed unit is output, and for warnings
+   --      on ineffective back-end inlining, which is detected in units that
+   --      contain subprograms to be inlined in the main program.
 
    --    Insertion character ? (Question: warning message)
    --      The character ? appearing anywhere in a message makes the message
@@ -374,6 +373,15 @@ package Errout is
    Gname5 : aliased constant String := "gnat05";
    Vname5 : aliased constant String := "05";
 
+   Gname6 : aliased constant String := "gnat2005";
+   Vname6 : aliased constant String := "2005";
+
+   Gname7 : aliased constant String := "gnat12";
+   Vname7 : aliased constant String := "12";
+
+   Gname8 : aliased constant String := "gnat2012";
+   Vname8 : aliased constant String := "2012";
+
    type Cstring_Ptr is access constant String;
 
    Gnames : array (Nat range <>) of Cstring_Ptr :=
@@ -381,14 +389,20 @@ package Errout is
                Gname2'Access,
                Gname3'Access,
                Gname4'Access,
-               Gname5'Access);
+               Gname5'Access,
+               Gname6'Access,
+               Gname7'Access,
+               Gname8'Access);
 
    Vnames : array (Nat range <>) of Cstring_Ptr :=
               (Vname1'Access,
                Vname2'Access,
                Vname3'Access,
                Vname4'Access,
-               Vname5'Access);
+               Vname5'Access,
+               Vname6'Access,
+               Vname7'Access,
+               Vname8'Access);
 
    -----------------------------------------------------
    -- Global Values Used for Error Message Insertions --
@@ -579,6 +593,26 @@ package Errout is
    --  Triggering switch. If non-zero, then ignore errors mode is activated.
    --  This is a counter to allow convenient nesting of enable/disable.
 
+   -----------------------
+   --  CODEFIX Facility --
+   -----------------------
+
+   --  The GPS and GNATBench IDE's have a codefix facility that allows for
+   --  automatic correction of a subset of the errors and warnings issued
+   --  by the compiler. This is done by recognizing the text of specific
+   --  messages using appropriate matching patterns.
+
+   --  The text of such messages should not be altered without coordinating
+   --  with the codefix code. All such messages are marked by a specific
+   --  style of comments, as shown by the following example:
+
+   --     Error_Msg_N -- CODEFIX
+   --       (parameters ....)
+
+   --  Any message marked with this -- CODEFIX comment should not be modified
+   --  without appropriate coordination. If new messages are added which may
+   --  be susceptible to automatic codefix action, they are marked using:
+
    ------------------------------
    -- Error Output Subprograms --
    ------------------------------
@@ -649,8 +683,8 @@ package Errout is
    --  suppressed.
 
    procedure Error_Msg_F (Msg : String; N : Node_Id);
-   --  Similar to Error_Msg_N except that the message is placed on the
-   --  first node of the construct N (First_Node (N)).
+   --  Similar to Error_Msg_N except that the message is placed on the first
+   --  node of the construct N (First_Node (N)).
 
    procedure Error_Msg_NE
      (Msg : String;

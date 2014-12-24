@@ -91,7 +91,7 @@ function hook_preconfigure {
 	configure_opts="${configure_opts} --program-suffix=${BINUTILS_SUFFIX}"
 	configure_opts="${configure_opts} --with-bugurl=http://www.qnx.com/support/bugreports"
 	export CC="${make_CC}"
-	export CFLAGS="-O2 -Wall"
+	export CFLAGS="-O0 -g3 -Wall"
 }
 
 function hook_premake {

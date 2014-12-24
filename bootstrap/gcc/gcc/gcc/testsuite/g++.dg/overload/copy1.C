@@ -10,12 +10,12 @@ struct B
 
 struct A
 {
-  A (B);
+  A (B);			// { dg-error "initializing" }
 };
 
 B
 f (B const& b)
 {
   return b;			// { dg-error "matching" "matching" }
-                                // { dg-error "initializing" "initializing" { target *-*-* } 19 }
+  // { dg-message "candidate" "candidate note" { target *-*-* } 19 }
 }

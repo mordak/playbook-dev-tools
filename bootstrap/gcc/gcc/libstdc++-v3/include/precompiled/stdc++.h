@@ -1,6 +1,6 @@
 // C++ includes used for precompiling -*- C++ -*-
 
-// Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009
+// Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -30,7 +30,9 @@
 // 17.4.1.2 Headers
 
 // C
+#ifndef _GLIBCXX_NO_ASSERT
 #include <cassert>
+#endif
 #include <cctype>
 #include <cerrno>
 #include <cfloat>
@@ -51,7 +53,6 @@
 #include <ccomplex>
 #include <cfenv>
 #include <cinttypes>
-#include <cstdatomic>
 #include <cstdbool>
 #include <cstdint>
 #include <ctgmath>
@@ -95,9 +96,12 @@
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <forward_list>
+#include <future>
+#include <initializer_list>
 #include <mutex>
 #include <random>
 #include <ratio>
@@ -105,6 +109,7 @@
 #include <system_error>
 #include <thread>
 #include <tuple>
+#include <typeindex>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>

@@ -1,5 +1,3 @@
-! { dg-options "-O2 -fgraphite-identity" }
-
 MODULE Vcimage
   CHARACTER (LEN=80), SAVE :: CARD, FIELD
 END MODULE Vcimage
@@ -32,3 +30,4 @@ CONTAINS
     END IF
   END SUBROUTINE QSORT
 END SUBROUTINE READIN
+! { dg-final { cleanup-modules "vimage vcimage" } }

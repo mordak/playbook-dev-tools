@@ -1,6 +1,6 @@
 ! { dg-do compile }
       subroutine foo(a,c,i,m)
-      dimension a(4,*),b(3,64),c(3,200),d(64)
+      real a(4,*),b(3,64),c(3,200),d(64)
       integer*8 i,j,k,l,m
       do j=1,m,64
         do k=1,m-j+1

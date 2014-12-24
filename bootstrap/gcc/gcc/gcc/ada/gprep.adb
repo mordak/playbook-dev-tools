@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2002-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 2002-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -55,6 +55,14 @@ package body GPrep is
    -- Argument Line Data --
    ------------------------
 
+   Unix_Line_Terminators : Boolean := False;
+   --  Set to True with option -T
+
+   type String_Array is array (Boolean) of String_Access;
+   Yes_No : constant String_Array :=
+     (False => new String'("YES"),
+      True  => new String'("NO"));
+
    Infile_Name  : Name_Id := No_Name;
    Outfile_Name : Name_Id := No_Name;
    Deffile_Name : Name_Id := No_Name;
@@ -83,9 +91,6 @@ package body GPrep is
    procedure Display_Copyright;
    --  Display the copyright notice
 
-   procedure Obsolescent_Check (S : Source_Ptr);
-   --  Null procedure, needed by instantiation of Scng below
-
    procedure Post_Scan;
    --  Null procedure, needed by instantiation of Scng below
 
@@ -95,7 +100,6 @@ package body GPrep is
       Errutil.Error_Msg_S,
       Errutil.Error_Msg_SC,
       Errutil.Error_Msg_SP,
-      Obsolescent_Check,
       Errutil.Style);
    --  The scanner for the preprocessor
 
@@ -164,13 +168,13 @@ package body GPrep is
       --  Do some initializations (order is important here!)
 
       Csets.Initialize;
-      Namet.Initialize;
       Snames.Initialize;
       Stringt.Initialize;
+      Prep.Initialize;
 
       --  Initialize the preprocessor
 
-      Prep.Initialize
+      Prep.Setup_Hooks
         (Error_Msg         => Errutil.Error_Msg'Access,
          Scan              => Scanner.Scan'Access,
          Set_Ignore_Errors => Errutil.Set_Ignore_Errors'Access,
@@ -236,9 +240,9 @@ package body GPrep is
             Sinput.Main_Source_File := Deffile;
 
             if Deffile = No_Source_File then
-               Fail ("unable to find definition file """,
-                     Get_Name_String (Deffile_Name),
-                     """");
+               Fail ("unable to find definition file """
+                     & Get_Name_String (Deffile_Name)
+                     & """");
             end if;
 
             Scanner.Initialize_Scanner (Deffile);
@@ -251,8 +255,9 @@ package body GPrep is
 
       if Total_Errors_Detected > 0 then
          Errutil.Finalize (Source_Type => "definition");
-         Fail ("errors in definition file """,
-               Get_Name_String (Deffile_Name), """");
+         Fail ("errors in definition file """
+               & Get_Name_String (Deffile_Name)
+               & """");
       end if;
 
       --  If -s switch was specified, print a sorted list of symbol names and
@@ -301,16 +306,6 @@ package body GPrep is
    begin
       New_Line (Outfile.all);
    end New_EOL_To_Outfile;
-
-   -----------------------
-   -- Obsolescent_Check --
-   -----------------------
-
-   procedure Obsolescent_Check (S : Source_Ptr) is
-      pragma Warnings (Off, S);
-   begin
-      null;
-   end Obsolescent_Check;
 
    ---------------
    -- Post_Scan --
@@ -482,13 +477,19 @@ package body GPrep is
          --  Create the output file (fails if this does not work)
 
          begin
-            Create (Text_Outfile, Out_File, Get_Name_String (Outfile_Name));
+            Create
+              (File => Text_Outfile,
+               Mode => Out_File,
+               Name => Get_Name_String (Outfile_Name),
+               Form => "Text_Translation=" &
+                       Yes_No (Unix_Line_Terminators).all);
 
          exception
             when others =>
                Fail
-                 ("unable to create output file """,
-                  Get_Name_String (Outfile_Name), """");
+                 ("unable to create output file """
+                  & Get_Name_String (Outfile_Name)
+                  & """");
          end;
 
          --  Load the input file
@@ -496,8 +497,9 @@ package body GPrep is
          Infile := Sinput.C.Load_File (Get_Name_String (Infile_Name));
 
          if Infile = No_Source_File then
-            Fail ("unable to find input file """,
-                  Get_Name_String (Infile_Name), """");
+            Fail ("unable to find input file """
+                  & Get_Name_String (Infile_Name)
+                  & """");
          end if;
 
          --  Set Main_Source_File to the input file for the benefit of
@@ -632,8 +634,9 @@ package body GPrep is
 
                         exception
                            when Directory_Error =>
-                              Fail ("could not create directory """,
-                                    Output, """");
+                              Fail ("could not create directory """
+                                    & Output
+                                    & """");
                         end;
                      end if;
 
@@ -717,7 +720,7 @@ package body GPrep is
 
       loop
          begin
-            Switch := GNAT.Command_Line.Getopt ("D: b c C r s u v");
+            Switch := GNAT.Command_Line.Getopt ("D: b c C r s T u v");
 
             case Switch is
 
@@ -742,6 +745,9 @@ package body GPrep is
 
                when 's' =>
                   Opt.List_Preprocessing_Symbols := True;
+
+               when 'T' =>
+                  Unix_Line_Terminators := True;
 
                when 'u' =>
                   Opt.Undefined_Symbols_Are_False := True;
@@ -808,6 +814,7 @@ package body GPrep is
       Write_Line ("   -D  Associate symbol with value");
       Write_Line ("   -r  Generate Source_Reference pragma");
       Write_Line ("   -s  Print a sorted list of symbol names and values");
+      Write_Line ("   -T  Use LF as line terminators");
       Write_Line ("   -u  Treat undefined symbols as FALSE");
       Write_Line ("   -v  Verbose mode");
       Write_Eol;

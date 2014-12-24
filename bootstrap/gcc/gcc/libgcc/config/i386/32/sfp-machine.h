@@ -38,9 +38,6 @@ typedef int __gcc_CMPtype __attribute__ ((mode (__libgcc_cmp_return__)));
 	     "g" ((USItype) (y1)),				\
 	     "%2" ((USItype) (x0)),				\
 	     "g" ((USItype) (y0)))
-
-/* FIXME: Change last operand constraint
-   from "im" to "g" when reload works properly.  */
 #define __FP_FRAC_SUB_4(r3,r2,r1,r0,x3,x2,x1,x0,y3,y2,y1,y0)	\
   __asm__ ("sub{l} {%11,%3|%3,%11}\n\t"				\
 	   "sbb{l} {%9,%2|%2,%9}\n\t"				\
@@ -57,7 +54,7 @@ typedef int __gcc_CMPtype __attribute__ ((mode (__libgcc_cmp_return__)));
 	     "2" ((USItype) (x1)),				\
 	     "g" ((USItype) (y1)),				\
 	     "3" ((USItype) (x0)),				\
-	     "im" ((USItype) (y0)))
+	     "g" ((USItype) (y0)))
 #define __FP_FRAC_SUB_3(r2,r1,r0,x2,x1,x0,y2,y1,y0)		\
   __asm__ ("sub{l} {%8,%2|%2,%8}\n\t"				\
 	   "sbb{l} {%6,%1|%1,%6}\n\t"				\
@@ -139,14 +136,14 @@ struct fenv
     if (_fex & FP_EX_INVALID)						\
       {									\
 	float f = 0.0;							\
-	__asm__ __volatile__ ("fdiv %0" : "+t" (f));			\
+	__asm__ __volatile__ ("fdiv {%y0, %0|%0, %y0}" : "+t" (f));	\
 	__asm__ __volatile__ ("fwait");					\
       }									\
     if (_fex & FP_EX_DIVZERO)						\
       {									\
 	float f = 1.0, g = 0.0;						\
-	__asm__ __volatile__ ("fdivp" : "=t" (f)			\
-			      	      : "0" (f), "u" (g)		\
+	__asm__ __volatile__ ("fdivp {%0, %y1|%y1, %0}"			\
+				      : "+t" (f) : "u" (g)		\
 				      : "st(1)");			\
 	__asm__ __volatile__ ("fwait");					\
       }									\

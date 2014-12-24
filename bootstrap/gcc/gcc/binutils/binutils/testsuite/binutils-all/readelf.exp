@@ -1,4 +1,5 @@
-#   Copyright 1999, 2000, 2001, 2003, 2004, 2007 Free Software Foundation, Inc.
+#   Copyright 1999, 2000, 2001, 2003, 2004, 2007, 2009
+#   Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -100,7 +101,9 @@ proc readelf_test { options binary_file regexp_file xfails } {
 
     set target_machine ""
     if [istarget "mips*-*-*"] then {
-	if { [istarget "mips*-*-*linux*"] || [istarget "mips*-sde-elf*"] } then {
+	if { [istarget "mips*-*-*linux*"]
+	     || [istarget "mips*-sde-elf*"]
+	     || [istarget "mips*-*freebsd*"] } then {
 	    set target_machine tmips
 	} else {
 	    set target_machine mips

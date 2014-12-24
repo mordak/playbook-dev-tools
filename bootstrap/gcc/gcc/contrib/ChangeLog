@@ -1,20 +1,172 @@
-2009-10-15  Release Manager
+2012-03-01  Release Manager
 
-	* GCC 4.4.2 released.
+	* GCC 4.6.3 released.
+
+2011-10-26  Release Manager
+
+	* GCC 4.6.2 released.
+
+2011-06-27  Release Manager
+
+	* GCC 4.6.1 released.
+
+2011-03-25  Release Manager
+
+	* GCC 4.6.0 released.
+
+2011-03-05  Joseph Myers  <joseph@codesourcery.com>
+
+	* gennews (files): Add files for GCC 4.6.
+
+2011-01-26  Dave Korn  <dave.korn.cygwin@gmail.com>
+
+	* patch_tester.sh (nopristinecache): New shell var, set according
+	to presence or absence of new -nopristinecache option.
+	(usage): Document new option.
+	(bootntest_pristine): Implement it.
+
+2010-11-25  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	* make_sunver.pl: Use elfdump -s to extract symbols if possible,
+	readelf -s otherwise.
+
+2010-11-08  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* make_sunver.pl: Ignore entries without symbol name first.  Then do
+	not ignore symbols marked as 'R'.
+
+2010-10-18  Andi Kleen  <ak@linux.intel.com>
+
+	* gccbug.el: Remove.
+
+2010-10-12  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	* gcc_update: Run $GCC_HG pull and update separately.
+	Check parents for SVN revision.
+
+2010-10-11  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* test_recheck: New script.
+
+2010-08-22  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* texi2pod.pl: Replace @@ before @{ and @}, for @samp{@@}.
+	Also escape characters with grave accents, to be fixed ...
+	(unmunge): ... here.
+	(postprocess): Also handle @/ and @acronym{...}.
+
+2010-07-02  Sebastian Pop  <sebastian.pop@amd.com>
+
+	* check_GNU_style.sh: Do not print warning messages when there are
+	no occurences.
+
+2010-09-13  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	* gcc_update: Handle hg, too.
+
+2010-07-08  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* make_sunver.pl: Remove extra whitespace in regexp.
+
+2010-07-02  Sebastian Pop  <sebastian.pop@amd.com>
+
+	* check_GNU_style.sh: New.
+
+2010-07-02  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	* make_sunver.pl: New file.
+
+2010-07-02  Iain Sandoe  <iains@gcc.gnu.org>
+
+       * compare-debug (Darwin): Remove '-x' flag from ld-based object
+       stripping.  Add a comment as to why we do it this way.
+
+2010-06-20  Alexandre Oliva  <aoliva@redhat.com>
+
+	* compare-debug: Drop LTO sections.
+
+2010-06-15  Bernhard Reutner-Fischer  <aldot@gcc.gnu.org>
+
+	* gcc_update: Support updating a git clone.
+
+2010-06-04  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	* test_summary: Don't use diff -u.
+	Adapt egrep regex.
+
+2010-06-02  Andrew Haley  <aph@redhat.com>
+
+	* download_prerequisites: New script.
+
+2010-05-25  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	* dg-extract-results.sh: Redirect grep output to /dev/null instead
+	of grep -q.
+
+2010-04-22  Basile Starynkevitch  <basile@starynkevitch.net>
+
+	* gcc_update: Sets the locale to C.
+
+2010-04-06  Joseph Myers  <joseph@codesourcery.com>
+
+	* gennews (files): Add files for GCC 4.5.
+
+2010-03-22  Jan Kratochvil  <jan.kratochvil@redhat.com>
+
+	Fix *.log tests output containing "===".
+	* dg-extract-results.sh (/\===/): Rename to ...
+	(/^\t\t=== .* ===$/): ... this pattern.
+
+2010-03-02  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	* dg-extract-results.sh: Fix result order to match sequential case.
+
+2010-01-16  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* check_warning_flags.sh: Use \012 instead of \n with tr.
+
+2010-01-05  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	* dg-extract-results.sh: Don't use tail -n.
+
+2009-10-03  H.J. Lu  <hongjiu.lu@intel.com>
+	    Richard Guenther  <rguenther@suse.de>
+
+	PR lto/39216
+	* gcc_update: Adjust file timestamps for lto-plugin.
+
+2009-09-10  Iain Sandoe  <iain.sandoe@sandoe-acoustics.co.uk>
+
+	PR bootstrap/41245
+	* compare-debug: Handle stripping of dwarf debug sections from darwin
+	mach-o objects.
+
+2009-09-04  Alexandre Oliva  <aoliva@redhat.com>
+
+	* compare-debug: Grep for blank before dash to avoid grep -e.
+
+2009-09-01  Alexandre Oliva  <aoliva@redhat.com>
+
+	* compare-debug: Look for .gkd files and compare them.
+
+2009-08-27  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	PR testsuite/41166
+	* test_summary: Invoke config.status, rather than trying to
+	parse it.  Adjust awk script.
 
 2009-08-18  Alexandre Oliva  <aoliva@redhat.com>
 
-	* compare-debug: Don't fail just because of .eh_frame
-	differences.  Drop .eh_frame relocations too.
+	* compare-debug: Drop .eh_frame relocations too.
 
-2009-07-22  Release Manager
+2009-08-18  H.J. Lu  <hongjiu.lu@intel.com>
 
-	* GCC 4.4.1 released.
+	PR testsuite/40704
+	* test_summary: Filter out "\r". 
 
-2009-06-20  Gerald Pfeifer  <gerald@pfeifer.com>
+2009-06-02  Alexandre Oliva  <aoliva@redhat.com>
 
-	* test_summary: Only include LAST_UPDATED if it exists.
-	Complete copyright years.
+	* compare-debug: Don't fail just because of .eh_frame differences.
 
 2009-04-27  Jakub Jelinek  <jakub@redhat.com>
 
@@ -25,9 +177,14 @@
 	by curfile variable rather than concatenated strings to workaround
 	Solaris nawk bug.
 
-2009-04-21  Release Manager
+2009-04-25  Gerald Pfeifer  <gerald@pfeifer.com>
 
-	* GCC 4.4.0 released.
+	* test_summary: Only include LAST_UPDATED if it exists.
+	Complete copyright years.
+
+2009-04-16  Paolo Bonzini  <bonzini@gnu.org>
+
+	* compare-all-tests: New.
 
 2009-04-14  Jakub Jelinek  <jakub@redhat.com>
 

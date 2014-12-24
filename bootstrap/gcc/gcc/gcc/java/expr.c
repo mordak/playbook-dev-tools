@@ -1,6 +1,6 @@
 /* Process expressions for the GNU compiler for the Java(TM) language.
    Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
-   2005, 2006, 2007, 2008 Free Software Foundation, Inc.
+   2005, 2006, 2007, 2008, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -27,24 +27,17 @@ The Free Software Foundation is independent of Sun Microsystems, Inc.  */
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "tm.h"
 #include "tree.h"
-#include "real.h"
-#include "rtl.h"
 #include "flags.h"
-#include "expr.h"
 #include "java-tree.h"
 #include "javaop.h"
 #include "java-opcodes.h"
 #include "jcf.h"
 #include "java-except.h"
 #include "parse.h"
-#include "toplev.h"
-#include "except.h"
-#include "tm_p.h"
+#include "diagnostic-core.h"
 #include "ggc.h"
 #include "tree-iterator.h"
-#include "gimple.h"
 #include "target.h"
 
 static void flush_quick_stack (void);
@@ -75,7 +68,7 @@ static void expand_cond (enum tree_code, tree, int);
 static void expand_java_goto (int);
 static tree expand_java_switch (tree, int);
 static void expand_java_add_case (tree, int, int);
-static tree pop_arguments (tree); 
+static VEC(tree,gc) *pop_arguments (tree); 
 static void expand_invoke (int, int, int); 
 static void expand_java_field_op (int, int, int); 
 static void java_push_constant_from_pool (struct JCF *, int); 
@@ -97,8 +90,8 @@ tree dtable_ident = NULL_TREE;
 int always_initialize_class_p = 0;
 
 /* We store the stack state in two places:
-   Within a basic block, we use the quick_stack, which is a
-   pushdown list (TREE_LISTs) of expression nodes.
+   Within a basic block, we use the quick_stack, which is a VEC of expression
+   nodes.
    This is the top part of the stack;  below that we use find_stack_slot.
    At the end of a basic block, the quick_stack must be flushed
    to the stack slot array (as handled by find_stack_slot).
@@ -123,10 +116,7 @@ int always_initialize_class_p = 0;
    So dup cannot just add an extra element to the quick_stack, but iadd can.
 */
 
-static GTY(()) tree quick_stack;
-
-/* A free-list of unused permanent TREE_LIST nodes.  */
-static GTY((deletable)) tree tree_list_free_list;
+static GTY(()) VEC(tree,gc) *quick_stack;
 
 /* The physical memory page size used in this computer.  See
    build_field_ref().  */
@@ -222,33 +212,24 @@ static void
 flush_quick_stack (void)
 {
   int stack_index = stack_pointer;
-  tree prev, cur, next;
+  unsigned ix;
+  tree t;
 
-  /* First reverse the quick_stack, and count the number of slots it has. */
-  for (cur = quick_stack, prev = NULL_TREE; cur != NULL_TREE; cur = next)
-    {
-      next = TREE_CHAIN (cur);
-      TREE_CHAIN (cur) = prev;
-      prev = cur;
-      stack_index -= 1 + TYPE_IS_WIDE (TREE_TYPE (TREE_VALUE (cur)));
-    }
-  quick_stack = prev;
+  /* Count the number of slots the quick stack is holding.  */
+  for (ix = 0; VEC_iterate(tree, quick_stack, ix, t); ix++)
+    stack_index -= 1 + TYPE_IS_WIDE (TREE_TYPE (t));
 
-  while (quick_stack != NULL_TREE)
+  for (ix = 0; VEC_iterate(tree, quick_stack, ix, t); ix++)
     {
-      tree decl;
-      tree node = quick_stack, type;
-      quick_stack = TREE_CHAIN (node);
-      TREE_CHAIN (node) = tree_list_free_list;
-      tree_list_free_list = node;
-      node = TREE_VALUE (node);
-      type = TREE_TYPE (node);
+      tree decl, type = TREE_TYPE (t);
 
       decl = find_stack_slot (stack_index, type);
-      if (decl != node)
-	java_add_stmt (build2 (MODIFY_EXPR, TREE_TYPE (node), decl, node));
+      if (decl != t)
+	java_add_stmt (build2 (MODIFY_EXPR, TREE_TYPE (t), decl, t));
       stack_index += 1 + TYPE_IS_WIDE (type);
     }
+
+  VEC_truncate (tree, quick_stack, 0);
 }
 
 /* Push TYPE on the type stack.
@@ -289,16 +270,8 @@ push_value (tree value)
       value = convert (type, value);
     }
   push_type (type);
-  if (tree_list_free_list == NULL_TREE)
-    quick_stack = tree_cons (NULL_TREE, value, quick_stack);
-  else
-    {
-      tree node = tree_list_free_list;
-      tree_list_free_list = TREE_CHAIN (tree_list_free_list);
-      TREE_VALUE (node) = value;
-      TREE_CHAIN (node) = quick_stack;
-      quick_stack = node;
-    }
+  VEC_safe_push (tree, gc, quick_stack, value);
+
   /* If the value has a side effect, then we need to evaluate it
      whether or not the result is used.  If the value ends up on the
      quick stack and is then popped, this won't happen -- so we flush
@@ -490,7 +463,7 @@ add_type_assertion (tree klass, int assertion_code, tree op1, tree op2)
   if (*as_pp)
     return;
 
-  *as_pp = ggc_alloc (sizeof (type_assertion));
+  *as_pp = ggc_alloc_type_assertion ();
   **(type_assertion **)as_pp = as;
 }
 
@@ -611,15 +584,8 @@ static tree
 pop_value (tree type)
 {
   type = pop_type (type);
-  if (quick_stack)
-    {
-      tree node = quick_stack;
-      quick_stack = TREE_CHAIN (quick_stack);
-      TREE_CHAIN (node) = tree_list_free_list;
-      tree_list_free_list = node;
-      node = TREE_VALUE (node);
-      return node;
-    }
+  if (VEC_length (tree, quick_stack) != 0)
+    return VEC_pop (tree, quick_stack);
   else
     return find_stack_slot (stack_pointer, promote_type (type));
 }
@@ -632,7 +598,7 @@ java_stack_pop (int count)
 {
   while (count > 0)
     {
-      tree type, val;
+      tree type;
 
       gcc_assert (stack_pointer != 0);
 
@@ -644,7 +610,7 @@ java_stack_pop (int count)
 
 	  type = stack_type_map[stack_pointer - 2];
 	}
-      val = pop_value (type);
+      pop_value (type);
       count--;
     }
 }
@@ -669,7 +635,7 @@ java_stack_swap (void)
   flush_quick_stack ();
   decl1 = find_stack_slot (stack_pointer - 1, type1);
   decl2 = find_stack_slot (stack_pointer - 2, type2);
-  temp = build_decl (VAR_DECL, NULL_TREE, type1);
+  temp = build_decl (input_location, VAR_DECL, NULL_TREE, type1);
   java_add_local_var (temp);
   java_add_stmt (build2 (MODIFY_EXPR, type1, temp, decl1));
   java_add_stmt (build2 (MODIFY_EXPR, type2, 
@@ -1128,20 +1094,21 @@ static void
 expand_java_multianewarray (tree class_type, int ndim)
 {
   int i;
-  tree args = build_tree_list( NULL_TREE, null_pointer_node );
+  VEC(tree,gc) *args = NULL;
 
-  for( i = 0; i < ndim; i++ )
-    args = tree_cons (NULL_TREE, pop_value (int_type_node), args);
+  VEC_safe_grow (tree, gc, args, 3 + ndim);
 
-  args = tree_cons (NULL_TREE,
-		    build_class_ref (class_type),
-		    tree_cons (NULL_TREE, 
-			       build_int_cst (NULL_TREE, ndim),
-			       args));
+  VEC_replace (tree, args, 0, build_class_ref (class_type));
+  VEC_replace (tree, args, 1, build_int_cst (NULL_TREE, ndim));
 
-  push_value (build_call_list (promote_type (class_type),
-			       build_address_of (soft_multianewarray_node),
-			       args));
+  for(i = ndim - 1; i >= 0; i-- )
+    VEC_replace (tree, args, (unsigned)(2 + i), pop_value (int_type_node));
+
+  VEC_replace (tree, args, 2 + ndim, null_pointer_node);
+
+  push_value (build_call_vec (promote_type (class_type),
+                              build_address_of (soft_multianewarray_node),
+                              args));
 }
 
 /*  ARRAY[INDEX] <- RHS. build_java_check_indexed_type makes sure that
@@ -1192,7 +1159,7 @@ expand_java_arraystore (tree rhs_type_node)
      MODIFY_EXPR to set the array element.  */
 
   access = build_java_arrayaccess (array, rhs_type_node, index);
-  temp = build_decl (VAR_DECL, NULL_TREE, 
+  temp = build_decl (input_location, VAR_DECL, NULL_TREE, 
 		     build_pointer_type (TREE_TYPE (access)));
   java_add_local_var (temp);
   java_add_stmt (build2 (MODIFY_EXPR, TREE_TYPE (temp),
@@ -1332,7 +1299,7 @@ expand_load_internal (int index, tree type, int pc)
      generated.  To avoid this we create a new local and copy our
      value into it.  Then we push this new local on the stack.
      Hopefully this all gets optimized out.  */
-  copy = build_decl (VAR_DECL, NULL_TREE, type);
+  copy = build_decl (input_location, VAR_DECL, NULL_TREE, type);
   if ((INTEGRAL_TYPE_P (type) || POINTER_TYPE_P (type))
       && TREE_TYPE (copy) != TREE_TYPE (var))
     var = convert (type, var);
@@ -1666,7 +1633,7 @@ lookup_field (tree *typep, tree name)
       tree save_field;
       int i;
 
-      for (field = TYPE_FIELDS (*typep); field; field = TREE_CHAIN (field))
+      for (field = TYPE_FIELDS (*typep); field; field = DECL_CHAIN (field))
 	if (DECL_NAME (field) == name)
 	  return field;
 
@@ -1795,7 +1762,8 @@ lookup_label (int pc)
   char buf[32];
   if (pc > highest_label_pc_this_method)
     highest_label_pc_this_method = pc;
-  ASM_GENERATE_INTERNAL_LABEL(buf, "LJpc=", start_label_pc_this_method + pc);
+  targetm.asm_out.generate_internal_label (buf, "LJpc=",
+					   start_label_pc_this_method + pc);
   name = get_identifier (buf);
   if (IDENTIFIER_LOCAL_VALUE (name))
     return IDENTIFIER_LOCAL_VALUE (name);
@@ -1815,7 +1783,7 @@ generate_name (void)
 {
   static int l_number = 0;
   char buff [32];
-  ASM_GENERATE_INTERNAL_LABEL(buff, "LJv", l_number);
+  targetm.asm_out.generate_internal_label (buff, "LJv", l_number);
   l_number++;
   return get_identifier (buff);
 }
@@ -1824,7 +1792,7 @@ tree
 create_label_decl (tree name)
 {
   tree decl;
-  decl = build_decl (LABEL_DECL, name, 
+  decl = build_decl (input_location, LABEL_DECL, name, 
 		     TREE_TYPE (return_address_type_node));
   DECL_CONTEXT (decl) = current_function_decl;
   DECL_IGNORED_P (decl) = 1;
@@ -1907,7 +1875,7 @@ expand_java_switch (tree selector, int default_pc)
   java_add_stmt (switch_expr);
 
   x = build3 (CASE_LABEL_EXPR, void_type_node, NULL_TREE, NULL_TREE,
-	      create_artificial_label ());
+	      create_artificial_label (input_location));
   append_to_statement_list (x, &SWITCH_BODY (switch_expr));
 
   x = build1 (GOTO_EXPR, void_type_node, lookup_label (default_pc));
@@ -1924,23 +1892,35 @@ expand_java_add_case (tree switch_expr, int match, int target_pc)
   value = build_int_cst (TREE_TYPE (switch_expr), match);
   
   x = build3 (CASE_LABEL_EXPR, void_type_node, value, NULL_TREE,
-	      create_artificial_label ());
+	      create_artificial_label (input_location));
   append_to_statement_list (x, &SWITCH_BODY (switch_expr));
 
   x = build1 (GOTO_EXPR, void_type_node, lookup_label (target_pc));
   append_to_statement_list (x, &SWITCH_BODY (switch_expr));
 }
 
-static tree
-pop_arguments (tree arg_types)
+static VEC(tree,gc) *
+pop_arguments (tree method_type)
 {
-  if (arg_types == end_params_node)
-    return NULL_TREE;
-  if (TREE_CODE (arg_types) == TREE_LIST)
+  function_args_iterator fnai;
+  tree type;
+  VEC(tree,gc) *args = NULL;
+  int arity;
+
+  FOREACH_FUNCTION_ARGS (method_type, type, fnai)
     {
-      tree tail = pop_arguments (TREE_CHAIN (arg_types));
-      tree type = TREE_VALUE (arg_types);
-      tree arg = pop_value (type);
+      /* XXX: leaky abstraction.  */
+      if (type == void_type_node)
+        break;
+
+      VEC_safe_push (tree, gc, args, type);
+    }
+
+  arity = VEC_length (tree, args);
+
+  while (arity--)
+    {
+      tree arg = pop_value (VEC_index (tree, args, arity));
 
       /* We simply cast each argument to its proper type.  This is
 	 needed since we lose type information coming out of the
@@ -1952,9 +1932,11 @@ pop_arguments (tree arg_types)
 	       && TYPE_PRECISION (type) < TYPE_PRECISION (integer_type_node)
 	       && INTEGRAL_TYPE_P (type))
 	arg = convert (integer_type_node, arg);
-      return tree_cons (NULL_TREE, arg, tail);
+
+      VEC_replace (tree, args, arity, arg);
     }
-  gcc_unreachable ();
+
+  return args;
 }
 
 /* Attach to PTR (a block) the declaration found in ENTRY. */
@@ -1970,7 +1952,7 @@ attach_init_test_initialization_flags (void **entry, void *ptr)
       if (TREE_CODE (block) == BIND_EXPR)
         {
 	  tree body = BIND_EXPR_BODY (block);
-	  TREE_CHAIN (ite->value) = BIND_EXPR_VARS (block);
+	  DECL_CHAIN (ite->value) = BIND_EXPR_VARS (block);
 	  BIND_EXPR_VARS (block) = ite->value;
 	  body = build2 (COMPOUND_EXPR, void_type_node,
 			 build1 (DECL_EXPR, void_type_node, ite->value), body);
@@ -2026,7 +2008,7 @@ build_class_init (tree clas, tree expr)
 	{
 	  /* Build a declaration and mark it as a flag used to track
 	     static class initializations. */
-	  decl = build_decl (VAR_DECL, NULL_TREE,
+	  decl = build_decl (input_location, VAR_DECL, NULL_TREE,
 			     boolean_type_node);
 	  MAYBE_CREATE_VAR_LANG_DECL_SPECIFIC (decl);
 	  DECL_CONTEXT (decl) = current_function_decl;
@@ -2079,34 +2061,30 @@ typedef struct
   const char *new_classname;
   const char *new_signature;
   int flags;
-  tree (*rewrite_arglist) (tree arglist);
+  void (*rewrite_arglist) (VEC(tree,gc) **);
 } rewrite_rule;
 
 /* Add __builtin_return_address(0) to the end of an arglist.  */
 
 
-static tree 
-rewrite_arglist_getcaller (tree arglist)
+static void
+rewrite_arglist_getcaller (VEC(tree,gc) **arglist)
 {
   tree retaddr 
     = build_call_expr (built_in_decls[BUILT_IN_RETURN_ADDRESS],
 		       1, integer_zero_node);
 
   DECL_UNINLINABLE (current_function_decl) = 1;
-  
-  return chainon (arglist, 
-		  tree_cons (NULL_TREE, retaddr, 
-			     NULL_TREE));
+
+  VEC_safe_push (tree, gc, *arglist, retaddr);
 }
 
 /* Add this.class to the end of an arglist.  */
 
-static tree 
-rewrite_arglist_getclass (tree arglist)
+static void
+rewrite_arglist_getclass (VEC(tree,gc) **arglist)
 {
-  return chainon (arglist, 
-		  tree_cons (NULL_TREE, build_class_ref (output_class),
-			     NULL_TREE));
+  VEC_safe_push (tree, gc, *arglist, build_class_ref (output_class));
 }
 
 static rewrite_rule rules[] =
@@ -2157,7 +2135,7 @@ special_method_p (tree candidate_method)
    method, update SPECIAL.*/
 
 void
-maybe_rewrite_invocation (tree *method_p, tree *arg_list_p, 
+maybe_rewrite_invocation (tree *method_p, VEC(tree,gc) **arg_list_p, 
 			  tree *method_signature_p, tree *special)
 {
   tree context = DECL_NAME (TYPE_NAME (DECL_CONTEXT (*method_p)));
@@ -2190,7 +2168,7 @@ maybe_rewrite_invocation (tree *method_p, tree *arg_list_p,
 	      *method_p = maybe_method;
 	      gcc_assert (*method_p);
 	      if (p->rewrite_arglist)
-		*arg_list_p = p->rewrite_arglist (*arg_list_p);
+		p->rewrite_arglist (arg_list_p);
 	      *method_signature_p = get_identifier (p->new_signature);
 	      *special = integer_one_node;
 
@@ -2205,7 +2183,7 @@ maybe_rewrite_invocation (tree *method_p, tree *arg_list_p,
 tree
 build_known_method_ref (tree method, tree method_type ATTRIBUTE_UNUSED,
 			tree self_type, tree method_signature ATTRIBUTE_UNUSED,
-			tree arg_list ATTRIBUTE_UNUSED, tree special)
+			VEC(tree,gc) *arg_list ATTRIBUTE_UNUSED, tree special)
 {
   tree func;
   if (is_compiled_class (self_type))
@@ -2261,7 +2239,7 @@ build_known_method_ref (tree method, tree method_type ATTRIBUTE_UNUSED,
 		    lookup_field (&class_type_node, methods_ident),
 		    NULL_TREE);
       for (meth = TYPE_METHODS (self_type);
-	   ; meth = TREE_CHAIN (meth))
+	   ; meth = DECL_CHAIN (meth))
 	{
 	  if (method == meth)
 	    break;
@@ -2282,18 +2260,19 @@ build_known_method_ref (tree method, tree method_type ATTRIBUTE_UNUSED,
 }
 
 tree
-invoke_build_dtable (int is_invoke_interface, tree arg_list)
+invoke_build_dtable (int is_invoke_interface, VEC(tree,gc) *arg_list)
 {
   tree dtable, objectref;
+  tree saved = save_expr (VEC_index (tree, arg_list, 0));
 
-  TREE_VALUE (arg_list) = save_expr (TREE_VALUE (arg_list));
+  VEC_replace (tree, arg_list, 0, saved);
 
   /* If we're dealing with interfaces and if the objectref
      argument is an array then get the dispatch table of the class
      Object rather than the one from the objectref.  */
   objectref = (is_invoke_interface 
-	       && is_array_type_p (TREE_TYPE (TREE_VALUE (arg_list)))
-	       ? build_class_ref (object_type_node) : TREE_VALUE (arg_list));
+	       && is_array_type_p (TREE_TYPE (saved))
+	       ? build_class_ref (object_type_node) : saved);
 
   if (dtable_ident == NULL_TREE)
     dtable_ident = get_identifier ("vtable");
@@ -2311,34 +2290,22 @@ invoke_build_dtable (int is_invoke_interface, tree arg_list)
    reused.  */
 
 int
-get_symbol_table_index (tree t, tree special, tree *symbol_table)
+get_symbol_table_index (tree t, tree special,
+			VEC(method_entry,gc) **symbol_table)
 {
-  int i = 1;
-  tree method_list;
+  method_entry *e;
+  unsigned i;
 
-  if (*symbol_table == NULL_TREE)
-    {
-      *symbol_table = build_tree_list (special, t);
-      return 1;
-    }
-  
-  method_list = *symbol_table;
-  
-  while (1)
-    {
-      tree value = TREE_VALUE (method_list);
-      tree purpose = TREE_PURPOSE (method_list);
-      if (value == t && purpose == special)
-	return i;
-      i++;
-      if (TREE_CHAIN (method_list) == NULL_TREE)
-        break;
-      else
-        method_list = TREE_CHAIN (method_list);
-    }
+  FOR_EACH_VEC_ELT (method_entry, *symbol_table, i, e)
+    if (t == e->method && special == e->special)
+      goto done;
 
-  TREE_CHAIN (method_list) = build_tree_list (special, t);
-  return i;
+  e = VEC_safe_push (method_entry, gc, *symbol_table, NULL);
+  e->method = t;
+  e->special = special;
+
+ done:
+  return i + 1;
 }
 
 tree 
@@ -2461,7 +2428,8 @@ expand_invoke (int opcode, int method_ref_index, int nargs ATTRIBUTE_UNUSED)
                           method_ref_index));
   const char *const self_name
     = IDENTIFIER_POINTER (DECL_NAME (TYPE_NAME (self_type)));
-  tree call, func, method, arg_list, method_type;
+  tree call, func, method, method_type;
+  VEC(tree,gc) *arg_list;
   tree check = NULL_TREE;
 
   tree special = NULL_TREE;
@@ -2568,7 +2536,7 @@ expand_invoke (int opcode, int method_ref_index, int nargs ATTRIBUTE_UNUSED)
 	 just pop the arguments, push a properly-typed zero, and
 	 continue.  */
       method_type = get_type_from_signature (method_signature);
-      pop_arguments (TYPE_ARG_TYPES (method_type));
+      pop_arguments (method_type);
       if (opcode != OPCODE_invokestatic) 
 	pop_type (self_type);
       method_type = promote_type (TREE_TYPE (method_type));
@@ -2577,7 +2545,7 @@ expand_invoke (int opcode, int method_ref_index, int nargs ATTRIBUTE_UNUSED)
     }
 
   method_type = TREE_TYPE (method);
-  arg_list = pop_arguments (TYPE_ARG_TYPES (method_type));
+  arg_list = pop_arguments (method_type);
   flush_quick_stack ();
 
   maybe_rewrite_invocation (&method, &arg_list, &method_signature,
@@ -2602,8 +2570,8 @@ expand_invoke (int opcode, int method_ref_index, int nargs ATTRIBUTE_UNUSED)
 	 We do omit the check if we're calling <init>.  */
       /* We use a SAVE_EXPR here to make sure we only evaluate
 	 the new `self' expression once.  */
-      tree save_arg = save_expr (TREE_VALUE (arg_list));
-      TREE_VALUE (arg_list) = save_arg;
+      tree save_arg = save_expr (VEC_index (tree, arg_list, 0));
+      VEC_replace (tree, arg_list, 0, save_arg);
       check = java_check_reference (save_arg, ! DECL_INIT_P (method));
       func = build_known_method_ref (method, method_type, self_type,
 				     method_signature, arg_list, special);
@@ -2623,7 +2591,7 @@ expand_invoke (int opcode, int method_ref_index, int nargs ATTRIBUTE_UNUSED)
   else
     func = build1 (NOP_EXPR, build_pointer_type (method_type), func);
 
-  call = build_call_list (TREE_TYPE (method_type), func, arg_list);
+  call = build_call_vec (TREE_TYPE (method_type), func, arg_list);
   TREE_SIDE_EFFECTS (call) = 1;
   call = check_for_builtin (method, call);
 
@@ -2648,14 +2616,14 @@ expand_invoke (int opcode, int method_ref_index, int nargs ATTRIBUTE_UNUSED)
 tree
 build_jni_stub (tree method)
 {
-  tree jnifunc, call, args, body, method_sig, arg_types;
+  tree jnifunc, call, body, method_sig, arg_types;
   tree jniarg0, jniarg1, jniarg2, jniarg3;
   tree jni_func_type, tem;
   tree env_var, res_var = NULL_TREE, block;
-  tree method_args, res_type;
+  tree method_args;
   tree meth_var;
   tree bind;
-
+  VEC(tree,gc) *args = NULL;
   int args_size = 0;
 
   tree klass = DECL_CONTEXT (method);
@@ -2666,15 +2634,16 @@ build_jni_stub (tree method)
   DECL_ARTIFICIAL (method) = 1;
   DECL_EXTERNAL (method) = 0;
 
-  env_var = build_decl (VAR_DECL, get_identifier ("env"), ptr_type_node);
+  env_var = build_decl (input_location,
+			VAR_DECL, get_identifier ("env"), ptr_type_node);
   DECL_CONTEXT (env_var) = method;
 
   if (TREE_TYPE (TREE_TYPE (method)) != void_type_node)
     {
-      res_var = build_decl (VAR_DECL, get_identifier ("res"),
+      res_var = build_decl (input_location, VAR_DECL, get_identifier ("res"),
 			    TREE_TYPE (TREE_TYPE (method)));
       DECL_CONTEXT (res_var) = method;
-      TREE_CHAIN (env_var) = res_var;
+      DECL_CHAIN (env_var) = res_var;
     }
 
   method_args = DECL_ARGUMENTS (method);
@@ -2688,11 +2657,23 @@ build_jni_stub (tree method)
 				  build_address_of (soft_getjnienvnewframe_node),
 				  1, klass));
 
+  /* The JNIEnv structure is the first argument to the JNI function.  */
+  args_size += int_size_in_bytes (TREE_TYPE (env_var));
+  VEC_safe_push (tree, gc, args, env_var);
+
+  /* For a static method the second argument is the class.  For a
+     non-static method the second argument is `this'; that is already
+     available in the argument list.  */
+  if (METHOD_STATIC (method))
+    {
+      args_size += int_size_in_bytes (TREE_TYPE (klass));
+      VEC_safe_push (tree, gc, args, klass);
+    }
+
   /* All the arguments to this method become arguments to the
      underlying JNI function.  If we had to wrap object arguments in a
      special way, we would do that here.  */
-  args = NULL_TREE;
-  for (tem = method_args; tem != NULL_TREE; tem = TREE_CHAIN (tem))
+  for (tem = method_args; tem != NULL_TREE; tem = DECL_CHAIN (tem))
     {
       int arg_bits = TREE_INT_CST_LOW (TYPE_SIZE (TREE_TYPE (tem)));
 #ifdef PARM_BOUNDARY
@@ -2701,24 +2682,14 @@ build_jni_stub (tree method)
 #endif
       args_size += (arg_bits / BITS_PER_UNIT);
 
-      args = tree_cons (NULL_TREE, tem, args);
+      VEC_safe_push (tree, gc, args, tem);
     }
-  args = nreverse (args);
   arg_types = TYPE_ARG_TYPES (TREE_TYPE (method));
 
-  /* For a static method the second argument is the class.  For a
-     non-static method the second argument is `this'; that is already
-     available in the argument list.  */
+  /* Argument types for static methods and the JNIEnv structure.
+     FIXME: Write and use build_function_type_vec to avoid this.  */
   if (METHOD_STATIC (method))
-    {
-      args_size += int_size_in_bytes (TREE_TYPE (klass));
-      args = tree_cons (NULL_TREE, klass, args);
-      arg_types = tree_cons (NULL_TREE, object_ptr_type_node, arg_types);
-    }
-
-  /* The JNIEnv structure is the first argument to the JNI function.  */
-  args_size += int_size_in_bytes (TREE_TYPE (env_var));
-  args = tree_cons (NULL_TREE, env_var, args);
+    arg_types = tree_cons (NULL_TREE, object_ptr_type_node, arg_types);
   arg_types = tree_cons (NULL_TREE, ptr_type_node, arg_types);
 
   /* We call _Jv_LookupJNIMethod to find the actual underlying
@@ -2745,7 +2716,8 @@ build_jni_stub (tree method)
      garbage-collected.  If it is, we end up using canonical types
      with different uids for equivalent function types, and this in
      turn causes utf8 identifiers and output order to vary.  */
-  meth_var = build_decl (VAR_DECL, get_identifier ("meth"), jni_func_type);
+  meth_var = build_decl (input_location,
+			 VAR_DECL, get_identifier ("meth"), jni_func_type);
   TREE_STATIC (meth_var) = 1;
   TREE_PUBLIC (meth_var) = 0;
   DECL_EXTERNAL (meth_var) = 0;
@@ -2772,8 +2744,7 @@ build_jni_stub (tree method)
 
   /* Now we make the actual JNI call via the resulting function
      pointer.    */
-  call = build_call_list (TREE_TYPE (TREE_TYPE (method)),
-			  jnifunc, args);
+  call = build_call_vec (TREE_TYPE (TREE_TYPE (method)), jnifunc, args);
 
   /* If the JNI call returned a result, capture it here.  If we had to
      unwrap JNI object results, we would do that here.  */
@@ -2803,7 +2774,6 @@ build_jni_stub (tree method)
   TREE_SIDE_EFFECTS (body) = 1;
 
   /* Finally, do the return.  */
-  res_type = void_type_node;
   if (res_var != NULL_TREE)
     {
       tree drt;
@@ -2949,7 +2919,7 @@ expand_java_field_op (int is_static, int is_putting, int field_ref_index)
       if (FIELD_FINAL (field_decl))
 	{
 	  if (DECL_CONTEXT (field_decl) != current_class)
-            error ("assignment to final field %q+D not in field's class",
+            error ("assignment to final field %q+D not in field%'s class",
                    field_decl);
 	  /* We used to check for assignments to final fields not
 	     occurring in the class initializer or in a constructor
@@ -2971,7 +2941,8 @@ expand_java_field_op (int is_static, int is_putting, int field_ref_index)
     }
   else
     {
-      tree temp = build_decl (VAR_DECL, NULL_TREE, TREE_TYPE (field_ref));
+      tree temp = build_decl (input_location,
+			      VAR_DECL, NULL_TREE, TREE_TYPE (field_ref));
       java_add_local_var (temp);
 
       if (TREE_THIS_VOLATILE (field_decl))
@@ -3327,6 +3298,7 @@ process_jvm_instruction (int PC, const unsigned char* byte_ops,
   {									\
     int saw_index = 0;							\
     int index     = OPERAND_VALUE;					\
+    (void) saw_index; /* Avoid set but not used warning.  */		\
     build_java_ret							\
       (find_local_variable (index, return_address_type_node, oldpc));	\
   }
@@ -3795,7 +3767,7 @@ force_evaluation_order (tree node)
 tree
 build_java_empty_stmt (void)
 {
-  tree t = build_empty_stmt ();
+  tree t = build_empty_stmt (input_location);
   return t;
 }
 
@@ -3807,7 +3779,7 @@ promote_arguments (void)
   int i;
   tree arg;
   for (arg = DECL_ARGUMENTS (current_function_decl), i = 0;
-       arg != NULL_TREE;  arg = TREE_CHAIN (arg), i++)
+       arg != NULL_TREE;  arg = DECL_CHAIN (arg), i++)
     {
       tree arg_type = TREE_TYPE (arg);
       if (INTEGRAL_TYPE_P (arg_type)
@@ -3832,7 +3804,7 @@ cache_cpool_data_ref (void)
     {
       tree cpool;
       tree d = build_constant_data_ref (flag_indirect_classes);
-      tree cpool_ptr = build_decl (VAR_DECL, NULL_TREE, 
+      tree cpool_ptr = build_decl (input_location, VAR_DECL, NULL_TREE, 
 				   build_pointer_type (TREE_TYPE (d)));
       java_add_local_var (cpool_ptr);
       TREE_CONSTANT (cpool_ptr) = 1;

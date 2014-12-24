@@ -1,6 +1,6 @@
 /* Separate lexical analyzer for GNU C++.
    Copyright (C) 1987, 1989, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008
+   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008, 2010
    Free Software Foundation, Inc.
    Hacked by Michael Tiemann (tiemann@cygnus.com)
 
@@ -32,8 +32,8 @@ along with GCC; see the file COPYING3.  If not see
 #include "cp-tree.h"
 #include "cpplib.h"
 #include "flags.h"
-#include "c-pragma.h"
-#include "toplev.h"
+#include "c-family/c-pragma.h"
+#include "c-family/c-objc.h"
 #include "output.h"
 #include "tm_p.h"
 #include "timevar.h"
@@ -184,7 +184,7 @@ init_reswords (void)
   /* The Objective-C keywords are all context-dependent.  */
   mask |= D_OBJC;
 
-  ridpointers = GGC_CNEWVEC (tree, (int) RID_MAX);
+  ridpointers = ggc_alloc_cleared_vec_tree ((int) RID_MAX);
   for (i = 0; i < num_c_common_reswords; i++)
     {
       if (c_common_reswords[i].disable & D_CONLY)
@@ -226,8 +226,9 @@ cxx_init (void)
    CTOR_INITIALIZER,	TRY_BLOCK,	HANDLER,
    EH_SPEC_BLOCK,	USING_STMT,	TAG_DEFN,
    IF_STMT,		CLEANUP_STMT,	FOR_STMT,
-   WHILE_STMT,		DO_STMT,	BREAK_STMT,
-   CONTINUE_STMT,	SWITCH_STMT,	EXPR_STMT
+   RANGE_FOR_STMT,	WHILE_STMT,	DO_STMT,
+   BREAK_STMT,		CONTINUE_STMT,	SWITCH_STMT,
+   EXPR_STMT
   };
 
   memset (&statement_code_p, 0, sizeof (statement_code_p));
@@ -448,13 +449,18 @@ unqualified_name_lookup_error (tree name)
     }
   else
     {
-      error ("%qD was not declared in this scope", name);
+      if (!objc_diagnose_private_ivar (name))
+	{
+	  error ("%qD was not declared in this scope", name);
+	  suggest_alternatives_for (location_of (name), name);
+	}
       /* Prevent repeated error messages by creating a VAR_DECL with
 	 this NAME in the innermost block scope.  */
       if (current_function_decl)
 	{
 	  tree decl;
-	  decl = build_decl (VAR_DECL, name, error_mark_node);
+	  decl = build_decl (input_location,
+			     VAR_DECL, name, error_mark_node);
 	  DECL_CONTEXT (decl) = current_function_decl;
 	  push_local_binding (name, decl, 0);
 	  /* Mark the variable as used so that we do not get warnings
@@ -506,18 +512,26 @@ unqualified_fn_lookup_error (tree name)
   return unqualified_name_lookup_error (name);
 }
 
+/* Wrapper around build_lang_decl_loc(). Should gradually move to
+   build_lang_decl_loc() and then rename build_lang_decl_loc() back to
+   build_lang_decl().  */
+
 tree
 build_lang_decl (enum tree_code code, tree name, tree type)
 {
+  return build_lang_decl_loc (input_location, code, name, type);
+}
+
+/* Build a decl from CODE, NAME, TYPE declared at LOC, and then add
+   DECL_LANG_SPECIFIC info to the result.  */
+
+tree
+build_lang_decl_loc (location_t loc, enum tree_code code, tree name, tree type)
+{
   tree t;
 
-  t = build_decl (code, name, type);
+  t = build_decl (loc, code, name, type);
   retrofit_lang_decl (t);
-
-  /* All nesting of C++ functions is lexical; there is never a "static
-     chain" in the sense of GNU C nested functions.  */
-  if (code == FUNCTION_DECL)
-    DECL_NO_STATIC_CHAIN (t) = 1;
 
   return t;
 }
@@ -530,19 +544,22 @@ retrofit_lang_decl (tree t)
 {
   struct lang_decl *ld;
   size_t size;
+  int sel;
 
-  if (CAN_HAVE_FULL_LANG_DECL_P (t))
-    size = sizeof (struct lang_decl);
+  if (TREE_CODE (t) == FUNCTION_DECL)
+    sel = 1, size = sizeof (struct lang_decl_fn);
+  else if (TREE_CODE (t) == NAMESPACE_DECL)
+    sel = 2, size = sizeof (struct lang_decl_ns);
+  else if (TREE_CODE (t) == PARM_DECL)
+    sel = 3, size = sizeof (struct lang_decl_parm);
+  else if (LANG_DECL_HAS_MIN (t))
+    sel = 0, size = sizeof (struct lang_decl_min);
   else
-    size = sizeof (struct lang_decl_flags);
+    gcc_unreachable ();
 
-  ld = GGC_CNEWVAR (struct lang_decl, size);
+  ld = ggc_alloc_cleared_lang_decl (size);
 
-  ld->decl_flags.can_be_full = CAN_HAVE_FULL_LANG_DECL_P (t) ? 1 : 0;
-  ld->decl_flags.u1sel = TREE_CODE (t) == NAMESPACE_DECL ? 1 : 0;
-  ld->decl_flags.u2sel = 0;
-  if (ld->decl_flags.can_be_full)
-    ld->u.f.u3sel = TREE_CODE (t) == FUNCTION_DECL ? 1 : 0;
+  ld->u.base.selector = sel;
 
   DECL_LANG_SPECIFIC (t) = ld;
   if (current_lang_name == lang_name_cplusplus
@@ -570,11 +587,18 @@ cxx_dup_lang_specific_decl (tree node)
   if (! DECL_LANG_SPECIFIC (node))
     return;
 
-  if (!CAN_HAVE_FULL_LANG_DECL_P (node))
-    size = sizeof (struct lang_decl_flags);
+  if (TREE_CODE (node) == FUNCTION_DECL)
+    size = sizeof (struct lang_decl_fn);
+  else if (TREE_CODE (node) == NAMESPACE_DECL)
+    size = sizeof (struct lang_decl_ns);
+  else if (TREE_CODE (node) == PARM_DECL)
+    size = sizeof (struct lang_decl_parm);
+  else if (LANG_DECL_HAS_MIN (node))
+    size = sizeof (struct lang_decl_min);
   else
-    size = sizeof (struct lang_decl);
-  ld = GGC_NEWVAR (struct lang_decl, size);
+    gcc_unreachable ();
+
+  ld = ggc_alloc_lang_decl (size);
   memcpy (ld, DECL_LANG_SPECIFIC (node), size);
   DECL_LANG_SPECIFIC (node) = ld;
 
@@ -611,7 +635,7 @@ copy_lang_type (tree node)
     size = sizeof (struct lang_type);
   else
     size = sizeof (struct lang_type_ptrmem);
-  lt = GGC_NEWVAR (struct lang_type, size);
+  lt = ggc_alloc_lang_type (size);
   memcpy (lt, TYPE_LANG_SPECIFIC (node), size);
   TYPE_LANG_SPECIFIC (node) = lt;
 
@@ -642,7 +666,8 @@ cxx_make_type (enum tree_code code)
   if (RECORD_OR_UNION_CODE_P (code)
       || code == BOUND_TEMPLATE_TEMPLATE_PARM)
     {
-      struct lang_type *pi = GGC_CNEW (struct lang_type);
+      struct lang_type *pi
+          = ggc_alloc_cleared_lang_type (sizeof (struct lang_type));
 
       TYPE_LANG_SPECIFIC (t) = pi;
       pi->u.c.h.is_lang_type_class = 1;

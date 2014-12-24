@@ -1,6 +1,6 @@
 // Stream iterators
 
-// Copyright (C) 2001, 2004, 2005, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2001, 2004, 2005, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -22,9 +22,9 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file stream_iterator.h
+/** @file bits/stream_iterator.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{iterator}
  */
 
 #ifndef _STREAM_ITERATOR_H
@@ -34,7 +34,14 @@
 
 #include <debug/debug.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
+  /**
+   * @addtogroup iterators
+   * @{
+   */
 
   /// Provides input iterator semantics for streams.
   template<typename _Tp, typename _CharT = char,
@@ -54,7 +61,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
     public:
       ///  Construct end of input stream iterator.
-      istream_iterator()
+      _GLIBCXX_CONSTEXPR istream_iterator()
       : _M_stream(0), _M_value(), _M_ok(false) {}
 
       ///  Construct start of input stream iterator.
@@ -206,6 +213,9 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       { return *this; }
     };
 
-_GLIBCXX_END_NAMESPACE
+  // @} group iterators
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif

@@ -1,5 +1,5 @@
 /* IEEE floating point support routines, for GDB, the GNU Debugger.
-   Copyright 1991, 1994, 1999, 2000, 2003, 2005, 2006
+   Copyright 1991, 1994, 1999, 2000, 2003, 2005, 2006, 2010
    Free Software Foundation, Inc.
 
 This file is part of GDB.
@@ -77,7 +77,23 @@ floatformat_always_valid (const struct floatformat *fmt ATTRIBUTE_UNUSED,
    a system header, what we do if not, etc.  */
 #define FLOATFORMAT_CHAR_BIT 8
 
-/* floatformats for IEEE single and double, big and little endian.  */
+/* floatformats for IEEE half, single and double, big and little endian.  */
+const struct floatformat floatformat_ieee_half_big =
+{
+  floatformat_big, 16, 0, 1, 5, 15, 31, 6, 10,
+  floatformat_intbit_no,
+  "floatformat_ieee_half_big",
+  floatformat_always_valid,
+  NULL
+};
+const struct floatformat floatformat_ieee_half_little =
+{
+  floatformat_little, 16, 0, 1, 5, 15, 31, 6, 10,
+  floatformat_intbit_no,
+  "floatformat_ieee_half_little",
+  floatformat_always_valid,
+  NULL
+};
 const struct floatformat floatformat_ieee_single_big =
 {
   floatformat_big, 32, 0, 1, 8, 127, 255, 9, 23,

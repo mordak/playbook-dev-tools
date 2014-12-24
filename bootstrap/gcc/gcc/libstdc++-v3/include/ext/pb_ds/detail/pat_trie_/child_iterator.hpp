@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -48,8 +48,8 @@ public:
   typedef node_pointer_reference reference;
 
   inline
-  iterator(node_pointer_pointer p_p_cur = NULL,  
-	   node_pointer_pointer p_p_end = NULL) 
+  iterator(node_pointer_pointer p_p_cur = 0,  
+	   node_pointer_pointer p_p_end = 0) 
   : const_iterator(p_p_cur, p_p_end)
   { }
 

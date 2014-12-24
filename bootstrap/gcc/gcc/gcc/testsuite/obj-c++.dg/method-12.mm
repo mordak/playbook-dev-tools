@@ -3,7 +3,7 @@
 /* { dg-options "-Wstrict-selector-match" } */
 /* { dg-do compile } */
 
-#include <objc/Protocol.h>
+#include "../objc-obj-c++-shared/Protocol1.h"
 
 @interface Base
 - (unsigned)port;
@@ -19,8 +19,8 @@ void foo(void) {
   Class receiver;
 
   [receiver port];  /* { dg-warning "multiple methods named .\\+port. found" } */
-       /* { dg-warning "using .\\-\\(unsigned( int)?\\)port." "" { target *-*-* } 9 } */
-       /* { dg-warning "also found .\\+\\(Protocol \\*\\)port." "" { target *-*-* } 14 } */
+       /* { dg-message "using .\\-\\(unsigned( int)?\\)port." "" { target *-*-* } 9 } */
+       /* { dg-message "also found .\\+\\(Protocol \\*\\)port." "" { target *-*-* } 14 } */
 
   [receiver starboard];  /* { dg-warning "no .\\+starboard. method found" } */
        /* { dg-warning "Messages without a matching method signature" "" { target *-*-* } 25 } */

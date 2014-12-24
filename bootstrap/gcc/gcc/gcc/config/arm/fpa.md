@@ -83,11 +83,11 @@
   "core+fpa*2")
 
 (define_insn_reservation "f_load" 3
-  (and (eq_attr "fpu" "fpa") (eq_attr "type" "f_load"))
+  (and (eq_attr "fpu" "fpa") (eq_attr "type" "f_fpa_load"))
   "fpa_mem+core*3")
 
 (define_insn_reservation "f_store" 4
-  (and (eq_attr "fpu" "fpa") (eq_attr "type" "f_store"))
+  (and (eq_attr "fpu" "fpa") (eq_attr "type" "f_fpa_store"))
   "core*4")
 
 (define_insn_reservation "r_mem_f" 6
@@ -545,7 +545,7 @@
   [(set_attr "length" "4,4,4,4,8,8,4,4,4")
    (set_attr "predicable" "yes")
    (set_attr "type"
-	 "ffarith,ffarith,f_load,f_store,r_mem_f,f_mem_r,*,load1,store1")
+	 "ffarith,ffarith,f_fpa_load,f_fpa_store,r_mem_f,f_mem_r,*,load1,store1")
    (set_attr "pool_range" "*,*,1024,*,*,*,*,4096,*")
    (set_attr "neg_pool_range" "*,*,1012,*,*,*,*,4084,*")]
 )
@@ -580,7 +580,7 @@
   [(set_attr "length" "4,4,8,8,8,4,4,4,4,8,8")
    (set_attr "predicable" "yes")
    (set_attr "type"
-    "load1,store2,*,store2,load1,ffarith,ffarith,f_load,f_store,r_mem_f,f_mem_r")
+    "load1,store2,*,store2,load1,ffarith,ffarith,f_fpa_load,f_fpa_store,r_mem_f,f_mem_r")
    (set_attr "pool_range" "*,*,*,*,1020,*,*,1024,*,*,*")
    (set_attr "neg_pool_range" "*,*,*,*,1008,*,*,1008,*,*,*")]
 )
@@ -599,17 +599,17 @@
     {
     default:
     case 0: return \"mvf%?e\\t%0, %1\";
-    case 1: if (arm_fpu_arch == FPUTYPE_FPA_EMU2)
+    case 1: if (TARGET_FPA_EMU2)
 	      return \"ldf%?e\\t%0, %1\";
 	    return \"lfm%?\\t%0, 1, %1\";
-    case 2: if (arm_fpu_arch == FPUTYPE_FPA_EMU2)
+    case 2: if (TARGET_FPA_EMU2)
 	      return \"stf%?e\\t%1, %0\";
 	    return \"sfm%?\\t%1, 1, %0\";
     }
   "
   [(set_attr "length" "4,4,4")
    (set_attr "predicable" "yes")
-   (set_attr "type" "ffarith,f_load,f_store")]
+   (set_attr "type" "ffarith,f_fpa_load,f_fpa_store")]
 )
 
 ;; stfs/ldfs always use a conditional infix.  This works around the
@@ -635,7 +635,7 @@
    (set_attr "ce_count" "1,1,1,1,2,2,1,1,1")
    (set_attr "predicable" "yes")
    (set_attr "type"
-	 "ffarith,ffarith,f_load,f_store,r_mem_f,f_mem_r,*,load1,store1")
+	 "ffarith,ffarith,f_fpa_load,f_fpa_store,r_mem_f,f_mem_r,*,load1,store1")
    (set_attr "pool_range" "*,*,1024,*,*,*,*,4096,*")
    (set_attr "neg_pool_range" "*,*,1012,*,*,*,*,0,*")]
 )
@@ -669,7 +669,7 @@
   "
   [(set_attr "length" "4,4,8,8,8,4,4,4,4,8,8")
    (set_attr "type"
-    "load1,store2,*,store2,load1,ffarith,ffarith,f_load,f_store,r_mem_f,f_mem_r")
+    "load1,store2,*,store2,load1,ffarith,ffarith,f_fpa_load,f_fpa_store,r_mem_f,f_mem_r")
    (set_attr "pool_range" "*,*,*,*,4092,*,*,1024,*,*,*")
    (set_attr "neg_pool_range" "*,*,*,*,0,*,*,1020,*,*,*")]
 )
@@ -698,7 +698,7 @@
     }
   "
   [(set_attr "length" "4,4,4,4,8,8,12")
-   (set_attr "type" "ffarith,ffarith,f_load,f_store,r_mem_f,f_mem_r,*")
+   (set_attr "type" "ffarith,ffarith,f_fpa_load,f_fpa_store,r_mem_f,f_mem_r,*")
    (set_attr "pool_range" "*,*,1024,*,*,*,*")
    (set_attr "neg_pool_range" "*,*,1004,*,*,*,*")]
 )

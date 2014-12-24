@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---                       Copyright (C) 2008, AdaCore                        --
+--                     Copyright (C) 2008-2010, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -38,7 +38,6 @@ with Ada.Unchecked_Conversion;
 
 with Interfaces.C;
 with Interfaces.C.Pointers;
-with Interfaces.C.Strings;
 
 package GNAT.Sockets.Thin_Common is
 
@@ -122,7 +121,7 @@ package GNAT.Sockets.Thin_Common is
       Sa_Family : Sockaddr_Length_And_Family;
       --  Address family (and address length on some platforms)
 
-      Sa_Data   : C.char_array (1 .. 14) := (others => C.nul);
+      Sa_Data : C.char_array (1 .. 14) := (others => C.nul);
       --  Family-specific data
       --  Note that some platforms require that all unused (reserved) bytes
       --  in addresses be initialized to 0 (e.g. VxWorks).
@@ -169,14 +168,15 @@ package GNAT.Sockets.Thin_Common is
       Sin_Family : Sockaddr_Length_And_Family;
       --  Address family (and address length on some platforms)
 
-      Sin_Port   : C.unsigned_short;
+      Sin_Port : C.unsigned_short;
       --  Port in network byte order
 
-      Sin_Addr   : In_Addr;
+      Sin_Addr : In_Addr;
       --  IPv4 address
 
-      Sin_Zero   : C.char_array (1 .. 8) := (others => C.nul);
+      Sin_Zero : C.char_array (1 .. 8) := (others => C.nul);
       --  Padding
+      --
       --  Note that some platforms require that all unused (reserved) bytes
       --  in addresses be initialized to 0 (e.g. VxWorks).
    end record;
@@ -199,64 +199,137 @@ package GNAT.Sockets.Thin_Common is
    pragma Inline (Set_Address);
    --  Set Sin.Sin_Addr to Address
 
-   ---------------------
-   -- Service entries --
-   ---------------------
-
-   type Chars_Ptr_Array is array (C.size_t range <>) of
-     aliased C.Strings.chars_ptr;
-
-   package Chars_Ptr_Pointers is
-      new C.Pointers (C.size_t, C.Strings.chars_ptr, Chars_Ptr_Array,
-                      C.Strings.Null_Ptr);
-   --  Arrays of C (char *)
-
-   type Servent is record
-      S_Name    : C.Strings.chars_ptr;
-      S_Aliases : Chars_Ptr_Pointers.Pointer;
-      S_Port    : C.int;
-      S_Proto   : C.Strings.chars_ptr;
-   end record;
-   pragma Convention (C, Servent);
-   --  Service entry
-
-   type Servent_Access is access all Servent;
-   pragma Convention (C, Servent_Access);
-   --  Access to service entry
-
    ------------------
    -- Host entries --
    ------------------
 
-   type Hostent is record
-      H_Name      : C.Strings.chars_ptr;
-      H_Aliases   : Chars_Ptr_Pointers.Pointer;
-      H_Addrtype  : SOSC.H_Addrtype_T;
-      H_Length    : SOSC.H_Length_T;
-      H_Addr_List : In_Addr_Access_Pointers.Pointer;
-   end record;
-   pragma Convention (C, Hostent);
-   --  Host entry
+   type Hostent is new
+     System.Storage_Elements.Storage_Array (1 .. SOSC.SIZEOF_struct_hostent);
+   for Hostent'Alignment use 8;
+   --  Host entry. This is an opaque type used only via the following
+   --  accessor functions, because 'struct hostent' has different layouts on
+   --  different platforms.
 
    type Hostent_Access is access all Hostent;
    pragma Convention (C, Hostent_Access);
    --  Access to host entry
 
+   --  Note: the hostent and servent accessors that return char*
+   --  values are compiled with GCC, and on VMS they always return
+   --  64-bit pointers, so we can't use C.Strings.chars_ptr, which
+   --  on VMS is 32 bits.
+
+   function Hostent_H_Name
+     (E : Hostent_Access) return System.Address;
+
+   function Hostent_H_Alias
+     (E : Hostent_Access; I : C.int) return System.Address;
+
+   function Hostent_H_Addrtype
+     (E : Hostent_Access) return C.int;
+
+   function Hostent_H_Length
+     (E : Hostent_Access) return C.int;
+
+   function Hostent_H_Addr
+     (E : Hostent_Access; Index : C.int) return System.Address;
+
+   ---------------------
+   -- Service entries --
+   ---------------------
+
+   type Servent is new
+     System.Storage_Elements.Storage_Array (1 .. SOSC.SIZEOF_struct_servent);
+   for Servent'Alignment use 8;
+   --  Service entry. This is an opaque type used only via the following
+   --  accessor functions, because 'struct servent' has different layouts on
+   --  different platforms.
+
+   type Servent_Access is access all Servent;
+   pragma Convention (C, Servent_Access);
+   --  Access to service entry
+
+   function Servent_S_Name
+     (E : Servent_Access) return System.Address;
+
+   function Servent_S_Alias
+     (E : Servent_Access; Index : C.int) return System.Address;
+
+   function Servent_S_Port
+     (E : Servent_Access) return C.unsigned_short;
+
+   function Servent_S_Proto
+     (E : Servent_Access) return System.Address;
+
+   ------------------
+   -- NetDB access --
+   ------------------
+
+   --  There are three possible situations for the following NetDB access
+   --  functions:
+   --    - inherently thread safe (case of data returned in a thread specific
+   --      buffer);
+   --    - thread safe using user-provided buffer;
+   --    - thread unsafe.
+   --
+   --  In the first and third cases, the Buf and Buflen are ignored. In the
+   --  second case, the caller must provide a buffer large enough to
+   --  accommodate the returned data. In the third case, the caller must ensure
+   --  that these functions are called within a critical section.
+
+   function C_Gethostbyname
+     (Name     : C.char_array;
+      Ret      : not null access Hostent;
+      Buf      : System.Address;
+      Buflen   : C.int;
+      H_Errnop : not null access C.int) return C.int;
+
+   function C_Gethostbyaddr
+     (Addr      : System.Address;
+      Addr_Len  : C.int;
+      Addr_Type : C.int;
+      Ret       : not null access Hostent;
+      Buf       : System.Address;
+      Buflen    : C.int;
+      H_Errnop  : not null access C.int) return C.int;
+
+   function C_Getservbyname
+     (Name   : C.char_array;
+      Proto  : C.char_array;
+      Ret    : not null access Servent;
+      Buf    : System.Address;
+      Buflen : C.int) return C.int;
+
+   function C_Getservbyport
+     (Port   : C.int;
+      Proto  : C.char_array;
+      Ret    : not null access Servent;
+      Buf    : System.Address;
+      Buflen : C.int) return C.int;
+
+   ------------------------------------
+   -- Scatter/gather vector handling --
+   ------------------------------------
+
+   type Msghdr is record
+      Msg_Name       : System.Address;
+      Msg_Namelen    : C.unsigned;
+      Msg_Iov        : System.Address;
+      Msg_Iovlen     : SOSC.Msg_Iovlen_T;
+      Msg_Control    : System.Address;
+      Msg_Controllen : C.size_t;
+      Msg_Flags      : C.int;
+   end record;
+   pragma Convention (C, Msghdr);
+
    ----------------------------
    -- Socket sets management --
    ----------------------------
 
-   type Int_Access is access all C.int;
-   pragma Convention (C, Int_Access);
-   --  Access to C integers
-
-   procedure Free_Socket_Set (Set : Fd_Set_Access);
-   --  Free system-dependent socket set
-
    procedure Get_Socket_From_Set
-     (Set    : Fd_Set_Access;
-      Socket : Int_Access;
-      Last   : Int_Access);
+     (Set    : access Fd_Set;
+      Last   : access C.int;
+      Socket : access C.int);
    --  Get last socket in Socket and remove it from the socket set. The
    --  parameter Last is a maximum value of the largest socket. This hint is
    --  used to avoid scanning very large socket sets. After a call to
@@ -264,35 +337,30 @@ package GNAT.Sockets.Thin_Common is
    --  socket set.
 
    procedure Insert_Socket_In_Set
-     (Set    : Fd_Set_Access;
+     (Set    : access Fd_Set;
       Socket : C.int);
    --  Insert socket in the socket set
 
    function  Is_Socket_In_Set
-     (Set    : Fd_Set_Access;
+     (Set    : access constant Fd_Set;
       Socket : C.int) return C.int;
    --  Check whether Socket is in the socket set, return a non-zero
    --  value if it is, zero if it is not.
 
    procedure Last_Socket_In_Set
-     (Set    : Fd_Set_Access;
-      Last   : Int_Access);
+     (Set  : access Fd_Set;
+      Last : access C.int);
    --  Find the largest socket in the socket set. This is needed for select().
    --  When Last_Socket_In_Set is called, parameter Last is a maximum value of
    --  the largest socket. This hint is used to avoid scanning very large
    --  socket sets. After the call, Last is set back to the real largest socket
    --  in the socket set.
 
-   function  New_Socket_Set
-     (Set : Fd_Set_Access) return Fd_Set_Access;
-   --  Allocate a new socket set which is a system-dependent structure and
-   --  initialize by copying Set if it is non-null, by making it empty
-   --  otherwise.
-
-   procedure Remove_Socket_From_Set
-     (Set    : Fd_Set_Access;
-      Socket : C.int);
+   procedure Remove_Socket_From_Set (Set : access Fd_Set; Socket : C.int);
    --  Remove socket from the socket set
+
+   procedure Reset_Socket_Set (Set : access Fd_Set);
+   --  Make Set empty
 
    ------------------------------------------
    -- Pairs of signalling file descriptors --
@@ -309,16 +377,43 @@ package GNAT.Sockets.Thin_Common is
 
    Read_End  : constant := 0;
    Write_End : constant := 1;
-   --  Indices into an Fd_Pair value providing access to each of the connected
+   --  Indexes into an Fd_Pair value providing access to each of the connected
    --  file descriptors.
 
-private
+   function Inet_Pton
+     (Af  : C.int;
+      Cp  : System.Address;
+      Inp : System.Address) return C.int;
 
-   pragma Import (C, Free_Socket_Set, "__gnat_free_socket_set");
+   function C_Ioctl
+     (Fd  : C.int;
+      Req : C.int;
+      Arg : access C.int) return C.int;
+
+private
    pragma Import (C, Get_Socket_From_Set, "__gnat_get_socket_from_set");
    pragma Import (C, Is_Socket_In_Set, "__gnat_is_socket_in_set");
    pragma Import (C, Last_Socket_In_Set, "__gnat_last_socket_in_set");
-   pragma Import (C, New_Socket_Set, "__gnat_new_socket_set");
    pragma Import (C, Insert_Socket_In_Set, "__gnat_insert_socket_in_set");
    pragma Import (C, Remove_Socket_From_Set, "__gnat_remove_socket_from_set");
+   pragma Import (C, Reset_Socket_Set, "__gnat_reset_socket_set");
+   pragma Import (C, C_Ioctl, "__gnat_socket_ioctl");
+   pragma Import (C, Inet_Pton, SOSC.Inet_Pton_Linkname);
+
+   pragma Import (C, C_Gethostbyname, "__gnat_gethostbyname");
+   pragma Import (C, C_Gethostbyaddr, "__gnat_gethostbyaddr");
+   pragma Import (C, C_Getservbyname, "__gnat_getservbyname");
+   pragma Import (C, C_Getservbyport, "__gnat_getservbyport");
+
+   pragma Import (C, Servent_S_Name,  "__gnat_servent_s_name");
+   pragma Import (C, Servent_S_Alias, "__gnat_servent_s_alias");
+   pragma Import (C, Servent_S_Port,  "__gnat_servent_s_port");
+   pragma Import (C, Servent_S_Proto, "__gnat_servent_s_proto");
+
+   pragma Import (C, Hostent_H_Name,     "__gnat_hostent_h_name");
+   pragma Import (C, Hostent_H_Alias,    "__gnat_hostent_h_alias");
+   pragma Import (C, Hostent_H_Addrtype, "__gnat_hostent_h_addrtype");
+   pragma Import (C, Hostent_H_Length,   "__gnat_hostent_h_length");
+   pragma Import (C, Hostent_H_Addr,     "__gnat_hostent_h_addr");
+
 end GNAT.Sockets.Thin_Common;

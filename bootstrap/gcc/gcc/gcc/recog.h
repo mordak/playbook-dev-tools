@@ -1,6 +1,6 @@
 /* Declarations for interface to insn recognizer and insn-output.c.
    Copyright (C) 1987, 1996, 1997, 1998, 1999, 2000, 2001, 2003, 2004,
-   2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+   2005, 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -17,6 +17,9 @@ for more details.
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING3.  If not see
 <http://www.gnu.org/licenses/>.  */
+
+#ifndef GCC_RECOG_H
+#define GCC_RECOG_H
 
 /* Random number that should be large enough for all purposes.  */
 #define MAX_RECOG_ALTERNATIVES 30
@@ -84,8 +87,14 @@ extern int num_validated_changes (void);
 extern void cancel_changes (int);
 extern int constrain_operands (int);
 extern int constrain_operands_cached (int);
-extern int memory_address_p (enum machine_mode, rtx);
-extern int strict_memory_address_p (enum machine_mode, rtx);
+extern int memory_address_addr_space_p (enum machine_mode, rtx, addr_space_t);
+#define memory_address_p(mode,addr) \
+	memory_address_addr_space_p ((mode), (addr), ADDR_SPACE_GENERIC)
+extern int strict_memory_address_addr_space_p (enum machine_mode, rtx,
+					       addr_space_t);
+#define strict_memory_address_p(mode,addr) \
+	strict_memory_address_addr_space_p ((mode), (addr), ADDR_SPACE_GENERIC)
+extern int validate_replace_rtx_subexp (rtx, rtx, rtx, rtx *);
 extern int validate_replace_rtx (rtx, rtx, rtx);
 extern int validate_replace_rtx_part (rtx, rtx, rtx *, rtx);
 extern int validate_replace_rtx_part_nosimplify (rtx, rtx, rtx *, rtx);
@@ -96,12 +105,16 @@ extern int num_changes_pending (void);
 #ifdef HAVE_cc0
 extern int next_insn_tests_no_inequality (rtx);
 #endif
-extern int reg_fits_class_p (rtx, enum reg_class, int, enum machine_mode);
+extern bool reg_fits_class_p (const_rtx, reg_class_t, int, enum machine_mode);
 
 extern int offsettable_memref_p (rtx);
 extern int offsettable_nonstrict_memref_p (rtx);
-extern int offsettable_address_p (int, enum machine_mode, rtx);
-extern int mode_dependent_address_p (rtx);
+extern int offsettable_address_addr_space_p (int, enum machine_mode, rtx,
+					     addr_space_t);
+#define offsettable_address_p(strict,mode,addr) \
+	offsettable_address_addr_space_p ((strict), (mode), (addr), \
+					  ADDR_SPACE_GENERIC)
+extern bool mode_dependent_address_p (rtx);
 
 extern int recog (rtx, rtx, int *);
 #ifndef GENERATOR_FILE
@@ -184,6 +197,9 @@ struct recog_data
   /* Gives the constraint string for operand N.  */
   const char *constraints[MAX_RECOG_OPERANDS];
 
+  /* Nonzero if operand N is a match_operator or a match_parallel.  */
+  char is_operator[MAX_RECOG_OPERANDS];
+
   /* Gives the mode of operand N.  */
   enum machine_mode operand_mode[MAX_RECOG_OPERANDS];
 
@@ -216,6 +232,9 @@ struct recog_data
 
   /* The number of alternatives in the constraints for the insn.  */
   char n_alternatives;
+
+  /* True if insn is ASM_OPERANDS.  */
+  bool is_asm;
 
   /* Specifies whether an insn alternative is enabled using the
      `enabled' attribute in the insn pattern definition.  For back
@@ -250,6 +269,8 @@ struct insn_operand_data
 
   const char strict_low;
 
+  const char is_operator;
+
   const char eliminable;
 };
 
@@ -260,7 +281,7 @@ struct insn_operand_data
 #define INSN_OUTPUT_FORMAT_MULTI	2	/* const char * const * */
 #define INSN_OUTPUT_FORMAT_FUNCTION	3	/* const char * (*)(...) */
 
-struct insn_data
+struct insn_data_d
 {
   const char *const name;
 #if HAVE_DESIGNATED_INITIALIZERS
@@ -285,5 +306,7 @@ struct insn_data
   const char output_format;
 };
 
-extern const struct insn_data insn_data[];
+extern const struct insn_data_d insn_data[];
 extern int peep2_current_count;
+
+#endif /* GCC_RECOG_H */

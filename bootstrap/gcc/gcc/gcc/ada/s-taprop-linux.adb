@@ -6,7 +6,7 @@
 --                                                                          --
 --                                  B o d y                                 --
 --                                                                          --
---         Copyright (C) 1992-2009, Free Software Foundation, Inc.          --
+--         Copyright (C) 1992-2010, Free Software Foundation, Inc.          --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -48,6 +48,7 @@ with System.Tasking.Debug;
 with System.Interrupt_Management;
 with System.OS_Primitives;
 with System.Stack_Checking.Operations;
+with System.Multiprocessors;
 
 with System.Soft_Links;
 --  We use System.Soft_Links instead of System.Tasking.Initialization
@@ -67,9 +68,6 @@ package body System.Task_Primitives.Operations is
    use System.Parameters;
    use System.OS_Primitives;
    use System.Task_Info;
-
-   Use_Alternate_Stack : constant Boolean := Alternate_Stack_Size /= 0;
-   --  Whether to use an alternate signal stack for stack overflows
 
    ----------------
    -- Local Data --
@@ -111,6 +109,12 @@ package body System.Task_Primitives.Operations is
 
    Foreign_Task_Elaborated : aliased Boolean := True;
    --  Used to identified fake tasks (i.e., non-Ada Threads)
+
+   Use_Alternate_Stack : constant Boolean := Alternate_Stack_Size /= 0;
+   --  Whether to use an alternate signal stack for stack overflows
+
+   Abort_Handler_Installed : Boolean := False;
+   --  True if a handler for the abort signal is installed
 
    --------------------
    -- Local Packages --
@@ -172,6 +176,11 @@ package body System.Task_Primitives.Operations is
       Old_Set : aliased sigset_t;
 
    begin
+      --  It's not safe to raise an exception when using GCC ZCX mechanism.
+      --  Note that we still need to install a signal handler, since in some
+      --  cases (e.g. shutdown of the Server_Task in System.Interrupts) we
+      --  need to send the Abort signal to a task.
+
       if ZCX_By_Default and then GCC_ZCX_Support then
          return;
       end if;
@@ -418,15 +427,12 @@ package body System.Task_Primitives.Operations is
    begin
       pragma Assert (Self_ID = Self);
 
-      if Single_Lock then
-         Result :=
-           pthread_cond_wait
-             (Self_ID.Common.LL.CV'Access, Single_RTS_Lock'Access);
-      else
-         Result :=
-           pthread_cond_wait
-             (Self_ID.Common.LL.CV'Access, Self_ID.Common.LL.L'Access);
-      end if;
+      Result :=
+        pthread_cond_wait
+          (cond  => Self_ID.Common.LL.CV'Access,
+           mutex => (if Single_Lock
+                     then Single_RTS_Lock'Access
+                     else Self_ID.Common.LL.L'Access));
 
       --  EINTR is not considered a failure
 
@@ -461,11 +467,10 @@ package body System.Task_Primitives.Operations is
       Timedout := True;
       Yielded := False;
 
-      if Mode = Relative then
-         Abs_Time := Duration'Min (Time, Max_Sensible_Delay) + Check_Time;
-      else
-         Abs_Time := Duration'Min (Check_Time + Max_Sensible_Delay, Time);
-      end if;
+      Abs_Time :=
+        (if Mode = Relative
+         then Duration'Min (Time, Max_Sensible_Delay) + Check_Time
+         else Duration'Min (Check_Time + Max_Sensible_Delay, Time));
 
       if Abs_Time > Check_Time then
          Request := To_Timespec (Abs_Time);
@@ -473,20 +478,13 @@ package body System.Task_Primitives.Operations is
          loop
             exit when Self_ID.Pending_ATC_Level < Self_ID.ATC_Nesting_Level;
 
-            if Single_Lock then
-               Result :=
-                 pthread_cond_timedwait
-                   (Self_ID.Common.LL.CV'Access,
-                    Single_RTS_Lock'Access,
-                    Request'Access);
-
-            else
-               Result :=
-                 pthread_cond_timedwait
-                   (Self_ID.Common.LL.CV'Access,
-                    Self_ID.Common.LL.L'Access,
-                    Request'Access);
-            end if;
+            Result :=
+              pthread_cond_timedwait
+                (cond    => Self_ID.Common.LL.CV'Access,
+                 mutex   => (if Single_Lock
+                             then Single_RTS_Lock'Access
+                             else Self_ID.Common.LL.L'Access),
+                 abstime => Request'Access);
 
             Check_Time := Monotonic_Clock;
             exit when Abs_Time <= Check_Time or else Check_Time < Base_Time;
@@ -531,11 +529,10 @@ package body System.Task_Primitives.Operations is
 
       Write_Lock (Self_ID);
 
-      if Mode = Relative then
-         Abs_Time := Time + Check_Time;
-      else
-         Abs_Time := Duration'Min (Check_Time + Max_Sensible_Delay, Time);
-      end if;
+      Abs_Time :=
+        (if Mode = Relative
+         then Time + Check_Time
+         else Duration'Min (Check_Time + Max_Sensible_Delay, Time));
 
       if Abs_Time > Check_Time then
          Request := To_Timespec (Abs_Time);
@@ -544,17 +541,13 @@ package body System.Task_Primitives.Operations is
          loop
             exit when Self_ID.Pending_ATC_Level < Self_ID.ATC_Nesting_Level;
 
-            if Single_Lock then
-               Result := pthread_cond_timedwait
-                           (Self_ID.Common.LL.CV'Access,
-                            Single_RTS_Lock'Access,
-                            Request'Access);
-            else
-               Result := pthread_cond_timedwait
-                           (Self_ID.Common.LL.CV'Access,
-                            Self_ID.Common.LL.L'Access,
-                            Request'Access);
-            end if;
+            Result :=
+              pthread_cond_timedwait
+                (cond    => Self_ID.Common.LL.CV'Access,
+                 mutex   => (if Single_Lock
+                             then Single_RTS_Lock'Access
+                             else Self_ID.Common.LL.L'Access),
+                 abstime => Request'Access);
 
             Check_Time := Monotonic_Clock;
             exit when Abs_Time <= Check_Time or else Check_Time < Base_Time;
@@ -581,12 +574,32 @@ package body System.Task_Primitives.Operations is
    ---------------------
 
    function Monotonic_Clock return Duration is
-      TV     : aliased struct_timeval;
-      Result : Interfaces.C.int;
+      use Interfaces;
+
+      type timeval is array (1 .. 2) of C.long;
+
+      procedure timeval_to_duration
+        (T    : not null access timeval;
+         sec  : not null access C.long;
+         usec : not null access C.long);
+      pragma Import (C, timeval_to_duration, "__gnat_timeval_to_duration");
+
+      Micro  : constant := 10**6;
+      sec    : aliased C.long;
+      usec   : aliased C.long;
+      TV     : aliased timeval;
+      Result : int;
+
+      function gettimeofday
+        (Tv : access timeval;
+         Tz : System.Address := System.Null_Address) return int;
+      pragma Import (C, gettimeofday, "gettimeofday");
+
    begin
       Result := gettimeofday (TV'Access, System.Null_Address);
       pragma Assert (Result = 0);
-      return To_Duration (TV);
+      timeval_to_duration (TV'Access, sec'Access, usec'Access);
+      return Duration (sec) + Duration (usec) / Micro;
    end Monotonic_Clock;
 
    -------------------
@@ -701,22 +714,13 @@ package body System.Task_Primitives.Operations is
       end if;
 
       Self_ID.Common.LL.Thread := pthread_self;
+      Self_ID.Common.LL.LWP := lwp_self;
 
       Specific.Set (Self_ID);
 
-      Lock_RTS;
-
-      for J in Known_Tasks'Range loop
-         if Known_Tasks (J) = null then
-            Known_Tasks (J) := Self_ID;
-            Self_ID.Known_Tasks_Index := J;
-            exit;
-         end if;
-      end loop;
-
-      Unlock_RTS;
-
-      if Use_Alternate_Stack then
+      if Use_Alternate_Stack
+        and then Self_ID.Common.Task_Alternate_Stack /= Null_Address
+      then
          declare
             Stack  : aliased stack_t;
             Result : Interfaces.C.int;
@@ -816,6 +820,8 @@ package body System.Task_Primitives.Operations is
       Adjusted_Stack_Size : Interfaces.C.size_t;
       Result              : Interfaces.C.int;
 
+      use type System.Multiprocessors.CPU_Range;
+
    begin
       Adjusted_Stack_Size :=
          Interfaces.C.size_t (Stack_Size + Alternate_Stack_Size);
@@ -838,6 +844,46 @@ package body System.Task_Primitives.Operations is
           (Attributes'Access, PTHREAD_CREATE_DETACHED);
       pragma Assert (Result = 0);
 
+      --  Set the required attributes for the creation of the thread
+
+      --  Note: Previously, we called pthread_setaffinity_np (after thread
+      --  creation but before thread activation) to set the affinity but it was
+      --  not behaving as expected. Setting the required attributes for the
+      --  creation of the thread works correctly and it is more appropriate.
+
+      --  Do nothing if required support not provided by the operating system
+
+      if pthread_attr_setaffinity_np'Address = System.Null_Address then
+         null;
+
+      --  Support is available
+
+      elsif T.Common.Base_CPU /= System.Multiprocessors.Not_A_Specific_CPU then
+         declare
+            CPU_Set : aliased cpu_set_t := (bits => (others => False));
+         begin
+            CPU_Set.bits (Integer (T.Common.Base_CPU)) := True;
+            Result :=
+              pthread_attr_setaffinity_np
+                (Attributes'Access,
+                 CPU_SETSIZE / 8,
+                 CPU_Set'Access);
+            pragma Assert (Result = 0);
+         end;
+
+      --  Handle Task_Info
+
+      elsif T.Common.Task_Info /= null
+        and then T.Common.Task_Info.CPU_Affinity /= Task_Info.Any_CPU
+      then
+         Result :=
+           pthread_attr_setaffinity_np
+             (Attributes'Access,
+              CPU_SETSIZE / 8,
+              T.Common.Task_Info.CPU_Affinity'Access);
+         pragma Assert (Result = 0);
+      end if;
+
       --  Since the initial signal mask of a thread is inherited from the
       --  creator, and the Environment task has all its signals masked, we
       --  do not need to manipulate caller's signal mask at this point.
@@ -859,19 +905,6 @@ package body System.Task_Primitives.Operations is
       end if;
 
       Succeeded := True;
-
-      --  Handle Task_Info
-
-      if T.Common.Task_Info /= null then
-         if T.Common.Task_Info.CPU_Affinity /= Task_Info.Any_CPU then
-            Result :=
-              pthread_setaffinity_np
-                (T.Common.LL.Thread,
-                 CPU_SETSIZE / 8,
-                 T.Common.Task_Info.CPU_Affinity'Access);
-            pragma Assert (Result = 0);
-         end if;
-      end if;
 
       Result := pthread_attr_destroy (Attributes'Access);
       pragma Assert (Result = 0);
@@ -927,11 +960,13 @@ package body System.Task_Primitives.Operations is
    procedure Abort_Task (T : Task_Id) is
       Result : Interfaces.C.int;
    begin
-      Result :=
-        pthread_kill
-          (T.Common.LL.Thread,
-           Signal (System.Interrupt_Management.Abort_Task_Interrupt));
-      pragma Assert (Result = 0);
+      if Abort_Handler_Installed then
+         Result :=
+           pthread_kill
+             (T.Common.LL.Thread,
+              Signal (System.Interrupt_Management.Abort_Task_Interrupt));
+         pragma Assert (Result = 0);
+      end if;
    end Abort_Task;
 
    ----------------
@@ -1085,6 +1120,7 @@ package body System.Task_Primitives.Operations is
          SSL.Abort_Undefer.all;
 
          raise Program_Error;
+
       else
          --  Suspend the task if the state is False. Otherwise, the task
          --  continues its execution, and the state of the suspension object
@@ -1094,7 +1130,18 @@ package body System.Task_Primitives.Operations is
             S.State := False;
          else
             S.Waiting := True;
-            Result := pthread_cond_wait (S.CV'Access, S.L'Access);
+
+            loop
+               --  Loop in case pthread_cond_wait returns earlier than expected
+               --  (e.g. in case of EINTR caused by a signal). This should not
+               --  happen with the current Linux implementation of pthread, but
+               --  POSIX does not guarantee it so this may change in future.
+
+               Result := pthread_cond_wait (S.CV'Access, S.L'Access);
+               pragma Assert (Result = 0 or else Result = EINTR);
+
+               exit when not S.Waiting;
+            end loop;
          end if;
 
          Result := pthread_mutex_unlock (S.L'Access);
@@ -1221,6 +1268,8 @@ package body System.Task_Primitives.Operations is
       --    's'   Interrupt_State pragma set state to System (use "default"
       --           system handler)
 
+      use type System.Multiprocessors.CPU_Range;
+
    begin
       Environment_Task_Id := Environment_Task;
 
@@ -1255,9 +1304,13 @@ package body System.Task_Primitives.Operations is
            Alternate_Stack'Address;
       end if;
 
-      Enter_Task (Environment_Task);
+      --  Make environment task known here because it doesn't go through
+      --  Activate_Tasks, which does it for all other tasks.
 
-      --  Install the abort-signal handler
+      Known_Tasks (Known_Tasks'First) := Environment_Task;
+      Environment_Task.Known_Tasks_Index := Known_Tasks'First;
+
+      Enter_Task (Environment_Task);
 
       if State
           (System.Interrupt_Management.Abort_Task_Interrupt) /= Default
@@ -1275,6 +1328,26 @@ package body System.Task_Primitives.Operations is
             act'Unchecked_Access,
             old_act'Unchecked_Access);
          pragma Assert (Result = 0);
+         Abort_Handler_Installed := True;
+      end if;
+
+      --  pragma CPU for the environment task
+
+      if pthread_setaffinity_np'Address /= System.Null_Address
+        and then Environment_Task.Common.Base_CPU /=
+                   System.Multiprocessors.Not_A_Specific_CPU
+      then
+         declare
+            CPU_Set : aliased cpu_set_t := (bits => (others => False));
+         begin
+            CPU_Set.bits (Integer (Environment_Task.Common.Base_CPU)) := True;
+            Result :=
+              pthread_setaffinity_np
+                (Environment_Task.Common.LL.Thread,
+                 CPU_SETSIZE / 8,
+                 CPU_Set'Access);
+            pragma Assert (Result = 0);
+         end;
       end if;
    end Initialize;
 

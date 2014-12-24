@@ -1,14 +1,22 @@
-2009-10-15  Release Manager
+2012-03-01  Release Manager
 
-	* GCC 4.4.2 released.
+	* GCC 4.6.3 released.
 
-2009-07-22  Release Manager
+2011-11-20  Andreas Tobler  <andreast@fgznet.ch>
 
-	* GCC 4.4.1 released.
+	* configure: Regenerate.
 
-2009-04-21  Release Manager
+2011-10-26  Release Manager
 
-	* GCC 4.4.0 released.
+	* GCC 4.6.2 released.
+
+2011-06-27  Release Manager
+
+	* GCC 4.6.1 released.
+
+2011-03-25  Release Manager
+
+	* GCC 4.6.0 released.
 
 
                 ChangeLog file for zlib

@@ -1,5 +1,6 @@
 /* Base configuration file for all FreeBSD targets.
-   Copyright (C) 1999, 2000, 2001, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 1999, 2000, 2001, 2007, 2008, 2009,
+   2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -29,17 +30,6 @@ along with GCC; see the file COPYING3.  If not see
 /* In case we need to know.  */
 #define USING_CONFIG_FREEBSD 1
 
-/* This defines which switch letters take arguments.  On FreeBSD, most of
-   the normal cases (defined in gcc.c) apply, and we also have -h* and
-   -z* options (for the linker) (coming from SVR4).
-   We also have -R (alias --rpath), no -z, --soname (-h), --assert etc.  */
-
-#undef  SWITCH_TAKES_ARG
-#define SWITCH_TAKES_ARG(CHAR) (FBSD_SWITCH_TAKES_ARG(CHAR))
-
-#undef  WORD_SWITCH_TAKES_ARG
-#define WORD_SWITCH_TAKES_ARG(STR) (FBSD_WORD_SWITCH_TAKES_ARG(STR))
-
 #undef  TARGET_OS_CPP_BUILTINS
 #define TARGET_OS_CPP_BUILTINS() FBSD_TARGET_OS_CPP_BUILTINS()
 
@@ -55,9 +45,6 @@ along with GCC; see the file COPYING3.  If not see
 #undef  LIB_SPEC
 #define LIB_SPEC FBSD_LIB_SPEC
 
-/* Define this so we can compile MS code for use with WINE.  */
-#define HANDLE_PRAGMA_PACK_PUSH_POP 1
-
 /************************[  Target stuff  ]***********************************/
 
 /* All FreeBSD Architectures support the ELF object file format.  */
@@ -68,12 +55,15 @@ along with GCC; see the file COPYING3.  If not see
 #undef  NO_IMPLICIT_EXTERN_C
 #define NO_IMPLICIT_EXTERN_C	1
 
-/* Make gcc agree with FreeBSD's standard headers (<machine/ansi.h>, etc...)  */
+/* Follow FreeBSD's standard headers (<sys/_types.h> etc...).  */
 
 #undef  WCHAR_TYPE
 #define WCHAR_TYPE "int"
 
-#define MATH_LIBRARY_PROFILE    "-lm_p"
+#undef  WINT_TYPE
+#define WINT_TYPE "int"
+
+#define MATH_LIBRARY_PROFILE    "m_p"
 
 /* Code generation parameters.  */
 

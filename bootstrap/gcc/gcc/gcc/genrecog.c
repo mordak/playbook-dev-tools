@@ -1,6 +1,6 @@
 /* Generate code from machine description to recognize rtl as insns.
    Copyright (C) 1987, 1988, 1992, 1993, 1994, 1995, 1997, 1998,
-   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008
+   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
 
    This file is part of GCC.
@@ -56,6 +56,7 @@
 #include "tm.h"
 #include "rtl.h"
 #include "errors.h"
+#include "read-md.h"
 #include "gensupport.h"
 
 #define OUTPUT_LABEL(INDENT_STRING, LABEL_NUMBER) \
@@ -71,6 +72,17 @@ struct decision_head
   struct decision *last;
 };
 
+/* These types are roughly in the order in which we'd like to test them.  */
+enum decision_type
+{
+  DT_num_insns,
+  DT_mode, DT_code, DT_veclen,
+  DT_elt_zero_int, DT_elt_one_int, DT_elt_zero_wide, DT_elt_zero_wide_safe,
+  DT_const_int,
+  DT_veclen_ge, DT_dup, DT_pred, DT_c_test,
+  DT_accept_op, DT_accept_insn
+};
+
 /* A single test.  The two accept types aren't tests per-se, but
    their equality (or lack thereof) does affect tree merging so
    it is convenient to keep them here.  */
@@ -80,16 +92,7 @@ struct decision_test
   /* A linked list through the tests attached to a node.  */
   struct decision_test *next;
 
-  /* These types are roughly in the order in which we'd like to test them.  */
-  enum decision_type
-    {
-      DT_num_insns,
-      DT_mode, DT_code, DT_veclen,
-      DT_elt_zero_int, DT_elt_one_int, DT_elt_zero_wide, DT_elt_zero_wide_safe,
-      DT_const_int,
-      DT_veclen_ge, DT_dup, DT_pred, DT_c_test,
-      DT_accept_op, DT_accept_insn
-    } type;
+  enum decision_type type;
 
   union
   {
@@ -167,9 +170,6 @@ static int max_depth;
 
 /* The line number of the start of the pattern currently being processed.  */
 static int pattern_lineno;
-
-/* Count of errors.  */
-static int error_count;
 
 /* Predicate handling.
 
@@ -286,8 +286,7 @@ compute_predicate_codes (rtx exp, char codes[NUM_RTX_CODE])
 
 	if (*next_code == '\0')
 	  {
-	    message_with_line (pattern_lineno, "empty match_code expression");
-	    error_count++;
+	    error_with_line (pattern_lineno, "empty match_code expression");
 	    break;
 	  }
 
@@ -306,9 +305,9 @@ compute_predicate_codes (rtx exp, char codes[NUM_RTX_CODE])
 		}
 	    if (!found_it)
 	      {
-		message_with_line (pattern_lineno, "match_code \"%.*s\" matches nothing",
-				   (int) n, code);
-		error_count ++;
+		error_with_line (pattern_lineno,
+				 "match_code \"%.*s\" matches nothing",
+				 (int) n, code);
 		for (i = 0; i < NUM_RTX_CODE; i++)
 		  if (!strncasecmp (code, GET_RTX_NAME (i), n)
 		      && GET_RTX_NAME (i)[n] == '\0'
@@ -330,10 +329,9 @@ compute_predicate_codes (rtx exp, char codes[NUM_RTX_CODE])
 	struct pred_data *p = lookup_predicate (XSTR (exp, 1));
 	if (!p)
 	  {
-	    message_with_line (pattern_lineno,
-			       "reference to unknown predicate '%s'",
-			       XSTR (exp, 1));
-	    error_count++;
+	    error_with_line (pattern_lineno,
+			     "reference to unknown predicate '%s'",
+			     XSTR (exp, 1));
 	    break;
 	  }
 	for (i = 0; i < NUM_RTX_CODE; i++)
@@ -348,10 +346,9 @@ compute_predicate_codes (rtx exp, char codes[NUM_RTX_CODE])
       break;
 
     default:
-      message_with_line (pattern_lineno,
-	 "'%s' cannot be used in a define_predicate expression",
-	 GET_RTX_NAME (GET_CODE (exp)));
-      error_count++;
+      error_with_line (pattern_lineno,
+		       "'%s' cannot be used in a define_predicate expression",
+		       GET_RTX_NAME (GET_CODE (exp)));
       memset (codes, I, NUM_RTX_CODE);
       break;
     }
@@ -378,7 +375,7 @@ process_define_predicate (rtx desc)
 
   for (i = 0; i < NUM_RTX_CODE; i++)
     if (codes[i] != N)
-      add_predicate_code (pred, i);
+      add_predicate_code (pred, (enum rtx_code) i);
 
   add_predicate (pred);
 }
@@ -631,12 +628,9 @@ validate_pattern (rtx pattern, rtx insn, rtx set, int set_code)
     case MATCH_OP_DUP:
     case MATCH_PAR_DUP:
       if (find_operand (insn, XINT (pattern, 0), pattern) == pattern)
-	{
-	  message_with_line (pattern_lineno,
-			     "operand %i duplicated before defined",
-			     XINT (pattern, 0));
-          error_count++;
-	}
+	error_with_line (pattern_lineno,
+			 "operand %i duplicated before defined",
+			 XINT (pattern, 0));
       break;
     case MATCH_OPERAND:
     case MATCH_OPERATOR:
@@ -692,20 +686,14 @@ validate_pattern (rtx pattern, rtx insn, rtx set, int set_code)
 			     && find_matching_operand (insn, XINT (pattern, 0)))
 		      ;
 		    else
-		      {
-			message_with_line (pattern_lineno,
-					   "operand %d missing in-out reload",
-					   XINT (pattern, 0));
-			error_count++;
-		      }
+		      error_with_line (pattern_lineno,
+				       "operand %d missing in-out reload",
+				       XINT (pattern, 0));
 		  }
 		else if (constraints0 != '=' && constraints0 != '+')
-		  {
-		    message_with_line (pattern_lineno,
-				       "operand %d missing output reload",
-				       XINT (pattern, 0));
-		    error_count++;
-		  }
+		  error_with_line (pattern_lineno,
+				   "operand %d missing output reload",
+				   XINT (pattern, 0));
 	      }
 	  }
 
@@ -779,12 +767,9 @@ validate_pattern (rtx pattern, rtx insn, rtx set, int set_code)
         /* The operands of a SET must have the same mode unless one
 	   is VOIDmode.  */
         else if (dmode != VOIDmode && smode != VOIDmode && dmode != smode)
-	  {
-	    message_with_line (pattern_lineno,
-			       "mode mismatch in set: %smode vs %smode",
-			       GET_MODE_NAME (dmode), GET_MODE_NAME (smode));
-	    error_count++;
-	  }
+	  error_with_line (pattern_lineno,
+			   "mode mismatch in set: %smode vs %smode",
+			   GET_MODE_NAME (dmode), GET_MODE_NAME (smode));
 
 	/* If only one of the operands is VOIDmode, and PC or CC0 is
 	   not involved, it's probably a mistake.  */
@@ -793,7 +778,8 @@ validate_pattern (rtx pattern, rtx insn, rtx set, int set_code)
 		 && GET_CODE (dest) != CC0
 		 && GET_CODE (src) != PC
 		 && GET_CODE (src) != CC0
-		 && GET_CODE (src) != CONST_INT)
+		 && !CONST_INT_P (src)
+		 && GET_CODE (src) != CALL)
 	  {
 	    const char *which;
 	    which = (dmode == VOIDmode ? "destination" : "source");
@@ -824,12 +810,9 @@ validate_pattern (rtx pattern, rtx insn, rtx set, int set_code)
 
     case LABEL_REF:
       if (GET_MODE (XEXP (pattern, 0)) != VOIDmode)
-	{
-	  message_with_line (pattern_lineno,
-			     "operand to label_ref %smode not VOIDmode",
-			     GET_MODE_NAME (GET_MODE (XEXP (pattern, 0))));
-	  error_count++;
-	}
+	error_with_line (pattern_lineno,
+			 "operand to label_ref %smode not VOIDmode",
+			 GET_MODE_NAME (GET_MODE (XEXP (pattern, 0))));
       break;
 
     default:
@@ -1243,7 +1226,7 @@ maybe_both_true_2 (struct decision_test *d1, struct decision_test *d2)
 	  else if (d2->type == DT_pred && d2->u.pred.data)
 	    {
 	      bool common = false;
-	      enum rtx_code c;
+	      int c;
 
 	      for (c = 0; c < NUM_RTX_CODE; c++)
 		if (d1->u.pred.data->codes[c] && d2->u.pred.data->codes[c])
@@ -1490,12 +1473,11 @@ merge_accept_insn (struct decision *oldd, struct decision *addd)
     }
   else
     {
-      message_with_line (add->u.insn.lineno, "`%s' matches `%s'",
-			 get_insn_name (add->u.insn.code_number),
-			 get_insn_name (old->u.insn.code_number));
+      error_with_line (add->u.insn.lineno, "`%s' matches `%s'",
+		       get_insn_name (add->u.insn.code_number),
+		       get_insn_name (old->u.insn.code_number));
       message_with_line (old->u.insn.lineno, "previous definition of `%s'",
 			 get_insn_name (old->u.insn.code_number));
-      error_count++;
     }
 }
 
@@ -1779,19 +1761,10 @@ change_state (const char *oldpos, const char *newpos, const char *indent)
   int odepth = strlen (oldpos);
   int ndepth = strlen (newpos);
   int depth;
-  int old_has_insn, new_has_insn;
 
   /* Pop up as many levels as necessary.  */
   for (depth = odepth; strncmp (oldpos, newpos, depth) != 0; --depth)
     continue;
-
-  /* Hunt for the last [A-Z] in both strings.  */
-  for (old_has_insn = odepth - 1; old_has_insn >= 0; --old_has_insn)
-    if (ISUPPER (oldpos[old_has_insn]))
-      break;
-  for (new_has_insn = ndepth - 1; new_has_insn >= 0; --new_has_insn)
-    if (ISUPPER (newpos[new_has_insn]))
-      break;
 
   /* Go down to desired level.  */
   while (depth < ndepth)
@@ -1921,7 +1894,8 @@ write_switch (struct decision *start, int depth)
       while (p && p->tests->type == DT_pred && p->tests->u.pred.data)
 	{
 	  const struct pred_data *data = p->tests->u.pred.data;
-	  RTX_CODE c;
+	  int c;
+
 	  for (c = 0; c < NUM_RTX_CODE; c++)
 	    if (codemap[c] && data->codes[c])
 	      goto pred_done;
@@ -1930,7 +1904,7 @@ write_switch (struct decision *start, int depth)
 	    if (data->codes[c])
 	      {
 		fputs ("    case ", stdout);
-		print_code (c);
+		print_code ((enum rtx_code) c);
 		fputs (":\n", stdout);
 		codemap[c] = 1;
 	      }
@@ -2470,12 +2444,11 @@ write_header (void)
 #include \"function.h\"\n\
 #include \"insn-config.h\"\n\
 #include \"recog.h\"\n\
-#include \"real.h\"\n\
 #include \"output.h\"\n\
 #include \"flags.h\"\n\
 #include \"hard-reg-set.h\"\n\
 #include \"resource.h\"\n\
-#include \"toplev.h\"\n\
+#include \"diagnostic-core.h\"\n\
 #include \"reload.h\"\n\
 #include \"regs.h\"\n\
 #include \"tm-constrs.h\"\n\
@@ -2726,7 +2699,7 @@ main (int argc, char **argv)
   memset (&split_tree, 0, sizeof split_tree);
   memset (&peephole2_tree, 0, sizeof peephole2_tree);
 
-  if (init_md_reader_args (argc, argv) != SUCCESS_EXIT_CODE)
+  if (!init_rtx_reader_args (argc, argv))
     return (FATAL_EXIT_CODE);
 
   next_insn_code = 0;
@@ -2767,7 +2740,7 @@ main (int argc, char **argv)
 	}
     }
 
-  if (error_count || have_error)
+  if (have_error)
     return FATAL_EXIT_CODE;
 
   puts ("\n\n");
@@ -2894,13 +2867,13 @@ debug_decision_0 (struct decision *d, int indent, int maxdepth)
     debug_decision_0 (n, indent + 2, maxdepth - 1);
 }
 
-void
+DEBUG_FUNCTION void
 debug_decision (struct decision *d)
 {
   debug_decision_0 (d, 0, 1000000);
 }
 
-void
+DEBUG_FUNCTION void
 debug_decision_list (struct decision *d)
 {
   while (d)

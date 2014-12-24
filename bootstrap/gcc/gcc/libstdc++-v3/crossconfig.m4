@@ -28,6 +28,16 @@ case "${host}" in
     AC_DEFINE(HAVE_SQRTF)
     ;;
 
+  *-aix*)
+    GLIBCXX_CHECK_LINKER_FEATURES
+    GLIBCXX_CHECK_MATH_SUPPORT
+    GLIBCXX_CHECK_STDLIB_SUPPORT
+    AC_DEFINE(_GLIBCXX_USE_RANDOM_TR1)
+    # We don't yet support AIX's TLS ABI.
+    #GCC_CHECK_TLS
+    AM_ICONV
+    ;;
+
   *-darwin*)
     # Darwin versions vary, but the linker should work in a cross environment,
     # so we just check for all the features here.
@@ -171,7 +181,7 @@ case "${host}" in
     AC_DEFINE(HAVE_ISINF)
     AC_DEFINE(HAVE_ISNAN)
     ;;
-  *-qnx6.1* | *-qnx6.2* | *-qnx6.3* | *-qnx6.4* | *-qnx6.5*)
+  *-qnx6* | *-qnx8*)
     SECTION_FLAGS='-ffunction-sections -fdata-sections'
     AC_SUBST(SECTION_FLAGS) 
     GLIBCXX_CHECK_LINKER_FEATURES
@@ -189,9 +199,15 @@ case "${host}" in
     AC_DEFINE(HAVE_SINHF)
     AC_DEFINE(HAVE_SINHL)
     ;;
+  *-rtems*)
+    GLIBCXX_CHECK_COMPILER_FEATURES
+    GLIBCXX_CHECK_LINKER_FEATURES
+    GLIBCXX_CHECK_MATH_SUPPORT
+    GLIBCXX_CHECK_STDLIB_SUPPORT
+    ;;
   *-solaris*)
     case "$target" in
-      *-solaris2.7 | *-solaris2.8 | *-solaris2.9 | *-solaris2.10)
+      *-solaris2.8 | *-solaris2.9 | *-solaris2.10)
          GLIBCXX_CHECK_LINKER_FEATURES
          AC_DEFINE(HAVE_MBSTATE_T)
          AC_DEFINE(HAVE_FINITE)

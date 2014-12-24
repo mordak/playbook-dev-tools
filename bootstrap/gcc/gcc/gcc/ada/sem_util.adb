@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -29,6 +29,7 @@ with Checks;   use Checks;
 with Debug;    use Debug;
 with Errout;   use Errout;
 with Elists;   use Elists;
+with Exp_Ch11; use Exp_Ch11;
 with Exp_Disp; use Exp_Disp;
 with Exp_Tss;  use Exp_Tss;
 with Exp_Util; use Exp_Util;
@@ -40,11 +41,11 @@ with Nlists;   use Nlists;
 with Output;   use Output;
 with Opt;      use Opt;
 with Rtsfind;  use Rtsfind;
-with Scans;    use Scans;
-with Scn;      use Scn;
 with Sem;      use Sem;
+with Sem_Aux;  use Sem_Aux;
 with Sem_Attr; use Sem_Attr;
 with Sem_Ch8;  use Sem_Ch8;
+with Sem_Disp; use Sem_Disp;
 with Sem_Eval; use Sem_Eval;
 with Sem_Res;  use Sem_Res;
 with Sem_Type; use Sem_Type;
@@ -53,12 +54,68 @@ with Sinput;   use Sinput;
 with Stand;    use Stand;
 with Style;
 with Stringt;  use Stringt;
+with Table;
 with Targparm; use Targparm;
 with Tbuild;   use Tbuild;
 with Ttypes;   use Ttypes;
 with Uname;    use Uname;
 
+with GNAT.HTable; use GNAT.HTable;
+
 package body Sem_Util is
+
+   ----------------------------------------
+   -- Global_Variables for New_Copy_Tree --
+   ----------------------------------------
+
+   --  These global variables are used by New_Copy_Tree. See description
+   --  of the body of this subprogram for details. Global variables can be
+   --  safely used by New_Copy_Tree, since there is no case of a recursive
+   --  call from the processing inside New_Copy_Tree.
+
+   NCT_Hash_Threshold : constant := 20;
+   --  If there are more than this number of pairs of entries in the
+   --  map, then Hash_Tables_Used will be set, and the hash tables will
+   --  be initialized and used for the searches.
+
+   NCT_Hash_Tables_Used : Boolean := False;
+   --  Set to True if hash tables are in use
+
+   NCT_Table_Entries : Nat;
+   --  Count entries in table to see if threshold is reached
+
+   NCT_Hash_Table_Setup : Boolean := False;
+   --  Set to True if hash table contains data. We set this True if we
+   --  setup the hash table with data, and leave it set permanently
+   --  from then on, this is a signal that second and subsequent users
+   --  of the hash table must clear the old entries before reuse.
+
+   subtype NCT_Header_Num is Int range 0 .. 511;
+   --  Defines range of headers in hash tables (512 headers)
+
+   ----------------------------------
+   -- Order Dependence (AI05-0144) --
+   ----------------------------------
+
+   --  Each actual in a call is entered into the table below. A flag indicates
+   --  whether the corresponding formal is OUT or IN OUT. Each top-level call
+   --  (procedure call, condition, assignment) examines all the actuals for a
+   --  possible order dependence. The table is reset after each such check.
+   --  The actuals to be checked in a call to Check_Order_Dependence are at
+   --  positions 1 .. Last.
+
+   type Actual_Name is record
+      Act         : Node_Id;
+      Is_Writable : Boolean;
+   end record;
+
+   package Actuals_In_Call is new Table.Table (
+      Table_Component_Type => Actual_Name,
+      Table_Index_Type     => Int,
+      Table_Low_Bound      => 0,
+      Table_Initial        => 10,
+      Table_Increment      => 100,
+      Table_Name           => "Actuals");
 
    -----------------------
    -- Local Subprograms --
@@ -186,6 +243,28 @@ package body Sem_Util is
       Analyze (N);
    end Add_Global_Declaration;
 
+   -----------------
+   -- Addressable --
+   -----------------
+
+   --  For now, just 8/16/32/64. but analyze later if AAMP is special???
+
+   function Addressable (V : Uint) return Boolean is
+   begin
+      return V = Uint_8  or else
+             V = Uint_16 or else
+             V = Uint_32 or else
+             V = Uint_64;
+   end Addressable;
+
+   function Addressable (V : Int) return Boolean is
+   begin
+      return V = 8  or else
+             V = 16 or else
+             V = 32 or else
+             V = 64;
+   end Addressable;
+
    -----------------------
    -- Alignment_In_Bits --
    -----------------------
@@ -237,6 +316,10 @@ package body Sem_Util is
       Set_Etype (N, Rtyp);
       Set_Raises_Constraint_Error (N);
 
+      --  Now deal with possible local raise handling
+
+      Possible_Local_Raise (N, Standard_Constraint_Error);
+
       --  If the original expression was marked as static, the result is
       --  still marked as static, but the Raises_Constraint_Error flag is
       --  always set so that further static evaluation is not attempted.
@@ -245,6 +328,30 @@ package body Sem_Util is
          Set_Is_Static_Expression (N);
       end if;
    end Apply_Compile_Time_Constraint_Error;
+
+   --------------------------------
+   -- Bad_Predicated_Subtype_Use --
+   --------------------------------
+
+   procedure Bad_Predicated_Subtype_Use
+     (Msg : String;
+      N   : Node_Id;
+      Typ : Entity_Id)
+   is
+   begin
+      if Has_Predicates (Typ) then
+         if Is_Generic_Actual_Type (Typ) then
+            Error_Msg_FE (Msg & '?', N, Typ);
+            Error_Msg_F ("\Program_Error will be raised at run time?", N);
+            Insert_Action (N,
+              Make_Raise_Program_Error (Sloc (N),
+                Reason => PE_Bad_Predicated_Generic_Type));
+
+         else
+            Error_Msg_FE (Msg, N, Typ);
+         end if;
+      end if;
+   end Bad_Predicated_Subtype_Use;
 
    --------------------------
    -- Build_Actual_Subtype --
@@ -360,9 +467,7 @@ package body Sem_Util is
          end loop;
       end if;
 
-      Subt :=
-        Make_Defining_Identifier (Loc,
-          Chars => New_Internal_Name ('S'));
+      Subt := Make_Temporary (Loc, 'S', Related_Node => N);
       Set_Is_Internal (Subt);
 
       Decl :=
@@ -505,8 +610,8 @@ package body Sem_Util is
                           and then Is_Constrained (Root_Type (T)))
            and then not Has_Unknown_Discriminants (T)
          then
-            --  If the type of the dereference is already constrained, it
-            --  is an actual subtype.
+            --  If the type of the dereference is already constrained, it is an
+            --  actual subtype.
 
             if Is_Array_Type (Etype (N))
               and then Is_Constrained (Etype (N))
@@ -586,9 +691,7 @@ package body Sem_Util is
          return Empty;
       end if;
 
-      Subt :=
-        Make_Defining_Identifier (Loc,
-          Chars => New_Internal_Name ('S'));
+      Subt := Make_Temporary (Loc, 'S');
       Set_Is_Internal (Subt);
 
       Decl :=
@@ -628,10 +731,7 @@ package body Sem_Util is
       end if;
 
       declare
-         Act : constant Entity_Id :=
-                 Make_Defining_Identifier (Loc,
-                   Chars => New_Internal_Name ('S'));
-
+         Act         : constant Entity_Id := Make_Temporary (Loc, 'S');
          Constraints : constant List_Id := New_List;
          Decl        : Node_Id;
 
@@ -996,6 +1096,33 @@ package body Sem_Util is
       end if;
    end Cannot_Raise_Constraint_Error;
 
+   -----------------------------------------
+   -- Check_Dynamically_Tagged_Expression --
+   -----------------------------------------
+
+   procedure Check_Dynamically_Tagged_Expression
+     (Expr        : Node_Id;
+      Typ         : Entity_Id;
+      Related_Nod : Node_Id)
+   is
+   begin
+      pragma Assert (Is_Tagged_Type (Typ));
+
+      --  In order to avoid spurious errors when analyzing the expanded code,
+      --  this check is done only for nodes that come from source and for
+      --  actuals of generic instantiations.
+
+      if (Comes_From_Source (Related_Nod)
+           or else In_Generic_Actual (Expr))
+        and then (Is_Class_Wide_Type (Etype (Expr))
+                   or else Is_Dynamically_Tagged (Expr))
+        and then Is_Tagged_Type (Typ)
+        and then not Is_Class_Wide_Type (Typ)
+      then
+         Error_Msg_N ("dynamically tagged expression not allowed!", Expr);
+      end if;
+   end Check_Dynamically_Tagged_Expression;
+
    --------------------------
    -- Check_Fully_Declared --
    --------------------------
@@ -1086,12 +1213,72 @@ package body Sem_Util is
       end if;
    end Check_Nested_Access;
 
+   ----------------------------
+   -- Check_Order_Dependence --
+   ----------------------------
+
+   procedure Check_Order_Dependence is
+      Act1 : Node_Id;
+      Act2 : Node_Id;
+
+   begin
+      if Ada_Version < Ada_2012 then
+         return;
+      end if;
+
+      --  Ada 2012 AI04-0144-2: Dangerous order dependence. Actuals in nested
+      --  calls within a construct have been collected. If one of them is
+      --  writable and overlaps with another one, evaluation of the enclosing
+      --  construct is nondeterministic. This is illegal in Ada 2012, but is
+      --  treated as a warning for now.
+
+      for J in 1 .. Actuals_In_Call.Last loop
+         if Actuals_In_Call.Table (J).Is_Writable then
+            Act1 := Actuals_In_Call.Table (J).Act;
+
+            if Nkind (Act1) = N_Attribute_Reference then
+               Act1 := Prefix (Act1);
+            end if;
+
+            for K in 1 .. Actuals_In_Call.Last loop
+               if K /= J then
+                  Act2 := Actuals_In_Call.Table (K).Act;
+
+                  if Nkind (Act2) = N_Attribute_Reference then
+                     Act2 := Prefix (Act2);
+                  end if;
+
+                  if Actuals_In_Call.Table (K).Is_Writable
+                    and then K < J
+                  then
+                     --  Already checked
+
+                     null;
+
+                  elsif Denotes_Same_Object (Act1, Act2)
+                    and then Parent (Act1) /= Parent (Act2)
+                  then
+                     Error_Msg_N
+                       ("result may differ if evaluated "
+                        & "after other actual in expression?", Act1);
+                  end if;
+               end if;
+            end loop;
+         end if;
+      end loop;
+
+      --  Remove checked actuals from table
+
+      Actuals_In_Call.Set_Last (0);
+   end Check_Order_Dependence;
+
    ------------------------------------------
    -- Check_Potentially_Blocking_Operation --
    ------------------------------------------
 
    procedure Check_Potentially_Blocking_Operation (N : Node_Id) is
       S : Entity_Id;
+
    begin
       --  N is one of the potentially blocking operations listed in 9.5.1(8).
       --  When pragma Detect_Blocking is active, the run time will raise
@@ -1108,7 +1295,6 @@ package body Sem_Util is
          if Is_Protected_Type (S) then
             Error_Msg_N
               ("potentially blocking operation in protected operation?", N);
-
             return;
          end if;
 
@@ -1356,10 +1542,19 @@ package body Sem_Util is
       -------------
 
       procedure Collect (Typ : Entity_Id) is
-         Tag_Comp : Entity_Id;
+         Tag_Comp   : Entity_Id;
+         Parent_Typ : Entity_Id;
 
       begin
-         if Etype (Typ) /= Typ
+         --  Handle private types
+
+         if Present (Full_View (Etype (Typ))) then
+            Parent_Typ := Full_View (Etype (Typ));
+         else
+            Parent_Typ := Etype (Typ);
+         end if;
+
+         if Parent_Typ /= Typ
 
             --  Protect the frontend against wrong sources. For example:
 
@@ -1372,9 +1567,9 @@ package body Sem_Util is
             --      type C is new B with null record;
             --    end P;
 
-           and then Etype (Typ) /= Tagged_Type
+           and then Parent_Typ /= Tagged_Type
          then
-            Collect (Etype (Typ));
+            Collect (Parent_Typ);
          end if;
 
          --  Collect the components containing tags of secondary dispatch
@@ -1425,22 +1620,48 @@ package body Sem_Util is
 
       function Search_Tag (Iface : Entity_Id) return Entity_Id is
          ADT : Elmt_Id;
-
       begin
-         ADT := Next_Elmt (Next_Elmt (First_Elmt (Access_Disp_Table (T))));
+         if not Is_CPP_Class (T) then
+            ADT := Next_Elmt (Next_Elmt (First_Elmt (Access_Disp_Table (T))));
+         else
+            ADT := Next_Elmt (First_Elmt (Access_Disp_Table (T)));
+         end if;
+
          while Present (ADT)
-            and then Ekind (Node (ADT)) = E_Constant
+            and then Is_Tag (Node (ADT))
             and then Related_Type (Node (ADT)) /= Iface
          loop
-            --  Skip the secondary dispatch tables of Iface
+            --  Skip secondary dispatch table referencing thunks to user
+            --  defined primitives covered by this interface.
 
+            pragma Assert (Has_Suffix (Node (ADT), 'P'));
             Next_Elmt (ADT);
-            Next_Elmt (ADT);
-            Next_Elmt (ADT);
-            Next_Elmt (ADT);
+
+            --  Skip secondary dispatch tables of Ada types
+
+            if not Is_CPP_Class (T) then
+
+               --  Skip secondary dispatch table referencing thunks to
+               --  predefined primitives.
+
+               pragma Assert (Has_Suffix (Node (ADT), 'Y'));
+               Next_Elmt (ADT);
+
+               --  Skip secondary dispatch table referencing user-defined
+               --  primitives covered by this interface.
+
+               pragma Assert (Has_Suffix (Node (ADT), 'D'));
+               Next_Elmt (ADT);
+
+               --  Skip secondary dispatch table referencing predefined
+               --  primitives.
+
+               pragma Assert (Has_Suffix (Node (ADT), 'Z'));
+               Next_Elmt (ADT);
+            end if;
          end loop;
 
-         pragma Assert (Ekind (Node (ADT)) = E_Constant);
+         pragma Assert (Is_Tag (Node (ADT)));
          return Node (ADT);
       end Search_Tag;
 
@@ -1492,6 +1713,44 @@ package body Sem_Util is
       end loop;
    end Collect_Interfaces_Info;
 
+   ---------------------
+   -- Collect_Parents --
+   ---------------------
+
+   procedure Collect_Parents
+     (T             : Entity_Id;
+      List          : out Elist_Id;
+      Use_Full_View : Boolean := True)
+   is
+      Current_Typ : Entity_Id := T;
+      Parent_Typ  : Entity_Id;
+
+   begin
+      List := New_Elmt_List;
+
+      --  No action if the if the type has no parents
+
+      if T = Etype (T) then
+         return;
+      end if;
+
+      loop
+         Parent_Typ := Etype (Current_Typ);
+
+         if Is_Private_Type (Parent_Typ)
+           and then Present (Full_View (Parent_Typ))
+           and then Use_Full_View
+         then
+            Parent_Typ := Full_View (Base_Type (Parent_Typ));
+         end if;
+
+         Append_Elmt (Parent_Typ, List);
+
+         exit when Parent_Typ = Current_Typ;
+         Current_Typ := Parent_Typ;
+      end loop;
+   end Collect_Parents;
+
    ----------------------------------
    -- Collect_Primitive_Operations --
    ----------------------------------
@@ -1505,6 +1764,27 @@ package body Sem_Util is
       Is_Prim        : Boolean;
       Formal_Derived : Boolean := False;
       Id             : Entity_Id;
+
+      function Match (E : Entity_Id) return Boolean;
+      --  True if E's base type is B_Type, or E is of an anonymous access type
+      --  and the base type of its designated type is B_Type.
+
+      -----------
+      -- Match --
+      -----------
+
+      function Match (E : Entity_Id) return Boolean is
+         Etyp : Entity_Id := Etype (E);
+
+      begin
+         if Ekind (Etyp) = E_Anonymous_Access_Type then
+            Etyp := Designated_Type (Etyp);
+         end if;
+
+         return Base_Type (Etyp) = B_Type;
+      end Match;
+
+   --  Start of processing for Collect_Primitive_Operations
 
    begin
       --  For tagged types, the primitive operations are collected as they
@@ -1574,19 +1854,13 @@ package body Sem_Util is
             then
                Is_Prim := False;
 
-               if Base_Type (Etype (Id)) = B_Type then
+               if Match (Id) then
                   Is_Prim := True;
+
                else
                   Formal := First_Formal (Id);
                   while Present (Formal) loop
-                     if Base_Type (Etype (Formal)) = B_Type then
-                        Is_Prim := True;
-                        exit;
-
-                     elsif Ekind (Etype (Formal)) = E_Anonymous_Access_Type
-                       and then Base_Type
-                         (Designated_Type (Etype (Formal))) = B_Type
-                     then
+                     if Match (Formal) then
                         Is_Prim := True;
                         exit;
                      end if;
@@ -1603,18 +1877,40 @@ package body Sem_Util is
                  and then (not Formal_Derived
                             or else Present (Alias (Id)))
                then
-                  Append_Elmt (Id, Op_List);
+                  --  In the special case of an equality operator aliased to
+                  --  an overriding dispatching equality belonging to the same
+                  --  type, we don't include it in the list of primitives.
+                  --  This avoids inheriting multiple equality operators when
+                  --  deriving from untagged private types whose full type is
+                  --  tagged, which can otherwise cause ambiguities. Note that
+                  --  this should only happen for this kind of untagged parent
+                  --  type, since normally dispatching operations are inherited
+                  --  using the type's Primitive_Operations list.
+
+                  if Chars (Id) = Name_Op_Eq
+                    and then Is_Dispatching_Operation (Id)
+                    and then Present (Alias (Id))
+                    and then Present (Overridden_Operation (Alias (Id)))
+                    and then Base_Type (Etype (First_Entity (Id))) =
+                               Base_Type (Etype (First_Entity (Alias (Id))))
+                  then
+                     null;
+
+                  --  Include the subprogram in the list of primitives
+
+                  else
+                     Append_Elmt (Id, Op_List);
+                  end if;
                end if;
             end if;
 
             Next_Entity (Id);
 
-            --  For a type declared in System, some of its operations
-            --  may appear in  the target-specific extension to System.
+            --  For a type declared in System, some of its operations may
+            --  appear in the target-specific extension to System.
 
             if No (Id)
-              and then Chars (B_Scope) = Name_System
-              and then Scope (B_Scope) = Standard_Standard
+              and then B_Scope = RTU_Entity (System)
               and then Present_System_Aux
             then
                B_Scope := System_Aux_Id;
@@ -2006,9 +2302,7 @@ package body Sem_Util is
                --  so we can continue semantic analysis
 
                elsif Nam = Error then
-                  Err :=
-                    Make_Defining_Identifier (Sloc (N),
-                      Chars => New_Internal_Name ('T'));
+                  Err := Make_Temporary (Sloc (N), 'T');
                   Set_Defining_Unit_Name (N, Err);
 
                   return Err;
@@ -2062,6 +2356,242 @@ package body Sem_Util is
                   Is_Concurrent_Record_Type (Scope (Discriminal_Link (E)))));
 
    end Denotes_Discriminant;
+
+   -------------------------
+   -- Denotes_Same_Object --
+   -------------------------
+
+   function Denotes_Same_Object (A1, A2 : Node_Id) return Boolean is
+      Obj1 : Node_Id := A1;
+      Obj2 : Node_Id := A2;
+
+      procedure Check_Renaming (Obj : in out Node_Id);
+      --  If an object is a renaming, examine renamed object. If it is a
+      --  dereference of a variable, or an indexed expression with non-constant
+      --  indexes, no overlap check can be reported.
+
+      --------------------
+      -- Check_Renaming --
+      --------------------
+
+      procedure Check_Renaming (Obj : in out Node_Id) is
+      begin
+         if Is_Entity_Name (Obj)
+           and then Present (Renamed_Entity (Entity (Obj)))
+         then
+            Obj := Renamed_Entity (Entity (Obj));
+            if Nkind (Obj) = N_Explicit_Dereference
+              and then Is_Variable (Prefix (Obj))
+            then
+               Obj := Empty;
+
+            elsif Nkind (Obj) = N_Indexed_Component then
+               declare
+                  Indx : Node_Id;
+
+               begin
+                  Indx := First (Expressions (Obj));
+                  while Present (Indx) loop
+                     if not Is_OK_Static_Expression (Indx) then
+                        Obj := Empty;
+                        exit;
+                     end if;
+
+                     Next_Index (Indx);
+                  end loop;
+               end;
+            end if;
+         end if;
+      end Check_Renaming;
+
+   --  Start of processing for Denotes_Same_Object
+
+   begin
+      Check_Renaming (Obj1);
+      Check_Renaming (Obj2);
+
+      if No (Obj1)
+        or else No (Obj2)
+      then
+         return False;
+      end if;
+
+      --  If we have entity names, then must be same entity
+
+      if Is_Entity_Name (Obj1) then
+         if Is_Entity_Name (Obj2) then
+            return Entity (Obj1) = Entity (Obj2);
+         else
+            return False;
+         end if;
+
+      --  No match if not same node kind
+
+      elsif Nkind (Obj1) /= Nkind (Obj2) then
+         return False;
+
+      --  For selected components, must have same prefix and selector
+
+      elsif Nkind (Obj1) = N_Selected_Component then
+         return Denotes_Same_Object (Prefix (Obj1), Prefix (Obj2))
+           and then
+         Entity (Selector_Name (Obj1)) = Entity (Selector_Name (Obj2));
+
+      --  For explicit dereferences, prefixes must be same
+
+      elsif Nkind (Obj1) = N_Explicit_Dereference then
+         return Denotes_Same_Object (Prefix (Obj1), Prefix (Obj2));
+
+      --  For indexed components, prefixes and all subscripts must be the same
+
+      elsif Nkind (Obj1) = N_Indexed_Component then
+         if Denotes_Same_Object (Prefix (Obj1), Prefix (Obj2)) then
+            declare
+               Indx1 : Node_Id;
+               Indx2 : Node_Id;
+
+            begin
+               Indx1 := First (Expressions (Obj1));
+               Indx2 := First (Expressions (Obj2));
+               while Present (Indx1) loop
+
+                  --  Indexes must denote the same static value or same object
+
+                  if Is_OK_Static_Expression (Indx1) then
+                     if not Is_OK_Static_Expression (Indx2) then
+                        return False;
+
+                     elsif Expr_Value (Indx1) /= Expr_Value (Indx2) then
+                        return False;
+                     end if;
+
+                  elsif not Denotes_Same_Object (Indx1, Indx2) then
+                     return False;
+                  end if;
+
+                  Next (Indx1);
+                  Next (Indx2);
+               end loop;
+
+               return True;
+            end;
+         else
+            return False;
+         end if;
+
+      --  For slices, prefixes must match and bounds must match
+
+      elsif Nkind (Obj1) = N_Slice
+        and then Denotes_Same_Object (Prefix (Obj1), Prefix (Obj2))
+      then
+         declare
+            Lo1, Lo2, Hi1, Hi2 : Node_Id;
+
+         begin
+            Get_Index_Bounds (Etype (Obj1), Lo1, Hi1);
+            Get_Index_Bounds (Etype (Obj2), Lo2, Hi2);
+
+            --  Check whether bounds are statically identical. There is no
+            --  attempt to detect partial overlap of slices.
+
+            return Denotes_Same_Object (Lo1, Lo2)
+              and then Denotes_Same_Object (Hi1, Hi2);
+         end;
+
+         --  Literals will appear as indexes. Isn't this where we should check
+         --  Known_At_Compile_Time at least if we are generating warnings ???
+
+      elsif Nkind (Obj1) = N_Integer_Literal then
+         return Intval (Obj1) = Intval (Obj2);
+
+      else
+         return False;
+      end if;
+   end Denotes_Same_Object;
+
+   -------------------------
+   -- Denotes_Same_Prefix --
+   -------------------------
+
+   function Denotes_Same_Prefix (A1, A2 : Node_Id) return Boolean is
+
+   begin
+      if Is_Entity_Name (A1) then
+         if Nkind_In (A2, N_Selected_Component, N_Indexed_Component)
+           and then not Is_Access_Type (Etype (A1))
+         then
+            return Denotes_Same_Object (A1, Prefix (A2))
+              or else Denotes_Same_Prefix (A1, Prefix (A2));
+         else
+            return False;
+         end if;
+
+      elsif Is_Entity_Name (A2) then
+         return Denotes_Same_Prefix (A2, A1);
+
+      elsif Nkind_In (A1, N_Selected_Component, N_Indexed_Component, N_Slice)
+              and then
+            Nkind_In (A2, N_Selected_Component, N_Indexed_Component, N_Slice)
+      then
+         declare
+            Root1, Root2 : Node_Id;
+            Depth1, Depth2 : Int := 0;
+
+         begin
+            Root1 := Prefix (A1);
+            while not Is_Entity_Name (Root1) loop
+               if not Nkind_In
+                 (Root1, N_Selected_Component, N_Indexed_Component)
+               then
+                  return False;
+               else
+                  Root1 := Prefix (Root1);
+               end if;
+
+               Depth1 := Depth1 + 1;
+            end loop;
+
+            Root2 := Prefix (A2);
+            while not Is_Entity_Name (Root2) loop
+               if not Nkind_In
+                 (Root2, N_Selected_Component, N_Indexed_Component)
+               then
+                  return False;
+               else
+                  Root2 := Prefix (Root2);
+               end if;
+
+               Depth2 := Depth2 + 1;
+            end loop;
+
+            --  If both have the same depth and they do not denote the same
+            --  object, they are disjoint and not warning is needed.
+
+            if Depth1 = Depth2 then
+               return False;
+
+            elsif Depth1 > Depth2 then
+               Root1 := Prefix (A1);
+               for I in 1 .. Depth1 - Depth2 - 1 loop
+                  Root1 := Prefix (Root1);
+               end loop;
+
+               return Denotes_Same_Object (Root1, A2);
+
+            else
+               Root2 := Prefix (A2);
+               for I in 1 .. Depth2 - Depth1 - 1 loop
+                  Root2 := Prefix (Root2);
+               end loop;
+
+               return Denotes_Same_Object (A1, Root2);
+            end if;
+         end;
+
+      else
+         return False;
+      end if;
+   end Denotes_Same_Prefix;
 
    ----------------------
    -- Denotes_Variable --
@@ -2162,6 +2692,28 @@ package body Sem_Util is
          return False;
       end if;
    end Designate_Same_Unit;
+
+   --------------------------
+   -- Enclosing_CPP_Parent --
+   --------------------------
+
+   function Enclosing_CPP_Parent (Typ : Entity_Id) return Entity_Id is
+      Parent_Typ : Entity_Id := Typ;
+
+   begin
+      while not Is_CPP_Class (Parent_Typ)
+         and then Etype (Parent_Typ) /= Parent_Typ
+      loop
+         Parent_Typ := Etype (Parent_Typ);
+
+         if Is_Private_Type (Parent_Typ) then
+            Parent_Typ := Full_View (Base_Type (Parent_Typ));
+         end if;
+      end loop;
+
+      pragma Assert (Is_CPP_Class (Parent_Typ));
+      return Parent_Typ;
+   end Enclosing_CPP_Parent;
 
    ----------------------------
    -- Enclosing_Generic_Body --
@@ -2309,7 +2861,18 @@ package body Sem_Util is
       elsif Ekind (Dynamic_Scope) = E_Task_Type then
          return Get_Task_Body_Procedure (Dynamic_Scope);
 
-      elsif Convention (Dynamic_Scope) = Convention_Protected then
+      elsif Ekind (Dynamic_Scope) = E_Limited_Private_Type
+        and then Present (Full_View (Dynamic_Scope))
+        and then Ekind (Full_View (Dynamic_Scope)) = E_Task_Type
+      then
+         return Get_Task_Body_Procedure (Full_View (Dynamic_Scope));
+
+      --  No body is generated if the protected operation is eliminated
+
+      elsif Convention (Dynamic_Scope) = Convention_Protected
+        and then not Is_Eliminated (Dynamic_Scope)
+        and then Present (Protected_Body_Subprogram (Dynamic_Scope))
+      then
          return Protected_Body_Subprogram (Dynamic_Scope);
 
       else
@@ -2482,9 +3045,9 @@ package body Sem_Util is
             Set_Scope (Def_Id, Current_Scope);
             return;
 
-         --  Analogous to privals, the discriminal generated for an entry
-         --  index parameter acts as a weak declaration. Perform minimal
-         --  decoration to avoid bogus errors.
+         --  Analogous to privals, the discriminal generated for an entry index
+         --  parameter acts as a weak declaration. Perform minimal decoration
+         --  to avoid bogus errors.
 
          elsif Is_Discriminal (Def_Id)
            and then Ekind (Discriminal_Link (Def_Id)) = E_Entry_Index_Parameter
@@ -2492,11 +3055,10 @@ package body Sem_Util is
             Set_Scope (Def_Id, Current_Scope);
             return;
 
-         --  In the body or private part of an instance, a type extension
-         --  may introduce a component with the same name as that of an
-         --  actual. The legality rule is not enforced, but the semantics
-         --  of the full type with two components of the same name are not
-         --  clear at this point ???
+         --  In the body or private part of an instance, a type extension may
+         --  introduce a component with the same name as that of an actual. The
+         --  legality rule is not enforced, but the semantics of the full type
+         --  with two components of same name are not clear at this point???
 
          elsif In_Instance_Not_Visible then
             null;
@@ -2510,9 +3072,9 @@ package body Sem_Util is
          then
             null;
 
-         --  Conversely, with front-end inlining we may compile the parent
-         --  body first, and a child unit subsequently. The context is now
-         --  the parent spec, and body entities are not visible.
+         --  Conversely, with front-end inlining we may compile the parent body
+         --  first, and a child unit subsequently. The context is now the
+         --  parent spec, and body entities are not visible.
 
          elsif Is_Child_Unit (Def_Id)
            and then Is_Package_Body_Entity (E)
@@ -2526,8 +3088,8 @@ package body Sem_Util is
             Error_Msg_Sloc := Sloc (E);
 
             --  If the previous declaration is an incomplete type declaration
-            --  this may be an attempt to complete it with a private type.
-            --  The following avoids confusing cascaded errors.
+            --  this may be an attempt to complete it with a private type. The
+            --  following avoids confusing cascaded errors.
 
             if Nkind (Parent (E)) = N_Incomplete_Type_Declaration
               and then Nkind (Parent (Def_Id)) = N_Private_Type_Declaration
@@ -2550,9 +3112,9 @@ package body Sem_Util is
                Error_Msg_N ("& conflicts with declaration#", E);
                return;
 
-            --  If the name of the unit appears in its own context clause,
-            --  a dummy package with the name has already been created, and
-            --  the error emitted. Try to continue quietly.
+            --  If the name of the unit appears in its own context clause, a
+            --  dummy package with the name has already been created, and the
+            --  error emitted. Try to continue quietly.
 
             elsif Error_Posted (E)
               and then Sloc (E) = No_Location
@@ -2568,9 +3130,7 @@ package body Sem_Util is
                --  Avoid cascaded messages with duplicate components in
                --  derived types.
 
-               if Ekind (E) = E_Component
-                 or else Ekind (E) = E_Discriminant
-               then
+               if Ekind_In (E, E_Component, E_Discriminant) then
                   return;
                end if;
             end if;
@@ -2583,9 +3143,9 @@ package body Sem_Util is
                Error_Msg_N ("\generic units cannot be overloaded", Def_Id);
             end if;
 
-            --  If entity is in standard, then we are in trouble, because
-            --  it means that we have a library package with a duplicated
-            --  name. That's hard to recover from, so abort!
+            --  If entity is in standard, then we are in trouble, because it
+            --  means that we have a library package with a duplicated name.
+            --  That's hard to recover from, so abort!
 
             if S = Standard_Standard then
                raise Unrecoverable_Error;
@@ -2599,19 +3159,17 @@ package body Sem_Util is
          end if;
       end if;
 
-      --  If we fall through, declaration is OK , or OK enough to continue
+      --  If we fall through, declaration is OK, at least OK enough to continue
 
-      --  If Def_Id is a discriminant or a record component we are in the
-      --  midst of inheriting components in a derived record definition.
-      --  Preserve their Ekind and Etype.
+      --  If Def_Id is a discriminant or a record component we are in the midst
+      --  of inheriting components in a derived record definition. Preserve
+      --  their Ekind and Etype.
 
-      if Ekind (Def_Id) = E_Discriminant
-        or else Ekind (Def_Id) = E_Component
-      then
+      if Ekind_In (Def_Id, E_Discriminant, E_Component) then
          null;
 
-      --  If a type is already set, leave it alone (happens whey a type
-      --  declaration is reanalyzed following a call to the optimizer)
+      --  If a type is already set, leave it alone (happens when a type
+      --  declaration is reanalyzed following a call to the optimizer).
 
       elsif Present (Etype (Def_Id)) then
          null;
@@ -2627,8 +3185,7 @@ package body Sem_Util is
       --  Inherited discriminants and components in derived record types are
       --  immediately visible. Itypes are not.
 
-      if Ekind (Def_Id) = E_Discriminant
-        or else Ekind (Def_Id) = E_Component
+      if Ekind_In (Def_Id, E_Discriminant, E_Component)
         or else (No (Corresponding_Remote_Type (Def_Id))
                  and then not Is_Itype (Def_Id))
       then
@@ -2669,8 +3226,8 @@ package body Sem_Util is
 
          and then In_Extended_Main_Source_Unit (Def_Id)
 
-         --  Finally, the hidden entity must be either immediately visible
-         --  or use visible (from a used package)
+         --  Finally, the hidden entity must be either immediately visible or
+         --  use visible (i.e. from a used package).
 
          and then
            (Is_Immediately_Visible (C)
@@ -2799,6 +3356,38 @@ package body Sem_Util is
       Call   := Empty;
    end Find_Actual;
 
+   ---------------------------
+   -- Find_Body_Discriminal --
+   ---------------------------
+
+   function Find_Body_Discriminal
+     (Spec_Discriminant : Entity_Id) return Entity_Id
+   is
+      pragma Assert (Is_Concurrent_Record_Type (Scope (Spec_Discriminant)));
+
+      Tsk  : constant Entity_Id :=
+               Corresponding_Concurrent_Type (Scope (Spec_Discriminant));
+      Disc : Entity_Id;
+
+   begin
+      --  Find discriminant of original concurrent type, and use its current
+      --  discriminal, which is the renaming within the task/protected body.
+
+      Disc := First_Discriminant (Tsk);
+      while Present (Disc) loop
+         if Chars (Disc) = Chars (Spec_Discriminant) then
+            return Discriminal (Disc);
+         end if;
+
+         Next_Discriminant (Disc);
+      end loop;
+
+      --  That loop should always succeed in finding a matching entry and
+      --  returning. Fatal error if not.
+
+      raise Program_Error;
+   end Find_Body_Discriminal;
+
    -------------------------------------
    -- Find_Corresponding_Discriminant --
    -------------------------------------
@@ -2847,11 +3436,15 @@ package body Sem_Util is
    end Find_Corresponding_Discriminant;
 
    --------------------------
-   -- Find_Overlaid_Object --
+   -- Find_Overlaid_Entity --
    --------------------------
 
-   function Find_Overlaid_Object (N : Node_Id) return Entity_Id is
-      Expr  : Node_Id;
+   procedure Find_Overlaid_Entity
+     (N   : Node_Id;
+      Ent : out Entity_Id;
+      Off : out Boolean)
+   is
+      Expr : Node_Id;
 
    begin
       --  We are looking for one of the two following forms:
@@ -2867,24 +3460,25 @@ package body Sem_Util is
       --  In the second case, the expr is either Y'Address, or recursively a
       --  constant that eventually references Y'Address.
 
+      Ent := Empty;
+      Off := False;
+
       if Nkind (N) = N_Attribute_Definition_Clause
         and then Chars (N) = Name_Address
       then
-         --  This loop checks the form of the expression for Y'Address where Y
-         --  is an object entity name. The first loop checks the original
-         --  expression in the attribute definition clause. Subsequent loops
-         --  check referenced constants.
-
          Expr := Expression (N);
+
+         --  This loop checks the form of the expression for Y'Address,
+         --  using recursion to deal with intermediate constants.
+
          loop
-            --  Check for Y'Address where Y is an object entity
+            --  Check for Y'Address
 
             if Nkind (Expr) = N_Attribute_Reference
               and then Attribute_Name (Expr) = Name_Address
-              and then Is_Entity_Name (Prefix (Expr))
-              and then Is_Object (Entity (Prefix (Expr)))
             then
-               return Entity (Prefix (Expr));
+               Expr := Prefix (Expr);
+               exit;
 
                --  Check for Const where Const is a constant entity
 
@@ -2896,13 +3490,36 @@ package body Sem_Util is
             --  Anything else does not need checking
 
             else
-               exit;
+               return;
+            end if;
+         end loop;
+
+         --  This loop checks the form of the prefix for an entity,
+         --  using recursion to deal with intermediate components.
+
+         loop
+            --  Check for Y where Y is an entity
+
+            if Is_Entity_Name (Expr) then
+               Ent := Entity (Expr);
+               return;
+
+            --  Check for components
+
+            elsif
+               Nkind_In (Expr, N_Selected_Component, N_Indexed_Component) then
+
+               Expr := Prefix (Expr);
+               Off := True;
+
+            --  Anything else does not need checking
+
+            else
+               return;
             end if;
          end loop;
       end if;
-
-      return Empty;
-   end Find_Overlaid_Object;
+   end Find_Overlaid_Entity;
 
    -------------------------
    -- Find_Parameter_Type --
@@ -2963,7 +3580,8 @@ package body Sem_Util is
                elsif Is_Entity_Name (Choice)
                  and then Is_Type (Entity (Choice))
                then
-                  exit Search when Is_In_Range (Expr, Etype (Choice));
+                  exit Search when Is_In_Range (Expr, Etype (Choice),
+                                                Assume_Valid => False);
 
                --  Choice is a subtype indication
 
@@ -3022,71 +3640,6 @@ package body Sem_Util is
          return N;
       end if;
    end First_Actual;
-
-   -------------------------
-   -- Full_Qualified_Name --
-   -------------------------
-
-   function Full_Qualified_Name (E : Entity_Id) return String_Id is
-      Res : String_Id;
-      pragma Warnings (Off, Res);
-
-      function Internal_Full_Qualified_Name (E : Entity_Id) return String_Id;
-      --  Compute recursively the qualified name without NUL at the end
-
-      ----------------------------------
-      -- Internal_Full_Qualified_Name --
-      ----------------------------------
-
-      function Internal_Full_Qualified_Name (E : Entity_Id) return String_Id is
-         Ent         : Entity_Id := E;
-         Parent_Name : String_Id := No_String;
-
-      begin
-         --  Deals properly with child units
-
-         if Nkind (Ent) = N_Defining_Program_Unit_Name then
-            Ent := Defining_Identifier (Ent);
-         end if;
-
-         --  Compute qualification recursively (only "Standard" has no scope)
-
-         if Present (Scope (Scope (Ent))) then
-            Parent_Name := Internal_Full_Qualified_Name (Scope (Ent));
-         end if;
-
-         --  Every entity should have a name except some expanded blocks
-         --  don't bother about those.
-
-         if Chars (Ent) = No_Name then
-            return Parent_Name;
-         end if;
-
-         --  Add a period between Name and qualification
-
-         if Parent_Name /= No_String then
-            Start_String (Parent_Name);
-            Store_String_Char (Get_Char_Code ('.'));
-
-         else
-            Start_String;
-         end if;
-
-         --  Generates the entity name in upper case
-
-         Get_Decoded_Name_String (Chars (Ent));
-         Set_All_Upper_Case;
-         Store_String_Chars (Name_Buffer (1 .. Name_Len));
-         return End_String;
-      end Internal_Full_Qualified_Name;
-
-   --  Start of processing for Full_Qualified_Name
-
-   begin
-      Res := Internal_Full_Qualified_Name (E);
-      Store_String_Char (Get_Char_Code (ASCII.NUL));
-      return End_String;
-   end Full_Qualified_Name;
 
    -----------------------
    -- Gather_Components --
@@ -3783,16 +4336,16 @@ package body Sem_Util is
          Default : Alignment_Result) return Alignment_Result
       is
          Result : Alignment_Result := Known_Compatible;
-         --  Set to result if Problem_Prefix or Problem_Offset returns True.
-         --  Note that once a value of Known_Incompatible is set, it is sticky
-         --  and does not get changed to Unknown (the value in Result only gets
-         --  worse as we go along, never better).
+         --  Holds the current status of the result. Note that once a value of
+         --  Known_Incompatible is set, it is sticky and does not get changed
+         --  to Unknown (the value in Result only gets worse as we go along,
+         --  never better).
 
-         procedure Check_Offset (Offs : Uint);
-         --  Called when Expr is a selected or indexed component with Offs set
-         --  to resp Component_First_Bit or Component_Size. Checks that if the
-         --  offset is specified it is compatible with the object alignment
-         --  requirements. The value in Result is modified accordingly.
+         Offs : Uint := No_Uint;
+         --  Set to a factor of the offset from the base object when Expr is a
+         --  selected or indexed component, based on Component_Bit_Offset and
+         --  Component_Size respectively. A negative value is used to represent
+         --  a value which is not known at compile time.
 
          procedure Check_Prefix;
          --  Checks the prefix recursively in the case where the expression
@@ -3801,33 +4354,6 @@ package body Sem_Util is
          procedure Set_Result (R : Alignment_Result);
          --  If R represents a worse outcome (unknown instead of known
          --  compatible, or known incompatible), then set Result to R.
-
-         ------------------
-         -- Check_Offset --
-         ------------------
-
-         procedure Check_Offset (Offs : Uint) is
-         begin
-            --  Unspecified or zero offset is always OK
-
-            if Offs = No_Uint or else Offs = Uint_0 then
-               null;
-
-            --  If we do not know required alignment, any non-zero offset is
-            --  a potential problem (but certainly may be OK, so result is
-            --  unknown).
-
-            elsif Unknown_Alignment (Obj) then
-               Set_Result (Unknown);
-
-            --  If we know the required alignment, see if offset is compatible
-
-            else
-               if Offs mod (System_Storage_Unit * Alignment (Obj)) /= 0 then
-                  Set_Result (Known_Incompatible);
-               end if;
-            end if;
-         end Check_Offset;
 
          ------------------
          -- Check_Prefix --
@@ -3894,37 +4420,60 @@ package body Sem_Util is
                Set_Result (Unknown);
             end if;
 
-            --  Check possible bad component offset and check prefix
+            --  Check prefix and component offset
 
-            Check_Offset
-              (Component_Bit_Offset (Entity (Selector_Name (Expr))));
             Check_Prefix;
+            Offs := Component_Bit_Offset (Entity (Selector_Name (Expr)));
 
          --  If Expr is an indexed component, we must make sure there is no
          --  potentially troublesome Component_Size clause and that the array
          --  is not bit-packed.
 
          elsif Nkind (Expr) = N_Indexed_Component then
+            declare
+               Typ : constant Entity_Id := Etype (Prefix (Expr));
+               Ind : constant Node_Id   := First_Index (Typ);
 
-            --  Bit packed array always generates unknown alignment
+            begin
+               --  Bit packed array always generates unknown alignment
 
-            if Is_Bit_Packed_Array (Etype (Prefix (Expr))) then
-               Set_Result (Unknown);
-            end if;
+               if Is_Bit_Packed_Array (Typ) then
+                  Set_Result (Unknown);
+               end if;
 
-            --  Check possible bad component size and check prefix
+               --  Check prefix and component offset
 
-            Check_Offset (Component_Size (Etype (Prefix (Expr))));
-            Check_Prefix;
+               Check_Prefix;
+               Offs := Component_Size (Typ);
+
+               --  Small optimization: compute the full offset when possible
+
+               if Offs /= No_Uint
+                 and then Offs > Uint_0
+                 and then Present (Ind)
+                 and then Nkind (Ind) = N_Range
+                 and then Compile_Time_Known_Value (Low_Bound (Ind))
+                 and then Compile_Time_Known_Value (First (Expressions (Expr)))
+               then
+                  Offs := Offs * (Expr_Value (First (Expressions (Expr)))
+                                    - Expr_Value (Low_Bound ((Ind))));
+               end if;
+            end;
          end if;
+
+         --  If we have a null offset, the result is entirely determined by
+         --  the base object and has already been computed recursively.
+
+         if Offs = Uint_0 then
+            null;
 
          --  Case where we know the alignment of the object
 
-         if Known_Alignment (Obj) then
+         elsif Known_Alignment (Obj) then
             declare
                ObjA : constant Uint := Alignment (Obj);
-               ExpA : Uint := No_Uint;
-               SizA : Uint := No_Uint;
+               ExpA : Uint          := No_Uint;
+               SizA : Uint          := No_Uint;
 
             begin
                --  If alignment of Obj is 1, then we are always OK
@@ -3935,9 +4484,16 @@ package body Sem_Util is
                --  Alignment of Obj is greater than 1, so we need to check
 
                else
-                  --  See if Expr is an object with known alignment
+                  --  If we have an offset, see if it is compatible
 
-                  if Is_Entity_Name (Expr)
+                  if Offs /= No_Uint and Offs > Uint_0 then
+                     if Offs mod (System_Storage_Unit * ObjA) /= 0 then
+                        Set_Result (Known_Incompatible);
+                     end if;
+
+                     --  See if Expr is an object with known alignment
+
+                  elsif Is_Entity_Name (Expr)
                     and then Known_Alignment (Entity (Expr))
                   then
                      ExpA := Alignment (Entity (Expr));
@@ -3949,26 +4505,29 @@ package body Sem_Util is
 
                   elsif Known_Alignment (Etype (Expr)) then
                      ExpA := Alignment (Etype (Expr));
-                  end if;
 
-                  --  If we got an alignment, see if it is acceptable
-
-                  if ExpA /= No_Uint then
-                     if ExpA < ObjA then
-                        Set_Result (Known_Incompatible);
-                     end if;
-
-                     --  Case of Expr alignment unknown
+                     --  Otherwise the alignment is unknown
 
                   else
                      Set_Result (Default);
                   end if;
 
-                  --  See if size is given. If so, check that it is not too
-                  --  small for the required alignment.
-                  --  See if Expr is an object with known alignment
+                  --  If we got an alignment, see if it is acceptable
 
-                  if Is_Entity_Name (Expr)
+                  if ExpA /= No_Uint and then ExpA < ObjA then
+                     Set_Result (Known_Incompatible);
+                  end if;
+
+                  --  If Expr is not a piece of a larger object, see if size
+                  --  is given. If so, check that it is not too small for the
+                  --  required alignment.
+
+                  if Offs /= No_Uint then
+                     null;
+
+                     --  See if Expr is an object with known size
+
+                  elsif Is_Entity_Name (Expr)
                     and then Known_Static_Esize (Entity (Expr))
                   then
                      SizA := Esize (Entity (Expr));
@@ -3992,6 +4551,12 @@ package body Sem_Util is
                end if;
             end;
 
+         --  If we do not know required alignment, any non-zero offset is a
+         --  potential problem (but certainly may be OK, so result is unknown).
+
+         elsif Offs /= No_Uint then
+            Set_Result (Unknown);
+
          --  If we can't find the result by direct comparison of alignment
          --  values, then there is still one case that we can determine known
          --  result, and that is when we can determine that the types are the
@@ -4013,8 +4578,8 @@ package body Sem_Util is
 
                if Known_Alignment (Entity (Expr))
                  and then
-                   UI_To_Int (Alignment (Entity (Expr)))
-                                 < Ttypes.Maximum_Alignment
+                   UI_To_Int (Alignment (Entity (Expr))) <
+                                                    Ttypes.Maximum_Alignment
                then
                   Set_Result (Unknown);
 
@@ -4027,7 +4592,7 @@ package body Sem_Util is
                  and then
                    (UI_To_Int (Esize (Entity (Expr))) mod
                      (Ttypes.Maximum_Alignment * Ttypes.System_Storage_Unit))
-                         /= 0
+                                                                        /= 0
                then
                   Set_Result (Unknown);
 
@@ -4044,7 +4609,7 @@ package body Sem_Util is
          --  Unknown, since that result will be set in any case.
 
          elsif Default /= Unknown
-           and then (Has_Size_Clause (Etype (Expr))
+           and then (Has_Size_Clause      (Etype (Expr))
                       or else
                      Has_Alignment_Clause (Etype (Expr)))
          then
@@ -4083,17 +4648,16 @@ package body Sem_Util is
    ----------------------
 
    function Has_Declarations (N : Node_Id) return Boolean is
-      K : constant Node_Kind := Nkind (N);
    begin
-      return    K = N_Accept_Statement
-        or else K = N_Block_Statement
-        or else K = N_Compilation_Unit_Aux
-        or else K = N_Entry_Body
-        or else K = N_Package_Body
-        or else K = N_Protected_Body
-        or else K = N_Subprogram_Body
-        or else K = N_Task_Body
-        or else K = N_Package_Specification;
+      return Nkind_In (Nkind (N), N_Accept_Statement,
+                                  N_Block_Statement,
+                                  N_Compilation_Unit_Aux,
+                                  N_Entry_Body,
+                                  N_Package_Body,
+                                  N_Protected_Body,
+                                  N_Subprogram_Body,
+                                  N_Task_Body,
+                                  N_Package_Specification);
    end Has_Declarations;
 
    -------------------------------------------
@@ -4163,15 +4727,13 @@ package body Sem_Util is
      (T             : Entity_Id;
       Use_Full_View : Boolean := True) return Boolean
    is
-      Typ : Entity_Id;
+      Typ : Entity_Id := Base_Type (T);
 
    begin
       --  Handle concurrent types
 
-      if Is_Concurrent_Type (T) then
-         Typ := Corresponding_Record_Type (T);
-      else
-         Typ := T;
+      if Is_Concurrent_Type (Typ) then
+         Typ := Corresponding_Record_Type (Typ);
       end if;
 
       if not Present (Typ)
@@ -4559,38 +5121,50 @@ package body Sem_Util is
 
             --  We are interested only in components and discriminants
 
-            if Ekind (Ent) = E_Component
-                or else
-               Ekind (Ent) = E_Discriminant
-            then
-               --  Get default expression if any. If there is no declaration
-               --  node, it means we have an internal entity. The parent and
-               --  tag fields are examples of such entities. For these cases,
-               --  we just test the type of the entity.
+            Exp := Empty;
 
-               if Present (Declaration_Node (Ent)) then
-                  Exp := Expression (Declaration_Node (Ent));
-               else
-                  Exp := Empty;
-               end if;
+            case Ekind (Ent) is
+               when E_Component =>
 
-               --  A component has PI if it has no default expression and the
-               --  component type has PI.
+                  --  Get default expression if any. If there is no declaration
+                  --  node, it means we have an internal entity. The parent and
+                  --  tag fields are examples of such entities. For such cases,
+                  --  we just test the type of the entity.
 
-               if No (Exp) then
-                  if not Has_Preelaborable_Initialization (Etype (Ent)) then
-                     Has_PE := False;
-                     exit;
+                  if Present (Declaration_Node (Ent)) then
+                     Exp := Expression (Declaration_Node (Ent));
                   end if;
 
-               --  Require the default expression to be preelaborable
+               when E_Discriminant =>
 
-               elsif not Is_Preelaborable_Expression (Exp) then
+                  --  Note: for a renamed discriminant, the Declaration_Node
+                  --  may point to the one from the ancestor, and have a
+                  --  different expression, so use the proper attribute to
+                  --  retrieve the expression from the derived constraint.
+
+                  Exp := Discriminant_Default_Value (Ent);
+
+               when others =>
+                  goto Check_Next_Entity;
+            end case;
+
+            --  A component has PI if it has no default expression and the
+            --  component type has PI.
+
+            if No (Exp) then
+               if not Has_Preelaborable_Initialization (Etype (Ent)) then
                   Has_PE := False;
                   exit;
                end if;
+
+            --  Require the default expression to be preelaborable
+
+            elsif not Is_Preelaborable_Expression (Exp) then
+               Has_PE := False;
+               exit;
             end if;
 
+         <<Check_Next_Entity>>
             Next_Entity (Ent);
          end loop;
       end Check_Components;
@@ -4804,6 +5378,16 @@ package body Sem_Util is
       end if;
    end Has_Stream;
 
+   ----------------
+   -- Has_Suffix --
+   ----------------
+
+   function Has_Suffix (E : Entity_Id; Suffix : Character) return Boolean is
+   begin
+      Get_Name_String (Chars (E));
+      return Name_Buffer (Name_Len) = Suffix;
+   end Has_Suffix;
+
    --------------------------
    -- Has_Tagged_Component --
    --------------------------
@@ -4830,7 +5414,7 @@ package body Sem_Util is
                return True;
             end if;
 
-            Comp := Next_Component (Typ);
+            Next_Component (Comp);
          end loop;
 
          return False;
@@ -4839,6 +5423,18 @@ package body Sem_Util is
          return False;
       end if;
    end Has_Tagged_Component;
+
+   -------------------------
+   -- Implementation_Kind --
+   -------------------------
+
+   function Implementation_Kind (Subp : Entity_Id) return Name_Id is
+      Impl_Prag : constant Node_Id := Get_Rep_Pragma (Subp, Name_Implemented);
+   begin
+      pragma Assert (Present (Impl_Prag));
+      return
+        Chars (Expression (Last (Pragma_Argument_Associations (Impl_Prag))));
+   end Implementation_Kind;
 
    --------------------------
    -- Implements_Interface --
@@ -4851,24 +5447,20 @@ package body Sem_Util is
    is
       Ifaces_List : Elist_Id;
       Elmt        : Elmt_Id;
-      Iface       : Entity_Id;
-      Typ         : Entity_Id;
+      Iface       : Entity_Id := Base_Type (Iface_Ent);
+      Typ         : Entity_Id := Base_Type (Typ_Ent);
 
    begin
-      if Is_Class_Wide_Type (Typ_Ent) then
-         Typ := Etype (Typ_Ent);
-      else
-         Typ := Typ_Ent;
-      end if;
-
-      if Is_Class_Wide_Type (Iface_Ent) then
-         Iface := Etype (Iface_Ent);
-      else
-         Iface := Iface_Ent;
+      if Is_Class_Wide_Type (Typ) then
+         Typ := Root_Type (Typ);
       end if;
 
       if not Has_Interfaces (Typ) then
          return False;
+      end if;
+
+      if Is_Class_Wide_Type (Iface) then
+         Iface := Root_Type (Iface);
       end if;
 
       Collect_Interfaces (Typ, Ifaces_List);
@@ -5120,16 +5712,17 @@ package body Sem_Util is
 
    begin
       Save_Interps (N, New_Prefix);
+
       Rewrite (N,
-        Make_Explicit_Dereference (Sloc (N),
+        Make_Explicit_Dereference (Sloc (Parent (N)),
           Prefix => New_Prefix));
 
       Set_Etype (N, Designated_Type (Etype (New_Prefix)));
 
       if Is_Overloaded (New_Prefix) then
 
-         --  The deference is also overloaded, and its interpretations are the
-         --  designated types of the interpretations of the original node.
+         --  The dereference is also overloaded, and its interpretations are
+         --  the designated types of the interpretations of the original node.
 
          Set_Etype (N, Any_Type);
 
@@ -5153,6 +5746,7 @@ package body Sem_Util is
 
          if Is_Entity_Name (New_Prefix) then
             Ent := Entity (New_Prefix);
+            Pref := New_Prefix;
 
          --  For a retrieval of a subcomponent of some composite object,
          --  retrieve the ultimate entity if there is one.
@@ -5174,8 +5768,10 @@ package body Sem_Util is
             end if;
          end if;
 
+         --  Place the reference on the entity node
+
          if Present (Ent) then
-            Generate_Reference (Ent, New_Prefix);
+            Generate_Reference (Ent, Pref);
          end if;
       end if;
    end Insert_Explicit_Dereference;
@@ -5201,8 +5797,8 @@ package body Sem_Util is
 
            and then Comes_From_Source (Decl)
 
-            --  The constant is not completed. A full object declaration
-            --  or a pragma Import complete a deferred constant.
+            --  The constant is not completed. A full object declaration or a
+            --  pragma Import complete a deferred constant.
 
            and then not Has_Completion (Defining_Identifier (Decl))
          then
@@ -5215,17 +5811,17 @@ package body Sem_Util is
       end loop;
    end Inspect_Deferred_Constant_Completion;
 
-   -------------------
-   -- Is_AAMP_Float --
-   -------------------
+   -----------------------------
+   -- Is_Actual_Out_Parameter --
+   -----------------------------
 
-   function Is_AAMP_Float (E : Entity_Id) return Boolean is
-      pragma Assert (Is_Type (E));
+   function Is_Actual_Out_Parameter (N : Node_Id) return Boolean is
+      Formal : Entity_Id;
+      Call   : Node_Id;
    begin
-      return AAMP_On_Target
-         and then Is_Floating_Point_Type (E)
-         and then E = Base_Type (E);
-   end Is_AAMP_Float;
+      Find_Actual (N, Formal, Call);
+      return Present (Formal) and then Ekind (Formal) = E_Out_Parameter;
+   end Is_Actual_Out_Parameter;
 
    -------------------------
    -- Is_Actual_Parameter --
@@ -5394,7 +5990,12 @@ package body Sem_Util is
    --  Start of processing for Is_Atomic_Object
 
    begin
-      if Is_Atomic (Etype (N))
+      --  Predicate is not relevant to subprograms
+
+      if Is_Entity_Name (N) and then Is_Overloadable (Entity (N)) then
+         return False;
+
+      elsif Is_Atomic (Etype (N))
         or else (Is_Entity_Name (N) and then Is_Atomic (Entity (N)))
       then
          return True;
@@ -5479,12 +6080,72 @@ package body Sem_Util is
       return False;
    end Is_Controlling_Limited_Procedure;
 
+   -----------------------------
+   -- Is_CPP_Constructor_Call --
+   -----------------------------
+
+   function Is_CPP_Constructor_Call (N : Node_Id) return Boolean is
+   begin
+      return Nkind (N) = N_Function_Call
+        and then Is_CPP_Class (Etype (Etype (N)))
+        and then Is_Constructor (Entity (Name (N)))
+        and then Is_Imported (Entity (Name (N)));
+   end Is_CPP_Constructor_Call;
+
+   -----------------
+   -- Is_Delegate --
+   -----------------
+
+   function Is_Delegate (T : Entity_Id) return Boolean is
+      Desig_Type : Entity_Id;
+
+   begin
+      if VM_Target /= CLI_Target then
+         return False;
+      end if;
+
+      --  Access-to-subprograms are delegates in CIL
+
+      if Ekind (T) = E_Access_Subprogram_Type then
+         return True;
+      end if;
+
+      if Ekind (T) not in Access_Kind then
+
+         --  A delegate is a managed pointer. If no designated type is defined
+         --  it means that it's not a delegate.
+
+         return False;
+      end if;
+
+      Desig_Type := Etype (Directly_Designated_Type (T));
+
+      if not Is_Tagged_Type (Desig_Type) then
+         return False;
+      end if;
+
+      --  Test if the type is inherited from [mscorlib]System.Delegate
+
+      while Etype (Desig_Type) /= Desig_Type loop
+         if Chars (Scope (Desig_Type)) /= No_Name
+           and then Is_Imported (Scope (Desig_Type))
+           and then Get_Name_String (Chars (Scope (Desig_Type))) = "delegate"
+         then
+            return True;
+         end if;
+
+         Desig_Type := Etype (Desig_Type);
+      end loop;
+
+      return False;
+   end Is_Delegate;
+
    ----------------------------------------------
    -- Is_Dependent_Component_Of_Mutable_Object --
    ----------------------------------------------
 
    function Is_Dependent_Component_Of_Mutable_Object
-     (Object : Node_Id) return   Boolean
+     (Object : Node_Id) return Boolean
    is
       P           : Node_Id;
       Prefix_Type : Entity_Id;
@@ -5524,10 +6185,9 @@ package body Sem_Util is
                   P_Aliased := True;
                end if;
 
-            --  A discriminant check on a selected component may be
-            --  expanded into a dereference when removing side-effects.
-            --  Recover the original node and its type, which may be
-            --  unconstrained.
+            --  A discriminant check on a selected component may be expanded
+            --  into a dereference when removing side-effects. Recover the
+            --  original node and its type, which may be unconstrained.
 
             elsif Nkind (P) = N_Explicit_Dereference
               and then not (Comes_From_Source (P))
@@ -5536,7 +6196,8 @@ package body Sem_Util is
                Prefix_Type := Etype (P);
 
             else
-               --  Check for prefix being an aliased component ???
+               --  Check for prefix being an aliased component???
+
                null;
 
             end if;
@@ -5552,14 +6213,14 @@ package body Sem_Util is
             --  (despite the fact that 3.10.2(26/2) and 8.5.1(5/2) are
             --  semantic rules -- these rules are acknowledged to need fixing).
 
-            if Ada_Version < Ada_05 then
+            if Ada_Version < Ada_2005 then
                if Is_Access_Type (Prefix_Type)
                  or else Nkind (P) = N_Explicit_Dereference
                then
                   return False;
                end if;
 
-            elsif Ada_Version >= Ada_05 then
+            elsif Ada_Version >= Ada_2005 then
                if Is_Access_Type (Prefix_Type) then
 
                   --  If the access type is pool-specific, and there is no
@@ -5585,8 +6246,8 @@ package body Sem_Util is
             Comp :=
               Original_Record_Component (Entity (Selector_Name (Object)));
 
-            --  As per AI-0017, the renaming is illegal in a generic body,
-            --  even if the subtype is indefinite.
+            --  As per AI-0017, the renaming is illegal in a generic body, even
+            --  if the subtype is indefinite.
 
             --  Ada 2005 (AI-363): In Ada 2005 an aliased object can be mutable
 
@@ -5599,7 +6260,7 @@ package body Sem_Util is
 
               and then (Is_Declared_Within_Variant (Comp)
                           or else Has_Discriminant_Dependent_Constraint (Comp))
-              and then (not P_Aliased or else Ada_Version >= Ada_05)
+              and then (not P_Aliased or else Ada_Version >= Ada_2005)
             then
                return True;
 
@@ -5868,7 +6529,7 @@ package body Sem_Util is
                   --  uninitialized case. Note that this applies both to the
                   --  uTag entry and the main vtable pointer (CPP_Class case).
 
-                 and then (VM_Target = No_VM or else not Is_Tag (Ent))
+                 and then (Tagged_Type_Expansion or else not Is_Tag (Ent))
                then
                   return False;
                end if;
@@ -5994,6 +6655,21 @@ package body Sem_Util is
       end if;
    end Is_Fully_Initialized_Variant;
 
+   ------------
+   -- Is_LHS --
+   ------------
+
+   --  We seem to have a lot of overlapping functions that do similar things
+   --  (testing for left hand sides or lvalues???). Anyway, since this one is
+   --  purely syntactic, it should be in Sem_Aux I would think???
+
+   function Is_LHS (N : Node_Id) return Boolean is
+      P : constant Node_Id := Parent (N);
+   begin
+      return Nkind (P) = N_Assignment_Statement
+        and then Name (P) = N;
+   end Is_LHS;
+
    ----------------------------
    -- Is_Inherited_Operation --
    ----------------------------
@@ -6020,7 +6696,7 @@ package body Sem_Util is
       --  the corresponding procedure has been created, and which therefore do
       --  not have an assigned scope.
 
-      if Ekind (E) in Formal_Kind then
+      if Is_Formal (E) then
          return False;
       end if;
 
@@ -6043,10 +6719,7 @@ package body Sem_Util is
             Ent : constant Entity_Id := Entity (Expr);
             Sub : constant Entity_Id := Enclosing_Subprogram (Ent);
          begin
-            if Ekind (Ent) /= E_Variable
-                 and then
-               Ekind (Ent) /= E_In_Out_Parameter
-            then
+            if not Ekind_In (Ent, E_Variable, E_In_Out_Parameter) then
                return False;
             else
                return Present (Sub) and then Sub = Current_Subprogram;
@@ -6199,19 +6872,24 @@ package body Sem_Util is
    -- Is_Partially_Initialized_Type --
    -----------------------------------
 
-   function Is_Partially_Initialized_Type (Typ : Entity_Id) return Boolean is
+   function Is_Partially_Initialized_Type
+     (Typ              : Entity_Id;
+      Include_Implicit : Boolean := True) return Boolean
+   is
    begin
       if Is_Scalar_Type (Typ) then
          return False;
 
       elsif Is_Access_Type (Typ) then
-         return True;
+         return Include_Implicit;
 
       elsif Is_Array_Type (Typ) then
 
          --  If component type is partially initialized, so is array type
 
-         if Is_Partially_Initialized_Type (Component_Type (Typ)) then
+         if Is_Partially_Initialized_Type
+              (Component_Type (Typ), Include_Implicit)
+         then
             return True;
 
          --  Otherwise we are only partially initialized if we are fully
@@ -6224,9 +6902,10 @@ package body Sem_Util is
 
       elsif Is_Record_Type (Typ) then
 
-         --  A discriminated type is always partially initialized
+         --  A discriminated type is always partially initialized if in
+         --  all mode
 
-         if Has_Discriminants (Typ) then
+         if Has_Discriminants (Typ) and then Include_Implicit then
             return True;
 
          --  A tagged type is always partially initialized
@@ -6264,7 +6943,9 @@ package body Sem_Util is
                      --  If a component is of a type which is itself partially
                      --  initialized, then the enclosing record type is also.
 
-                     elsif Is_Partially_Initialized_Type (Etype (Ent)) then
+                     elsif Is_Partially_Initialized_Type
+                             (Etype (Ent), Include_Implicit)
+                     then
                         return True;
                      end if;
                   end if;
@@ -6303,7 +6984,7 @@ package body Sem_Util is
             if No (U) then
                return True;
             else
-               return Is_Partially_Initialized_Type (U);
+               return Is_Partially_Initialized_Type (U, Include_Implicit);
             end if;
          end;
 
@@ -6382,8 +7063,8 @@ package body Sem_Util is
    -- Is_Protected_Self_Reference --
    ---------------------------------
 
-   function Is_Protected_Self_Reference (N : Node_Id) return Boolean
-   is
+   function Is_Protected_Self_Reference (N : Node_Id) return Boolean is
+
       function In_Access_Definition (N : Node_Id) return Boolean;
       --  Returns true if N belongs to an access definition
 
@@ -6391,24 +7072,34 @@ package body Sem_Util is
       -- In_Access_Definition --
       --------------------------
 
-      function In_Access_Definition (N : Node_Id) return Boolean
-      is
-         P : Node_Id := Parent (N);
+      function In_Access_Definition (N : Node_Id) return Boolean is
+         P : Node_Id;
+
       begin
+         P := Parent (N);
          while Present (P) loop
             if Nkind (P) = N_Access_Definition then
                return True;
             end if;
+
             P := Parent (P);
          end loop;
+
          return False;
       end In_Access_Definition;
 
    --  Start of processing for Is_Protected_Self_Reference
 
    begin
-      return Ada_Version >= Ada_05
+      --  Verify that prefix is analyzed and has the proper form. Note that
+      --  the attributes Elab_Spec, Elab_Body, and UET_Address, which also
+      --  produce the address of an entity, do not analyze their prefix
+      --  because they denote entities that are not necessarily visible.
+      --  Neither of them can apply to a protected type.
+
+      return Ada_Version >= Ada_2005
         and then Is_Entity_Name (N)
+        and then Present (Entity (N))
         and then Is_Protected_Type (Entity (N))
         and then In_Open_Scopes (Entity (N))
         and then not In_Access_Definition (N);
@@ -6690,6 +7381,15 @@ package body Sem_Util is
       return (U /= 0);
    end Is_True;
 
+   -------------------------------
+   -- Is_Universal_Numeric_Type --
+   -------------------------------
+
+   function Is_Universal_Numeric_Type (T : Entity_Id) return Boolean is
+   begin
+      return T = Universal_Integer or else T = Universal_Real;
+   end Is_Universal_Numeric_Type;
+
    -------------------
    -- Is_Value_Type --
    -------------------
@@ -6697,9 +7397,30 @@ package body Sem_Util is
    function Is_Value_Type (T : Entity_Id) return Boolean is
    begin
       return VM_Target = CLI_Target
+        and then Nkind (T) in N_Has_Chars
         and then Chars (T) /= No_Name
         and then Get_Name_String (Chars (T)) = "valuetype";
    end Is_Value_Type;
+
+   ---------------------
+   -- Is_VMS_Operator --
+   ---------------------
+
+   function Is_VMS_Operator (Op : Entity_Id) return Boolean is
+   begin
+      --  The VMS operators are declared in a child of System that is loaded
+      --  through pragma Extend_System. In some rare cases a program is run
+      --  with this extension but without indicating that the target is VMS.
+
+      return Ekind (Op) = E_Function
+        and then Is_Intrinsic_Subprogram (Op)
+        and then
+          ((Present_System_Aux
+            and then Scope (Op) = System_Aux_Id)
+           or else
+           (True_VMS_Target
+             and then Scope (Scope (Op)) = RTU_Entity (System)));
+   end Is_VMS_Operator;
 
    -----------------
    -- Is_Variable --
@@ -6708,21 +7429,21 @@ package body Sem_Util is
    function Is_Variable (N : Node_Id) return Boolean is
 
       Orig_Node : constant Node_Id := Original_Node (N);
-      --  We do the test on the original node, since this is basically a
-      --  test of syntactic categories, so it must not be disturbed by
-      --  whatever rewriting might have occurred. For example, an aggregate,
-      --  which is certainly NOT a variable, could be turned into a variable
-      --  by expansion.
+      --  We do the test on the original node, since this is basically a test
+      --  of syntactic categories, so it must not be disturbed by whatever
+      --  rewriting might have occurred. For example, an aggregate, which is
+      --  certainly NOT a variable, could be turned into a variable by
+      --  expansion.
 
       function In_Protected_Function (E : Entity_Id) return Boolean;
-      --  Within a protected function, the private components of the
-      --  enclosing protected type are constants. A function nested within
-      --  a (protected) procedure is not itself protected.
+      --  Within a protected function, the private components of the enclosing
+      --  protected type are constants. A function nested within a (protected)
+      --  procedure is not itself protected.
 
       function Is_Variable_Prefix (P : Node_Id) return Boolean;
-      --  Prefixes can involve implicit dereferences, in which case we
-      --  must test for the case of a reference of a constant access
-      --  type, which can never be a variable.
+      --  Prefixes can involve implicit dereferences, in which case we must
+      --  test for the case of a reference of a constant access type, which can
+      --  can never be a variable.
 
       ---------------------------
       -- In_Protected_Function --
@@ -6738,9 +7459,7 @@ package body Sem_Util is
          else
             S := Current_Scope;
             while Present (S) and then S /= Prot loop
-               if Ekind (S) = E_Function
-                 and then Scope (S) = Prot
-               then
+               if Ekind (S) = E_Function and then Scope (S) = Prot then
                   return True;
                end if;
 
@@ -6785,26 +7504,32 @@ package body Sem_Util is
       if Nkind (N) in N_Subexpr and then Assignment_OK (N) then
          return True;
 
-      --  Normally we go to the original node, but there is one exception
-      --  where we use the rewritten node, namely when it is an explicit
-      --  dereference. The generated code may rewrite a prefix which is an
-      --  access type with an explicit dereference. The dereference is a
-      --  variable, even though the original node may not be (since it could
-      --  be a constant of the access type).
+      --  Normally we go to the original node, but there is one exception where
+      --  we use the rewritten node, namely when it is an explicit dereference.
+      --  The generated code may rewrite a prefix which is an access type with
+      --  an explicit dereference. The dereference is a variable, even though
+      --  the original node may not be (since it could be a constant of the
+      --  access type).
 
-      --  In Ada 2005 we have a further case to consider: the prefix may be
-      --  a function call given in prefix notation. The original node appears
-      --  to be a selected component, but we need to examine the call.
+      --  In Ada 2005 we have a further case to consider: the prefix may be a
+      --  function call given in prefix notation. The original node appears to
+      --  be a selected component, but we need to examine the call.
 
       elsif Nkind (N) = N_Explicit_Dereference
         and then Nkind (Orig_Node) /= N_Explicit_Dereference
         and then Present (Etype (Orig_Node))
         and then Is_Access_Type (Etype (Orig_Node))
       then
-         return Is_Variable_Prefix (Original_Node (Prefix (N)))
+         --  Note that if the prefix is an explicit dereference that does not
+         --  come from source, we must check for a rewritten function call in
+         --  prefixed notation before other forms of rewriting, to prevent a
+         --  compiler crash.
+
+         return
+           (Nkind (Orig_Node) = N_Function_Call
+             and then not Is_Access_Constant (Etype (Prefix (N))))
            or else
-             (Nkind (Orig_Node) = N_Function_Call
-               and then not Is_Access_Constant (Etype (Prefix (N))));
+             Is_Variable_Prefix (Original_Node (Prefix (N)));
 
       --  A function call is never a variable
 
@@ -6888,6 +7613,18 @@ package body Sem_Util is
          end case;
       end if;
    end Is_Variable;
+
+   ---------------------------
+   -- Is_Visibly_Controlled --
+   ---------------------------
+
+   function Is_Visibly_Controlled (T : Entity_Id) return Boolean is
+      Root : constant Entity_Id := Root_Type (T);
+   begin
+      return Chars (Scope (Root)) = Name_Finalization
+        and then Chars (Scope (Scope (Root))) = Name_Ada
+        and then Scope (Scope (Scope (Root))) = Standard_Standard;
+   end Is_Visibly_Controlled;
 
    ------------------------
    -- Is_Volatile_Object --
@@ -6979,19 +7716,33 @@ package body Sem_Util is
       Last_Assignment_Only : Boolean := False)
    is
    begin
+      --  ??? do we have to worry about clearing cached checks?
+
       if Is_Assignable (Ent) then
          Set_Last_Assignment (Ent, Empty);
       end if;
 
-      if not Last_Assignment_Only and then Is_Object (Ent) then
-         Kill_Checks (Ent);
-         Set_Current_Value (Ent, Empty);
+      if Is_Object (Ent) then
+         if not Last_Assignment_Only then
+            Kill_Checks (Ent);
+            Set_Current_Value (Ent, Empty);
 
-         if not Can_Never_Be_Null (Ent) then
-            Set_Is_Known_Non_Null (Ent, False);
+            if not Can_Never_Be_Null (Ent) then
+               Set_Is_Known_Non_Null (Ent, False);
+            end if;
+
+            Set_Is_Known_Null (Ent, False);
+
+            --  Reset Is_Known_Valid unless type is always valid, or if we have
+            --  a loop parameter (loop parameters are always valid, since their
+            --  bounds are defined by the bounds given in the loop header).
+
+            if not Is_Known_Valid (Etype (Ent))
+              and then Ekind (Ent) /= E_Loop_Parameter
+            then
+               Set_Is_Known_Valid (Ent, False);
+            end if;
          end if;
-
-         Set_Is_Known_Null (Ent, False);
       end if;
    end Kill_Current_Values;
 
@@ -7197,31 +7948,82 @@ package body Sem_Util is
          when N_Assignment_Statement =>
             return N = Name (P);
 
-         --  Test prefix of component or attribute
+         --  Test prefix of component or attribute. Note that the prefix of an
+         --  explicit or implicit dereference cannot be an l-value.
 
          when N_Attribute_Reference =>
             return N = Prefix (P)
               and then Name_Implies_Lvalue_Prefix (Attribute_Name (P));
 
-         when N_Expanded_Name        |
-              N_Explicit_Dereference |
-              N_Indexed_Component    |
-              N_Reference            |
-              N_Selected_Component   |
-              N_Slice                =>
-            return N = Prefix (P);
+         --  For an expanded name, the name is an lvalue if the expanded name
+         --  is an lvalue, but the prefix is never an lvalue, since it is just
+         --  the scope where the name is found.
 
-         --  Function call arguments are never lvalues
+         when N_Expanded_Name        =>
+            if N = Prefix (P) then
+               return May_Be_Lvalue (P);
+            else
+               return False;
+            end if;
 
-         when N_Function_Call =>
+         --  For a selected component A.B, A is certainly an lvalue if A.B is.
+         --  B is a little interesting, if we have A.B := 3, there is some
+         --  discussion as to whether B is an lvalue or not, we choose to say
+         --  it is. Note however that A is not an lvalue if it is of an access
+         --  type since this is an implicit dereference.
+
+         when N_Selected_Component   =>
+            if N = Prefix (P)
+              and then Present (Etype (N))
+              and then Is_Access_Type (Etype (N))
+            then
+               return False;
+            else
+               return May_Be_Lvalue (P);
+            end if;
+
+         --  For an indexed component or slice, the index or slice bounds is
+         --  never an lvalue. The prefix is an lvalue if the indexed component
+         --  or slice is an lvalue, except if it is an access type, where we
+         --  have an implicit dereference.
+
+         when N_Indexed_Component    =>
+            if N /= Prefix (P)
+              or else (Present (Etype (N)) and then Is_Access_Type (Etype (N)))
+            then
+               return False;
+            else
+               return May_Be_Lvalue (P);
+            end if;
+
+         --  Prefix of a reference is an lvalue if the reference is an lvalue
+
+         when N_Reference            =>
+            return May_Be_Lvalue (P);
+
+         --  Prefix of explicit dereference is never an lvalue
+
+         when N_Explicit_Dereference =>
             return False;
 
-         --  Positional parameter for procedure, entry,  or accept call
+         --  Positional parameter for subprogram, entry, or accept call.
+         --  In older versions of Ada function call arguments are never
+         --  lvalues. In Ada 2012 functions can have in-out parameters.
 
-         when N_Procedure_Call_Statement |
+         when N_Function_Call            |
+              N_Procedure_Call_Statement |
               N_Entry_Call_Statement     |
               N_Accept_Statement
          =>
+            if Nkind (P) = N_Function_Call
+              and then Ada_Version < Ada_2012
+            then
+               return False;
+            end if;
+
+            --  The following mechanism is clumsy and fragile. A single
+            --  flag set in Resolve_Actuals would be preferable ???
+
             declare
                Proc : Entity_Id;
                Form : Entity_Id;
@@ -7308,7 +8110,7 @@ package body Sem_Util is
          when N_Object_Renaming_Declaration =>
             return True;
 
-         --  All other references are definitely not Lvalues
+         --  All other references are definitely not lvalues
 
          when others =>
             return False;
@@ -7337,6 +8139,17 @@ package body Sem_Util is
          if Nkind (N) = N_Allocator then
             if Is_Dynamic then
                Set_Is_Dynamic_Coextension (N);
+
+            --  If the allocator expression is potentially dynamic, it may
+            --  be expanded out of order and require dynamic allocation
+            --  anyway, so we treat the coextension itself as dynamic.
+            --  Potential optimization ???
+
+            elsif Nkind (Expression (N)) = N_Qualified_Expression
+              and then Nkind (Expression (Expression (N))) = N_Op_Concat
+            then
+               Set_Is_Dynamic_Coextension (N);
+
             else
                Set_Is_Static_Coextension (N);
             end if;
@@ -7376,7 +8189,7 @@ package body Sem_Util is
       Formal : Entity_Id;
 
    begin
-      if Ada_Version >= Ada_05
+      if Ada_Version >= Ada_2005
         and then Present (First_Formal (E))
       then
          Formal := Next_Formal (First_Formal (E));
@@ -7394,6 +8207,952 @@ package body Sem_Util is
          return False;
       end if;
    end Needs_One_Actual;
+
+   ------------------------
+   -- New_Copy_List_Tree --
+   ------------------------
+
+   function New_Copy_List_Tree (List : List_Id) return List_Id is
+      NL : List_Id;
+      E  : Node_Id;
+
+   begin
+      if List = No_List then
+         return No_List;
+
+      else
+         NL := New_List;
+         E := First (List);
+
+         while Present (E) loop
+            Append (New_Copy_Tree (E), NL);
+            E := Next (E);
+         end loop;
+
+         return NL;
+      end if;
+   end New_Copy_List_Tree;
+
+   -------------------
+   -- New_Copy_Tree --
+   -------------------
+
+   use Atree.Unchecked_Access;
+   use Atree_Private_Part;
+
+   --  Our approach here requires a two pass traversal of the tree. The
+   --  first pass visits all nodes that eventually will be copied looking
+   --  for defining Itypes. If any defining Itypes are found, then they are
+   --  copied, and an entry is added to the replacement map. In the second
+   --  phase, the tree is copied, using the replacement map to replace any
+   --  Itype references within the copied tree.
+
+   --  The following hash tables are used if the Map supplied has more
+   --  than hash threshold entries to speed up access to the map. If
+   --  there are fewer entries, then the map is searched sequentially
+   --  (because setting up a hash table for only a few entries takes
+   --  more time than it saves.
+
+   function New_Copy_Hash (E : Entity_Id) return NCT_Header_Num;
+   --  Hash function used for hash operations
+
+   -------------------
+   -- New_Copy_Hash --
+   -------------------
+
+   function New_Copy_Hash (E : Entity_Id) return NCT_Header_Num is
+   begin
+      return Nat (E) mod (NCT_Header_Num'Last + 1);
+   end New_Copy_Hash;
+
+   ---------------
+   -- NCT_Assoc --
+   ---------------
+
+   --  The hash table NCT_Assoc associates old entities in the table
+   --  with their corresponding new entities (i.e. the pairs of entries
+   --  presented in the original Map argument are Key-Element pairs).
+
+   package NCT_Assoc is new Simple_HTable (
+     Header_Num => NCT_Header_Num,
+     Element    => Entity_Id,
+     No_Element => Empty,
+     Key        => Entity_Id,
+     Hash       => New_Copy_Hash,
+     Equal      => Types."=");
+
+   ---------------------
+   -- NCT_Itype_Assoc --
+   ---------------------
+
+   --  The hash table NCT_Itype_Assoc contains entries only for those
+   --  old nodes which have a non-empty Associated_Node_For_Itype set.
+   --  The key is the associated node, and the element is the new node
+   --  itself (NOT the associated node for the new node).
+
+   package NCT_Itype_Assoc is new Simple_HTable (
+     Header_Num => NCT_Header_Num,
+     Element    => Entity_Id,
+     No_Element => Empty,
+     Key        => Entity_Id,
+     Hash       => New_Copy_Hash,
+     Equal      => Types."=");
+
+   --  Start of processing for New_Copy_Tree function
+
+   function New_Copy_Tree
+     (Source    : Node_Id;
+      Map       : Elist_Id := No_Elist;
+      New_Sloc  : Source_Ptr := No_Location;
+      New_Scope : Entity_Id := Empty) return Node_Id
+   is
+      Actual_Map : Elist_Id := Map;
+      --  This is the actual map for the copy. It is initialized with the
+      --  given elements, and then enlarged as required for Itypes that are
+      --  copied during the first phase of the copy operation. The visit
+      --  procedures add elements to this map as Itypes are encountered.
+      --  The reason we cannot use Map directly, is that it may well be
+      --  (and normally is) initialized to No_Elist, and if we have mapped
+      --  entities, we have to reset it to point to a real Elist.
+
+      function Assoc (N : Node_Or_Entity_Id) return Node_Id;
+      --  Called during second phase to map entities into their corresponding
+      --  copies using Actual_Map. If the argument is not an entity, or is not
+      --  in Actual_Map, then it is returned unchanged.
+
+      procedure Build_NCT_Hash_Tables;
+      --  Builds hash tables (number of elements >= threshold value)
+
+      function Copy_Elist_With_Replacement
+        (Old_Elist : Elist_Id) return Elist_Id;
+      --  Called during second phase to copy element list doing replacements
+
+      procedure Copy_Itype_With_Replacement (New_Itype : Entity_Id);
+      --  Called during the second phase to process a copied Itype. The actual
+      --  copy happened during the first phase (so that we could make the entry
+      --  in the mapping), but we still have to deal with the descendents of
+      --  the copied Itype and copy them where necessary.
+
+      function Copy_List_With_Replacement (Old_List : List_Id) return List_Id;
+      --  Called during second phase to copy list doing replacements
+
+      function Copy_Node_With_Replacement (Old_Node : Node_Id) return Node_Id;
+      --  Called during second phase to copy node doing replacements
+
+      procedure Visit_Elist (E : Elist_Id);
+      --  Called during first phase to visit all elements of an Elist
+
+      procedure Visit_Field (F : Union_Id; N : Node_Id);
+      --  Visit a single field, recursing to call Visit_Node or Visit_List
+      --  if the field is a syntactic descendent of the current node (i.e.
+      --  its parent is Node N).
+
+      procedure Visit_Itype (Old_Itype : Entity_Id);
+      --  Called during first phase to visit subsidiary fields of a defining
+      --  Itype, and also create a copy and make an entry in the replacement
+      --  map for the new copy.
+
+      procedure Visit_List (L : List_Id);
+      --  Called during first phase to visit all elements of a List
+
+      procedure Visit_Node (N : Node_Or_Entity_Id);
+      --  Called during first phase to visit a node and all its subtrees
+
+      -----------
+      -- Assoc --
+      -----------
+
+      function Assoc (N : Node_Or_Entity_Id) return Node_Id is
+         E   : Elmt_Id;
+         Ent : Entity_Id;
+
+      begin
+         if not Has_Extension (N) or else No (Actual_Map) then
+            return N;
+
+         elsif NCT_Hash_Tables_Used then
+            Ent := NCT_Assoc.Get (Entity_Id (N));
+
+            if Present (Ent) then
+               return Ent;
+            else
+               return N;
+            end if;
+
+         --  No hash table used, do serial search
+
+         else
+            E := First_Elmt (Actual_Map);
+            while Present (E) loop
+               if Node (E) = N then
+                  return Node (Next_Elmt (E));
+               else
+                  E := Next_Elmt (Next_Elmt (E));
+               end if;
+            end loop;
+         end if;
+
+         return N;
+      end Assoc;
+
+      ---------------------------
+      -- Build_NCT_Hash_Tables --
+      ---------------------------
+
+      procedure Build_NCT_Hash_Tables is
+         Elmt : Elmt_Id;
+         Ent  : Entity_Id;
+      begin
+         if NCT_Hash_Table_Setup then
+            NCT_Assoc.Reset;
+            NCT_Itype_Assoc.Reset;
+         end if;
+
+         Elmt := First_Elmt (Actual_Map);
+         while Present (Elmt) loop
+            Ent := Node (Elmt);
+
+            --  Get new entity, and associate old and new
+
+            Next_Elmt (Elmt);
+            NCT_Assoc.Set (Ent, Node (Elmt));
+
+            if Is_Type (Ent) then
+               declare
+                  Anode : constant Entity_Id :=
+                            Associated_Node_For_Itype (Ent);
+
+               begin
+                  if Present (Anode) then
+
+                     --  Enter a link between the associated node of the
+                     --  old Itype and the new Itype, for updating later
+                     --  when node is copied.
+
+                     NCT_Itype_Assoc.Set (Anode, Node (Elmt));
+                  end if;
+               end;
+            end if;
+
+            Next_Elmt (Elmt);
+         end loop;
+
+         NCT_Hash_Tables_Used := True;
+         NCT_Hash_Table_Setup := True;
+      end Build_NCT_Hash_Tables;
+
+      ---------------------------------
+      -- Copy_Elist_With_Replacement --
+      ---------------------------------
+
+      function Copy_Elist_With_Replacement
+        (Old_Elist : Elist_Id) return Elist_Id
+      is
+         M         : Elmt_Id;
+         New_Elist : Elist_Id;
+
+      begin
+         if No (Old_Elist) then
+            return No_Elist;
+
+         else
+            New_Elist := New_Elmt_List;
+
+            M := First_Elmt (Old_Elist);
+            while Present (M) loop
+               Append_Elmt (Copy_Node_With_Replacement (Node (M)), New_Elist);
+               Next_Elmt (M);
+            end loop;
+         end if;
+
+         return New_Elist;
+      end Copy_Elist_With_Replacement;
+
+      ---------------------------------
+      -- Copy_Itype_With_Replacement --
+      ---------------------------------
+
+      --  This routine exactly parallels its phase one analog Visit_Itype,
+
+      procedure Copy_Itype_With_Replacement (New_Itype : Entity_Id) is
+      begin
+         --  Translate Next_Entity, Scope and Etype fields, in case they
+         --  reference entities that have been mapped into copies.
+
+         Set_Next_Entity (New_Itype, Assoc (Next_Entity (New_Itype)));
+         Set_Etype       (New_Itype, Assoc (Etype       (New_Itype)));
+
+         if Present (New_Scope) then
+            Set_Scope    (New_Itype, New_Scope);
+         else
+            Set_Scope    (New_Itype, Assoc (Scope       (New_Itype)));
+         end if;
+
+         --  Copy referenced fields
+
+         if Is_Discrete_Type (New_Itype) then
+            Set_Scalar_Range (New_Itype,
+              Copy_Node_With_Replacement (Scalar_Range (New_Itype)));
+
+         elsif Has_Discriminants (Base_Type (New_Itype)) then
+            Set_Discriminant_Constraint (New_Itype,
+              Copy_Elist_With_Replacement
+                (Discriminant_Constraint (New_Itype)));
+
+         elsif Is_Array_Type (New_Itype) then
+            if Present (First_Index (New_Itype)) then
+               Set_First_Index (New_Itype,
+                 First (Copy_List_With_Replacement
+                         (List_Containing (First_Index (New_Itype)))));
+            end if;
+
+            if Is_Packed (New_Itype) then
+               Set_Packed_Array_Type (New_Itype,
+                 Copy_Node_With_Replacement
+                   (Packed_Array_Type (New_Itype)));
+            end if;
+         end if;
+      end Copy_Itype_With_Replacement;
+
+      --------------------------------
+      -- Copy_List_With_Replacement --
+      --------------------------------
+
+      function Copy_List_With_Replacement
+        (Old_List : List_Id) return List_Id
+      is
+         New_List : List_Id;
+         E        : Node_Id;
+
+      begin
+         if Old_List = No_List then
+            return No_List;
+
+         else
+            New_List := Empty_List;
+
+            E := First (Old_List);
+            while Present (E) loop
+               Append (Copy_Node_With_Replacement (E), New_List);
+               Next (E);
+            end loop;
+
+            return New_List;
+         end if;
+      end Copy_List_With_Replacement;
+
+      --------------------------------
+      -- Copy_Node_With_Replacement --
+      --------------------------------
+
+      function Copy_Node_With_Replacement
+        (Old_Node : Node_Id) return Node_Id
+      is
+         New_Node : Node_Id;
+
+         procedure Adjust_Named_Associations
+           (Old_Node : Node_Id;
+            New_Node : Node_Id);
+         --  If a call node has named associations, these are chained through
+         --  the First_Named_Actual, Next_Named_Actual links. These must be
+         --  propagated separately to the new parameter list, because these
+         --  are not syntactic fields.
+
+         function Copy_Field_With_Replacement
+           (Field : Union_Id) return Union_Id;
+         --  Given Field, which is a field of Old_Node, return a copy of it
+         --  if it is a syntactic field (i.e. its parent is Node), setting
+         --  the parent of the copy to poit to New_Node. Otherwise returns
+         --  the field (possibly mapped if it is an entity).
+
+         -------------------------------
+         -- Adjust_Named_Associations --
+         -------------------------------
+
+         procedure Adjust_Named_Associations
+           (Old_Node : Node_Id;
+            New_Node : Node_Id)
+         is
+            Old_E : Node_Id;
+            New_E : Node_Id;
+
+            Old_Next : Node_Id;
+            New_Next : Node_Id;
+
+         begin
+            Old_E := First (Parameter_Associations (Old_Node));
+            New_E := First (Parameter_Associations (New_Node));
+            while Present (Old_E) loop
+               if Nkind (Old_E) = N_Parameter_Association
+                 and then Present (Next_Named_Actual (Old_E))
+               then
+                  if First_Named_Actual (Old_Node)
+                    =  Explicit_Actual_Parameter (Old_E)
+                  then
+                     Set_First_Named_Actual
+                       (New_Node, Explicit_Actual_Parameter (New_E));
+                  end if;
+
+                  --  Now scan parameter list from the beginning,to locate
+                  --  next named actual, which can be out of order.
+
+                  Old_Next := First (Parameter_Associations (Old_Node));
+                  New_Next := First (Parameter_Associations (New_Node));
+
+                  while Nkind (Old_Next) /= N_Parameter_Association
+                    or else  Explicit_Actual_Parameter (Old_Next)
+                      /= Next_Named_Actual (Old_E)
+                  loop
+                     Next (Old_Next);
+                     Next (New_Next);
+                  end loop;
+
+                  Set_Next_Named_Actual
+                    (New_E, Explicit_Actual_Parameter (New_Next));
+               end if;
+
+               Next (Old_E);
+               Next (New_E);
+            end loop;
+         end Adjust_Named_Associations;
+
+         ---------------------------------
+         -- Copy_Field_With_Replacement --
+         ---------------------------------
+
+         function Copy_Field_With_Replacement
+           (Field : Union_Id) return Union_Id
+         is
+         begin
+            if Field = Union_Id (Empty) then
+               return Field;
+
+            elsif Field in Node_Range then
+               declare
+                  Old_N : constant Node_Id := Node_Id (Field);
+                  New_N : Node_Id;
+
+               begin
+                  --  If syntactic field, as indicated by the parent pointer
+                  --  being set, then copy the referenced node recursively.
+
+                  if Parent (Old_N) = Old_Node then
+                     New_N := Copy_Node_With_Replacement (Old_N);
+
+                     if New_N /= Old_N then
+                        Set_Parent (New_N, New_Node);
+                     end if;
+
+                  --  For semantic fields, update possible entity reference
+                  --  from the replacement map.
+
+                  else
+                     New_N := Assoc (Old_N);
+                  end if;
+
+                  return Union_Id (New_N);
+               end;
+
+            elsif Field in List_Range then
+               declare
+                  Old_L : constant List_Id := List_Id (Field);
+                  New_L : List_Id;
+
+               begin
+                  --  If syntactic field, as indicated by the parent pointer,
+                  --  then recursively copy the entire referenced list.
+
+                  if Parent (Old_L) = Old_Node then
+                     New_L := Copy_List_With_Replacement (Old_L);
+                     Set_Parent (New_L, New_Node);
+
+                  --  For semantic list, just returned unchanged
+
+                  else
+                     New_L := Old_L;
+                  end if;
+
+                  return Union_Id (New_L);
+               end;
+
+            --  Anything other than a list or a node is returned unchanged
+
+            else
+               return Field;
+            end if;
+         end Copy_Field_With_Replacement;
+
+      --  Start of processing for Copy_Node_With_Replacement
+
+      begin
+         if Old_Node <= Empty_Or_Error then
+            return Old_Node;
+
+         elsif Has_Extension (Old_Node) then
+            return Assoc (Old_Node);
+
+         else
+            New_Node := New_Copy (Old_Node);
+
+            --  If the node we are copying is the associated node of a
+            --  previously copied Itype, then adjust the associated node
+            --  of the copy of that Itype accordingly.
+
+            if Present (Actual_Map) then
+               declare
+                  E   : Elmt_Id;
+                  Ent : Entity_Id;
+
+               begin
+                  --  Case of hash table used
+
+                  if NCT_Hash_Tables_Used then
+                     Ent := NCT_Itype_Assoc.Get (Old_Node);
+
+                     if Present (Ent) then
+                        Set_Associated_Node_For_Itype (Ent, New_Node);
+                     end if;
+
+                  --  Case of no hash table used
+
+                  else
+                     E := First_Elmt (Actual_Map);
+                     while Present (E) loop
+                        if Is_Itype (Node (E))
+                          and then
+                            Old_Node = Associated_Node_For_Itype (Node (E))
+                        then
+                           Set_Associated_Node_For_Itype
+                             (Node (Next_Elmt (E)), New_Node);
+                        end if;
+
+                        E := Next_Elmt (Next_Elmt (E));
+                     end loop;
+                  end if;
+               end;
+            end if;
+
+            --  Recursively copy descendents
+
+            Set_Field1
+              (New_Node, Copy_Field_With_Replacement (Field1 (New_Node)));
+            Set_Field2
+              (New_Node, Copy_Field_With_Replacement (Field2 (New_Node)));
+            Set_Field3
+              (New_Node, Copy_Field_With_Replacement (Field3 (New_Node)));
+            Set_Field4
+              (New_Node, Copy_Field_With_Replacement (Field4 (New_Node)));
+            Set_Field5
+              (New_Node, Copy_Field_With_Replacement (Field5 (New_Node)));
+
+            --  Adjust Sloc of new node if necessary
+
+            if New_Sloc /= No_Location then
+               Set_Sloc (New_Node, New_Sloc);
+
+               --  If we adjust the Sloc, then we are essentially making
+               --  a completely new node, so the Comes_From_Source flag
+               --  should be reset to the proper default value.
+
+               Nodes.Table (New_Node).Comes_From_Source :=
+                 Default_Node.Comes_From_Source;
+            end if;
+
+            --  If the node is call and has named associations,
+            --  set the corresponding links in the copy.
+
+            if (Nkind (Old_Node) = N_Function_Call
+                 or else Nkind (Old_Node) = N_Entry_Call_Statement
+                 or else
+                   Nkind (Old_Node) = N_Procedure_Call_Statement)
+              and then Present (First_Named_Actual (Old_Node))
+            then
+               Adjust_Named_Associations (Old_Node, New_Node);
+            end if;
+
+            --  Reset First_Real_Statement for Handled_Sequence_Of_Statements.
+            --  The replacement mechanism applies to entities, and is not used
+            --  here. Eventually we may need a more general graph-copying
+            --  routine. For now, do a sequential search to find desired node.
+
+            if Nkind (Old_Node) = N_Handled_Sequence_Of_Statements
+              and then Present (First_Real_Statement (Old_Node))
+            then
+               declare
+                  Old_F  : constant Node_Id := First_Real_Statement (Old_Node);
+                  N1, N2 : Node_Id;
+
+               begin
+                  N1 := First (Statements (Old_Node));
+                  N2 := First (Statements (New_Node));
+
+                  while N1 /= Old_F loop
+                     Next (N1);
+                     Next (N2);
+                  end loop;
+
+                  Set_First_Real_Statement (New_Node, N2);
+               end;
+            end if;
+         end if;
+
+         --  All done, return copied node
+
+         return New_Node;
+      end Copy_Node_With_Replacement;
+
+      -----------------
+      -- Visit_Elist --
+      -----------------
+
+      procedure Visit_Elist (E : Elist_Id) is
+         Elmt : Elmt_Id;
+      begin
+         if Present (E) then
+            Elmt := First_Elmt (E);
+
+            while Elmt /= No_Elmt loop
+               Visit_Node (Node (Elmt));
+               Next_Elmt (Elmt);
+            end loop;
+         end if;
+      end Visit_Elist;
+
+      -----------------
+      -- Visit_Field --
+      -----------------
+
+      procedure Visit_Field (F : Union_Id; N : Node_Id) is
+      begin
+         if F = Union_Id (Empty) then
+            return;
+
+         elsif F in Node_Range then
+
+            --  Copy node if it is syntactic, i.e. its parent pointer is
+            --  set to point to the field that referenced it (certain
+            --  Itypes will also meet this criterion, which is fine, since
+            --  these are clearly Itypes that do need to be copied, since
+            --  we are copying their parent.)
+
+            if Parent (Node_Id (F)) = N then
+               Visit_Node (Node_Id (F));
+               return;
+
+            --  Another case, if we are pointing to an Itype, then we want
+            --  to copy it if its associated node is somewhere in the tree
+            --  being copied.
+
+            --  Note: the exclusion of self-referential copies is just an
+            --  optimization, since the search of the already copied list
+            --  would catch it, but it is a common case (Etype pointing
+            --  to itself for an Itype that is a base type).
+
+            elsif Has_Extension (Node_Id (F))
+              and then Is_Itype (Entity_Id (F))
+              and then Node_Id (F) /= N
+            then
+               declare
+                  P : Node_Id;
+
+               begin
+                  P := Associated_Node_For_Itype (Node_Id (F));
+                  while Present (P) loop
+                     if P = Source then
+                        Visit_Node (Node_Id (F));
+                        return;
+                     else
+                        P := Parent (P);
+                     end if;
+                  end loop;
+
+                  --  An Itype whose parent is not being copied definitely
+                  --  should NOT be copied, since it does not belong in any
+                  --  sense to the copied subtree.
+
+                  return;
+               end;
+            end if;
+
+         elsif F in List_Range
+           and then Parent (List_Id (F)) = N
+         then
+            Visit_List (List_Id (F));
+            return;
+         end if;
+      end Visit_Field;
+
+      -----------------
+      -- Visit_Itype --
+      -----------------
+
+      procedure Visit_Itype (Old_Itype : Entity_Id) is
+         New_Itype : Entity_Id;
+         E         : Elmt_Id;
+         Ent       : Entity_Id;
+
+      begin
+         --  Itypes that describe the designated type of access to subprograms
+         --  have the structure of subprogram declarations, with signatures,
+         --  etc. Either we duplicate the signatures completely, or choose to
+         --  share such itypes, which is fine because their elaboration will
+         --  have no side effects.
+
+         if Ekind (Old_Itype) = E_Subprogram_Type then
+            return;
+         end if;
+
+         New_Itype := New_Copy (Old_Itype);
+
+         --  The new Itype has all the attributes of the old one, and
+         --  we just copy the contents of the entity. However, the back-end
+         --  needs different names for debugging purposes, so we create a
+         --  new internal name for it in all cases.
+
+         Set_Chars (New_Itype, New_Internal_Name ('T'));
+
+         --  If our associated node is an entity that has already been copied,
+         --  then set the associated node of the copy to point to the right
+         --  copy. If we have copied an Itype that is itself the associated
+         --  node of some previously copied Itype, then we set the right
+         --  pointer in the other direction.
+
+         if Present (Actual_Map) then
+
+            --  Case of hash tables used
+
+            if NCT_Hash_Tables_Used then
+
+               Ent := NCT_Assoc.Get (Associated_Node_For_Itype (Old_Itype));
+
+               if Present (Ent) then
+                  Set_Associated_Node_For_Itype (New_Itype, Ent);
+               end if;
+
+               Ent := NCT_Itype_Assoc.Get (Old_Itype);
+               if Present (Ent) then
+                  Set_Associated_Node_For_Itype (Ent, New_Itype);
+
+               --  If the hash table has no association for this Itype and
+               --  its associated node, enter one now.
+
+               else
+                  NCT_Itype_Assoc.Set
+                    (Associated_Node_For_Itype (Old_Itype), New_Itype);
+               end if;
+
+            --  Case of hash tables not used
+
+            else
+               E := First_Elmt (Actual_Map);
+               while Present (E) loop
+                  if Associated_Node_For_Itype (Old_Itype) = Node (E) then
+                     Set_Associated_Node_For_Itype
+                       (New_Itype, Node (Next_Elmt (E)));
+                  end if;
+
+                  if Is_Type (Node (E))
+                    and then
+                      Old_Itype = Associated_Node_For_Itype (Node (E))
+                  then
+                     Set_Associated_Node_For_Itype
+                       (Node (Next_Elmt (E)), New_Itype);
+                  end if;
+
+                  E := Next_Elmt (Next_Elmt (E));
+               end loop;
+            end if;
+         end if;
+
+         if Present (Freeze_Node (New_Itype)) then
+            Set_Is_Frozen (New_Itype, False);
+            Set_Freeze_Node (New_Itype, Empty);
+         end if;
+
+         --  Add new association to map
+
+         if No (Actual_Map) then
+            Actual_Map := New_Elmt_List;
+         end if;
+
+         Append_Elmt (Old_Itype, Actual_Map);
+         Append_Elmt (New_Itype, Actual_Map);
+
+         if NCT_Hash_Tables_Used then
+            NCT_Assoc.Set (Old_Itype, New_Itype);
+
+         else
+            NCT_Table_Entries := NCT_Table_Entries + 1;
+
+            if NCT_Table_Entries > NCT_Hash_Threshold then
+               Build_NCT_Hash_Tables;
+            end if;
+         end if;
+
+         --  If a record subtype is simply copied, the entity list will be
+         --  shared. Thus cloned_Subtype must be set to indicate the sharing.
+
+         if Ekind_In (Old_Itype, E_Record_Subtype, E_Class_Wide_Subtype) then
+            Set_Cloned_Subtype (New_Itype, Old_Itype);
+         end if;
+
+         --  Visit descendents that eventually get copied
+
+         Visit_Field (Union_Id (Etype (Old_Itype)), Old_Itype);
+
+         if Is_Discrete_Type (Old_Itype) then
+            Visit_Field (Union_Id (Scalar_Range (Old_Itype)), Old_Itype);
+
+         elsif Has_Discriminants (Base_Type (Old_Itype)) then
+            --  ??? This should involve call to Visit_Field
+            Visit_Elist (Discriminant_Constraint (Old_Itype));
+
+         elsif Is_Array_Type (Old_Itype) then
+            if Present (First_Index (Old_Itype)) then
+               Visit_Field (Union_Id (List_Containing
+                                (First_Index (Old_Itype))),
+                            Old_Itype);
+            end if;
+
+            if Is_Packed (Old_Itype) then
+               Visit_Field (Union_Id (Packed_Array_Type (Old_Itype)),
+                            Old_Itype);
+            end if;
+         end if;
+      end Visit_Itype;
+
+      ----------------
+      -- Visit_List --
+      ----------------
+
+      procedure Visit_List (L : List_Id) is
+         N : Node_Id;
+      begin
+         if L /= No_List then
+            N := First (L);
+
+            while Present (N) loop
+               Visit_Node (N);
+               Next (N);
+            end loop;
+         end if;
+      end Visit_List;
+
+      ----------------
+      -- Visit_Node --
+      ----------------
+
+      procedure Visit_Node (N : Node_Or_Entity_Id) is
+
+      --  Start of processing for Visit_Node
+
+      begin
+         --  Handle case of an Itype, which must be copied
+
+         if Has_Extension (N)
+           and then Is_Itype (N)
+         then
+            --  Nothing to do if already in the list. This can happen with an
+            --  Itype entity that appears more than once in the tree.
+            --  Note that we do not want to visit descendents in this case.
+
+            --  Test for already in list when hash table is used
+
+            if NCT_Hash_Tables_Used then
+               if Present (NCT_Assoc.Get (Entity_Id (N))) then
+                  return;
+               end if;
+
+            --  Test for already in list when hash table not used
+
+            else
+               declare
+                  E : Elmt_Id;
+               begin
+                  if Present (Actual_Map) then
+                     E := First_Elmt (Actual_Map);
+                     while Present (E) loop
+                        if Node (E) = N then
+                           return;
+                        else
+                           E := Next_Elmt (Next_Elmt (E));
+                        end if;
+                     end loop;
+                  end if;
+               end;
+            end if;
+
+            Visit_Itype (N);
+         end if;
+
+         --  Visit descendents
+
+         Visit_Field (Field1 (N), N);
+         Visit_Field (Field2 (N), N);
+         Visit_Field (Field3 (N), N);
+         Visit_Field (Field4 (N), N);
+         Visit_Field (Field5 (N), N);
+      end Visit_Node;
+
+   --  Start of processing for New_Copy_Tree
+
+   begin
+      Actual_Map := Map;
+
+      --  See if we should use hash table
+
+      if No (Actual_Map) then
+         NCT_Hash_Tables_Used := False;
+
+      else
+         declare
+            Elmt : Elmt_Id;
+
+         begin
+            NCT_Table_Entries := 0;
+
+            Elmt := First_Elmt (Actual_Map);
+            while Present (Elmt) loop
+               NCT_Table_Entries := NCT_Table_Entries + 1;
+               Next_Elmt (Elmt);
+               Next_Elmt (Elmt);
+            end loop;
+
+            if NCT_Table_Entries > NCT_Hash_Threshold then
+               Build_NCT_Hash_Tables;
+            else
+               NCT_Hash_Tables_Used := False;
+            end if;
+         end;
+      end if;
+
+      --  Hash table set up if required, now start phase one by visiting
+      --  top node (we will recursively visit the descendents).
+
+      Visit_Node (Source);
+
+      --  Now the second phase of the copy can start. First we process
+      --  all the mapped entities, copying their descendents.
+
+      if Present (Actual_Map) then
+         declare
+            Elmt      : Elmt_Id;
+            New_Itype : Entity_Id;
+         begin
+            Elmt := First_Elmt (Actual_Map);
+            while Present (Elmt) loop
+               Next_Elmt (Elmt);
+               New_Itype := Node (Elmt);
+               Copy_Itype_With_Replacement (New_Itype);
+               Next_Elmt (Elmt);
+            end loop;
+         end;
+      end if;
+
+      --  Now we can copy the actual tree
+
+      return Copy_Node_With_Replacement (Source);
+   end New_Copy_Tree;
 
    -------------------------
    -- New_External_Entity --
@@ -7436,8 +9195,7 @@ package body Sem_Util is
       Sloc_Value : Source_Ptr;
       Id_Char    : Character) return Entity_Id
    is
-      N : constant Entity_Id :=
-            Make_Defining_Identifier (Sloc_Value, New_Internal_Name (Id_Char));
+      N : constant Entity_Id := Make_Temporary (Sloc_Value, Id_Char);
 
    begin
       Set_Ekind          (N, Kind);
@@ -7857,7 +9615,10 @@ package body Sem_Util is
                if Comes_From_Source (Exp)
                  or else Modification_Comes_From_Source
                then
-                  if Has_Pragma_Unmodified (Ent) then
+                  --  Give warning if pragma unmodified given and we are
+                  --  sure this is a modification.
+
+                  if Has_Pragma_Unmodified (Ent) and then Sure then
                      Error_Msg_NE ("?pragma Unmodified given for &!", N, Ent);
                   end if;
 
@@ -7887,6 +9648,29 @@ package body Sem_Util is
 
                if Modification_Comes_From_Source then
                   Generate_Reference (Ent, Exp, 'm');
+
+                  --  If the target of the assignment is the bound variable
+                  --  in an iterator, indicate that the corresponding array
+                  --  or container is also modified.
+
+                  if Ada_Version >= Ada_2012
+                    and then
+                      Nkind (Parent (Ent)) = N_Iterator_Specification
+                  then
+                     declare
+                        Domain : constant Node_Id := Name (Parent (Ent));
+
+                     begin
+                        --  TBD : in the full version of the construct, the
+                        --  domain of iteration can be given by an expression.
+
+                        if Is_Entity_Name (Domain) then
+                           Generate_Reference      (Entity (Domain), Exp, 'm');
+                           Set_Is_True_Constant    (Entity (Domain), False);
+                           Set_Never_Set_In_Source (Entity (Domain), False);
+                        end if;
+                     end;
+                  end if;
                end if;
 
                Check_Nested_Access (Ent);
@@ -8052,15 +9836,112 @@ package body Sem_Util is
       then
          return Object_Access_Level (Expression (Obj));
 
-      --  Function results are objects, so we get either the access level of
-      --  the function or, in the case of an indirect call, the level of the
-      --  access-to-subprogram type.
-
       elsif Nkind (Obj) = N_Function_Call then
-         if Is_Entity_Name (Name (Obj)) then
-            return Subprogram_Access_Level (Entity (Name (Obj)));
+
+         --  Function results are objects, so we get either the access level of
+         --  the function or, in the case of an indirect call, the level of the
+         --  access-to-subprogram type. (This code is used for Ada 95, but it
+         --  looks wrong, because it seems that we should be checking the level
+         --  of the call itself, even for Ada 95. However, using the Ada 2005
+         --  version of the code causes regressions in several tests that are
+         --  compiled with -gnat95. ???)
+
+         if Ada_Version < Ada_2005 then
+            if Is_Entity_Name (Name (Obj)) then
+               return Subprogram_Access_Level (Entity (Name (Obj)));
+            else
+               return Type_Access_Level (Etype (Prefix (Name (Obj))));
+            end if;
+
+         --  For Ada 2005, the level of the result object of a function call is
+         --  defined to be the level of the call's innermost enclosing master.
+         --  We determine that by querying the depth of the innermost enclosing
+         --  dynamic scope.
+
          else
-            return Type_Access_Level (Etype (Prefix (Name (Obj))));
+            Return_Master_Scope_Depth_Of_Call : declare
+
+               function Innermost_Master_Scope_Depth
+                 (N : Node_Id) return Uint;
+               --  Returns the scope depth of the given node's innermost
+               --  enclosing dynamic scope (effectively the accessibility
+               --  level of the innermost enclosing master).
+
+               ----------------------------------
+               -- Innermost_Master_Scope_Depth --
+               ----------------------------------
+
+               function Innermost_Master_Scope_Depth
+                 (N : Node_Id) return Uint
+               is
+                  Node_Par : Node_Id := Parent (N);
+
+               begin
+                  --  Locate the nearest enclosing node (by traversing Parents)
+                  --  that Defining_Entity can be applied to, and return the
+                  --  depth of that entity's nearest enclosing dynamic scope.
+
+                  while Present (Node_Par) loop
+                     case Nkind (Node_Par) is
+                        when N_Component_Declaration           |
+                             N_Entry_Declaration               |
+                             N_Formal_Object_Declaration       |
+                             N_Formal_Type_Declaration         |
+                             N_Full_Type_Declaration           |
+                             N_Incomplete_Type_Declaration     |
+                             N_Loop_Parameter_Specification    |
+                             N_Object_Declaration              |
+                             N_Protected_Type_Declaration      |
+                             N_Private_Extension_Declaration   |
+                             N_Private_Type_Declaration        |
+                             N_Subtype_Declaration             |
+                             N_Function_Specification          |
+                             N_Procedure_Specification         |
+                             N_Task_Type_Declaration           |
+                             N_Body_Stub                       |
+                             N_Generic_Instantiation           |
+                             N_Proper_Body                     |
+                             N_Implicit_Label_Declaration      |
+                             N_Package_Declaration             |
+                             N_Single_Task_Declaration         |
+                             N_Subprogram_Declaration          |
+                             N_Generic_Declaration             |
+                             N_Renaming_Declaration            |
+                             N_Block_Statement                 |
+                             N_Formal_Subprogram_Declaration   |
+                             N_Abstract_Subprogram_Declaration |
+                             N_Entry_Body                      |
+                             N_Exception_Declaration           |
+                             N_Formal_Package_Declaration      |
+                             N_Number_Declaration              |
+                             N_Package_Specification           |
+                             N_Parameter_Specification         |
+                             N_Single_Protected_Declaration    |
+                             N_Subunit                         =>
+
+                           return Scope_Depth
+                                    (Nearest_Dynamic_Scope
+                                       (Defining_Entity (Node_Par)));
+
+                        when others =>
+                           null;
+                     end case;
+
+                     Node_Par := Parent (Node_Par);
+                  end loop;
+
+                  pragma Assert (False);
+
+                  --  Should never reach the following return
+
+                  return Scope_Depth (Current_Scope) + 1;
+               end Innermost_Master_Scope_Depth;
+
+            --  Start of processing for Return_Master_Scope_Depth_Of_Call
+
+            begin
+               return Innermost_Master_Scope_Depth (Obj);
+            end Return_Master_Scope_Depth_Of_Call;
          end if;
 
       --  For convenience we handle qualified expressions, even though
@@ -8078,6 +9959,36 @@ package body Sem_Util is
          return Scope_Depth (Standard_Standard);
       end if;
    end Object_Access_Level;
+
+   --------------------------------------
+   -- Original_Corresponding_Operation --
+   --------------------------------------
+
+   function Original_Corresponding_Operation (S : Entity_Id) return Entity_Id
+   is
+      Typ : constant Entity_Id := Find_Dispatching_Type (S);
+
+   begin
+      --  If S is an inherited primitive S2 the original corresponding
+      --  operation of S is the original corresponding operation of S2
+
+      if Present (Alias (S))
+        and then Find_Dispatching_Type (Alias (S)) /= Typ
+      then
+         return Original_Corresponding_Operation (Alias (S));
+
+      --  If S overrides an inherited subprogram S2 the original corresponding
+      --  operation of S is the original corresponding operation of S2
+
+      elsif Present (Overridden_Operation (S)) then
+         return Original_Corresponding_Operation (Overridden_Operation (S));
+
+      --  otherwise it is S itself
+
+      else
+         return S;
+      end if;
+   end Original_Corresponding_Operation;
 
    -----------------------
    -- Private_Component --
@@ -8383,44 +10294,50 @@ package body Sem_Util is
       Set_Sloc (Endl, Loc);
    end Process_End_Label;
 
-   ------------------
-   -- Real_Convert --
-   ------------------
+   ------------------------------------
+   -- References_Generic_Formal_Type --
+   ------------------------------------
 
-   --  We do the conversion to get the value of the real string by using
-   --  the scanner, see Sinput for details on use of the internal source
-   --  buffer for scanning internal strings.
+   function References_Generic_Formal_Type (N : Node_Id) return Boolean is
 
-   function Real_Convert (S : String) return Node_Id is
-      Save_Src : constant Source_Buffer_Ptr := Source;
-      Negative : Boolean;
+      function Process (N : Node_Id) return Traverse_Result;
+      --  Process one node in search for generic formal type
+
+      -------------
+      -- Process --
+      -------------
+
+      function Process (N : Node_Id) return Traverse_Result is
+      begin
+         if Nkind (N) in N_Has_Entity then
+            declare
+               E : constant Entity_Id := Entity (N);
+            begin
+               if Present (E) then
+                  if Is_Generic_Type (E) then
+                     return Abandon;
+                  elsif Present (Etype (E))
+                    and then Is_Generic_Type (Etype (E))
+                  then
+                     return Abandon;
+                  end if;
+               end if;
+            end;
+         end if;
+
+         return Atree.OK;
+      end Process;
+
+      function Traverse is new Traverse_Func (Process);
+      --  Traverse tree to look for generic type
 
    begin
-      Source := Internal_Source_Ptr;
-      Scan_Ptr := 1;
-
-      for J in S'Range loop
-         Source (Source_Ptr (J)) := S (J);
-      end loop;
-
-      Source (S'Length + 1) := EOF;
-
-      if Source (Scan_Ptr) = '-' then
-         Negative := True;
-         Scan_Ptr := Scan_Ptr + 1;
+      if Inside_A_Generic then
+         return Traverse (N) = Abandon;
       else
-         Negative := False;
+         return False;
       end if;
-
-      Scan;
-
-      if Negative then
-         Set_Realval (Token_Node, UR_Negate (Realval (Token_Node)));
-      end if;
-
-      Source := Save_Src;
-      return Token_Node;
-   end Real_Convert;
+   end References_Generic_Formal_Type;
 
    --------------------
    -- Remove_Homonym --
@@ -8679,12 +10596,7 @@ package body Sem_Util is
          while R_Scope /= Standard_Standard loop
             exit when R_Scope = E_Scope;
 
-            if Ekind (R_Scope) /= E_Package
-                  and then
-                Ekind (R_Scope) /= E_Block
-                  and then
-                Ekind (R_Scope) /= E_Loop
-            then
+            if not Ekind_In (R_Scope, E_Package, E_Block, E_Loop) then
                return False;
             else
                R_Scope := Scope (R_Scope);
@@ -8710,10 +10622,12 @@ package body Sem_Util is
 
          P := Parent (N);
          while Present (P) loop
-            if Nkind (P) = N_If_Statement
+            if         Nkind (P) = N_If_Statement
               or else  Nkind (P) = N_Case_Statement
-              or else (Nkind (P) = N_And_Then and then Desc = Right_Opnd (P))
-              or else (Nkind (P) = N_Or_Else and then Desc = Right_Opnd (P))
+              or else (Nkind (P) in N_Short_Circuit
+                         and then Desc = Right_Opnd (P))
+              or else (Nkind (P) = N_Conditional_Expression
+                         and then Desc /= First (Expressions (P)))
               or else  Nkind (P) = N_Exception_Handler
               or else  Nkind (P) = N_Selective_Accept
               or else  Nkind (P) = N_Conditional_Entry_Call
@@ -8774,20 +10688,24 @@ package body Sem_Util is
    begin
       --  First case, both are entities with same entity
 
-      if K1 in N_Has_Entity
-        and then K2 in N_Has_Entity
-        and then Present (Entity (N1))
-        and then Present (Entity (N2))
-        and then (Ekind (Entity (N1)) = E_Variable
-                    or else
-                  Ekind (Entity (N1)) = E_Constant)
-        and then Entity (N1) = Entity (N2)
-      then
-         return True;
+      if K1 in N_Has_Entity and then K2 in N_Has_Entity then
+         declare
+            EN1 : constant Entity_Id := Entity (N1);
+            EN2 : constant Entity_Id := Entity (N2);
+         begin
+            if Present (EN1) and then Present (EN2)
+              and then (Ekind_In (EN1, E_Variable, E_Constant)
+                         or else Is_Formal (EN1))
+              and then EN1 = EN2
+            then
+               return True;
+            end if;
+         end;
+      end if;
 
       --  Second case, selected component with same selector, same record
 
-      elsif K1 = N_Selected_Component
+      if K1 = N_Selected_Component
         and then K2 = N_Selected_Component
         and then Chars (Selector_Name (N1)) = Chars (Selector_Name (N2))
       then
@@ -8877,6 +10795,35 @@ package body Sem_Util is
          return False;
       end if;
    end Same_Value;
+
+   -----------------
+   -- Save_Actual --
+   -----------------
+
+   procedure Save_Actual (N : Node_Id;  Writable : Boolean := False) is
+   begin
+      if Ada_Version < Ada_2012 then
+         return;
+
+      elsif Is_Entity_Name (N)
+        or else
+          Nkind_In (N, N_Indexed_Component, N_Selected_Component, N_Slice)
+        or else
+          (Nkind (N) = N_Attribute_Reference
+            and then Attribute_Name (N) = Name_Access)
+
+      then
+         --  We are only interested in IN OUT parameters of inner calls
+
+         if not Writable
+           or else Nkind (Parent (N)) = N_Function_Call
+           or else Nkind (Parent (N)) in N_Op
+         then
+            Actuals_In_Call.Increment_Last;
+            Actuals_In_Call.Table (Actuals_In_Call.Last) := (N, Writable);
+         end if;
+      end if;
+   end Save_Actual;
 
    ------------------------
    -- Scope_Is_Transient --
@@ -9025,6 +10972,13 @@ package body Sem_Util is
                   Next_Entity (Ent);
                end loop;
             end;
+
+            --  For a class wide subtype, we also need debug information
+            --  for the equivalent type.
+
+            if Ekind (T) = E_Class_Wide_Subtype then
+               Set_Debug_Info_Needed_If_Not_Set (Equivalent_Type (T));
+            end if;
 
          elsif Is_Array_Type (T) then
             Set_Debug_Info_Needed_If_Not_Set (Component_Type (T));
@@ -9222,10 +11176,7 @@ package body Sem_Util is
    begin
       --  Deal with indexed or selected component where prefix is modified
 
-      if Nkind (N) = N_Indexed_Component
-           or else
-         Nkind (N) = N_Selected_Component
-      then
+      if Nkind_In (N, N_Indexed_Component, N_Selected_Component) then
          Pref := Prefix (N);
 
          --  If prefix is access type, then it is the designated object that is
@@ -9500,22 +11451,6 @@ package body Sem_Util is
       return Scope_Depth (Enclosing_Dynamic_Scope (Btyp));
    end Type_Access_Level;
 
-   --------------------
-   -- Ultimate_Alias --
-   --------------------
-   --  To do: add occurrences calling this new subprogram
-
-   function Ultimate_Alias (Prim : Entity_Id) return Entity_Id is
-      E : Entity_Id := Prim;
-
-   begin
-      while Present (Alias (E)) loop
-         E := Alias (E);
-      end loop;
-
-      return E;
-   end Ultimate_Alias;
-
    --------------------------
    -- Unit_Declaration_Node --
    --------------------------
@@ -9615,6 +11550,47 @@ package body Sem_Util is
          return Expr;
       end if;
    end Unqualify;
+
+   -----------------------
+   -- Visible_Ancestors --
+   -----------------------
+
+   function Visible_Ancestors (Typ : Entity_Id) return Elist_Id is
+      List_1 : Elist_Id;
+      List_2 : Elist_Id;
+      Elmt   : Elmt_Id;
+
+   begin
+      pragma Assert (Is_Record_Type (Typ)
+        and then Is_Tagged_Type (Typ));
+
+      --  Collect all the parents and progenitors of Typ. If the full-view of
+      --  private parents and progenitors is available then it is used to
+      --  generate the list of visible ancestors; otherwise their partial
+      --  view is added to the resulting list.
+
+      Collect_Parents
+        (T               => Typ,
+         List            => List_1,
+         Use_Full_View   => True);
+
+      Collect_Interfaces
+        (T               => Typ,
+         Ifaces_List     => List_2,
+         Exclude_Parents => True,
+         Use_Full_View   => True);
+
+      --  Join the two lists. Avoid duplications because an interface may
+      --  simultaneously be parent and progenitor of a type.
+
+      Elmt := First_Elmt (List_2);
+      while Present (Elmt) loop
+         Append_Unique_Elmt (Node (Elmt), List_1);
+         Next_Elmt (Elmt);
+      end loop;
+
+      return List_1;
+   end Visible_Ancestors;
 
    ----------------------
    -- Within_Init_Proc --
@@ -9754,8 +11730,10 @@ package body Sem_Util is
         and then Covers
           (Designated_Type (Expec_Type), Designated_Type (Found_Type))
       then
-         Error_Msg_N ("result must be general access type!", Expr);
-         Error_Msg_NE ("add ALL to }!", Expr, Expec_Type);
+         Error_Msg_N -- CODEFIX
+           ("result must be general access type!", Expr);
+         Error_Msg_NE -- CODEFIX
+           ("add ALL to }!", Expr, Expec_Type);
 
       --  Another special check, if the expected type is an integer type,
       --  but the expression is of type System.Address, and the parent is
@@ -9802,7 +11780,8 @@ package body Sem_Util is
             if From_With_Type (Found_Type) then
                Error_Msg_NE ("\\found incomplete}!", Expr, Found_Type);
                Error_Msg_Qual_Level := 99;
-               Error_Msg_NE ("\\missing `WITH &;", Expr, Scope (Found_Type));
+               Error_Msg_NE -- CODEFIX
+                 ("\\missing `WITH &;", Expr, Scope (Found_Type));
                Error_Msg_Qual_Level := 0;
             else
                Error_Msg_NE ("found}!", Expr, Found_Type);
@@ -9902,6 +11881,38 @@ package body Sem_Util is
          else
             Error_Msg_NE ("\\found}!", Expr, Found_Type);
          end if;
+
+         --  A special check for cases like M1 and M2 = 0 where M1 and M2 are
+         --  of the same modular type, and (M1 and M2) = 0 was intended.
+
+         if Expec_Type = Standard_Boolean
+           and then Is_Modular_Integer_Type (Found_Type)
+           and then Nkind_In (Parent (Expr), N_Op_And, N_Op_Or, N_Op_Xor)
+           and then Nkind (Right_Opnd (Parent (Expr))) in N_Op_Compare
+         then
+            declare
+               Op : constant Node_Id := Right_Opnd (Parent (Expr));
+               L  : constant Node_Id := Left_Opnd (Op);
+               R  : constant Node_Id := Right_Opnd (Op);
+            begin
+               --  The case for the message is when the left operand of the
+               --  comparison is the same modular type, or when it is an
+               --  integer literal (or other universal integer expression),
+               --  which would have been typed as the modular type if the
+               --  parens had been there.
+
+               if (Etype (L) = Found_Type
+                     or else
+                   Etype (L) = Universal_Integer)
+                 and then Is_Integer_Type (Etype (R))
+               then
+                  Error_Msg_N
+                    ("\\possible missing parens for modular operation", Expr);
+               end if;
+            end;
+         end if;
+
+         --  Reset error message qualification indication
 
          Error_Msg_Qual_Level := 0;
       end if;

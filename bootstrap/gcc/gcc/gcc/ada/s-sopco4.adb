@@ -29,9 +29,11 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-pragma Warnings (Off);
+--  NOTE: This package is obsolescent. It is no longer used by the compiler
+--  which now generates concatenation inline. It is retained only because
+--  it may be used during bootstrapping using old versions of the compiler.
+
 pragma Compiler_Unit;
-pragma Warnings (On);
 
 package body System.String_Ops_Concat_4 is
 

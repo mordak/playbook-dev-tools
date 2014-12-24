@@ -1,8 +1,5 @@
 ! { dg-do run }
 
-! FIXME: Remove -w after polymorphic entities are supported.
-! { dg-options "-w" }
-
 ! Type-bound procedures
 ! Check calls with passed-objects.
 
@@ -27,7 +24,7 @@ CONTAINS
 
   INTEGER FUNCTION func_add (me, x)
     IMPLICIT NONE
-    TYPE(add) :: me
+    CLASS(add) :: me
     INTEGER :: x
     func_add = me%val + x
   END FUNCTION func_add
@@ -35,14 +32,14 @@ CONTAINS
   SUBROUTINE sub_add (res, me, x)
     IMPLICIT NONE
     INTEGER, INTENT(OUT) :: res
-    TYPE(add), INTENT(IN) :: me
+    CLASS(add), INTENT(IN) :: me
     INTEGER, INTENT(IN) :: x
     res = me%val + x
   END SUBROUTINE sub_add
 
   SUBROUTINE swap (me1, me2)
     IMPLICIT NONE
-    TYPE(trueOrFalse), INTENT(INOUT) :: me1, me2
+    CLASS(trueOrFalse), INTENT(INOUT) :: me1, me2
 
     IF (.NOT. me1%val .OR. me2%val) THEN
       CALL abort ()

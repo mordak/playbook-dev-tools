@@ -1,6 +1,7 @@
 /* ldctor.c -- constructor support routines
    Copyright 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001,
-   2002, 2003, 2004, 2006, 2007, 2008 Free Software Foundation, Inc.
+   2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2011
+   Free Software Foundation, Inc.
    By Steve Chamberlain <sac@cygnus.com>
 
    This file is part of the GNU Binutils.
@@ -69,7 +70,7 @@ ldctor_add_set_entry (struct bfd_link_hash_entry *h,
 
   if (p == NULL)
     {
-      p = xmalloc (sizeof (struct set_info));
+      p = (struct set_info *) xmalloc (sizeof (struct set_info));
       p->next = sets;
       sets = p;
       p->h = h;
@@ -105,7 +106,7 @@ ldctor_add_set_entry (struct bfd_link_hash_entry *h,
 	}
     }
 
-  e = xmalloc (sizeof (struct set_element));
+  e = (struct set_element *) xmalloc (sizeof (struct set_element));
   e->next = NULL;
   e->name = name;
   e->section = section;
@@ -152,8 +153,10 @@ ctor_prio (const char *name)
 static int
 ctor_cmp (const void *p1, const void *p2)
 {
-  const struct set_element * const *pe1 = p1;
-  const struct set_element * const *pe2 = p2;
+  const struct set_element * const *pe1 =
+      (const struct set_element * const *) p1;
+  const struct set_element * const *pe2 =
+      (const struct set_element * const *) p2;
   const char *n1;
   const char *n2;
   int prio1;
@@ -198,7 +201,6 @@ void
 ldctor_build_sets (void)
 {
   static bfd_boolean called;
-  lang_statement_list_type *old;
   bfd_boolean header_printed;
   struct set_info *p;
 
@@ -223,7 +225,7 @@ ldctor_build_sets (void)
 	  for (e = p->elements; e != NULL; e = e->next)
 	    ++c;
 
-	  array = xmalloc (c * sizeof *array);
+	  array = (struct set_element **) xmalloc (c * sizeof *array);
 
 	  i = 0;
 	  for (e = p->elements; e != NULL; e = e->next)
@@ -244,10 +246,8 @@ ldctor_build_sets (void)
 	}
     }
 
-  old = stat_ptr;
-  stat_ptr = &constructor_list;
-
-  lang_list_init (stat_ptr);
+  lang_list_init (&constructor_list);
+  push_stat_ptr (&constructor_list);
 
   header_printed = FALSE;
   for (p = sets; p != NULL; p = p->next)
@@ -319,11 +319,11 @@ ldctor_build_sets (void)
 	  break;
 	}
 
-      lang_add_assignment (exp_assop ('=', ".",
-				      exp_unop (ALIGN_K,
-						exp_intop (reloc_size))));
-      lang_add_assignment (exp_assop ('=', p->h->root.string,
-				      exp_nameop (NAME, ".")));
+      lang_add_assignment (exp_assign (".",
+				       exp_unop (ALIGN_K,
+						 exp_intop (reloc_size))));
+      lang_add_assignment (exp_assign (p->h->root.string,
+				       exp_nameop (NAME, ".")));
       lang_add_data (size, exp_intop (p->count));
 
       for (e = p->elements; e != NULL; e = e->next)
@@ -372,5 +372,5 @@ ldctor_build_sets (void)
       lang_add_data (size, exp_intop (0));
     }
 
-  stat_ptr = old;
+  pop_stat_ptr ();
 }

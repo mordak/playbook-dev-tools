@@ -1,14 +1,104 @@
-2009-10-15  Release Manager
+2012-03-01  Release Manager
 
-	* GCC 4.4.2 released.
+	* GCC 4.6.3 released.
 
-2009-07-22  Release Manager
+2011-11-23  Gerald Pfeifer  <gerald@pfeifer.com>
 
-	* GCC 4.4.1 released.
+	* update_web_docs_svn: Make $DOCSDIR group writable after
+	creating it.
 
-2009-04-21  Release Manager
+2011-10-26  Release Manager
 
-	* GCC 4.4.0 released.
+	* GCC 4.6.2 released.
+
+2011-06-27  Release Manager
+
+	* GCC 4.6.1 released.
+
+2011-03-25  Release Manager
+
+	* GCC 4.6.0 released.
+
+2011-02-07  Joseph Myers  <joseph@codesourcery.com>
+
+	* update_web_docs_svn: Generate libquadmath-vers.texi.
+
+2011-01-31  Gerald Pfeifer  <gerald@pfeifer.com>
+
+	* update_version_svn (FILES): Merge with datestamp_FILES.
+	(SVNROOT2): Introduce and use.
+	
+2011-01-30  Gerald Pfeifer  <gerald@pfeifer.com>
+
+	* update_version_svn (SVN): Remove obsolete comment.
+	(CURR_DATE): Fix description.
+	Fix description of checkout procedure.
+
+2010-12-18  Tobias Burnus  <burnus@net-b.de>
+
+	* update_web_docs_svn (MANUALS): Add libquadmath.
+
+2010-12-08  Ian Lance Taylor  <iant@google.com>
+
+	* gcc_release: Add support for releasing Go as a separate
+	tarball.
+
+2010-12-08  Ian Lance Taylor  <iant@google.com>
+
+	* update_web_docs_svn (MANUALS): Add gccgo.
+
+2010-12-08  Ian Lance Taylor  <iant@google.com>
+
+	* README: Change "CVS" to "Subversion".
+
+2010-08-23  Gerald Pfeifer  <gerald@pfeifer.com>
+
+	* gcc_release (snapshot_print): Also include an sha1 hash for
+	every tarball.  Slightly tweak indentation.
+
+2010-08-15  Gerald Pfeifer  <gerald@pfeifer.com>
+
+	* gcc_release (CVSROOT): Remove all occurrences.
+
+2010-08-14  Gerald Pfeifer  <gerald@pfeifer.com>
+
+	* gcc_release (snapshot_print): Include md5 hash for every tarball
+	in the README file and notification mail.
+
+2010-08-01  Gerald Pfeifer  <gerald@pfeifer.com>
+
+	* update_web_docs_libstdcxx_svn: Do not compress generated .html
+	files any more.
+
+2010-06-24  Joseph Myers  <joseph@codesourcery.com>
+
+	* update_web_docs_svn: Also pass -I option pointing to ada/ source
+	directory for Ada manual.
+
+2010-04-16  Joseph Myers  <joseph@codesourcery.com>
+
+	* crontab: Enable 4.6 snapshots.
+
+2010-04-07  Joseph Myers  <joseph@codesourcery.com>
+
+	* crontab: Switch 4.5 snapshots to 4.5 branch.
+
+2010-03-31  Joseph Myers  <joseph@codesourcery.com>
+
+	* gcc_release (build_tarfiles): Make directories mode 755, not
+	777.
+
+2009-10-10  Gerald Pfeifer  <gerald@pfeifer.com>
+
+	* update_web_docs_svn: Update BUGURL to http://gcc.gnu.org/bugs/.
+
+2009-10-03  Diego Novillo  <dnovillo@google.com>
+
+	* gcc_release (JAVA_DIRS): Remove zlib.
+
+2009-04-23  Gerald Pfeifer  <gerald@pfeifer.com>
+
+	* update_web_docs_svn: Redirect output of texi2dvi to /dev/null.
 
 2009-04-09  Jakub Jelinek  <jakub@redhat.com>
 
@@ -16,6 +106,24 @@
 	3 of the GNU General Public License and to point readers at the
 	COPYING3 file and the FSF's license web page.
 	* maintainer-addresses: Likewise.
+
+2009-04-08  Gerald Pfeifer  <gerald@pfeifer.com>
+
+	* update_web_docs_svn: Run this script under plain /bin/sh
+	as opposed to /bin/sh -x.
+
+2009-03-30  Joseph Myers  <joseph@codesourcery.com>
+
+	* update_version_svn (IGNORE_BRANCHES): Add 4.2 branch.
+
+2009-03-28  Gerald Pfeifer  <gerald@pfeifer.com>
+
+	* crontab: Stop 4.2 snapshots.
+	Spread out 4.3, 4.4, and 4.5 snapshots more evenly.
+
+2009-03-27  Mark Mitchell  <mark@codesourcery.com>
+
+	* crontab: Add 4.4 branch snapshots.
 
 2009-02-21  Gerald Pfeifer  <gerald@pfeifer.com>
 

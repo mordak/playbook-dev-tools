@@ -1,19 +1,22 @@
 /* Author:  Ziemowit Laski <zlaski@apple.com>.  */
 
 /* { dg-do run } */
-/* { dg-skip-if "" { *-*-darwin* } { "-m64" } { "" } } */
+/* { dg-xfail-run-if "Needs OBJC2 ABI" { *-*-darwin* && { lp64 && { ! objc2 } } } { "-fnext-runtime" } { "" } } */
+/* { dg-options "-mno-constant-cfstrings" { target *-*-darwin* } } */
+/* { dg-additional-sources "../objc-obj-c++-shared/Object1.mm ../objc-obj-c++-shared/nsconstantstring-class-impl.mm" } */
 
-#include <objc/Object.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <string.h>
 
-#ifdef __NEXT_RUNTIME__
-/* The following ain't pretty, but does allow us to have just one copy
-   of next_mapping.h.  */
-#include "../objc/execute/next_mapping.h"
-#else
+#ifndef __NEXT_RUNTIME__
 #include <objc/NXConstStr.h>
+#else
+#include "../objc-obj-c++-shared/nsconstantstring-class.h"
 #endif
+
+#include "../objc-obj-c++-shared/Object1.h"
+#include "../objc-obj-c++-shared/next-mapping.h"
 
 #define CHECK_IF(expr) if(!(expr)) abort()
 

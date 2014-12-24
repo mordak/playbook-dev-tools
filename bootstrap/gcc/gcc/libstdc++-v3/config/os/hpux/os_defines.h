@@ -1,6 +1,7 @@
 // Specific definitions for HPUX  -*- C++ -*-
 
-// Copyright (C) 2000, 2002, 2004, 2005, 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2000, 2002, 2004, 2005, 2008, 2009, 2010, 2011
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -22,9 +23,9 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file os_defines.h
+/** @file bits/os_defines.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{iosfwd}
  */
 
 #ifndef _GLIBCXX_OS_DEFINES
@@ -57,9 +58,11 @@
    We also force _GLIBCXX_USE_LONG_LONG here so that we don't have
    to bastardize configure to deal with this sillyness.  */
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
-_GLIBCXX_BEGIN_EXTERN_C
-
+#ifdef __cplusplus
+namespace std
+{
+  extern "C" 
+  {
 #ifndef __LP64__
   __extension__ long long strtoll (const char *, char **, int)
     __asm  ("__strtoll");
@@ -71,9 +74,9 @@ _GLIBCXX_BEGIN_EXTERN_C
   __extension__ unsigned long long strtoull (const char *, char **, int)
     __asm  ("strtoul");
 #endif
-
-_GLIBCXX_END_EXTERN_C
-_GLIBCXX_END_NAMESPACE
+  }
+} // namespace std
+#endif // __cplusplus
 
 #define _GLIBCXX_USE_LONG_LONG 1
 

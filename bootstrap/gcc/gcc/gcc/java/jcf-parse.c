@@ -1,6 +1,6 @@
 /* Parser for Java(TM) .class files.
    Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
-   2005, 2006, 2007, 2008 Free Software Foundation, Inc.
+   2005, 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -27,23 +27,21 @@ The Free Software Foundation is independent of Sun Microsystems, Inc.  */
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "tm.h"
 #include "tree.h"
-#include "real.h"
 #include "obstack.h"
 #include "flags.h"
 #include "java-except.h"
 #include "input.h"
 #include "javaop.h"
 #include "java-tree.h"
-#include "toplev.h"
+#include "diagnostic-core.h"
 #include "parse.h"
 #include "ggc.h"
 #include "debug.h"
-#include "assert.h"
-#include "tm_p.h"
 #include "cgraph.h"
 #include "vecprim.h"
+#include "bitmap.h"
+#include "target.h"
 
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
@@ -73,7 +71,7 @@ The Free Software Foundation is independent of Sun Microsystems, Inc.  */
 
 extern struct obstack temporary_obstack;
 
-static GTY(()) tree parse_roots[3];
+static GTY(()) tree parse_roots[2];
 
 /* The FIELD_DECL for the current field.  */
 #define current_field parse_roots[0]
@@ -81,14 +79,14 @@ static GTY(()) tree parse_roots[3];
 /* The METHOD_DECL for the current method.  */
 #define current_method parse_roots[1]
 
-/* A list of TRANSLATION_UNIT_DECLs for the files to be compiled.  */
-#define current_file_list parse_roots[2]
-
 /* Line 0 in current file, if compiling from bytecode. */
 static location_t file_start_location;
 
 /* The Java archive that provides main_class;  the main input file. */
 static GTY(()) struct JCF * main_jcf;
+
+/* A list of all the class DECLs seen so far.  */
+static GTY(()) VEC(tree,gc) *all_class_list;
 
 /* The number of source files passed to us by -fsource-filename and an
    array of pointers to each name.  Used by find_sourcefile().  */
@@ -333,7 +331,7 @@ set_source_filename (JCF *jcf, int index)
     {
       const char *class_name
 	= IDENTIFIER_POINTER (DECL_NAME (TYPE_NAME (current_class)));
-      char *dot = strrchr (class_name, '.');
+      const char *dot = strrchr (class_name, '.');
       if (dot != NULL)
 	{
 	  /* Length of prefix, not counting final dot. */
@@ -498,7 +496,7 @@ handle_long_constant (JCF *jcf, CPool *cpool, enum cpool_tag kind,
 static uint16
 handle_constant (JCF *jcf, int index, enum cpool_tag purpose)
 {
-  enum cpool_tag kind;
+  unsigned int kind;
   CPool *cpool = cpool_for_class (output_class);
   
   if (index == 0)
@@ -555,13 +553,13 @@ handle_constant (JCF *jcf, int index, enum cpool_tag purpose)
       break;
 
     case CONSTANT_Long:
-      index = handle_long_constant (jcf, cpool, kind, index, 
-				    WORDS_BIG_ENDIAN);
+      index = handle_long_constant (jcf, cpool, CONSTANT_Long, index,
+				    targetm.words_big_endian ());
       break;
       
     case CONSTANT_Double:
-      index = handle_long_constant (jcf, cpool, kind, index, 
-				    FLOAT_WORDS_BIG_ENDIAN);
+      index = handle_long_constant (jcf, cpool, CONSTANT_Double, index,
+				    targetm.float_words_big_endian ());
       break;
 
     case CONSTANT_Float:
@@ -935,13 +933,14 @@ handle_signature_attribute (int member_index, JCF *jcf,
 #define HANDLE_EXCEPTIONS_ATTRIBUTE(COUNT) \
 { \
   int n = COUNT; \
-  tree list = DECL_FUNCTION_THROWS (current_method); \
+  VEC (tree,gc) *v = VEC_alloc (tree, gc, n); \
+  gcc_assert (DECL_FUNCTION_THROWS (current_method) == NULL); \
   while (--n >= 0) \
     { \
       tree thrown_class = get_class_constant (jcf, JCF_readu2 (jcf)); \
-      list = tree_cons (NULL_TREE, thrown_class, list); \
+      VEC_quick_push (tree, v, thrown_class); \
     } \
-  DECL_FUNCTION_THROWS (current_method) = nreverse (list); \
+  DECL_FUNCTION_THROWS (current_method) = v; \
 }
 
 #define HANDLE_DEPRECATED_ATTRIBUTE()  handle_deprecated ()
@@ -1040,14 +1039,15 @@ get_constant (JCF *jcf, int index)
       }
     case CONSTANT_Long:
       {
-	unsigned HOST_WIDE_INT num = JPOOL_UINT (jcf, index);
-	unsigned HOST_WIDE_INT lo;
-	HOST_WIDE_INT hi;
-	
-	lshift_double (num, 0, 32, 64, &lo, &hi, 0);
-	num = JPOOL_UINT (jcf, index+1);
-	add_double (lo, hi, num, 0, &lo, &hi);
-	value = build_int_cst_wide_type (long_type_node, lo, hi);
+	unsigned HOST_WIDE_INT num;
+	double_int val;
+
+	num = JPOOL_UINT (jcf, index);
+	val = double_int_lshift (uhwi_to_double_int (num), 32, 64, false);
+	num = JPOOL_UINT (jcf, index + 1);
+	val = double_int_ior (val, uhwi_to_double_int (num));
+
+	value = double_int_to_tree (long_type_node, val);
 	break;
       }
 
@@ -1070,7 +1070,7 @@ get_constant (JCF *jcf, int index)
 	hi = JPOOL_UINT (jcf, index);
 	lo = JPOOL_UINT (jcf, index+1);
 
-	if (FLOAT_WORDS_BIG_ENDIAN)
+	if (targetm.float_words_big_endian ())
 	  buf[0] = hi, buf[1] = lo;
 	else
 	  buf[0] = lo, buf[1] = hi;
@@ -1355,7 +1355,7 @@ load_class (tree class_or_name, int verbose)
     {
       while (1)
 	{
-	  char *separator;
+	  const char *separator;
 
 	  /* We've already loaded it.  */
 	  if (IDENTIFIER_CLASS_VALUE (name) != NULL_TREE)
@@ -1372,12 +1372,9 @@ load_class (tree class_or_name, int verbose)
 	     for an inner class.  */
 	  if ((separator = strrchr (IDENTIFIER_POINTER (name), '$'))
 	      || (separator = strrchr (IDENTIFIER_POINTER (name), '.')))
-	    {
-	      int c = *separator;
-	      *separator = '\0';
-	      name = get_identifier (IDENTIFIER_POINTER (name));
-	      *separator = c;
-	    }
+	    name = get_identifier_with_length (IDENTIFIER_POINTER (name),
+					       (separator
+						- IDENTIFIER_POINTER (name)));
 	  /* Otherwise, we failed, we bail. */
 	  else
 	    break;
@@ -1483,8 +1480,7 @@ jcf_parse (JCF* jcf)
   if (current_class == object_type_node)
     layout_class_methods (object_type_node);
   else
-    all_class_list = tree_cons (NULL_TREE,
-				TYPE_NAME (current_class), all_class_list );
+    VEC_safe_push (tree, gc, all_class_list, TYPE_NAME (current_class));
 }
 
 /* If we came across inner classes, load them now. */
@@ -1509,22 +1505,23 @@ duplicate_class_warning (const char *filename)
   location_t warn_loc;
   linemap_add (line_table, LC_RENAME, 0, filename, 0);
   warn_loc = linemap_line_start (line_table, 0, 1);
-  warning (0, "%Hduplicate class will only be compiled once", &warn_loc);
+  warning_at (warn_loc, 0, "duplicate class will only be compiled once");
 }
 
 static void
 java_layout_seen_class_methods (void)
 {
-  tree previous_list = all_class_list;
-  tree end = NULL_TREE;
-  tree current;
+  unsigned start = 0;
+  unsigned end = VEC_length (tree, all_class_list);
 
   while (1)
     {
-      for (current = previous_list;
-	   current != end; current = TREE_CHAIN (current))
+      unsigned ix;
+      unsigned new_length;
+
+      for (ix = start; ix != end; ix++)
         {
-	  tree decl = TREE_VALUE (current);
+	  tree decl = VEC_index (tree, all_class_list, ix);
           tree cls = TREE_TYPE (decl);
 
 	  input_location = DECL_SOURCE_LOCATION (decl);
@@ -1537,11 +1534,11 @@ java_layout_seen_class_methods (void)
 
       /* Note that new classes might have been added while laying out
          methods, changing the value of all_class_list.  */
-
-      if (previous_list != all_class_list)
+      new_length = VEC_length (tree, all_class_list);
+      if (end != new_length)
 	{
-	  end = previous_list;
-	  previous_list = all_class_list;
+	  start = end;
+	  end = new_length;
 	}
       else
 	break;
@@ -1570,7 +1567,7 @@ parse_class_file (void)
   gen_indirect_dispatch_tables (current_class);
 
   for (method = TYPE_METHODS (current_class);
-       method != NULL_TREE; method = TREE_CHAIN (method))
+       method != NULL_TREE; method = DECL_CHAIN (method))
     {
       JCF *jcf = current_jcf;
 
@@ -1668,22 +1665,24 @@ parse_class_file (void)
   input_location = save_location;
 }
 
+static VEC(tree,gc) *predefined_filenames;
+
 void
 add_predefined_file (tree name)
 {
-  predef_filenames = tree_cons (NULL_TREE, name, predef_filenames);
+  VEC_safe_push (tree, gc, predefined_filenames, name);
 }
 
 int
 predefined_filename_p (tree node)
 {
-  tree iter;
+  unsigned ix;
+  tree f;
 
-  for (iter = predef_filenames; iter != NULL_TREE; iter = TREE_CHAIN (iter))
-    {
-      if (TREE_VALUE (iter) == node)
-	return 1;
-    }
+  FOR_EACH_VEC_ELT (tree, predefined_filenames, ix, f)
+    if (f == node)
+      return 1;
+
   return 0;
 }
 
@@ -1703,10 +1702,11 @@ java_emit_static_constructor (void)
       tree name = get_identifier ("_Jv_global_static_constructor");
 
       tree decl 
-	= build_decl (FUNCTION_DECL, name,
-		      build_function_type (void_type_node, void_list_node));
+	= build_decl (input_location, FUNCTION_DECL, name,
+		      build_function_type_list (void_type_node, NULL_TREE));
 
-      tree resdecl = build_decl (RESULT_DECL, NULL_TREE, void_type_node);
+      tree resdecl = build_decl (input_location,
+				 RESULT_DECL, NULL_TREE, void_type_node);
       DECL_ARTIFICIAL (resdecl) = 1;
       DECL_RESULT (decl) = resdecl;
       current_function_decl = decl;
@@ -1730,7 +1730,7 @@ java_emit_static_constructor (void)
 
 
 void
-java_parse_file (int set_yydebug ATTRIBUTE_UNUSED)
+java_parse_file (void)
 {
   int filename_count = 0;
   location_t save_location = input_location;
@@ -1738,6 +1738,7 @@ java_parse_file (int set_yydebug ATTRIBUTE_UNUSED)
   tree node;
   FILE *finput = NULL;
   int in_quotes = 0;
+  unsigned ix;
  
   bitmap_obstack_initialize (&bit_obstack);
   field_offsets = BITMAP_ALLOC (&bit_obstack);
@@ -1747,7 +1748,7 @@ java_parse_file (int set_yydebug ATTRIBUTE_UNUSED)
       int avail = 2000;
       finput = fopen (main_input_filename, "r");
       if (finput == NULL)
-	fatal_error ("can't open %s: %m", input_filename);
+	fatal_error ("can%'t open %s: %m", input_filename);
       list = XNEWVEC (char, avail);
       next = list;
       for (;;)
@@ -1835,9 +1836,7 @@ java_parse_file (int set_yydebug ATTRIBUTE_UNUSED)
 	    duplicate_class_warning (IDENTIFIER_POINTER (node));
 	  else
 	    {
-	      tree file_decl = build_decl (TRANSLATION_UNIT_DECL, node, NULL);
-	      TREE_CHAIN (file_decl) = current_file_list;
-	      current_file_list = file_decl;
+	      build_translation_unit_decl (node);
 	      IS_A_COMMAND_LINE_FILENAME_P (node) = 1;
 	    }
 	}
@@ -1855,17 +1854,18 @@ java_parse_file (int set_yydebug ATTRIBUTE_UNUSED)
       const char *resource_filename;
       
       /* Only one resource file may be compiled at a time.  */
-      assert (TREE_CHAIN (current_file_list) == NULL);
+      gcc_assert (VEC_length (tree, all_translation_units) == 1);
 
-      resource_filename = IDENTIFIER_POINTER (DECL_NAME (current_file_list));
+      resource_filename
+	= IDENTIFIER_POINTER
+	    (DECL_NAME (VEC_index (tree, all_translation_units, 0)));
       compile_resource_file (resource_name, resource_filename);
 
       goto finish;
     }
 
   current_jcf = main_jcf;
-  current_file_list = nreverse (current_file_list);
-  for (node = current_file_list; node; node = TREE_CHAIN (node))
+  FOR_EACH_VEC_ELT (tree, all_translation_units, ix, node)
     {
       unsigned char magic_string[4];
       char *real_path;
@@ -1883,11 +1883,11 @@ java_parse_file (int set_yydebug ATTRIBUTE_UNUSED)
 
       /* Close previous descriptor, if any */
       if (finput && fclose (finput))
-	fatal_error ("can't close input file %s: %m", main_input_filename);
+	fatal_error ("can%'t close input file %s: %m", main_input_filename);
       
       finput = fopen (filename, "rb");
       if (finput == NULL)
-	fatal_error ("can't open %s: %m", filename);
+	fatal_error ("can%'t open %s: %m", filename);
 
 #ifdef IO_BUFFER_SIZE
       setvbuf (finput, xmalloc (IO_BUFFER_SIZE),
@@ -1903,8 +1903,7 @@ java_parse_file (int set_yydebug ATTRIBUTE_UNUSED)
       if (magic == 0xcafebabe)
 	{
 	  CLASS_FILE_P (node) = 1;
-	  current_jcf = GGC_NEW (JCF);
-	  JCF_ZERO (current_jcf);
+	  current_jcf = ggc_alloc_cleared_JCF ();
 	  current_jcf->read_state = finput;
 	  current_jcf->filbuf = jcf_filbuf_from_stdio;
 	  jcf_parse (current_jcf);
@@ -1921,8 +1920,7 @@ java_parse_file (int set_yydebug ATTRIBUTE_UNUSED)
 	}
       else if (magic == (JCF_u4)ZIPMAGIC)
 	{
-	  main_jcf = GGC_NEW (JCF);
-	  JCF_ZERO (main_jcf);
+	  main_jcf = ggc_alloc_cleared_JCF ();
 	  main_jcf->read_state = finput;
 	  main_jcf->filbuf = jcf_filbuf_from_stdio;
 	  linemap_add (line_table, LC_ENTER, false, filename, 0);
@@ -1954,7 +1952,7 @@ java_parse_file (int set_yydebug ATTRIBUTE_UNUSED)
 	}
     }
 
-  for (node = current_file_list; node; node = TREE_CHAIN (node))
+  FOR_EACH_VEC_ELT (tree, all_translation_units, ix, node)
     {
       input_location = DECL_SOURCE_LOCATION (node);
       if (CLASS_FILE_P (node))
@@ -1980,11 +1978,6 @@ java_parse_file (int set_yydebug ATTRIBUTE_UNUSED)
   /* Arrange for any necessary initialization to happen.  */
   java_emit_static_constructor ();
   gcc_assert (global_bindings_p ());
-
-  /* Only finalize the compilation unit after we've told cgraph which
-     functions have their addresses stored.  */
-  cgraph_finalize_compilation_unit ();
-  cgraph_optimize ();
 }
 
 
@@ -2183,8 +2176,7 @@ process_zip_dir (FILE *finput)
 
       class_name = compute_class_name (zdir);
       file_name  = XNEWVEC (char, zdir->filename_length+1);
-      jcf = GGC_NEW (JCF);
-      JCF_ZERO (jcf);
+      jcf = ggc_alloc_cleared_JCF ();
 
       strncpy (file_name, class_name_in_zip_dir, zdir->filename_length);
       file_name [zdir->filename_length] = '\0';

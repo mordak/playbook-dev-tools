@@ -3,6 +3,11 @@
 #define _FP_WS_TYPE		signed long
 #define _FP_I_TYPE		long
 
+/* The type of the result of a floating point comparison.  This must
+   match `__libgcc_cmp_return__' in GCC for the target.  */
+typedef int __gcc_CMPtype __attribute__ ((mode (__libgcc_cmp_return__)));
+#define CMPtype __gcc_CMPtype
+
 #define _FP_MUL_MEAT_S(R,X,Y)				\
   _FP_MUL_MEAT_1_wide(_FP_WFRACBITS_S,R,X,Y,umul_ppmm)
 #define _FP_MUL_MEAT_D(R,X,Y)				\
@@ -14,9 +19,11 @@
 #define _FP_DIV_MEAT_D(R,X,Y)	_FP_DIV_MEAT_2_udiv(D,R,X,Y)
 #define _FP_DIV_MEAT_Q(R,X,Y)	_FP_DIV_MEAT_4_udiv(Q,R,X,Y)
 
+#define _FP_NANFRAC_H		((_FP_QNANBIT_H << 1) - 1)
 #define _FP_NANFRAC_S		((_FP_QNANBIT_S << 1) - 1)
 #define _FP_NANFRAC_D		((_FP_QNANBIT_D << 1) - 1), -1
 #define _FP_NANFRAC_Q		((_FP_QNANBIT_Q << 1) - 1), -1, -1, -1
+#define _FP_NANSIGN_H		0
 #define _FP_NANSIGN_S		0
 #define _FP_NANSIGN_D		0
 #define _FP_NANSIGN_Q		0
@@ -92,5 +99,7 @@
 #define __fixdfdi	__aeabi_d2lz
 #define __fixunsdfdi	__aeabi_d2ulz
 #define __floatdidf	__aeabi_l2d
+#define __extendhfsf2	__gnu_h2f_ieee
+#define __truncsfhf2	__gnu_f2h_ieee
 
 #endif /* __ARM_EABI__ */

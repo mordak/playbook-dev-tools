@@ -1,5 +1,5 @@
 /* Natural loop analysis code for GNU compiler.
-   Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+   Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -32,6 +32,11 @@ along with GCC; see the file COPYING3.  If not see
 #include "graphds.h"
 #include "params.h"
 
+struct target_cfgloop default_target_cfgloop;
+#if SWITCHABLE_TARGET
+struct target_cfgloop *this_target_cfgloop = &default_target_cfgloop;
+#endif
+
 /* Checks whether BB is executed exactly once in each LOOP iteration.  */
 
 bool
@@ -52,26 +57,6 @@ just_once_each_iteration_p (const struct loop *loop, const_basic_block bb)
   return true;
 }
 
-/* Marks the edge E in graph G irreducible if it connects two vertices in the
-   same scc.  */
-
-static void
-check_irred (struct graph *g, struct graph_edge *e)
-{
-  edge real = (edge) e->data;
-
-  /* All edges should lead from a component with higher number to the
-     one with lower one.  */
-  gcc_assert (g->vertices[e->src].component >= g->vertices[e->dest].component);
-
-  if (g->vertices[e->src].component != g->vertices[e->dest].component)
-    return;
-
-  real->flags |= EDGE_IRREDUCIBLE_LOOP;
-  if (flow_bb_inside_loop_p (real->src->loop_father, real->dest))
-    real->src->flags |= BB_IRREDUCIBLE_LOOP;
-}
-
 /* Marks blocks and edges that are part of non-recognized loops; i.e. we
    throw away all latch edges and mark blocks inside any remaining cycle.
    Everything is a bit complicated due to fact we do not want to do this
@@ -84,10 +69,11 @@ check_irred (struct graph *g, struct graph_edge *e)
 #define LOOP_REPR(LOOP) ((LOOP)->num + last_basic_block)
 #define BB_REPR(BB) ((BB)->index + 1)
 
-void
+bool
 mark_irreducible_loops (void)
 {
   basic_block act;
+  struct graph_edge *ge;
   edge e;
   edge_iterator ei;
   int src, dest;
@@ -95,6 +81,8 @@ mark_irreducible_loops (void)
   struct graph *g;
   int num = number_of_loops ();
   struct loop *cloop;
+  bool irred_loop_found = false;
+  int i;
 
   gcc_assert (current_loops != NULL);
 
@@ -154,11 +142,30 @@ mark_irreducible_loops (void)
   graphds_scc (g, NULL);
 
   /* Mark the irreducible loops.  */
-  for_each_edge (g, check_irred);
+  for (i = 0; i < g->n_vertices; i++)
+    for (ge = g->vertices[i].succ; ge; ge = ge->succ_next)
+      {
+	edge real = (edge) ge->data;
+	/* edge E in graph G is irreducible if it connects two vertices in the
+	   same scc.  */
+
+	/* All edges should lead from a component with higher number to the
+	   one with lower one.  */
+	gcc_assert (g->vertices[ge->src].component >= g->vertices[ge->dest].component);
+
+	if (g->vertices[ge->src].component != g->vertices[ge->dest].component)
+	  continue;
+
+	real->flags |= EDGE_IRREDUCIBLE_LOOP;
+	irred_loop_found = true;
+	if (flow_bb_inside_loop_p (real->src->loop_father, real->dest))
+	  real->src->flags |= BB_IRREDUCIBLE_LOOP;
+      }
 
   free_graph (g);
 
   loops_state_set (LOOPS_HAVE_MARKED_IRREDUCIBLE_REGIONS);
+  return irred_loop_found;
 }
 
 /* Counts number of insns inside LOOP.  */
@@ -173,12 +180,14 @@ num_loop_insns (const struct loop *loop)
   for (i = 0; i < loop->num_nodes; i++)
     {
       bb = bbs[i];
-      ninsns++;
-      for (insn = BB_HEAD (bb); insn != BB_END (bb); insn = NEXT_INSN (insn))
-	if (INSN_P (insn))
+      FOR_BB_INSNS (bb, insn)
+	if (NONDEBUG_INSN_P (insn))
 	  ninsns++;
     }
-  free(bbs);
+  free (bbs);
+
+  if (!ninsns)
+    ninsns = 1;	/* To avoid division by zero.  */
 
   return ninsns;
 }
@@ -197,9 +206,9 @@ average_num_loop_insns (const struct loop *loop)
     {
       bb = bbs[i];
 
-      binsns = 1;
-      for (insn = BB_HEAD (bb); insn != BB_END (bb); insn = NEXT_INSN (insn))
-	if (INSN_P (insn))
+      binsns = 0;
+      FOR_BB_INSNS (bb, insn)
+	if (NONDEBUG_INSN_P (insn))
 	  binsns++;
 
       ratio = loop->header->frequency == 0
@@ -207,7 +216,7 @@ average_num_loop_insns (const struct loop *loop)
 	      : (bb->frequency * BB_FREQ_MAX) / loop->header->frequency;
       ninsns += binsns * ratio;
     }
-  free(bbs);
+  free (bbs);
 
   ninsns /= BB_FREQ_MAX;
   if (!ninsns)
@@ -313,17 +322,6 @@ seq_cost (const_rtx seq, bool speed)
   return cost;
 }
 
-/* The properties of the target.  */
-
-unsigned target_avail_regs;	/* Number of available registers.  */
-unsigned target_res_regs;	/* Number of registers reserved for temporary
-				   expressions.  */
-unsigned target_reg_cost[2];	/* The cost for register when there still
-				   is some reserve, but we are approaching
-				   the number of available registers.  */
-unsigned target_spill_cost[2];	/* The cost for register when we need
-				   to spill.  */
-
 /* Initialize the constants for computing set costs.  */
 
 void
@@ -338,10 +336,15 @@ init_set_costs (void)
   unsigned i;
 
   target_avail_regs = 0;
+  target_clobbered_regs = 0;
   for (i = 0; i < FIRST_PSEUDO_REGISTER; i++)
     if (TEST_HARD_REG_BIT (reg_class_contents[GENERAL_REGS], i)
 	&& !fixed_regs[i])
-      target_avail_regs++;
+      {
+	target_avail_regs++;
+	if (call_used_regs[i])
+	  target_clobbered_regs++;
+      }
 
   target_res_regs = 3;
 
@@ -375,20 +378,29 @@ init_set_costs (void)
 
 /* Estimates cost of increased register pressure caused by making N_NEW new
    registers live around the loop.  N_OLD is the number of registers live
-   around the loop.  */
+   around the loop.  If CALL_P is true, also take into account that
+   call-used registers may be clobbered in the loop body, reducing the
+   number of available registers before we spill.  */
 
 unsigned
-estimate_reg_pressure_cost (unsigned n_new, unsigned n_old, bool speed)
+estimate_reg_pressure_cost (unsigned n_new, unsigned n_old, bool speed,
+			    bool call_p)
 {
   unsigned cost;
   unsigned regs_needed = n_new + n_old;
+  unsigned available_regs = target_avail_regs;
+
+  /* If there is a call in the loop body, the call-clobbered registers
+     are not available for loop invariants.  */
+  if (call_p)
+    available_regs = available_regs - target_clobbered_regs;
 
   /* If we have enough registers, we should use them and not restrict
      the transformations unnecessarily.  */
-  if (regs_needed + target_res_regs <= target_avail_regs)
+  if (regs_needed + target_res_regs <= available_regs)
     return 0;
 
-  if (regs_needed <= target_avail_regs)
+  if (regs_needed <= available_regs)
     /* If we are close to running out of registers, try to preserve
        them.  */
     cost = target_reg_cost [speed] * n_new;

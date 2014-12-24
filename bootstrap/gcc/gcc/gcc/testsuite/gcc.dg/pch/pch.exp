@@ -1,4 +1,5 @@
-#   Copyright (C) 1997, 2002, 2003, 2007, 2009 Free Software Foundation, Inc.
+#   Copyright (C) 1997, 2002, 2003, 2007, 2009, 2010
+#   Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -43,7 +44,6 @@ foreach test [lsort [glob -nocomplain $srcdir/$subdir/*.c]] {
 set test "largefile.c"
 set testh "largefile.hs"
 set f [open $test w]
-puts $f "/* { dg-xfail-if \"PR 14940\" { \"i?86-*-solaris2.10\" } { \"*\" } { \"\" } } */"
 puts $f "/* { dg-timeout-factor 4.0 } */"
 set v 0
 for { set v 0 } { $v < 10000 } { incr v } {

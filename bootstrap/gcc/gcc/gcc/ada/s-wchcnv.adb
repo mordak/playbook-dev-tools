@@ -29,9 +29,7 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-pragma Warnings (Off);
 pragma Compiler_Unit;
-pragma Warnings (On);
 
 with Interfaces;     use Interfaces;
 with System.WCh_Con; use System.WCh_Con;
@@ -286,6 +284,14 @@ package body System.WCh_Cnv is
       U      : Unsigned_32;
 
    begin
+      --  Raise CE for invalid UTF_32_Code
+
+      if not Val'Valid then
+         raise Constraint_Error;
+      end if;
+
+      --  Processing depends on encoding mode
+
       case EM is
 
          when WCEM_Hex =>
@@ -427,10 +433,6 @@ package body System.WCh_Cnv is
 
                if Val > 16#FFFF# then
                   if Val > 16#00FF_FFFF# then
-                     if Val > 16#7FFF_FFFF# then
-                        raise Constraint_Error;
-                     end if;
-
                      Out_Char (Hexc (Val / 16 ** 7));
                      Out_Char (Hexc ((Val / 16 ** 6) mod 16));
                   end if;

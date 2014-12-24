@@ -1,5 +1,5 @@
 /* Basic block reordering routines for the GNU compiler.
-   Copyright (C) 2000, 2002, 2003, 2004, 2005, 2006, 2007, 2008
+   Copyright (C) 2000, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2010
    Free Software Foundation, Inc.
 
    This file is part of GCC.
@@ -82,13 +82,11 @@
 #include "obstack.h"
 #include "expr.h"
 #include "params.h"
-#include "toplev.h"
+#include "diagnostic-core.h"
+#include "toplev.h" /* user_defined_section_attribute */
 #include "tree-pass.h"
 #include "df.h"
-
-#ifndef HAVE_conditional_execution
-#define HAVE_conditional_execution 0
-#endif
+#include "bb-reorder.h"
 
 /* The number of rounds.  In most cases there will only be 4 rounds, but
    when partitioning hot and cold basic blocks into separate sections of
@@ -104,6 +102,14 @@
 #endif
 
 
+struct target_bb_reorder default_target_bb_reorder;
+#if SWITCHABLE_TARGET
+struct target_bb_reorder *this_target_bb_reorder = &default_target_bb_reorder;
+#endif
+
+#define uncond_jump_length \
+  (this_target_bb_reorder->x_uncond_jump_length)
+
 /* Branch thresholds in thousandths (per mille) of the REG_BR_PROB_BASE.  */
 static int branch_threshold[N_ROUNDS] = {400, 200, 100, 0, 0};
 
@@ -113,9 +119,6 @@ static int exec_threshold[N_ROUNDS] = {500, 200, 50, 0, 0};
 /* If edge frequency is lower than DUPLICATION_THRESHOLD per mille of entry
    block the edge destination is not duplicated while connecting traces.  */
 #define DUPLICATION_THRESHOLD 100
-
-/* Length of unconditional jump instruction.  */
-static int uncond_jump_length;
 
 /* Structure to hold needed information for each basic block.  */
 typedef struct bbro_basic_block_data_def
@@ -1296,7 +1299,9 @@ add_labels_and_missing_jumps (edge *crossing_edges, int n_crossing_edges)
 
 	      if (src && (src != ENTRY_BLOCK_PTR))
 		{
-		  if (!JUMP_P (BB_END (src)) && !block_ends_with_call_p (src))
+		  if (!JUMP_P (BB_END (src))
+		      && !block_ends_with_call_p (src)
+		      && !can_throw_internal (BB_END (src)))
 		    /* bb just falls through.  */
 		    {
 		      /* make sure there's only one successor */
@@ -1313,9 +1318,9 @@ add_labels_and_missing_jumps (edge *crossing_edges, int n_crossing_edges)
 		      src->il.rtl->footer = unlink_insn_chain (barrier, barrier);
 		      /* Mark edge as non-fallthru.  */
 		      crossing_edges[i]->flags &= ~EDGE_FALLTHRU;
-		    } /* end: 'if (GET_CODE ... '  */
-		} /* end: 'if (src && src->index...'  */
-	    } /* end: 'if (dest && dest->index...'  */
+		    } /* end: 'if (!JUMP_P ... '  */
+		} /* end: 'if (src && src !=...'  */
+	    } /* end: 'if (dest && dest !=...'  */
 	} /* end: 'if (crossing_edges[i]...'  */
     } /* end for loop  */
 }
@@ -1372,19 +1377,21 @@ fix_up_fall_thru_edges (void)
 	  fall_thru = succ2;
 	  cond_jump = succ1;
 	}
-      else if (!fall_thru && succ1 && block_ends_with_call_p (cur_bb))
-      {
-        edge e;
-        edge_iterator ei;
+      else if (succ1
+	       && (block_ends_with_call_p (cur_bb)
+		   || can_throw_internal (BB_END (cur_bb))))
+	{
+	  edge e;
+	  edge_iterator ei;
 
-        /* Find EDGE_CAN_FALLTHRU edge.  */
-        FOR_EACH_EDGE (e, ei, cur_bb->succs) 
-          if (e->flags & EDGE_CAN_FALLTHRU)
-          {
-            fall_thru = e;
-            break;
-          }
-      }
+	  /* Find EDGE_CAN_FALLTHRU edge.  */
+	  FOR_EACH_EDGE (e, ei, cur_bb->succs)
+	    if (e->flags & EDGE_CAN_FALLTHRU)
+	      {
+		fall_thru = e;
+		break;
+	      }
+	}
 
       if (fall_thru && (fall_thru->dest != EXIT_BLOCK_PTR))
 	{
@@ -1420,7 +1427,7 @@ fix_up_fall_thru_edges (void)
 
 		      fall_thru_label = block_label (fall_thru->dest);
 
-		      if (old_jump && fall_thru_label)
+		      if (old_jump && JUMP_P (old_jump) && fall_thru_label)
 			invert_worked = invert_jump (old_jump,
 						     fall_thru_label,0);
 		      if (invert_worked)
@@ -1442,7 +1449,7 @@ fix_up_fall_thru_edges (void)
 		  /* This is the case where both edges out of the basic
 		     block are crossing edges. Here we will fix up the
 		     fall through edge. The jump edge will be taken care
-		     of later.  The EDGE_CROSSING flag of fall_thru edge 
+		     of later.  The EDGE_CROSSING flag of fall_thru edge
                      is unset before the call to force_nonfallthru
                      function because if a new basic-block is created
                      this edge remains in the current section boundary
@@ -1985,7 +1992,9 @@ gate_duplicate_computed_gotos (void)
 {
   if (targetm.cannot_modify_jumps_p ())
     return false;
-  return (optimize > 0 && flag_expensive_optimizations);
+  return (optimize > 0
+	  && flag_expensive_optimizations
+	  && ! optimize_function_for_size_p (cfun));
 }
 
 
@@ -2074,9 +2083,6 @@ duplicate_computed_gotos (void)
 	  || single_succ (bb) == EXIT_BLOCK_PTR
 	  || single_succ (bb) == bb->next_bb
 	  || single_pred_p (single_succ (bb)))
-	continue;
-
-      if (!optimize_bb_for_size_p (bb))
 	continue;
 
       /* The successor block has to be a duplication candidate.  */
@@ -2177,7 +2183,6 @@ struct rtl_opt_pass pass_duplicate_computed_gotos =
 static void
 partition_hot_cold_basic_blocks (void)
 {
-  basic_block cur_bb;
   edge *crossing_edges;
   int n_crossing_edges;
   int max_edges = 2 * last_basic_block;
@@ -2187,13 +2192,6 @@ partition_hot_cold_basic_blocks (void)
 
   crossing_edges = XCNEWVEC (edge, max_edges);
 
-  cfg_layout_initialize (0);
-
-  FOR_EACH_BB (cur_bb)
-    if (cur_bb->index >= NUM_FIXED_BLOCKS
-	&& cur_bb->next_bb->index >= NUM_FIXED_BLOCKS)
-      cur_bb->aux = cur_bb->next_bb;
-
   find_rarely_executed_basic_blocks_and_crossing_edges (&crossing_edges,
 							&n_crossing_edges,
 							&max_edges);
@@ -2202,8 +2200,6 @@ partition_hot_cold_basic_blocks (void)
     fix_edges_for_rarely_executed_code (crossing_edges, n_crossing_edges);
 
   free (crossing_edges);
-
-  cfg_layout_finalize ();
 }
 
 static bool
@@ -2300,12 +2296,10 @@ struct rtl_opt_pass pass_partition_blocks =
   NULL,                                 /* next */
   0,                                    /* static_pass_number */
   TV_REORDER_BLOCKS,                    /* tv_id */
-  0,                                    /* properties_required */
+  PROP_cfglayout,                       /* properties_required */
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
   TODO_dump_func | TODO_verify_rtl_sharing/* todo_flags_finish */
  }
 };
-
-

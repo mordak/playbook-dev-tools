@@ -1,4 +1,4 @@
-! { dg-do run { target fd_truncate } }
+! { dg-do run }
 ! This tests the fix for PR22010, where namelists were not being written to
 ! and read back from modules.  It has two namelists: one that is USE
 ! associated and another that is concatenated by USE and host association.
@@ -6,7 +6,7 @@
 ! Contributed by Paul Thomas  pault@gcc.gnu.org
 !
 module global
-  character*4 :: aa
+  character(4) :: aa
   integer :: ii
   real    :: rr
   namelist /nml1/ aa, ii, rr

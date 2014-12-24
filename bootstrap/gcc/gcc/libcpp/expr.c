@@ -1,6 +1,6 @@
 /* Parse C expressions for cpplib.
    Copyright (C) 1987, 1992, 1994, 1995, 1997, 1998, 1999, 2000, 2001,
-   2002, 2004, 2008, 2009 Free Software Foundation.
+   2002, 2004, 2008, 2009, 2010 Free Software Foundation.
    Contributed by Per Bothner, 1994.
 
 This program is free software; you can redistribute it and/or modify it
@@ -52,7 +52,8 @@ static cpp_num num_inequality_op (cpp_reader *, cpp_num, cpp_num,
 static cpp_num num_equality_op (cpp_reader *, cpp_num, cpp_num,
 				enum cpp_ttype);
 static cpp_num num_mul (cpp_reader *, cpp_num, cpp_num);
-static cpp_num num_div_op (cpp_reader *, cpp_num, cpp_num, enum cpp_ttype);
+static cpp_num num_div_op (cpp_reader *, cpp_num, cpp_num, enum cpp_ttype,
+			   source_location);
 static cpp_num num_lshift (cpp_num, size_t, size_t);
 static cpp_num num_rshift (cpp_num, size_t, size_t);
 
@@ -82,89 +83,106 @@ static void check_promotion (cpp_reader *, const struct op *);
 static unsigned int
 interpret_float_suffix (const uchar *s, size_t len)
 {
-  size_t f, l, w, q, i, d;
-  size_t r, k, u, h;
+  size_t flags;
+  size_t f, d, l, w, q, i;
 
-  f = l = w = q = i = d = 0;
-  r = k = u = h = 0;
+  flags = 0;
+  f = d = l = w = q = i = 0;
 
+  /* Process decimal float suffixes, which are two letters starting
+     with d or D.  Order and case are significant.  */
+  if (len == 2 && (*s == 'd' || *s == 'D'))
+    {
+      bool uppercase = (*s == 'D');
+      switch (s[1])
+      {
+      case 'f': return (!uppercase ? (CPP_N_DFLOAT | CPP_N_SMALL): 0); break;
+      case 'F': return (uppercase ? (CPP_N_DFLOAT | CPP_N_SMALL) : 0); break;
+      case 'd': return (!uppercase ? (CPP_N_DFLOAT | CPP_N_MEDIUM): 0); break;
+      case 'D': return (uppercase ? (CPP_N_DFLOAT | CPP_N_MEDIUM) : 0); break;
+      case 'l': return (!uppercase ? (CPP_N_DFLOAT | CPP_N_LARGE) : 0); break;
+      case 'L': return (uppercase ? (CPP_N_DFLOAT | CPP_N_LARGE) : 0); break;
+      default:
+	/* Additional two-character suffixes beginning with D are not
+	   for decimal float constants.  */
+	break;
+      }
+    }
+
+  /* Recognize a fixed-point suffix.  */
+  switch (s[len-1])
+    {
+    case 'k': case 'K': flags = CPP_N_ACCUM; break;
+    case 'r': case 'R': flags = CPP_N_FRACT; break;
+    default: break;
+    }
+
+  /* Continue processing a fixed-point suffix.  The suffix is case
+     insensitive except for ll or LL.  Order is significant.  */
+  if (flags)
+    {
+      if (len == 1)
+	return flags;
+      len--;
+
+      if (*s == 'u' || *s == 'U')
+	{
+	  flags |= CPP_N_UNSIGNED;
+	  if (len == 1)
+	    return flags;
+	  len--;
+	  s++;
+        }
+
+      switch (*s)
+      {
+      case 'h': case 'H':
+	if (len == 1)
+	  return flags |= CPP_N_SMALL;
+	break;
+      case 'l':
+	if (len == 1)
+	  return flags |= CPP_N_MEDIUM;
+	if (len == 2 && s[1] == 'l')
+	  return flags |= CPP_N_LARGE;
+	break;
+      case 'L':
+	if (len == 1)
+	  return flags |= CPP_N_MEDIUM;
+	if (len == 2 && s[1] == 'L')
+	  return flags |= CPP_N_LARGE;
+	break;
+      default:
+	break;
+      }
+      /* Anything left at this point is invalid.  */
+      return 0;
+    }
+
+  /* In any remaining valid suffix, the case and order don't matter.  */
   while (len--)
     switch (s[len])
       {
-      case 'r': case 'R': r++; break;
-      case 'k': case 'K': k++; break;
-      case 'u': case 'U': u++; break;
-      case 'h': case 'H': h++; break;
-      case 'f': case 'F':
-	if (d > 0)
-	  return 0;
-	f++;
-	break;
-      case 'l': case 'L':
-	if (d > 0)
-	  return 0;
-	l++;
-	/* If there are two Ls, they must be adjacent and the same case.  */
-	if (l == 2 && s[len] != s[len + 1])
-	  return 0;
-	break;
-      case 'w': case 'W':
-	if (d > 0)
-	  return 0;
-	w++;
-	break;
-      case 'q': case 'Q':
-	if (d > 0)
-	  return 0;
-	q++;
-	break;
+      case 'f': case 'F': f++; break;
+      case 'd': case 'D': d++; break;
+      case 'l': case 'L': l++; break;
+      case 'w': case 'W': w++; break;
+      case 'q': case 'Q': q++; break;
       case 'i': case 'I':
       case 'j': case 'J': i++; break;
-      case 'd': case 'D': d++; break;
       default:
 	return 0;
       }
 
-  if (r + k > 1 || h > 1 || l > 2 || u > 1)
-    return 0;
-
-  if (r == 1)
-    {
-      if (f || i || d || w || q)
-	return 0;
-
-      return (CPP_N_FRACT
-	      | (u ? CPP_N_UNSIGNED : 0)
-	      | (h ? CPP_N_SMALL :
-		 l == 2 ? CPP_N_LARGE :
-		 l == 1 ? CPP_N_MEDIUM :  0));
-    }
-
-  if (k == 1)
-    {
-      if (f || i || d || w || q)
-	return 0;
-
-      return (CPP_N_ACCUM
-	      | (u ? CPP_N_UNSIGNED : 0)
-	      | (h ? CPP_N_SMALL :
-		 l == 2 ? CPP_N_LARGE :
-		 l == 1 ? CPP_N_MEDIUM :  0));
-    }
-
-  if (f + l + w + q > 1 || i > 1 || h + u > 0)
-    return 0;
-
-  /* Allow dd, df, dl suffixes for decimal float constants.  */
-  if (d && ((d + f + l != 2) || i))
+  if (f + d + l + w + q > 1 || i > 1)
     return 0;
 
   return ((i ? CPP_N_IMAGINARY : 0)
 	  | (f ? CPP_N_SMALL :
+	     d ? CPP_N_MEDIUM :
 	     l ? CPP_N_LARGE :
 	     w ? CPP_N_MD_W :
-	     q ? CPP_N_MD_Q : CPP_N_MEDIUM)
-	  | (d ? CPP_N_DFLOAT : 0));
+	     q ? CPP_N_MD_Q : CPP_N_DEFAULT));
 }
 
 /* Subroutine of cpp_classify_number.  S points to an integer suffix
@@ -211,6 +229,7 @@ cpp_classify_number (cpp_reader *pfile, const cpp_token *token)
   const uchar *limit;
   unsigned int max_digit, result, radix;
   enum {NOT_FLOAT = 0, AFTER_POINT, AFTER_EXPON} float_flag;
+  bool seen_digit;
 
   /* If the lexer has done its job, length one can only be a single
      digit.  Fast-path this very common case.  */
@@ -221,6 +240,7 @@ cpp_classify_number (cpp_reader *pfile, const cpp_token *token)
   float_flag = NOT_FLOAT;
   max_digit = 0;
   radix = 10;
+  seen_digit = false;
 
   /* First, interpret the radix.  */
   if (*str == '0')
@@ -249,6 +269,7 @@ cpp_classify_number (cpp_reader *pfile, const cpp_token *token)
 
       if (ISDIGIT (c) || (ISXDIGIT (c) && radix == 16))
 	{
+	  seen_digit = true;
 	  c = hex_value (c);
 	  if (c > max_digit)
 	    max_digit = c;
@@ -314,6 +335,9 @@ cpp_classify_number (cpp_reader *pfile, const cpp_token *token)
 	  return CPP_N_INVALID;
 	}
 
+      if (radix == 16 && !seen_digit)
+	SYNTAX_ERROR ("no digits in hexadecimal floating constant");
+
       if (radix == 16 && CPP_PEDANTIC (pfile) && !CPP_OPTION (pfile, c99))
 	cpp_error (pfile, CPP_DL_PEDWARN,
 		   "use of C99 hexadecimal floating constant");
@@ -347,9 +371,16 @@ cpp_classify_number (cpp_reader *pfile, const cpp_token *token)
       if (limit != str
 	  && CPP_WTRADITIONAL (pfile)
 	  && ! cpp_sys_macro_p (pfile))
-	cpp_error (pfile, CPP_DL_WARNING,
-		   "traditional C rejects the \"%.*s\" suffix",
-		   (int) (limit - str), str);
+	cpp_warning (pfile, CPP_W_TRADITIONAL,
+		     "traditional C rejects the \"%.*s\" suffix",
+		     (int) (limit - str), str);
+
+      /* A suffix for double is a GCC extension via decimal float support.
+	 If the suffix also specifies an imaginary value we'll catch that
+	 later.  */
+      if ((result == CPP_N_MEDIUM) && CPP_PEDANTIC (pfile))
+	cpp_error (pfile, CPP_DL_PEDWARN,
+		   "suffix for double constant is a GCC extension");
 
       /* Radix must be 10 for decimal floats.  */
       if ((result & CPP_N_DFLOAT) && radix != 10)
@@ -386,19 +417,27 @@ cpp_classify_number (cpp_reader *pfile, const cpp_token *token)
       if (CPP_WTRADITIONAL (pfile) && ! cpp_sys_macro_p (pfile))
 	{
 	  int u_or_i = (result & (CPP_N_UNSIGNED|CPP_N_IMAGINARY));
-	  int large = (result & CPP_N_WIDTH) == CPP_N_LARGE;
+	  int large = (result & CPP_N_WIDTH) == CPP_N_LARGE
+		       && CPP_OPTION (pfile, cpp_warn_long_long);
 
-	  if (u_or_i || (large && CPP_OPTION (pfile, warn_long_long)))
-	    cpp_error (pfile, CPP_DL_WARNING,
-		       "traditional C rejects the \"%.*s\" suffix",
-		       (int) (limit - str), str);
+	  if (u_or_i || large)
+	    cpp_warning (pfile, large ? CPP_W_LONG_LONG : CPP_W_TRADITIONAL,
+		         "traditional C rejects the \"%.*s\" suffix",
+		         (int) (limit - str), str);
 	}
 
       if ((result & CPP_N_WIDTH) == CPP_N_LARGE
-	  && ! CPP_OPTION (pfile, c99)
-	  && CPP_OPTION (pfile, warn_long_long))
-	cpp_error (pfile, CPP_DL_PEDWARN,
-		   "use of C99 long long integer constant");
+	  && CPP_OPTION (pfile, cpp_warn_long_long))
+        {
+          const char *message = CPP_OPTION (pfile, cplusplus) 
+		                ? N_("use of C++0x long long integer constant")
+		                : N_("use of C99 long long integer constant");
+
+	  if (CPP_OPTION (pfile, c99))
+            cpp_warning (pfile, CPP_W_LONG_LONG, message);
+          else
+            cpp_pedwarning (pfile, CPP_W_LONG_LONG, message);
+        }
 
       result |= CPP_N_INTEGER;
     }
@@ -512,8 +551,27 @@ cpp_interpret_integer (cpp_reader *pfile, const cpp_token *token,
 		    && pfile->state.in_directive)
 	       && !num_positive (result, precision))
 	{
+	  /* This is for constants within the range of uintmax_t but
+	     not that of intmax_t.  For such decimal constants, a
+	     diagnostic is required for C99 as the selected type must
+	     be signed and not having a type is a constraint violation
+	     (DR#298, TC3), so this must be a pedwarn.  For C90,
+	     unsigned long is specified to be used for a constant that
+	     does not fit in signed long; if uintmax_t has the same
+	     range as unsigned long this means only a warning is
+	     appropriate here.  C90 permits the preprocessor to use a
+	     wider range than unsigned long in the compiler, so if
+	     uintmax_t is wider than unsigned long no diagnostic is
+	     required for such constants in preprocessor #if
+	     expressions and the compiler will pedwarn for such
+	     constants outside the range of unsigned long that reach
+	     the compiler so a diagnostic is not required there
+	     either; thus, pedwarn for C99 but use a plain warning for
+	     C90.  */
 	  if (base == 10)
-	    cpp_error (pfile, CPP_DL_WARNING,
+	    cpp_error (pfile, (CPP_OPTION (pfile, c99)
+			       ? CPP_DL_PEDWARN
+			       : CPP_DL_WARNING),
 		       "integer constant is so large that it is unsigned");
 	  result.unsignedp = true;
 	}
@@ -606,7 +664,7 @@ parse_defined (cpp_reader *pfile)
 
   if (token->type == CPP_NAME)
     {
-      node = token->val.node;
+      node = token->val.node.node;
       if (paren && cpp_get_token (pfile)->type != CPP_CLOSE_PAREN)
 	{
 	  cpp_error (pfile, CPP_DL_ERROR, "missing ')' after \"defined\"");
@@ -642,6 +700,9 @@ parse_defined (cpp_reader *pfile)
 	  node->flags |= NODE_USED;
 	  if (node->type == NT_MACRO)
 	    {
+	      if ((node->flags & NODE_BUILTIN)
+		  && pfile->cb.user_builtin_macro)
+		pfile->cb.user_builtin_macro (pfile, node);
 	      if (pfile->cb.used_define)
 		pfile->cb.used_define (pfile, pfile->directive_line, node);
 	    }
@@ -659,10 +720,15 @@ parse_defined (cpp_reader *pfile)
 
   pfile->state.prevent_expansion--;
 
+  /* Do not treat conditional macros as being defined.  This is due to the
+     powerpc and spu ports using conditional macros for 'vector', 'bool', and
+     'pixel' to act as conditional keywords.  This messes up tests like #ifndef
+     bool.  */
   result.unsignedp = false;
   result.high = 0;
   result.overflow = false;
-  result.low = node && node->type == NT_MACRO;
+  result.low = (node && node->type == NT_MACRO
+		&& (node->flags & NODE_CONDITIONAL) == 0);
   return result;
 }
 
@@ -726,22 +792,22 @@ eval_token (cpp_reader *pfile, const cpp_token *token)
       break;
 
     case CPP_NAME:
-      if (token->val.node == pfile->spec_nodes.n_defined)
+      if (token->val.node.node == pfile->spec_nodes.n_defined)
 	return parse_defined (pfile);
       else if (CPP_OPTION (pfile, cplusplus)
-	       && (token->val.node == pfile->spec_nodes.n_true
-		   || token->val.node == pfile->spec_nodes.n_false))
+	       && (token->val.node.node == pfile->spec_nodes.n_true
+		   || token->val.node.node == pfile->spec_nodes.n_false))
 	{
 	  result.high = 0;
-	  result.low = (token->val.node == pfile->spec_nodes.n_true);
+	  result.low = (token->val.node.node == pfile->spec_nodes.n_true);
 	}
       else
 	{
 	  result.high = 0;
 	  result.low = 0;
 	  if (CPP_OPTION (pfile, warn_undef) && !pfile->state.skip_eval)
-	    cpp_error (pfile, CPP_DL_WARNING, "\"%s\" is not defined",
-		       NODE_NAME (token->val.node));
+	    cpp_warning (pfile, CPP_W_UNDEF, "\"%s\" is not defined",
+		         NODE_NAME (token->val.node.node));
 	}
       break;
 
@@ -753,9 +819,9 @@ eval_token (cpp_reader *pfile, const cpp_token *token)
 	  if (CPP_PEDANTIC (pfile))
 	    cpp_error (pfile, CPP_DL_PEDWARN,
 		       "assertions are a GCC extension");
-	  else if (CPP_OPTION (pfile, warn_deprecated))
-	    cpp_error (pfile, CPP_DL_WARNING,
-		       "assertions are a deprecated extension");
+	  else if (CPP_OPTION (pfile, cpp_warn_deprecated))
+	    cpp_warning (pfile, CPP_W_DEPRECATED,
+		         "assertions are a deprecated extension");
 	}
       _cpp_test_assertion (pfile, &temp);
       result.high = 0;
@@ -1078,7 +1144,7 @@ reduce (cpp_reader *pfile, struct op *top, enum cpp_ttype op)
 	case CPP_DIV:
 	case CPP_MOD:
 	  top[-1].value = num_div_op (pfile, top[-1].value,
-				      top->value, top->op);
+				      top->value, top->op, top->loc);
 	  top[-1].loc = top->loc;
 	  break;
 
@@ -1450,8 +1516,8 @@ num_unary_op (cpp_reader *pfile, cpp_num num, enum cpp_ttype op)
     {
     case CPP_UPLUS:
       if (CPP_WTRADITIONAL (pfile) && !pfile->state.skip_eval)
-	cpp_error (pfile, CPP_DL_WARNING,
-		   "traditional C rejects the unary plus operator");
+	cpp_warning (pfile, CPP_W_TRADITIONAL,
+		     "traditional C rejects the unary plus operator");
       num.overflow = false;
       break;
 
@@ -1623,10 +1689,13 @@ num_mul (cpp_reader *pfile, cpp_num lhs, cpp_num rhs)
   return result;
 }
 
-/* Divide two preprocessing numbers, returning the answer or the
-   remainder depending upon OP.  */
+/* Divide two preprocessing numbers, LHS and RHS, returning the answer
+   or the remainder depending upon OP. LOCATION is the source location
+   of this operator (for diagnostics).  */
+
 static cpp_num
-num_div_op (cpp_reader *pfile, cpp_num lhs, cpp_num rhs, enum cpp_ttype op)
+num_div_op (cpp_reader *pfile, cpp_num lhs, cpp_num rhs, enum cpp_ttype op,
+	    source_location location)
 {
   cpp_num result, sub;
   cpp_num_part mask;
@@ -1666,7 +1735,8 @@ num_div_op (cpp_reader *pfile, cpp_num lhs, cpp_num rhs, enum cpp_ttype op)
   else
     {
       if (!pfile->state.skip_eval)
-	cpp_error (pfile, CPP_DL_ERROR, "division by zero in #if");
+	cpp_error_with_line (pfile, CPP_DL_ERROR, location, 0,
+			     "division by zero in #if");
       return lhs;
     }
 

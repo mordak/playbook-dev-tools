@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2007, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -32,24 +32,31 @@ with Uintp; use Uintp;
 
 package Err_Vars is
 
+   --  All of these variables are set when needed, so they do not need to be
+   --  initialized. However, there is code that saves and restores existing
+   --  values, which may malfunction in -gnatVa mode if the variable has never
+   --  been initialized, so we initialize some variables to avoid exceptions
+   --  from invalid values in such cases.
+
    ------------------
    -- Error Counts --
    ------------------
 
-   Serious_Errors_Detected : Nat;
+   Serious_Errors_Detected : Nat := 0;
    --  This is a count of errors that are serious enough to stop expansion,
    --  and hence to prevent generation of an object file even if the
    --  switch -gnatQ is set. Initialized to zero at the start of compilation.
+   --  Initialized for -gnatVa use, see comment above.
 
-   Total_Errors_Detected : Nat;
+   Total_Errors_Detected : Nat := 0;
    --  Number of errors detected so far. Includes count of serious errors and
    --  non-serious errors, so this value is always greater than or equal to the
    --  Serious_Errors_Detected value. Initialized to zero at the start of
-   --  compilation.
+   --  compilation. Initialized for -gnatVa use, see comment above.
 
-   Warnings_Detected : Nat;
+   Warnings_Detected : Nat := 0;
    --  Number of warnings detected. Initialized to zero at the start of
-   --  compilation.
+   --  compilation. Initialized for -gnatVa use, see comment above.
 
    ----------------------------------
    -- Error Message Mode Variables --
@@ -67,7 +74,7 @@ package Err_Vars is
    --  note get reset by any Error_Msg call, so the caller is responsible
    --  for resetting it.
 
-   Warn_On_Instance : Boolean;
+   Warn_On_Instance : Boolean := False;
    --  Normally if a warning is generated in a generic template from the
    --  analysis of the template, then the warning really belongs in the
    --  template, and the default value of False for this Boolean achieves
@@ -75,13 +82,14 @@ package Err_Vars is
    --  generated on the instantiation (referring to the template) rather
    --  than on the template itself.
 
-   Raise_Exception_On_Error : Nat;
+   Raise_Exception_On_Error : Nat := 0;
    --  If this value is non-zero, then any attempt to generate an error
    --  message raises the exception Error_Msg_Exception, and the error
    --  message is not output. This is used for defending against junk
    --  resulting from illegalities, and also for substitution of more
    --  appropriate error messages from higher semantic levels. It is
    --  a counter so that the increment/decrement protocol nests neatly.
+   --  Initialized for -gnatVa use, see comment above.
 
    Error_Msg_Exception : exception;
    --  Exception raised if Raise_Exception_On_Error is true

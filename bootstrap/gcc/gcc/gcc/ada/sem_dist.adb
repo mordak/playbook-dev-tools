@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -35,6 +35,7 @@ with Namet;    use Namet;
 with Opt;      use Opt;
 with Rtsfind;  use Rtsfind;
 with Sem;      use Sem;
+with Sem_Aux;  use Sem_Aux;
 with Sem_Disp; use Sem_Disp;
 with Sem_Eval; use Sem_Eval;
 with Sem_Res;  use Sem_Res;
@@ -349,9 +350,7 @@ package body Sem_Dist is
 
       --  Build the function call which will replace the attribute
 
-      if Is_Remote_Call_Interface (Ety)
-        or else Is_Shared_Passive (Ety)
-      then
+      if Is_Remote_Call_Interface (Ety) or else Is_Shared_Passive (Ety) then
          Get_Pt_Id_Call :=
            Make_Function_Call (Loc,
              Name => Get_Pt_Id,
@@ -452,9 +451,7 @@ package body Sem_Dist is
       --  True iff this RAS has an access formal parameter (see
       --  Exp_Dist.Add_RAS_Dereference_TSS for details).
 
-      Subpkg      : constant Entity_Id :=
-                      Make_Defining_Identifier (Loc,
-                        New_Internal_Name ('S'));
+      Subpkg      : constant Entity_Id := Make_Temporary (Loc, 'S');
       Subpkg_Decl : Node_Id;
       Subpkg_Body : Node_Id;
       Vis_Decls   : constant List_Id := New_List;
@@ -465,16 +462,14 @@ package body Sem_Dist is
                       New_External_Name (Chars (User_Type), 'R'));
 
       Full_Obj_Type : constant Entity_Id :=
-                        Make_Defining_Identifier (Loc,
-                          Chars (Obj_Type));
+                        Make_Defining_Identifier (Loc, Chars (Obj_Type));
 
       RACW_Type : constant Entity_Id :=
                     Make_Defining_Identifier (Loc,
                       New_External_Name (Chars (User_Type), 'P'));
 
       Fat_Type : constant Entity_Id :=
-                   Make_Defining_Identifier (Loc,
-                     Chars (User_Type));
+                   Make_Defining_Identifier (Loc, Chars (User_Type));
 
       Fat_Type_Decl : Node_Id;
 
@@ -782,7 +777,7 @@ package body Sem_Dist is
         Make_Aggregate (Loc,
           Component_Associations => New_List (
             Make_Component_Association (Loc,
-              Choices => New_List (Make_Identifier (Loc, Name_Ras)),
+              Choices    => New_List (Make_Identifier (Loc, Name_Ras)),
               Expression => Make_Null (Loc)))));
       Analyze_And_Resolve (N, Target_Type);
       return True;

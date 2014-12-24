@@ -41,12 +41,10 @@ QNX_SYSTEM_INCLUDES \
 
 #undef STARTFILE_SPEC
 #define STARTFILE_SPEC \
-"%{!shared: \
-  %{!symbolic: \
-    %{pg:%$QNX_TARGET/x86/lib/mcrt1.o%s} \
-    %{!pg:%{p:%$QNX_TARGET/x86/lib/mcrt1.o%s} \
-    %{!p:%$QNX_TARGET/x86/lib/crt1.o%s}} \
-    }} \
+"%{!shared: %{pg|p|profile:%$QNX_TARGET/x86/lib/mcrt1.o%s; \
+		pie: %$QNX_TARGET/x86/lib/crt1S.o%s; \
+		static|nopie:%$QNX_TARGET/x86/lib/crt1.o%s; \
+		:%$QNX_TARGET/x86/lib/crt1S.o%s}} \
 %$QNX_TARGET/x86/lib/crti.o%s crtbegin.o%s" 
 
 #undef ENDFILE_SPEC
@@ -65,22 +63,26 @@ QNX_SYSTEM_INCLUDES \
 #undef LIB_SPEC
 #define LIB_SPEC \
   QNX_SYSTEM_LIBDIRS \
-  "%{!symbolic: -lc -Bstatic %{!shared: -lc} %{shared:-lcS}}"
+  "%{!symbolic: -lc -Bstatic %{static|nopie: -lc;:-lcS}}"
 
 #undef LINK_SPEC
 #define LINK_SPEC \
   "%{h*} %{v:-V} \
    %{b} \
+   %{!r:--build-id=md5} \
    %{static:-dn -Bstatic} \
-   %{shared:-G -dy -z text} \
-   %{symbolic:-Bsymbolic -G -dy -z text} \
+   %{shared:-G -dy} \
+   %{symbolic:-Bsymbolic -G -dy} \
    %{G:-G} \
    %{YP,*} \
    %{!YP,*:%{p:-Y P,%R/lib} \
     %{!p:-Y P,%R/lib}} \
    %{Qy:} %{!Qn:-Qy} \
    -m i386nto \
-   %{!shared: --dynamic-linker /usr/lib/ldqnx.so.2}"
+   %{!shared: \
+     %{!static: \
+       %{rdynamic:-export-dynamic}} \
+     --dynamic-linker /usr/lib/ldqnx.so.2}"
 
 #undef SIZE_TYPE
 #define SIZE_TYPE "unsigned int"
@@ -96,3 +98,9 @@ QNX_SYSTEM_INCLUDES \
 #undef DBX_REGISTER_NUMBER
 #define DBX_REGISTER_NUMBER(n) \
   (TARGET_64BIT ? dbx64_register_map[n] : svr4_dbx_register_map[n])
+
+/* Put all *tf routines in libgcc.  */
+#undef LIBGCC2_HAS_TF_MODE
+#define LIBGCC2_HAS_TF_MODE 1
+#define LIBGCC2_TF_CEXT q
+#define TF_SIZE 113

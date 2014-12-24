@@ -1,5 +1,5 @@
 /* The lang_hooks data structure.
-   Copyright 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008
+   Copyright 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -23,7 +23,6 @@ along with GCC; see the file COPYING3.  If not see
 
 /* This file should be #include-d after tree.h.  */
 
-struct diagnostic_context;
 struct diagnostic_info;
 
 struct gimplify_omp_ctx;
@@ -49,9 +48,6 @@ struct lang_hooks_for_callgraph
   /* The node passed is a language-specific tree node.  If its contents
      are relevant to use of other declarations, mark them.  */
   tree (*analyze_expr) (tree *, int *);
-
-  /* Emit thunks associated to function.  */
-  void (*emit_associated_thunks) (tree);
 };
 
 /* The following hooks are used by tree-dump.c.  */
@@ -90,6 +86,9 @@ struct lang_hooks_for_types
   /* True if the type is an instantiation of a generic type,
      e.g. C++ template implicit specializations.  */
   bool (*generic_p) (const_tree);
+
+  /* Returns the TREE_VEC of elements of a given generic argument pack.  */
+  tree (*get_argument_pack_elems) (const_tree);
 
   /* Given a type, apply default promotions to unnamed function
      arguments and return the new type.  Return the same type if no
@@ -130,16 +129,14 @@ struct lang_hooks_for_types
      for the debugger about the array bounds, strides, etc.  */
   bool (*get_array_descr_info) (const_tree, struct array_descr_info *);
 
+  /* Fill in information for the debugger about the bounds of TYPE.  */
+  void (*get_subrange_bounds) (const_tree, tree *, tree *);
+
   /* If we requested a pointer to a vector, build up the pointers that
      we stripped off while looking for the inner type.  Similarly for
      return values from functions.  The argument TYPE is the top of the
      chain, and BOTTOM is the new type which we will point to.  */
   tree (*reconstruct_complex_type) (tree, tree);
-
-  /* Nonzero if types that are identical are to be hashed so that only
-     one copy is kept.  If a language requires unique types for each
-     user-specified type, such as Ada, this should be set to TRUE.  */
-  bool hash_types;
 };
 
 /* Language hooks related to decls and the symbol table.  */
@@ -159,6 +156,20 @@ struct lang_hooks_for_decls
   /* Returns the chain of decls so far in the current scope level.  */
   tree (*getdecls) (void);
 
+  /* Returns true if DECL is explicit member function.  */
+  bool (*function_decl_explicit_p) (tree);
+
+  /* Returns True if the parameter is a generic parameter decl
+     of a generic type, e.g a template template parameter for the C++ FE.  */
+  bool (*generic_generic_parameter_decl_p) (const_tree);
+
+  /* Determine if a function parameter got expanded from a
+     function parameter pack.  */
+  bool (*function_parm_expanded_from_pack_p) (tree, tree);
+
+  /* Returns the generic declaration of a generic function instantiations.  */
+  tree (*get_generic_function_decl) (const_tree);
+
   /* Returns true when we should warn for an unused global DECL.
      We will already have checked that it has static binding.  */
   bool (*warn_unused_global) (const_tree);
@@ -170,15 +181,6 @@ struct lang_hooks_for_decls
   /* True if this decl may be called via a sibcall.  */
   bool (*ok_for_sibcall) (const_tree);
 
-  /* Return the COMDAT group into which this DECL should be placed.
-     It is known that the DECL belongs in *some* COMDAT group when
-     this hook is called.  The return value will be used immediately,
-     but not explicitly deallocated, so implementations should not use
-     xmalloc to allocate the string returned.  (Typically, the return
-     value will be the string already stored in an
-     IDENTIFIER_NODE.)  */
-  const char * (*comdat_group) (tree);
-
   /* True if OpenMP should privatize what this DECL points to rather
      than the DECL itself.  */
   bool (*omp_privatize_by_reference) (const_tree);
@@ -186,6 +188,10 @@ struct lang_hooks_for_decls
   /* Return sharing kind if OpenMP sharing attribute of DECL is
      predetermined, OMP_CLAUSE_DEFAULT_UNSPECIFIED otherwise.  */
   enum omp_clause_default_kind (*omp_predetermined_sharing) (tree);
+
+  /* Return decl that should be reported for DEFAULT(NONE) failure
+     diagnostics.  Usually the DECL passed in.  */
+  tree (*omp_report_decl) (tree);
 
   /* Return true if DECL's DECL_VALUE_EXPR (if any) should be
      disregarded in OpenMP construct, because it is going to be
@@ -220,6 +226,23 @@ struct lang_hooks_for_decls
   void (*omp_finish_clause) (tree clause);
 };
 
+/* Language hooks related to LTO serialization.  */
+
+struct lang_hooks_for_lto
+{
+  /* Begin a new LTO section named NAME.  */
+  void (*begin_section) (const char *name);
+
+  /* Write DATA of length LEN to the currently open LTO section.  BLOCK is a
+     pointer to the dynamically allocated memory containing DATA.  The
+     append_data function is responsible for freeing it when it is no longer
+     needed.  */
+  void (*append_data) (const void *data, size_t len, void *block);
+
+  /* End the previously begun LTO section.  */
+  void (*end_section) (void);
+};
+
 /* Language-specific hooks.  See langhooks-def.h for defaults.  */
 
 struct lang_hooks
@@ -231,35 +254,50 @@ struct lang_hooks
      identifier nodes long enough for the language-specific slots.  */
   size_t identifier_size;
 
+  /* Remove any parts of the tree that are used only by the FE. */
+  void (*free_lang_data) (tree);
+
   /* Determines the size of any language-specific tcc_constant or
      tcc_exceptional nodes.  Since it is called from make_node, the
      only information available is the tree code.  Expected to die
      on unrecognized codes.  */
   size_t (*tree_size) (enum tree_code);
 
-  /* The first callback made to the front end, for simple
-     initialization needed before any calls to handle_option.  Return
-     the language mask to filter the switch array with.  */
-  unsigned int (*init_options) (unsigned int argc, const char **argv);
+  /* Return the language mask used for converting argv into a sequence
+     of options.  */
+  unsigned int (*option_lang_mask) (void);
+
+  /* Initialize variables in an options structure.  */
+  void (*init_options_struct) (struct gcc_options *opts);
+
+  /* After the initialize_diagnostics hook is called, do any simple
+     initialization needed before any calls to handle_option, other
+     than that done by the init_options_struct hook.  */
+  void (*init_options) (unsigned int decoded_options_count,
+			struct cl_decoded_option *decoded_options);
 
   /* Callback used to perform language-specific initialization for the
      global diagnostic context structure.  */
-  void (*initialize_diagnostics) (struct diagnostic_context *);
+  void (*initialize_diagnostics) (diagnostic_context *);
+
+  /* Return true if a warning should be given about option OPTION,
+     which is for the wrong language, false if it should be quietly
+     ignored.  */
+  bool (*complain_wrong_lang_p) (const struct cl_option *option);
 
   /* Handle the switch CODE, which has real type enum opt_code from
      options.h.  If the switch takes an argument, it is passed in ARG
      which points to permanent storage.  The handler is responsible for
      checking whether ARG is NULL, which indicates that no argument
      was in fact supplied.  For -f and -W switches, VALUE is 1 or 0
-     for the positive and negative forms respectively.
+     for the positive and negative forms respectively.  HANDLERS should
+     be passed to any recursive handle_option calls.  LOC is the
+     location of the option.
 
-     Return 1 if the switch is valid, 0 if invalid, and -1 if it's
-     valid and should not be treated as language-independent too.  */
-  int (*handle_option) (size_t code, const char *arg, int value);
-
-  /* Return false to use the default complaint about a missing
-     argument, otherwise output a complaint and return true.  */
-  bool (*missing_argument) (const char *opt, size_t code);
+     Return true if the switch is valid, false if invalid.  */
+  bool (*handle_option) (size_t code, const char *arg, int value, int kind,
+			 location_t loc,
+			 const struct cl_option_handlers *handlers);
 
   /* Called when all command line options have been parsed to allow
      further processing and initialization
@@ -279,9 +317,8 @@ struct lang_hooks
   /* Called at the end of compilation, as a finalizer.  */
   void (*finish) (void);
 
-  /* Parses the entire file.  The argument is nonzero to cause bison
-     parsers to dump debugging information during parsing.  */
-  void (*parse_file) (int);
+  /* Parses the entire file.  */
+  void (*parse_file) (void);
 
   /* Determines if it's ok for a function to have no noreturn attribute.  */
   bool (*missing_noreturn_ok_p) (tree);
@@ -290,21 +327,9 @@ struct lang_hooks
      Returns -1 if the language does nothing special for it.  */
   alias_set_type (*get_alias_set) (tree);
 
-  /* Called by expand_expr for language-specific tree codes.
-     Fourth argument is actually an enum expand_modifier.  */
-  rtx (*expand_expr) (tree, rtx, enum machine_mode, int, rtx *);
-
   /* Function to finish handling an incomplete decl at the end of
      compilation.  Default hook is does nothing.  */
   void (*finish_incomplete_decl) (tree);
-
-  /* Mark EXP saying that we need to be able to take the address of
-     it; it should not be allocated in a register.  Return true if
-     successful.  */
-  bool (*mark_addressable) (tree);
-
-  /* Hook called by staticp for language-specific tree codes.  */
-  tree (*staticp) (tree);
 
   /* Replace the DECL_LANG_SPECIFIC data, which may be NULL, of the
      DECL_NODE with a newly GC-allocated copy.  */
@@ -336,7 +361,10 @@ struct lang_hooks
      information will be printed: 0: DECL_NAME, demangled as
      necessary.  1: and scope information.  2: and any other
      information that might be interesting, such as function parameter
-     types in C++.  */
+     types in C++.  The name is in the internal character set and
+     needs to be converted to the locale character set of diagnostics,
+     or to the execution character set for strings such as
+     __PRETTY_FUNCTION__.  */
   const char *(*decl_printable_name) (tree decl, int verbosity);
 
   /* Computes the dwarf-2/3 name for a tree.  VERBOSITY determines what
@@ -350,14 +378,8 @@ struct lang_hooks
   int (*types_compatible_p) (tree x, tree y);
 
   /* Called by report_error_function to print out function name.  */
-  void (*print_error_function) (struct diagnostic_context *, const char *,
+  void (*print_error_function) (diagnostic_context *, const char *,
 				struct diagnostic_info *);
-
-  /* Called from expr_size to calculate the size of the value of an
-     expression in a language-dependent way.  Returns a tree for the size
-     in bytes.  A frontend can call lhd_expr_size to get the default
-     semantics in cases that it doesn't want to handle specially.  */
-  tree (*expr_size) (const_tree);
 
   /* Convert a character from the host's to the target's character
      set.  The character should be in what C calls the "basic source
@@ -387,13 +409,22 @@ struct lang_hooks
 
   struct lang_hooks_for_types types;
 
+  struct lang_hooks_for_lto lto;
+
+  /* Returns the generic parameters of an instantiation of
+     a generic type or decl, e.g. C++ template instantiation.  */
+  tree (*get_innermost_generic_parms) (const_tree);
+
+  /* Returns the TREE_VEC of arguments of an instantiation
+     of a generic type of decl, e.g. C++ template instantiation.  */
+  tree (*get_innermost_generic_args) (const_tree);
+
+  /* Determine if a tree is a function parameter pack.  */
+  bool (*function_parameter_pack_p) (const_tree);
+
   /* Perform language-specific gimplification on the argument.  Returns an
      enum gimplify_status, though we can't see that type here.  */
   int (*gimplify_expr) (tree *, gimple_seq *, gimple_seq *);
-
-  /* Fold an OBJ_TYPE_REF expression to the address of a function.
-     KNOWN_TYPE carries the true type of the OBJ_TYPE_REF_OBJECT.  */
-  tree (*fold_obj_type_ref) (tree, tree);
 
   /* Do language specific processing in the builtin function DECL  */
   tree (*builtin_function) (tree decl);
@@ -414,12 +445,34 @@ struct lang_hooks
      if in the process TREE_CONSTANT or TREE_SIDE_EFFECTS need updating.  */
   tree (*expr_to_decl) (tree expr, bool *tc, bool *se);
 
+  /* The EH personality function decl.  */
+  tree (*eh_personality) (void);
+
+  /* Map a type to a runtime object to match type.  */
+  tree (*eh_runtime_type) (tree);
+
+  /* If non-NULL, this is a function that returns a function decl to be
+     executed if an unhandled exception is propagated out of a cleanup
+     region.  For example, in C++, an exception thrown by a destructor
+     during stack unwinding is required to result in a call to
+     `std::terminate', so the C++ version of this function returns a
+     FUNCTION_DECL for `std::terminate'.  */
+  tree (*eh_protect_cleanup_actions) (void);
+
+  /* True if this language uses __cxa_end_cleanup when the ARM EABI
+     is enabled.  */
+  bool eh_use_cxa_end_cleanup;
+
+  /* True if this language requires deep unsharing of tree nodes prior to
+     gimplification.  */
+  bool deep_unsharing;
+
   /* Whenever you add entries here, make sure you adjust langhooks-def.h
      and langhooks.c accordingly.  */
 };
 
 /* Each front end provides its own.  */
-extern const struct lang_hooks lang_hooks;
+extern struct lang_hooks lang_hooks;
 extern tree add_builtin_function (const char *name, tree type,
 				  int function_code, enum built_in_class cl,
 				  const char *library_name,

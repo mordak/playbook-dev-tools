@@ -1,6 +1,6 @@
 /* CPP Library - charsets
-   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2006, 2008, 2009
-   Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2006, 2008, 2009,
+   2010 Free Software Foundation, Inc.
 
    Broken out of c-lex.c Apr 2003, adding valid C99 UCN ranges.
 
@@ -169,7 +169,7 @@ static inline int
 one_utf8_to_cppchar (const uchar **inbufp, size_t *inbytesleftp,
 		     cppchar_t *cp)
 {
-  static const uchar masks[6] = { 0x7F, 0x1F, 0x0F, 0x07, 0x02, 0x01 };
+  static const uchar masks[6] = { 0x7F, 0x1F, 0x0F, 0x07, 0x03, 0x01 };
   static const uchar patns[6] = { 0x00, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC };
 
   cppchar_t c;
@@ -721,6 +721,8 @@ cpp_init_iconv (cpp_reader *pfile)
 
   pfile->narrow_cset_desc = init_iconv_desc (pfile, ncset, SOURCE_CHARSET);
   pfile->narrow_cset_desc.width = CPP_OPTION (pfile, char_precision);
+  pfile->utf8_cset_desc = init_iconv_desc (pfile, "UTF-8", SOURCE_CHARSET);
+  pfile->utf8_cset_desc.width = CPP_OPTION (pfile, char_precision);
   pfile->char16_cset_desc = init_iconv_desc (pfile,
 					     be ? "UTF-16BE" : "UTF-16LE",
 					     SOURCE_CHARSET);
@@ -741,6 +743,12 @@ _cpp_destroy_iconv (cpp_reader *pfile)
     {
       if (pfile->narrow_cset_desc.func == convert_using_iconv)
 	iconv_close (pfile->narrow_cset_desc.cd);
+      if (pfile->utf8_cset_desc.func == convert_using_iconv)
+	iconv_close (pfile->utf8_cset_desc.cd);
+      if (pfile->char16_cset_desc.func == convert_using_iconv)
+	iconv_close (pfile->char16_cset_desc.cd);
+      if (pfile->char32_cset_desc.func == convert_using_iconv)
+	iconv_close (pfile->char32_cset_desc.cd);
       if (pfile->wide_cset_desc.func == convert_using_iconv)
 	iconv_close (pfile->wide_cset_desc.cd);
     }
@@ -948,10 +956,16 @@ ucn_valid_in_identifier (cpp_reader *pfile, cppchar_t c,
    ISO/IEC 10646 is NNNNNNNN; the character designated by the
    universal character name \uNNNN is that character whose character
    short name in ISO/IEC 10646 is 0000NNNN.  If the hexadecimal value
-   for a universal character name is less than 0x20 or in the range
-   0x7F-0x9F (inclusive), or if the universal character name
-   designates a character in the basic source character set, then the
-   program is ill-formed.
+   for a universal character name corresponds to a surrogate code point
+   (in the range 0xD800-0xDFFF, inclusive), the program is ill-formed.
+   Additionally, if the hexadecimal value for a universal-character-name
+   outside a character or string literal corresponds to a control character
+   (in either of the ranges 0x00-0x1F or 0x7F-0x9F, both inclusive) or to a
+   character in the basic source character set, the program is ill-formed.
+
+   C99 6.4.3: A universal character name shall not specify a character
+   whose short identifier is less than 00A0 other than 0024 ($), 0040 (@),
+   or 0060 (`), nor one in the range D800 through DFFF inclusive.
 
    *PSTR must be preceded by "\u" or "\U"; it is assumed that the
    buffer end is delimited by a non-hex digit.  Returns zero if the
@@ -979,9 +993,9 @@ _cpp_valid_ucn (cpp_reader *pfile, const uchar **pstr,
     cpp_error (pfile, CPP_DL_WARNING,
 	       "universal character names are only valid in C++ and C99");
   else if (CPP_WTRADITIONAL (pfile) && identifier_pos == 0)
-    cpp_error (pfile, CPP_DL_WARNING,
-	       "the meaning of '\\%c' is different in traditional C",
-	       (int) str[-1]);
+    cpp_warning (pfile, CPP_W_TRADITIONAL,
+	         "the meaning of '\\%c' is different in traditional C",
+	         (int) str[-1]);
 
   if (str[-1] == 'u')
     length = 4;
@@ -1018,9 +1032,12 @@ _cpp_valid_ucn (cpp_reader *pfile, const uchar **pstr,
 		 (int) (str - base), base);
       result = 1;
     }
-  /* The standard permits $, @ and ` to be specified as UCNs.  We use
-     hex escapes so that this also works with EBCDIC hosts.  */
+  /* The C99 standard permits $, @ and ` to be specified as UCNs.  We use
+     hex escapes so that this also works with EBCDIC hosts.
+     C++0x permits everything below 0xa0 within literals;
+     ucn_valid_in_identifier will complain about identifiers.  */
   else if ((result < 0xa0
+	    && !CPP_OPTION (pfile, cplusplus)
 	    && (result != 0x24 && result != 0x40 && result != 0x60))
 	   || (result & 0x80000000)
 	   || (result >= 0xD800 && result <= 0xDFFF))
@@ -1157,8 +1174,8 @@ convert_hex (cpp_reader *pfile, const uchar *from, const uchar *limit,
   size_t mask = width_to_mask (width);
 
   if (CPP_WTRADITIONAL (pfile))
-    cpp_error (pfile, CPP_DL_WARNING,
-	       "the meaning of '\\x' is different in traditional C");
+    cpp_warning (pfile, CPP_W_TRADITIONAL,
+	         "the meaning of '\\x' is different in traditional C");
 
   from++;  /* Skip 'x'.  */
   while (from < limit)
@@ -1285,8 +1302,8 @@ convert_escape (cpp_reader *pfile, const uchar *from, const uchar *limit,
 
     case 'a':
       if (CPP_WTRADITIONAL (pfile))
-	cpp_error (pfile, CPP_DL_WARNING,
-		   "the meaning of '\\a' is different in traditional C");
+	cpp_warning (pfile, CPP_W_TRADITIONAL,
+		     "the meaning of '\\a' is different in traditional C");
       c = charconsts[0];
       break;
 
@@ -1301,7 +1318,7 @@ convert_escape (cpp_reader *pfile, const uchar *from, const uchar *limit,
     unknown:
       if (ISGRAPH (c))
 	cpp_error (pfile, CPP_DL_PEDWARN,
-		   "unknown escape sequence '\\%c'", (int) c);
+		   "unknown escape sequence: '\\%c'", (int) c);
       else
 	{
 	  /* diagnostic.c does not support "%03o".  When it does, this
@@ -1330,6 +1347,8 @@ converter_for_type (cpp_reader *pfile, enum cpp_ttype type)
     {
     default:
 	return pfile->narrow_cset_desc;
+    case CPP_UTF8STRING:
+	return pfile->utf8_cset_desc;
     case CPP_CHAR16:
     case CPP_STRING16:
 	return pfile->char16_cset_desc;
@@ -1364,7 +1383,34 @@ cpp_interpret_string (cpp_reader *pfile, const cpp_string *from, size_t count,
   for (i = 0; i < count; i++)
     {
       p = from[i].text;
-      if (*p == 'L' || *p == 'u' || *p == 'U') p++;
+      if (*p == 'u')
+	{
+	  if (*++p == '8')
+	    p++;
+	}
+      else if (*p == 'L' || *p == 'U') p++;
+      if (*p == 'R')
+	{
+	  const uchar *prefix;
+
+	  /* Skip over 'R"'.  */
+	  p += 2;
+	  prefix = p;
+	  while (*p != '(')
+	    p++;
+	  p++;
+	  limit = from[i].text + from[i].len;
+	  if (limit >= p + (p - prefix) + 1)
+	    limit -= (p - prefix) + 1;
+
+	  /* Raw strings are all normal characters; these can be fed
+	     directly to convert_cset.  */
+	  if (!APPLY_CONVERSION (cvt, p, limit - p, &tbuf))
+	    goto fail;
+
+	  continue;
+	}
+
       p++; /* Skip leading quote.  */
       limit = from[i].text + from[i].len - 1; /* Skip trailing quote.  */
 
@@ -1463,7 +1509,7 @@ narrow_str_to_charconst (cpp_reader *pfile, cpp_string str,
 		 "character constant too long for its type");
     }
   else if (i > 1 && CPP_OPTION (pfile, warn_multichar))
-    cpp_error (pfile, CPP_DL_WARNING, "multi-character character constant");
+    cpp_warning (pfile, CPP_W_MULTICHAR, "multi-character character constant");
 
   /* Multichar constants are of type int and therefore signed.  */
   if (i > 1)

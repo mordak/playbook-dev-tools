@@ -72,7 +72,7 @@
 #undef islessgreater
 #undef isunordered
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
   template<typename _Tp>
     inline _Tp

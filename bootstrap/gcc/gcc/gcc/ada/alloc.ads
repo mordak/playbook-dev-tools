@@ -61,6 +61,9 @@ package Alloc is
    Elmts_Initial                    : constant := 1_200;   -- Elists
    Elmts_Increment                  : constant := 100;
 
+   File_Name_Chars_Initial          : constant := 10_000;  -- Osint
+   File_Name_Chars_Increment        : constant := 100;
+
    Inlined_Bodies_Initial           : constant := 50;      -- Inline
    Inlined_Bodies_Increment         : constant := 200;
 
@@ -96,6 +99,9 @@ package Alloc is
 
    Nodes_Initial                    : constant := 50_000;  -- Atree
    Nodes_Increment                  : constant := 100;
+
+   Notes_Initial                    : constant := 100;     -- Lib
+   Notes_Increment                  : constant := 200;
 
    Obsolescent_Warnings_Initial     : constant := 50;      -- Sem_Prag
    Obsolescent_Warnings_Increment   : constant := 200;

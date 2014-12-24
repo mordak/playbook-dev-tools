@@ -13,10 +13,6 @@
 #ifdef __cplusplus
 #define exception __math_exception
 #endif
-#ifndef FIXINC_WRAP_MATH_H_EXCEPTION_STRUCTURE
-#define FIXINC_WRAP_MATH_H_EXCEPTION_STRUCTURE 1
-
-struct exception;
 
 
 #if defined( AAB_DARWIN7_9_LONG_DOUBLE_FUNCS_2_CHECK )
@@ -36,11 +32,6 @@ struct exception;
 
 
 #endif  /* BROKEN_CABS_CHECK */
-
-
-#if defined( EXCEPTION_STRUCTURE_CHECK )
-extern int matherr();
-#endif  /* EXCEPTION_STRUCTURE_CHECK */
 
 
 #if defined( HPPA_HPUX_FP_MACROS_CHECK )
@@ -80,11 +71,6 @@ extern "C" int abs(int);
 #endif  /* HPUX8_BOGUS_INLINES_CHECK */
 
 
-#if defined( ISC_FMOD_CHECK )
-extern double	fmod(double, double);
-#endif  /* ISC_FMOD_CHECK */
-
-
 #if defined( MATH_EXCEPTION_CHECK )
 typedef struct exception t_math_exception;
 #endif  /* MATH_EXCEPTION_CHECK */
@@ -103,13 +89,6 @@ extern int class();
 #endif  /* RS6000_DOUBLE_CHECK */
 
 
-#if defined( SCO_MATH_CHECK )
-#define __fp_class(a) \
- __builtin_generic(a,"ld:__fplcassifyl;f:__fpclassifyf;:__fpclassify")
-
-#endif  /* SCO_MATH_CHECK */
-
-
 #if defined( STRICT_ANSI_NOT_CTD_CHECK )
 #if 1 && \
 && defined(mumbling) |& ( !defined(__STRICT_ANSI__)) \
@@ -118,8 +97,6 @@ extern int class();
 int foo;
 #endif
 #endif  /* STRICT_ANSI_NOT_CTD_CHECK */
-
-#endif  /* FIXINC_WRAP_MATH_H_EXCEPTION_STRUCTURE */
 #ifdef __cplusplus
 #undef exception
 #endif

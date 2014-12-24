@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2008, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -123,7 +123,7 @@ namespace detail
 	return -2;
       };
 
-    xml_test_rand_regression_formatter* p_fmt = NULL;
+    xml_test_rand_regression_formatter* p_fmt = 0;
     if (sd == 0)
       sd = twister_rand_gen::get_time_determined_seed();
     if (disp)
@@ -150,7 +150,7 @@ namespace detail
 
 namespace detail
 {
-  void
+  inline void
   usage(const std::string& name)
   {
     using namespace std;
@@ -182,7 +182,7 @@ namespace detail
     cerr << "'t' or 'f' determine whether progress will be displayed" << endl;
   }
 
-  void
+  inline void
   verify_params(size_t& r_seed, size_t& r_n, 
 		size_t& r_m, double& r_tp, double& r_ip, double& r_dp, 
 		double& r_ep, double& r_cp, double& r_mp, bool& r_d)

@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---      Copyright (C) 1992-2009  Free Software Foundation, Inc.             --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -31,7 +31,7 @@
 
 --  This package contains host independent type definitions which are used
 --  in more than one unit in the compiler. They are gathered here for easy
---  reference, though in some cases the full description is found in the
+--  reference, although in some cases the full description is found in the
 --  relevant module which implements the definition. The main reason that they
 --  are not in their "natural" specs is that this would cause a lot of inter-
 --  spec dependencies, and in particular some awkward circular dependencies
@@ -58,9 +58,6 @@ package Types is
 
    type Int is range -2 ** 31 .. +2 ** 31 - 1;
    --  Signed 32-bit integer
-
-   type Dint is range -2 ** 63 .. +2 ** 63 - 1;
-   --  Double length (64-bit) integer
 
    subtype Nat is Int range 0 .. Int'Last;
    --  Non-negative Int values
@@ -125,8 +122,9 @@ package Types is
 
    subtype Big_String is String (Positive);
    type Big_String_Ptr is access all Big_String;
-   for Big_String_Ptr'Storage_Size use 0;
-   --  Virtual type for handling imported big strings
+   --  Virtual type for handling imported big strings. Note that we should
+   --  never have any allocators for this type, but we don't give a storage
+   --  size of zero, since there are legitimate deallocations going on.
 
    function To_Big_String_Ptr is
      new Unchecked_Conversion (System.Address, Big_String_Ptr);
@@ -192,37 +190,38 @@ package Types is
    subtype Source_Buffer is Text_Buffer;
    --  Type used to store text of a source file . The buffer for the main
    --  source (the source specified on the command line) has a lower bound
-   --  starting at zero. Subsequent subsidiary sources have lower bounds which
-   --  are one greater than the previous upper bound.
+   --  starting at zero. Subsequent subsidiary sources have lower bounds
+   --  which are one greater than the previous upper bound.
 
    subtype Big_Source_Buffer is Text_Buffer (0 .. Text_Ptr'Last);
-   --  This is a virtual type used as the designated type of the access
-   --  type Source_Buffer_Ptr, see Osint.Read_Source_File for details.
+   --  This is a virtual type used as the designated type of the access type
+   --  Source_Buffer_Ptr, see Osint.Read_Source_File for details.
 
    type Source_Buffer_Ptr is access all Big_Source_Buffer;
-   for Source_Buffer_Ptr'Storage_Size use 0;
    --  Pointer to source buffer. We use virtual origin addressing for source
    --  buffers, with thin pointers. The pointer points to a virtual instance
    --  of type Big_Source_Buffer, where the actual type is in fact of type
    --  Source_Buffer. The address is adjusted so that the virtual origin
    --  addressing works correctly. See Osint.Read_Source_Buffer for further
-   --  details.
+   --  details. Again, as for Big_String_Ptr, we should never allocate using
+   --  this type, but we don't give a storage size clause of zero, since we
+   --  may end up doing deallocations of instances allocated manually.
 
    subtype Source_Ptr is Text_Ptr;
    --  Type used to represent a source location, which is a subscript of a
-   --  character in the source buffer. As noted above, different source
-   --  buffers have different ranges, so it is possible to tell from a
-   --  Source_Ptr value which source it refers to. Note that negative numbers
-   --  are allowed to accommodate the following special values.
+   --  character in the source buffer. As noted above, different source buffers
+   --  have different ranges, so it is possible to tell from a Source_Ptr value
+   --  which source it refers to. Note that negative numbers are allowed to
+   --  accommodate the following special values.
 
    No_Location : constant Source_Ptr := -1;
-   --  Value used to indicate no source position set in a node. A test for
-   --  a Source_Ptr value being > No_Location is the approved way to test
-   --  for a standard value that does not include No_Location or any of the
-   --  following special definitions. One important use of No_Location is to
-   --  label generated nodes that we don't want the debugger to see in normal
-   --  mode (very often we conditionalize so that we set No_Location in normal
-   --  mode and the corresponding source line in -gnatD mode).
+   --  Value used to indicate no source position set in a node. A test for a
+   --  Source_Ptr value being > No_Location is the approved way to test for a
+   --  standard value that does not include No_Location or any of the following
+   --  special definitions. One important use of No_Location is to label
+   --  generated nodes that we don't want the debugger to see in normal mode
+   --  (very often we conditionalize so that we set No_Location in normal mode
+   --  and the corresponding source line in -gnatD mode).
 
    Standard_Location : constant Source_Ptr := -2;
    --  Used for all nodes in the representation of package Standard other than
@@ -234,8 +233,8 @@ package Types is
    --  Used for all nodes in the presentation of package Standard.ASCII
 
    System_Location : constant Source_Ptr := -4;
-   --  Used to identify locations of pragmas scanned by Targparm, where we
-   --  know the location is in System, but we don't know exactly what line.
+   --  Used to identify locations of pragmas scanned by Targparm, where we know
+   --  the location is in System, but we don't know exactly what line.
 
    First_Source_Ptr : constant Source_Ptr := 0;
    --  Starting source pointer index value for first source program
@@ -254,13 +253,13 @@ package Types is
    --    Universal integers (type Uint)
    --    Universal reals (type Ureal)
 
-   --  In most contexts, the strongly typed interface determines which of
-   --  these types is present. However, there are some situations (involving
-   --  untyped traversals of the tree), where it is convenient to be easily
-   --  able to distinguish these values. The underlying representation in all
-   --  cases is an integer type Union_Id, and we ensure that the range of
-   --  the various possible values for each of the above types is disjoint
-   --  so that this distinction is possible.
+   --  In most contexts, the strongly typed interface determines which of these
+   --  types is present. However, there are some situations (involving untyped
+   --  traversals of the tree), where it is convenient to be easily able to
+   --  distinguish these values. The underlying representation in all cases is
+   --  an integer type Union_Id, and we ensure that the range of the various
+   --  possible values for each of the above types is disjoint so that this
+   --  distinction is possible.
 
    type Union_Id is new Int;
    --  The type in the tree for a union of possible ID values
@@ -348,16 +347,16 @@ package Types is
    --  lie in. Such tests appear only in the lowest level packages.
 
    subtype List_Range      is Union_Id
-     range List_Low_Bound   .. List_High_Bound;
+     range List_Low_Bound    .. List_High_Bound;
 
    subtype Node_Range      is Union_Id
-     range Node_Low_Bound   .. Node_High_Bound;
+     range Node_Low_Bound    .. Node_High_Bound;
 
    subtype Elist_Range     is Union_Id
-     range Elist_Low_Bound  .. Elist_High_Bound;
+     range Elist_Low_Bound   .. Elist_High_Bound;
 
    subtype Elmt_Range      is Union_Id
-     range Elmt_Low_Bound   .. Elmt_High_Bound;
+     range Elmt_Low_Bound    .. Elmt_High_Bound;
 
    subtype Names_Range     is Union_Id
      range Names_Low_Bound   .. Names_High_Bound;
@@ -369,25 +368,25 @@ package Types is
      range Uint_Low_Bound    .. Uint_High_Bound;
 
    subtype Ureal_Range     is Union_Id
-     range Ureal_Low_Bound    .. Ureal_High_Bound;
+     range Ureal_Low_Bound   .. Ureal_High_Bound;
 
-   ----------------------------
+   -----------------------------
    -- Types for Atree Package --
-   ----------------------------
+   -----------------------------
 
    --  Node_Id values are used to identify nodes in the tree. They are
-   --  subscripts into the Node table declared in package Tree. Note that
-   --  the special values Empty and Error are subscripts into this table,
+   --  subscripts into the Nodes table declared in package Atree. Note that
+   --  the special values Empty and Error are subscripts into this table.
    --  See package Atree for further details.
 
    type Node_Id is range Node_Low_Bound .. Node_High_Bound;
    --  Type used to identify nodes in the tree
 
    subtype Entity_Id is Node_Id;
-   --  A synonym for node types, used in the entity package to refer to
-   --  nodes that are entities (i.e. nodes with an Nkind of N_Defining_xxx)
-   --  All such nodes are extended nodes and these are the only extended
-   --  nodes, so that in practice entity and extended nodes are synonymous.
+   --  A synonym for node types, used in the Einfo package to refer to nodes
+   --  that are entities (i.e. nodes with an Nkind of N_Defining_xxx). All such
+   --  nodes are extended nodes and these are the only extended nodes, so that
+   --  in practice entity and extended nodes are synonymous.
 
    subtype Node_Or_Entity_Id is Node_Id;
    --  A synonym for node types, used in cases where a given value may be used
@@ -402,12 +401,12 @@ package Types is
 
    Empty_List_Or_Node : constant := 0;
    --  This constant is used in situations (e.g. initializing empty fields)
-   --  where the value set will be used to represent either an empty node
-   --  or a non-existent list, depending on the context.
+   --  where the value set will be used to represent either an empty node or
+   --  a non-existent list, depending on the context.
 
    Error : constant Node_Id := Node_Low_Bound + 1;
-   --  Used to indicate that there was an error in the source program. A node
-   --  is actually allocated at this address, so that Nkind (Error) = N_Error.
+   --  Used to indicate an error in the source program. A node is actually
+   --  allocated with this Id value, so that Nkind (Error) = N_Error.
 
    Empty_Or_Error : constant Node_Id := Error;
    --  Since Empty and Error are the first two Node_Id values, the test for
@@ -422,11 +421,12 @@ package Types is
    -- Types for Nlists Package --
    ------------------------------
 
-   --  List_Id values are used to identify node lists in the tree. They are
-   --  subscripts into the Lists table declared in package Tree. Note that the
-   --  special value Error_List is a subscript in this table, but the value
-   --  No_List is *not* a valid subscript, and any attempt to apply list
-   --  operations to No_List will cause a (detected) error.
+   --  List_Id values are used to identify node lists stored in the tree, so
+   --  that each node can be on at most one such list (see package Nlists for
+   --  further details). Note that the special value Error_List is a subscript
+   --  in this table, but the value No_List is *not* a valid subscript, and any
+   --  attempt to apply list operations to No_List will cause a (detected)
+   --  error.
 
    type List_Id is range List_Low_Bound .. List_High_Bound;
    --  Type used to identify a node list
@@ -449,24 +449,23 @@ package Types is
    -- Types for Elists Package --
    ------------------------------
 
-   --  Element list Id values are used to identify element lists stored in the
-   --  tree (see package Tree for further details). They are formed by adding a
-   --  bias (Element_List_Bias) to subscript values in the same array that is
-   --  used for node list headers.
+   --  Element list Id values are used to identify element lists stored outside
+   --  of the tree, allowing nodes to be members of more than one such list
+   --  (see package Elists for further details).
 
    type Elist_Id is range Elist_Low_Bound .. Elist_High_Bound;
    --  Type used to identify an element list (Elist header table subscript)
 
    No_Elist : constant Elist_Id := Elist_Low_Bound;
-   --  Used to indicate absence of an element list. Note that this is not
-   --  an actual Elist header, so element list operations on this value
-   --  are not valid.
+   --  Used to indicate absence of an element list. Note that this is not an
+   --  actual Elist header, so element list operations on this value are not
+   --  valid.
 
    First_Elist_Id : constant Elist_Id := No_Elist + 1;
    --  Subscript of first allocated Elist header
 
-   --  Element Id values are used to identify individual elements of an
-   --  element list (see package Elists for further details).
+   --  Element Id values are used to identify individual elements of an element
+   --  list (see package Elists for further details).
 
    type Elmt_Id is range Elmt_Low_Bound .. Elmt_High_Bound;
    --  Type used to identify an element list
@@ -482,11 +481,12 @@ package Types is
    -------------------------------
 
    --  String_Id values are used to identify entries in the strings table. They
-   --  are subscripts into the strings table defined in package Strings.
+   --  are subscripts into the Strings table defined in package Stringt.
 
    --  Note that with only a few exceptions, which are clearly documented, the
    --  type String_Id should be regarded as a private type. In particular it is
    --  never appropriate to perform arithmetic operations using this type.
+   --  Doesn't this also apply to all other *_Id types???
 
    type String_Id is range Strings_Low_Bound .. Strings_High_Bound;
    --  Type used to identify entries in the strings table
@@ -505,10 +505,10 @@ package Types is
    --  The type Char is used for character data internally in the compiler, but
    --  character codes in the source are represented by the Char_Code type.
    --  Each character literal in the source is interpreted as being one of the
-   --  16#8000_0000 possible Wide_Wide_Character codes, and a unique Integer
-   --  Value is assigned, corresponding to the UTF_32 value, which also
-   --  corresponds to the POS value in the Wide_Wide_Character type, and also
-   --  corresponds to the POS value in the Wide_Character and Character types
+   --  16#7FFF_FFFF# possible Wide_Wide_Character codes, and a unique Integer
+   --  value is assigned, corresponding to the UTF-32 value, which also
+   --  corresponds to the Pos value in the Wide_Wide_Character type, and also
+   --  corresponds to the Pos value in the Wide_Character and Character types
    --  for values that are in appropriate range. String literals are similarly
    --  interpreted as a sequence of such codes.
 
@@ -554,7 +554,7 @@ package Types is
    type Unit_Number_Type is new Int;
    --  Unit number. The main source is unit 0, and subsidiary sources have
    --  non-zero numbers starting with 1. Unit numbers are used to index the
-   --  file table in Lib.
+   --  Units table in package Lib.
 
    Main_Unit : constant Unit_Number_Type := 0;
    --  Unit number value for main unit
@@ -730,14 +730,14 @@ package Types is
    -- Parameter Mechanism Control --
    ---------------------------------
 
-   --  Function and parameter entities have a field that records the
-   --  passing mechanism. See specification of Sem_Mech for full details.
-   --  The following subtype is used to represent values of this type:
+   --  Function and parameter entities have a field that records the passing
+   --  mechanism. See specification of Sem_Mech for full details. The following
+   --  subtype is used to represent values of this type:
 
    subtype Mechanism_Type is Int range -18 .. Int'Last;
-   --  Type used to represent a mechanism value. This is a subtype rather
-   --  than a type to avoid some annoying processing problems with certain
-   --  routines in Einfo (processing them to create the corresponding C).
+   --  Type used to represent a mechanism value. This is a subtype rather than
+   --  a type to avoid some annoying processing problems with certain routines
+   --  in Einfo (processing them to create the corresponding C).
 
    ------------------------------
    -- Run-Time Exception Codes --
@@ -762,12 +762,12 @@ package Types is
    --    1. Modify the type and subtype declarations below appropriately,
    --       keeping things in alphabetical order.
 
-   --    2. Modify the corresponding definitions in types.h, including
-   --       the definition of last_reason_code.
+   --    2. Modify the corresponding definitions in types.h, including the
+   --       definition of last_reason_code.
 
-   --    3. Add a new routine in Ada.Exceptions with the appropriate call
-   --       and static string constant. Note that there is more than one
-   --       version of a-except.adb which must be modified.
+   --    3. Add a new routine in Ada.Exceptions with the appropriate call and
+   --       static string constant. Note that there is more than one version
+   --       of a-except.adb which must be modified.
 
    type RT_Exception_Code is
      (CE_Access_Check_Failed,            -- 00
@@ -787,24 +787,26 @@ package Types is
 
       PE_Access_Before_Elaboration,      -- 14
       PE_Accessibility_Check_Failed,     -- 15
-      PE_All_Guards_Closed,              -- 16
-      PE_Current_Task_In_Entry_Body,     -- 17
-      PE_Duplicated_Entry_Address,       -- 18
-      PE_Explicit_Raise,                 -- 19
-      PE_Finalize_Raised_Exception,      -- 20
-      PE_Implicit_Return,                -- 21
-      PE_Misaligned_Address_Value,       -- 22
-      PE_Missing_Return,                 -- 23
-      PE_Overlaid_Controlled_Object,     -- 24
-      PE_Potentially_Blocking_Operation, -- 25
-      PE_Stubbed_Subprogram_Called,      -- 26
-      PE_Unchecked_Union_Restriction,    -- 27
-      PE_Non_Transportable_Actual,       -- 28
+      PE_Address_Of_Intrinsic,           -- 16
+      PE_All_Guards_Closed,              -- 17
+      PE_Bad_Predicated_Generic_Type,    -- 18
+      PE_Current_Task_In_Entry_Body,     -- 19
+      PE_Duplicated_Entry_Address,       -- 20
+      PE_Explicit_Raise,                 -- 21
+      PE_Finalize_Raised_Exception,      -- 22
+      PE_Implicit_Return,                -- 23
+      PE_Misaligned_Address_Value,       -- 24
+      PE_Missing_Return,                 -- 25
+      PE_Overlaid_Controlled_Object,     -- 26
+      PE_Potentially_Blocking_Operation, -- 27
+      PE_Stubbed_Subprogram_Called,      -- 28
+      PE_Unchecked_Union_Restriction,    -- 29
+      PE_Non_Transportable_Actual,       -- 30
 
-      SE_Empty_Storage_Pool,             -- 29
-      SE_Explicit_Raise,                 -- 30
-      SE_Infinite_Recursion,             -- 31
-      SE_Object_Too_Large);              -- 32
+      SE_Empty_Storage_Pool,             -- 31
+      SE_Explicit_Raise,                 -- 32
+      SE_Infinite_Recursion,             -- 33
+      SE_Object_Too_Large);              -- 34
 
    subtype RT_CE_Exceptions is RT_Exception_Code range
      CE_Access_Check_Failed ..

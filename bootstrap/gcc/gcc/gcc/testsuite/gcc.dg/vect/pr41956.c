@@ -11,4 +11,3 @@ void K (int *gpwgts, int *badminpwgt, int *badmaxpwgt)
 }
 
 /* { dg-final { cleanup-tree-dump "vect" } } */
-

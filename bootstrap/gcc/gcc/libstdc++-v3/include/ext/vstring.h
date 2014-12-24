@@ -1,6 +1,7 @@
 // Versatile string -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2007, 2008, 2009, 2010, 2011
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -36,20 +37,24 @@
 #include <ext/rc_string_base.h>
 #include <ext/sso_string_base.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   /**
    *  @class __versa_string vstring.h
-   *  @brief  Managing sequences of characters and character-like objects.
+   *  @brief  Template class __versa_string. 
+   *  @ingroup extensions
+   *
+   *  Data structure managing sequences of characters and
+   *  character-like objects. 
    */
-
-  // Template class __versa_string
   template<typename _CharT, typename _Traits, typename _Alloc,
 	   template <typename, typename, typename> class _Base>
     class __versa_string
     : private _Base<_CharT, _Traits, _Alloc>
     {
-      typedef _Base<_CharT, _Traits, _Alloc>                __vstring_base;      
+      typedef _Base<_CharT, _Traits, _Alloc>                __vstring_base;    
       typedef typename __vstring_base::_CharT_alloc_type    _CharT_alloc_type;
 
       // Types:
@@ -59,8 +64,8 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       typedef _Alloc					    allocator_type;
       typedef typename _CharT_alloc_type::size_type	    size_type;
       typedef typename _CharT_alloc_type::difference_type   difference_type;
-      typedef typename _CharT_alloc_type::reference	    reference;
-      typedef typename _CharT_alloc_type::const_reference   const_reference;
+      typedef value_type&               	            reference;
+      typedef const value_type&                             const_reference;
       typedef typename _CharT_alloc_type::pointer	    pointer;
       typedef typename _CharT_alloc_type::const_pointer	    const_pointer;
       typedef __gnu_cxx::__normal_iterator<pointer, __versa_string>  iterator;
@@ -152,7 +157,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
        *  string.
        */
       __versa_string(__versa_string&& __str)
-      : __vstring_base(std::forward<__vstring_base>(__str)) { }
+      : __vstring_base(std::move(__str)) { }
 
       /**
        *  @brief  Construct string from an initializer list.
@@ -259,8 +264,8 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       __versa_string&
       operator=(__versa_string&& __str)
       {
-	if (this != &__str)
-	  this->swap(__str);
+	// NB: DR 1204.
+	this->swap(__str);
 	return *this;
       }
 
@@ -455,6 +460,18 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       resize(size_type __n)
       { this->resize(__n, _CharT()); }
 
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+      /// A non-binding request to reduce capacity() to size().
+      void
+      shrink_to_fit()
+      {
+	__try
+	  { this->reserve(0); }
+	__catch(...)
+	  { }
+      }
+#endif
+
       /**
        *  Returns the total number of characters that the %string can
        *  hold before needing to allocate more memory.
@@ -492,7 +509,8 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       { this->_M_clear(); }
 
       /**
-       *  Returns true if the %string is empty.  Equivalent to *this == "".
+       *  Returns true if the %string is empty.  Equivalent to 
+       *  <code>*this == ""</code>.
        */
       bool
       empty() const
@@ -582,7 +600,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
        */
       reference
       front()
-      { return *begin(); }
+      { return operator[](0); }
 
       /**
        *  Returns a read-only (constant) reference to the data at the first
@@ -590,7 +608,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
        */
       const_reference
       front() const
-      { return *begin(); }
+      { return operator[](0); }
 
       /**
        *  Returns a read/write reference to the data at the last
@@ -598,7 +616,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
        */
       reference
       back()
-      { return *(end() - 1); }
+      { return operator[](this->size() - 1); }
 
       /**
        *  Returns a read-only (constant) reference to the data at the
@@ -606,7 +624,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
        */
       const_reference
       back() const
-      { return *(end() - 1); }
+      { return operator[](this->size() - 1); }
 #endif
 
       // Modifiers:
@@ -768,6 +786,23 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	this->_M_assign(__str);
 	return *this;
       }
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+      /**
+       *  @brief  Set value to contents of another string.
+       *  @param  __str  Source string to use.
+       *  @return  Reference to this string.
+       *
+       *  This function sets this string to the exact contents of @a __str.
+       *  @a __str is a valid, but unspecified string.
+       */
+      __versa_string&
+      assign(__versa_string&& __str)
+      {
+	this->swap(__str);
+	return *this;
+      }
+#endif // __GXX_EXPERIMENTAL_CXX0X__
 
       /**
        *  @brief  Set value to a substring of a string.
@@ -1186,11 +1221,10 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
        *  @throw  std::length_error  If new length exceeds @c max_size().
        *
        *  Removes the characters in the range [pos,pos + n1) from this
-       *  string.  In place, the first @a __n characters of @a __s are
-       *  inserted.  If @a pos is beyond end of string, out_of_range
-       *  is thrown.  If the length of result exceeds max_size(),
-       *  length_error is thrown.  The value of the string doesn't
-       *  change if an error is thrown.
+       *  string.  In place, the characters of @a __s are inserted.  If
+       *  @a pos is beyond end of string, out_of_range is thrown.  If
+       *  the length of result exceeds max_size(), length_error is thrown.  
+       *  The value of the string doesn't change if an error is thrown.
       */
       __versa_string&
       replace(size_type __pos, size_type __n1, const _CharT* __s)
@@ -1325,7 +1359,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 				   && __i2 <= _M_iend());
 	  __glibcxx_requires_valid_range(__k1, __k2);
 	  typedef typename std::__is_integer<_InputIterator>::__type _Integral;
-	  return _M_replace_dispatch(__i1, __i2, __k1, __k2, _Integral());
+	  return this->_M_replace_dispatch(__i1, __i2, __k1, __k2, _Integral());
 	}
 
       // Specializations for the common case of pointer and iterator:
@@ -1439,11 +1473,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
        *  constant time.
       */
       void
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-      swap(__versa_string&& __s)
-#else
       swap(__versa_string& __s)
-#endif
       { this->_M_swap(__s); }
 
       // String operations:
@@ -1884,7 +1914,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 
 	int __r = traits_type::compare(this->_M_data(), __str.data(), __len);
 	if (!__r)
-	  __r = _S_compare(__size, __osize);
+	  __r = this->_S_compare(__size, __osize);
 	return __r;
       }
 
@@ -2001,7 +2031,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
        *  the comparison is nonzero returns it, otherwise the shorter
        *  one is ordered first.
        *
-       *  NB: s must have at least n2 characters, '\\0' has no special
+       *  NB: s must have at least n2 characters, <em>\\0</em> has no special
        *  meaning.
       */
       int
@@ -2069,6 +2099,63 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
     __versa_string<_CharT, _Traits, _Alloc, _Base>
     operator+(const __versa_string<_CharT, _Traits, _Alloc, _Base>& __lhs,
 	      _CharT __rhs);
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+  template<typename _CharT, typename _Traits, typename _Alloc,
+	   template <typename, typename, typename> class _Base>
+    inline __versa_string<_CharT, _Traits, _Alloc, _Base>
+    operator+(__versa_string<_CharT, _Traits, _Alloc, _Base>&& __lhs,
+	      const __versa_string<_CharT, _Traits, _Alloc, _Base>& __rhs)
+    { return std::move(__lhs.append(__rhs)); }
+
+  template<typename _CharT, typename _Traits, typename _Alloc,
+	   template <typename, typename, typename> class _Base>
+    inline __versa_string<_CharT, _Traits, _Alloc, _Base>
+    operator+(const __versa_string<_CharT, _Traits, _Alloc, _Base>& __lhs,
+	      __versa_string<_CharT, _Traits, _Alloc, _Base>&& __rhs)
+    { return std::move(__rhs.insert(0, __lhs)); }
+
+  template<typename _CharT, typename _Traits, typename _Alloc,
+	   template <typename, typename, typename> class _Base>
+    inline __versa_string<_CharT, _Traits, _Alloc, _Base>
+    operator+(__versa_string<_CharT, _Traits, _Alloc, _Base>&& __lhs,
+	      __versa_string<_CharT, _Traits, _Alloc, _Base>&& __rhs)
+    {
+      const auto __size = __lhs.size() + __rhs.size();
+      const bool __cond = (__size > __lhs.capacity()
+			   && __size <= __rhs.capacity());
+      return __cond ? std::move(__rhs.insert(0, __lhs))
+	            : std::move(__lhs.append(__rhs));
+    }
+
+  template<typename _CharT, typename _Traits, typename _Alloc,
+	   template <typename, typename, typename> class _Base>
+    inline __versa_string<_CharT, _Traits, _Alloc, _Base>
+    operator+(const _CharT* __lhs,
+	      __versa_string<_CharT, _Traits, _Alloc, _Base>&& __rhs)
+    { return std::move(__rhs.insert(0, __lhs)); }
+
+  template<typename _CharT, typename _Traits, typename _Alloc,
+	   template <typename, typename, typename> class _Base>
+    inline __versa_string<_CharT, _Traits, _Alloc, _Base>
+    operator+(_CharT __lhs,
+	      __versa_string<_CharT, _Traits, _Alloc, _Base>&& __rhs)
+    { return std::move(__rhs.insert(0, 1, __lhs)); }
+
+  template<typename _CharT, typename _Traits, typename _Alloc,
+	   template <typename, typename, typename> class _Base>
+    inline __versa_string<_CharT, _Traits, _Alloc, _Base>
+    operator+(__versa_string<_CharT, _Traits, _Alloc, _Base>&& __lhs,
+	      const _CharT* __rhs)
+    { return std::move(__lhs.append(__rhs)); }
+
+  template<typename _CharT, typename _Traits, typename _Alloc,
+	   template <typename, typename, typename> class _Base>
+    inline __versa_string<_CharT, _Traits, _Alloc, _Base>
+    operator+(__versa_string<_CharT, _Traits, _Alloc, _Base>&& __lhs,
+	      _CharT __rhs)
+    { return std::move(__lhs.append(1, __rhs)); }
+#endif
 
   // operator ==
   /**
@@ -2335,25 +2422,12 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	 __versa_string<_CharT, _Traits, _Alloc, _Base>& __rhs)
     { __lhs.swap(__rhs); }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-  template<typename _CharT, typename _Traits, typename _Alloc,
-	   template <typename, typename, typename> class _Base>
-    inline void
-    swap(__versa_string<_CharT, _Traits, _Alloc, _Base>&& __lhs,
-	 __versa_string<_CharT, _Traits, _Alloc, _Base>& __rhs)
-    { __lhs.swap(__rhs); }
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
-  template<typename _CharT, typename _Traits, typename _Alloc,
-	   template <typename, typename, typename> class _Base>
-    inline void
-    swap(__versa_string<_CharT, _Traits, _Alloc, _Base>& __lhs,
-	 __versa_string<_CharT, _Traits, _Alloc, _Base>&& __rhs)
-    { __lhs.swap(__rhs); }
-#endif
-
-_GLIBCXX_END_NAMESPACE
-
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   /**
    *  @brief  Read stream into a string.
@@ -2422,12 +2496,12 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
    *  @param __str  Buffer to store into.
    *  @return  Reference to the input stream.
    *
-   *  Stores characters from is into @a __str until '\n' is found, the
-   *  end of the stream is encountered, or str.max_size() is reached.
-   *  If is.width() is non-zero, that is the limit on the number of
-   *  characters stored into @a __str.  Any previous contents of @a
-   *  __str are erased.  If end of line was encountered, it is
-   *  extracted but not stored into @a __str.
+   *  Stores characters from is into @a __str until &apos;\n&apos; is
+   *  found, the end of the stream is encountered, or str.max_size()
+   *  is reached.  If is.width() is non-zero, that is the limit on the
+   *  number of characters stored into @a __str.  Any previous
+   *  contents of @a __str are erased.  If end of line was
+   *  encountered, it is extracted but not stored into @a __str.
    */
   template<typename _CharT, typename _Traits, typename _Alloc,
            template <typename, typename, typename> class _Base>
@@ -2436,13 +2510,16 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	    __gnu_cxx::__versa_string<_CharT, _Traits, _Alloc, _Base>& __str)
     { return getline(__is, __str, __is.widen('\n')); }      
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #if (defined(__GXX_EXPERIMENTAL_CXX0X__) && defined(_GLIBCXX_USE_C99))
 
 #include <ext/string_conversions.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   // 21.4 Numeric Conversions [string.conversions].
   inline int
@@ -2484,6 +2561,32 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
   { return __gnu_cxx::__stoa(&std::strtold, "stold", __str.c_str(), __idx); }
 
   // NB: (v)snprintf vs sprintf.
+
+  // DR 1261.
+  inline __vstring
+  to_string(int __val)
+  { return __gnu_cxx::__to_xstring<__vstring>(&std::vsnprintf, 4 * sizeof(int),
+					      "%d", __val); }
+
+  inline __vstring
+  to_string(unsigned __val)
+  { return __gnu_cxx::__to_xstring<__vstring>(&std::vsnprintf,
+					      4 * sizeof(unsigned),
+					      "%u", __val); }
+
+  inline __vstring
+  to_string(long __val)
+  { return __gnu_cxx::__to_xstring<__vstring>(&std::vsnprintf,
+					      4 * sizeof(long),
+					      "%ld", __val); }
+
+  inline __vstring
+  to_string(unsigned long __val)
+  { return __gnu_cxx::__to_xstring<__vstring>(&std::vsnprintf,
+					      4 * sizeof(unsigned long),
+					      "%lu", __val); }
+
+
   inline __vstring
   to_string(long long __val)
   { return __gnu_cxx::__to_xstring<__vstring>(&std::vsnprintf,
@@ -2495,6 +2598,22 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
   { return __gnu_cxx::__to_xstring<__vstring>(&std::vsnprintf,
 					      4 * sizeof(unsigned long long),
 					      "%llu", __val); }
+
+  inline __vstring
+  to_string(float __val)
+  {
+    const int __n = __numeric_traits<float>::__max_exponent10 + 20;
+    return __gnu_cxx::__to_xstring<__vstring>(&std::vsnprintf, __n,
+					      "%f", __val);
+  }
+
+  inline __vstring
+  to_string(double __val)
+  {
+    const int __n = __numeric_traits<double>::__max_exponent10 + 20;
+    return __gnu_cxx::__to_xstring<__vstring>(&std::vsnprintf, __n,
+					      "%f", __val);
+  }
 
   inline __vstring
   to_string(long double __val)
@@ -2543,6 +2662,32 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
   stold(const __wvstring& __str, std::size_t* __idx = 0)
   { return __gnu_cxx::__stoa(&std::wcstold, "stold", __str.c_str(), __idx); }
 
+#ifndef _GLIBCXX_HAVE_BROKEN_VSWPRINTF
+  // DR 1261.
+  inline __wvstring
+  to_wstring(int __val)
+  { return __gnu_cxx::__to_xstring<__wvstring>(&std::vswprintf,
+					       4 * sizeof(int),
+					       L"%d", __val); }
+
+  inline __wvstring
+  to_wstring(unsigned __val)
+  { return __gnu_cxx::__to_xstring<__wvstring>(&std::vswprintf,
+					       4 * sizeof(unsigned),
+					       L"%u", __val); }
+
+  inline __wvstring
+  to_wstring(long __val)
+  { return __gnu_cxx::__to_xstring<__wvstring>(&std::vswprintf,
+					       4 * sizeof(long),
+					       L"%ld", __val); }
+
+  inline __wvstring
+  to_wstring(unsigned long __val)
+  { return __gnu_cxx::__to_xstring<__wvstring>(&std::vswprintf,
+					       4 * sizeof(unsigned long),
+					       L"%lu", __val); }
+
   inline __wvstring
   to_wstring(long long __val)
   { return __gnu_cxx::__to_xstring<__wvstring>(&std::vswprintf,
@@ -2556,6 +2701,22 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 					       L"%llu", __val); }
 
   inline __wvstring
+  to_wstring(float __val)
+  {
+    const int __n = __numeric_traits<float>::__max_exponent10 + 20;
+    return __gnu_cxx::__to_xstring<__wvstring>(&std::vswprintf, __n,
+					       L"%f", __val);
+  }
+
+  inline __wvstring
+  to_wstring(double __val)
+  {
+    const int __n = __numeric_traits<double>::__max_exponent10 + 20;
+    return __gnu_cxx::__to_xstring<__wvstring>(&std::vswprintf, __n,
+					       L"%f", __val);
+  }
+
+  inline __wvstring
   to_wstring(long double __val)
   {
     const int __n = __numeric_traits<long double>::__max_exponent10 + 20;
@@ -2563,13 +2724,73 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 					       L"%Lf", __val);
   }
 #endif
+#endif
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif
 
-#ifndef _GLIBCXX_EXPORT_TEMPLATE
-# include "vstring.tcc" 
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+
+#include <bits/functional_hash.h>
+
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
+  /// std::hash specialization for __vstring.
+  template<>
+    struct hash<__gnu_cxx::__vstring>
+    : public __hash_base<size_t, __gnu_cxx::__vstring>
+    {
+      size_t
+      operator()(const __gnu_cxx::__vstring& __s) const
+      { return std::_Hash_impl::hash(__s.data(), __s.length()); }
+    };
+
+#ifdef _GLIBCXX_USE_WCHAR_T
+  /// std::hash specialization for __wvstring.
+  template<>
+    struct hash<__gnu_cxx::__wvstring>
+    : public __hash_base<size_t, __gnu_cxx::__wvstring>
+    {
+      size_t
+      operator()(const __gnu_cxx::__wvstring& __s) const
+      { return std::_Hash_impl::hash(__s.data(),
+                                     __s.length() * sizeof(wchar_t)); }
+    };
 #endif
+
+#ifdef _GLIBCXX_USE_C99_STDINT_TR1
+  /// std::hash specialization for __u16vstring.
+  template<>
+    struct hash<__gnu_cxx::__u16vstring>
+    : public __hash_base<size_t, __gnu_cxx::__u16vstring>
+    {
+      size_t
+      operator()(const __gnu_cxx::__u16vstring& __s) const
+      { return std::_Hash_impl::hash(__s.data(),
+                                     __s.length() * sizeof(char16_t)); }
+    };
+
+  /// std::hash specialization for __u32vstring.
+  template<>
+    struct hash<__gnu_cxx::__u32vstring>
+    : public __hash_base<size_t, __gnu_cxx::__u32vstring>
+    {
+      size_t
+      operator()(const __gnu_cxx::__u32vstring& __s) const
+      { return std::_Hash_impl::hash(__s.data(),
+                                     __s.length() * sizeof(char32_t)); }
+    };
+#endif
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
+
+#endif /* __GXX_EXPERIMENTAL_CXX0X__ */
+
+#include "vstring.tcc" 
 
 #endif /* _VSTRING_H */

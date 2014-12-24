@@ -1,7 +1,7 @@
 // -*- C++ -*-
 // Testing allocator for the C++ library testsuite.
 //
-// Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+// Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -27,16 +27,12 @@
 #ifndef _GLIBCXX_TESTSUITE_ALLOCATOR_H
 #define _GLIBCXX_TESTSUITE_ALLOCATOR_H
 
-#include <cstddef>
 #include <tr1/unordered_map>
 #include <cassert>
-#include <bits/move.h>
 
-namespace 
-{
-  bool new_called = false;
-  bool delete_called = false;
-}
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#include <bits/move.h>
+#endif
 
 namespace __gnu_test
 {
@@ -186,35 +182,14 @@ namespace __gnu_test
   bool
   check_construct_destroy(const char* tag, int expected_c, int expected_d);
 
-  template<typename Alloc, bool uses_global_new>
-    bool 
-    check_new(Alloc a = Alloc())
-    {
-      bool test __attribute__((unused)) = true;
-      a.allocate(10);
-      test &= ( new_called == uses_global_new );
-      return test;
-    }
-
-  template<typename Alloc, bool uses_global_delete>
-    bool 
-    check_delete(Alloc a = Alloc())
-    {
-      bool test __attribute__((unused)) = true;
-      typename Alloc::pointer p = a.allocate(10);
-      a.deallocate(p, 10);
-      test &= ( delete_called == uses_global_delete );
-      return test;
-    }
-
   template<typename Alloc>
     bool
     check_deallocate_null()
     {
       // Let's not core here...
       Alloc  a;
-      a.deallocate(NULL, 1);
-      a.deallocate(NULL, 10);
+      a.deallocate(0, 1);
+      a.deallocate(0, 10);
       return true;
     }
 
@@ -268,8 +243,8 @@ namespace __gnu_test
     : private uneq_allocator_base
     {
     public:
-      typedef size_t                              size_type;
-      typedef ptrdiff_t                           difference_type;
+      typedef std::size_t                         size_type;
+      typedef std::ptrdiff_t                      difference_type;
       typedef Tp*                                 pointer;
       typedef const Tp*                           const_pointer;
       typedef Tp&                                 reference;

@@ -6,7 +6,7 @@
  *                                                                          *
  *                          C Implementation File                           *
  *                                                                          *
- *             Copyright (C) 1992-2009, Free Software Foundation, Inc.      *
+ *             Copyright (C) 1992-2010, Free Software Foundation, Inc.      *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -55,6 +55,14 @@ typedef char bool;
 
 #include "adaint.h"
 #include "raise.h"
+
+#ifdef __APPLE__
+/* On MacOS X, versions older than 10.5 don't export _Unwind_GetIPInfo.  */
+#undef HAVE_GETIPINFO
+#if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1050
+#define HAVE_GETIPINFO 1
+#endif
+#endif
 
 /* The names of a couple of "standard" routines for unwinding/propagation
    actually vary depending on the underlying GCC scheme for exception handling
@@ -399,7 +407,7 @@ db_phases (int phases)
    ===================================
 
    The major point of this unit is to provide an exception propagation
-   personality routine for Ada. This is __gnat_eh_personality.
+   personality routine for Ada. This is __gnat_personality_v0.
 
    It is provided with a pointer to the propagated exception, an unwind
    context describing a location the propagation is going through, and a
@@ -432,7 +440,7 @@ db_phases (int phases)
      |
      |   (Ada frame)
      |
-     +--> __gnat_eh_personality (context, exception)
+     +--> __gnat_personality_v0 (context, exception)
 	   |
 	   +--> get_region_descriptor_for (context)
 	   |
@@ -501,7 +509,14 @@ typedef struct
 static void
 db_region_for (region_descriptor *region, _Unwind_Context *uw_context)
 {
-  _Unwind_Ptr ip = _Unwind_GetIP (uw_context) - 1;
+  int ip_before_insn = 0;
+#ifdef HAVE_GETIPINFO
+  _Unwind_Ptr ip = _Unwind_GetIPInfo (uw_context, &ip_before_insn);
+#else
+  _Unwind_Ptr ip = _Unwind_GetIP (uw_context);
+#endif
+  if (!ip_before_insn)
+    ip--;
 
   if (! (db_accepted_codes () & DB_REGIONS))
     return;
@@ -631,7 +646,14 @@ typedef struct
 static void
 db_action_for (action_descriptor *action, _Unwind_Context *uw_context)
 {
-  _Unwind_Ptr ip = _Unwind_GetIP (uw_context) - 1;
+  int ip_before_insn = 0;
+#ifdef HAVE_GETIPINFO
+  _Unwind_Ptr ip = _Unwind_GetIPInfo (uw_context, &ip_before_insn);
+#else
+  _Unwind_Ptr ip = _Unwind_GetIP (uw_context);
+#endif
+  if (!ip_before_insn)
+    ip--;
 
   db (DB_ACTIONS, "For ip @ 0x%08x => ", ip);
 
@@ -669,14 +691,6 @@ db_action_for (action_descriptor *action, _Unwind_Context *uw_context)
 
    There are two variants of this routine, depending on the underlying
    mechanism (DWARF/SJLJ), which account for differences in the tables.  */
-
-#ifdef __APPLE__
-/* On MacOS X, versions older than 10.5 don't export _Unwind_GetIPInfo.  */
-#undef HAVE_GETIPINFO
-#if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1050
-#define HAVE_GETIPINFO 1
-#endif
-#endif
 
 #ifdef __USING_SJLJ_EXCEPTIONS__
 
@@ -1014,9 +1028,9 @@ extern void __gnat_notify_unhandled_exception (void);
    GNU-Ada exceptions are met.  */
 
 #ifdef __USING_SJLJ_EXCEPTIONS__
-#define PERSONALITY_FUNCTION    __gnat_eh_personality_sj
+#define PERSONALITY_FUNCTION    __gnat_personality_sj0
 #else
-#define PERSONALITY_FUNCTION    __gnat_eh_personality
+#define PERSONALITY_FUNCTION    __gnat_personality_v0
 #endif
 
 /* Major tweak for ia64-vms : the CHF propagation phase calls this personality

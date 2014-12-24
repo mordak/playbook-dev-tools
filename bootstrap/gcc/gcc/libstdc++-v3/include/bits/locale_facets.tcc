@@ -1,7 +1,7 @@
 // Locale support -*- C++ -*-
 
 // Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-// 2006, 2007, 2008, 2009
+// 2006, 2007, 2008, 2009, 2010, 2011
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -24,9 +24,9 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file locale_facets.tcc
+/** @file bits/locale_facets.tcc
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{locale}
  */
 
 #ifndef _LOCALE_FACETS_TCC
@@ -34,7 +34,9 @@
 
 #pragma GCC system_header
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   // Routine to access a cache for the facet.  If the cache didn't
   // exist before, it gets constructed on the fly.
@@ -56,7 +58,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	const locale::facet** __caches = __loc._M_impl->_M_caches;
 	if (!__caches[__i])
 	  {
-	    __numpunct_cache<_CharT>* __tmp = NULL;
+	    __numpunct_cache<_CharT>* __tmp = 0;
 	    __try
 	      {
 		__tmp = new __numpunct_cache<_CharT>;
@@ -81,33 +83,48 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
       const numpunct<_CharT>& __np = use_facet<numpunct<_CharT> >(__loc);
 
-      _M_grouping_size = __np.grouping().size();
-      char* __grouping = new char[_M_grouping_size];
-      __np.grouping().copy(__grouping, _M_grouping_size);
-      _M_grouping = __grouping;
-      _M_use_grouping = (_M_grouping_size
-			 && static_cast<signed char>(_M_grouping[0]) > 0
-			 && (_M_grouping[0]
-			     != __gnu_cxx::__numeric_traits<char>::__max));
+      char* __grouping = 0;
+      _CharT* __truename = 0;
+      _CharT* __falsename = 0;
+      __try
+	{
+	  _M_grouping_size = __np.grouping().size();
+	  __grouping = new char[_M_grouping_size];
+	  __np.grouping().copy(__grouping, _M_grouping_size);
+	  _M_grouping = __grouping;
+	  _M_use_grouping = (_M_grouping_size
+			     && static_cast<signed char>(_M_grouping[0]) > 0
+			     && (_M_grouping[0]
+				 != __gnu_cxx::__numeric_traits<char>::__max));
 
-      _M_truename_size = __np.truename().size();
-      _CharT* __truename = new _CharT[_M_truename_size];
-      __np.truename().copy(__truename, _M_truename_size);
-      _M_truename = __truename;
+	  _M_truename_size = __np.truename().size();
+	  __truename = new _CharT[_M_truename_size];
+	  __np.truename().copy(__truename, _M_truename_size);
+	  _M_truename = __truename;
 
-      _M_falsename_size = __np.falsename().size();
-      _CharT* __falsename = new _CharT[_M_falsename_size];
-      __np.falsename().copy(__falsename, _M_falsename_size);
-      _M_falsename = __falsename;
+	  _M_falsename_size = __np.falsename().size();
+	  __falsename = new _CharT[_M_falsename_size];
+	  __np.falsename().copy(__falsename, _M_falsename_size);
+	  _M_falsename = __falsename;
 
-      _M_decimal_point = __np.decimal_point();
-      _M_thousands_sep = __np.thousands_sep();
+	  _M_decimal_point = __np.decimal_point();
+	  _M_thousands_sep = __np.thousands_sep();
 
-      const ctype<_CharT>& __ct = use_facet<ctype<_CharT> >(__loc);
-      __ct.widen(__num_base::_S_atoms_out,
-		 __num_base::_S_atoms_out + __num_base::_S_oend, _M_atoms_out);
-      __ct.widen(__num_base::_S_atoms_in,
-		 __num_base::_S_atoms_in + __num_base::_S_iend, _M_atoms_in);
+	  const ctype<_CharT>& __ct = use_facet<ctype<_CharT> >(__loc);
+	  __ct.widen(__num_base::_S_atoms_out,
+		     __num_base::_S_atoms_out
+		     + __num_base::_S_oend, _M_atoms_out);
+	  __ct.widen(__num_base::_S_atoms_in,
+		     __num_base::_S_atoms_in
+		     + __num_base::_S_iend, _M_atoms_in);
+	}
+      __catch(...)
+	{
+	  delete [] __grouping;
+	  delete [] __truename;
+	  delete [] __falsename;
+	  __throw_exception_again;
+	}
     }
 
   // Used by both numeric and monetary facets.
@@ -118,11 +135,11 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   // 1,222,444 == __grouping_tmp of "\1\3\3"
   // __grouping is parsed R to L
   // 1,222,444 == __grouping of "\3" == "\3\3\3"
-  bool
+  _GLIBCXX_PURE bool
   __verify_grouping(const char* __grouping, size_t __grouping_size,
-		    const string& __grouping_tmp);
+		    const string& __grouping_tmp) throw ();
 
-_GLIBCXX_BEGIN_LDBL_NAMESPACE
+_GLIBCXX_BEGIN_NAMESPACE_LDBL
 
   template<typename _CharT, typename _InIter>
     _InIter
@@ -767,7 +784,7 @@ _GLIBCXX_BEGIN_LDBL_NAMESPACE
       __len = static_cast<int>(__w);
     }
 
-_GLIBCXX_END_LDBL_NAMESPACE
+_GLIBCXX_END_NAMESPACE_LDBL
 
   template<typename _CharT, typename _ValueT>
     int
@@ -811,7 +828,7 @@ _GLIBCXX_END_LDBL_NAMESPACE
       return __bufend - __buf;
     }
 
-_GLIBCXX_BEGIN_LDBL_NAMESPACE
+_GLIBCXX_BEGIN_NAMESPACE_LDBL
 
   template<typename _CharT, typename _OutIter>
     void
@@ -1162,7 +1179,7 @@ _GLIBCXX_BEGIN_LDBL_NAMESPACE
       return __s;
     }
 
-_GLIBCXX_END_LDBL_NAMESPACE
+_GLIBCXX_END_NAMESPACE_LDBL
 
   // Construct correctly padded string, as per 22.2.2.2.2
   // Assumes
@@ -1259,12 +1276,11 @@ _GLIBCXX_END_LDBL_NAMESPACE
 
   // Inhibit implicit instantiations for required instantiations,
   // which are defined via explicit instantiations elsewhere.
-  // NB: This syntax is a GNU extension.
 #if _GLIBCXX_EXTERN_TEMPLATE
   extern template class numpunct<char>;
   extern template class numpunct_byname<char>;
-  extern template class _GLIBCXX_LDBL_NAMESPACE num_get<char>;
-  extern template class _GLIBCXX_LDBL_NAMESPACE num_put<char>;
+  extern template class _GLIBCXX_NAMESPACE_LDBL num_get<char>;
+  extern template class _GLIBCXX_NAMESPACE_LDBL num_put<char>;
   extern template class ctype_byname<char>;
 
   extern template
@@ -1302,8 +1318,8 @@ _GLIBCXX_END_LDBL_NAMESPACE
 #ifdef _GLIBCXX_USE_WCHAR_T
   extern template class numpunct<wchar_t>;
   extern template class numpunct_byname<wchar_t>;
-  extern template class _GLIBCXX_LDBL_NAMESPACE num_get<wchar_t>;
-  extern template class _GLIBCXX_LDBL_NAMESPACE num_put<wchar_t>;
+  extern template class _GLIBCXX_NAMESPACE_LDBL num_get<wchar_t>;
+  extern template class _GLIBCXX_NAMESPACE_LDBL num_put<wchar_t>;
   extern template class ctype_byname<wchar_t>;
 
   extern template
@@ -1340,6 +1356,7 @@ _GLIBCXX_END_LDBL_NAMESPACE
 #endif
 #endif
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif

@@ -1,6 +1,6 @@
 // dwarf_reader.h -- parse dwarf2/3 debug information for gold  -*- C++ -*-
 
-// Copyright 2007, 2008 Free Software Foundation, Inc.
+// Copyright 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -25,6 +25,7 @@
 
 #include <vector>
 #include <map>
+#include <limits.h>
 
 #include "elfcpp.h"
 #include "elfcpp_swap.h"
@@ -38,23 +39,31 @@ template<int size, bool big_endian>
 class Track_relocs;
 struct LineStateMachine;
 
-uint64_t
-read_unsigned_LEB_128(const unsigned char* buffer, size_t* len);
-
-int64_t
-read_signed_LEB_128(const unsigned char* buffer, size_t* len);
-
 // We can't do better than to keep the offsets in a sorted vector.
 // Here, offset is the key, and file_num/line_num is the value.
 struct Offset_to_lineno_entry
 {
   off_t offset;
   int header_num;  // which file-list to use (i.e. which .o file are we in)
-  int file_num;    // a pointer into files_
-  int line_num;    // the line number in the source file
-  // Offsets are unique within a section, so that's a sufficient sort key.
+  // A pointer into files_.
+  unsigned int file_num : sizeof(int) * CHAR_BIT - 1;
+  // True if this was the last entry for the current offset, meaning
+  // it's the line that actually applies.
+  unsigned int last_line_for_offset : 1;
+  // The line number in the source file.  -1 to indicate end-of-function.
+  int line_num;
+
+  // This sorts by offsets first, and then puts the correct line to
+  // report for a given offset at the beginning of the run of equal
+  // offsets (so that asking for 1 line gives the best answer).  This
+  // is not a total ordering.
   bool operator<(const Offset_to_lineno_entry& that) const
-  { return this->offset < that.offset; }
+  {
+    if (this->offset != that.offset)
+      return this->offset < that.offset;
+    // Note the '>' which makes this sort 'true' first.
+    return this->last_line_for_offset > that.last_line_for_offset;
+  }
 };
 
 // This class is used to read the line information from the debugging
@@ -73,10 +82,13 @@ class Dwarf_line_info
   // Given a section number and an offset, returns the associated
   // file and line-number, as a string: "file:lineno".  If unable
   // to do the mapping, returns the empty string.  You must call
-  // read_line_mappings() before calling this function.
+  // read_line_mappings() before calling this function.  If
+  // 'other_lines' is non-NULL, fills that in with other line
+  // numbers assigned to the same offset.
   std::string
-  addr2line(unsigned int shndx, off_t offset)
-  { return do_addr2line(shndx, offset); }
+  addr2line(unsigned int shndx, off_t offset,
+            std::vector<std::string>* other_lines)
+  { return this->do_addr2line(shndx, offset, other_lines); }
 
   // A helper function for a single addr2line lookup.  It also keeps a
   // cache of the last CACHE_SIZE Dwarf_line_info objects it created;
@@ -86,7 +98,7 @@ class Dwarf_line_info
   // NOTE: Not thread-safe, so only call from one thread at a time.
   static std::string
   one_addr2line(Object* object, unsigned int shndx, off_t offset,
-                size_t cache_size);
+                size_t cache_size, std::vector<std::string>* other_lines);
 
   // This reclaims all the memory that one_addr2line may have cached.
   // Use this when you know you will not be calling one_addr2line again.
@@ -95,7 +107,8 @@ class Dwarf_line_info
 
  private:
   virtual std::string
-  do_addr2line(unsigned int shndx, off_t offset) = 0;
+  do_addr2line(unsigned int shndx, off_t offset,
+               std::vector<std::string>* other_lines) = 0;
 };
 
 template<int size, bool big_endian>
@@ -105,17 +118,22 @@ class Sized_dwarf_line_info : public Dwarf_line_info
   // Initializes a .debug_line reader for a given object file.
   // If SHNDX is specified and non-negative, only read the debug
   // information that pertains to the specified section.
-  Sized_dwarf_line_info(Object* object, off_t read_shndx = -1U);
+  Sized_dwarf_line_info(Object* object, unsigned int read_shndx = -1U);
 
  private:
   std::string
-  do_addr2line(unsigned int shndx, off_t offset);
+  do_addr2line(unsigned int shndx, off_t offset,
+               std::vector<std::string>* other_lines);
+
+  // Formats a file and line number to a string like "dirname/filename:lineno".
+  std::string
+  format_file_lineno(const Offset_to_lineno_entry& lineno) const;
 
   // Start processing line info, and populates the offset_map_.
   // If SHNDX is non-negative, only store debug information that
   // pertains to the specified section.
   void
-  read_line_mappings(Object*, off_t shndx);
+  read_line_mappings(Object*, unsigned int shndx);
 
   // Reads the relocation section associated with .debug_line and
   // stores relocation information in reloc_map_.
@@ -140,7 +158,7 @@ class Sized_dwarf_line_info : public Dwarf_line_info
   // discard all line information that doesn't pertain to the given
   // section.
   const unsigned char*
-  read_lines(const unsigned char* lineptr, off_t shndx);
+  read_lines(const unsigned char* lineptr, unsigned int shndx);
 
   // Process a single line info opcode at START using the state
   // machine at LSM.  Return true if we should define a line using the
@@ -184,6 +202,8 @@ class Sized_dwarf_line_info : public Dwarf_line_info
 
   // This has relocations that point into buffer.
   Track_relocs<size, big_endian> track_relocs_;
+  // The type of the reloc section in track_relocs_--SHT_REL or SHT_RELA.
+  unsigned int track_relocs_type_;
 
   // This is used to figure out what section to apply a relocation to.
   const unsigned char* symtab_buffer_;

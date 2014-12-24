@@ -1,7 +1,7 @@
 // -*- C++ -*- forwarding header.
 
 // Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-// 2009  Free Software Foundation, Inc.
+// 2009, 2010  Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -25,7 +25,7 @@
 
 /** @file include/cstdlib
  *  This is a Standard C++ Library file.  You should @c #include this file
- *  in your programs, rather than any of the "*.h" implementation files.
+ *  in your programs, rather than any of the @a *.h implementation files.
  *
  *  This is the C++ version of the Standard C Library header @c stdlib.h,
  *  and its contents are (mostly) the same as that header, but are all
@@ -43,7 +43,6 @@
 #pragma GCC system_header
 
 #include <bits/c++config.h>
-#include <cstddef>
 
 #if !_GLIBCXX_HOSTED
 // The C standard does not require a freestanding implementation to
@@ -54,13 +53,12 @@
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
-
-  extern "C" void abort(void);
-  extern "C" int atexit(void (*)());
-  extern "C" void exit(int);
-
-_GLIBCXX_END_NAMESPACE
+namespace std
+{
+  extern "C" void abort(void) throw () _GLIBCXX_NORETURN;
+  extern "C" int atexit(void (*)()) throw ();
+  extern "C" void exit(int) throw () _GLIBCXX_NORETURN;
+} // namespace
 
 #else
 
@@ -96,7 +94,9 @@ _GLIBCXX_END_NAMESPACE
 #undef wcstombs
 #undef wctomb
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   using ::div_t;
   using ::ldiv_t;
@@ -140,7 +140,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   inline ldiv_t
   div(long __i, long __j) { return ldiv(__i, __j); }
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #if _GLIBCXX_USE_C99
 
@@ -153,13 +154,15 @@ _GLIBCXX_END_NAMESPACE
 #undef strtof
 #undef strtold
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
 #if !_GLIBCXX_USE_C99_LONG_LONG_DYNAMIC
   using ::lldiv_t;
 #endif
 #if _GLIBCXX_USE_C99_CHECK || _GLIBCXX_USE_C99_DYNAMIC
-  extern "C" void (_Exit)(int);
+  extern "C" void (_Exit)(int) throw () _GLIBCXX_NORETURN;
 #endif
 #if !_GLIBCXX_USE_C99_DYNAMIC
   using ::_Exit;
@@ -179,11 +182,11 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 #endif
 
 #if _GLIBCXX_USE_C99_LONG_LONG_CHECK || _GLIBCXX_USE_C99_LONG_LONG_DYNAMIC
-  extern "C" long long int (atoll)(const char *);
+  extern "C" long long int (atoll)(const char *) throw ();
   extern "C" long long int
-    (strtoll)(const char * restrict, char ** restrict, int);
+    (strtoll)(const char * __restrict, char ** __restrict, int) throw ();
   extern "C" unsigned long long int
-    (strtoull)(const char * restrict, char ** restrict, int);
+    (strtoull)(const char * __restrict, char ** __restrict, int) throw ();
 #endif
 #if !_GLIBCXX_USE_C99_LONG_LONG_DYNAMIC
   using ::atoll;
@@ -193,10 +196,11 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
   using ::strtof;
   using ::strtold;
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace __gnu_cxx
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
-
+namespace std
+{
 #if !_GLIBCXX_USE_C99_LONG_LONG_DYNAMIC
   using ::__gnu_cxx::lldiv_t;
 #endif
@@ -212,8 +216,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   using ::__gnu_cxx::strtoll;
   using ::__gnu_cxx::strtoull;
   using ::__gnu_cxx::strtold;
-
-_GLIBCXX_END_NAMESPACE
+} // namespace std
 
 #endif // _GLIBCXX_USE_C99
 

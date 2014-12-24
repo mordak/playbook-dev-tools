@@ -1,5 +1,6 @@
 /* Generic helper function for repacking arrays.
-   Copyright 2003, 2004, 2005, 2007, 2009  Free Software Foundation, Inc.
+   Copyright 2003, 2004, 2005, 2007, 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -48,12 +49,6 @@ internal_pack (gfc_array_char * source)
   index_type size;
   index_type type_size;
 
-  if (source->dim[0].stride == 0)
-    {
-      source->dim[0].stride = 1;
-      return source->data;
-    }
-
   type_size = GFC_DTYPE_TYPE_SIZE(source);
   size = GFC_DESCRIPTOR_SIZE (source);
   switch (type_size)
@@ -86,29 +81,46 @@ internal_pack (gfc_array_char * source)
     case GFC_DTYPE_REAL_8:
       return internal_pack_r8 ((gfc_array_r8 *) source);
 
-#if defined (HAVE_GFC_REAL_10)
+/* FIXME: This here is a hack, which will have to be removed when
+   the array descriptor is reworked.  Currently, we don't store the
+   kind value for the type, but only the size.  Because on targets with
+   __float128, we have sizeof(logn double) == sizeof(__float128),
+   we cannot discriminate here and have to fall back to the generic
+   handling (which is suboptimal).  */
+#if !defined(GFC_REAL_16_IS_FLOAT128)
+# if defined (HAVE_GFC_REAL_10)
     case GFC_DTYPE_REAL_10:
       return internal_pack_r10 ((gfc_array_r10 *) source);
-#endif
+# endif
 
-#if defined (HAVE_GFC_REAL_16)
+# if defined (HAVE_GFC_REAL_16)
     case GFC_DTYPE_REAL_16:
       return internal_pack_r16 ((gfc_array_r16 *) source);
+# endif
 #endif
+
     case GFC_DTYPE_COMPLEX_4:
       return internal_pack_c4 ((gfc_array_c4 *) source);
 	
     case GFC_DTYPE_COMPLEX_8:
       return internal_pack_c8 ((gfc_array_c8 *) source);
 
-#if defined (HAVE_GFC_COMPLEX_10)
+/* FIXME: This here is a hack, which will have to be removed when
+   the array descriptor is reworked.  Currently, we don't store the
+   kind value for the type, but only the size.  Because on targets with
+   __float128, we have sizeof(logn double) == sizeof(__float128),
+   we cannot discriminate here and have to fall back to the generic
+   handling (which is suboptimal).  */
+#if !defined(GFC_REAL_16_IS_FLOAT128)
+# if defined (HAVE_GFC_COMPLEX_10)
     case GFC_DTYPE_COMPLEX_10:
       return internal_pack_c10 ((gfc_array_c10 *) source);
-#endif
+# endif
 
-#if defined (HAVE_GFC_COMPLEX_16)
+# if defined (HAVE_GFC_COMPLEX_16)
     case GFC_DTYPE_COMPLEX_16:
       return internal_pack_c16 ((gfc_array_c16 *) source);
+# endif
 #endif
 
     case GFC_DTYPE_DERIVED_2:
@@ -147,8 +159,8 @@ internal_pack (gfc_array_char * source)
   for (n = 0; n < dim; n++)
     {
       count[n] = 0;
-      stride[n] = source->dim[n].stride;
-      extent[n] = source->dim[n].ubound + 1 - source->dim[n].lbound;
+      stride[n] = GFC_DESCRIPTOR_STRIDE(source,n);
+      extent[n] = GFC_DESCRIPTOR_EXTENT(source,n);
       if (extent[n] <= 0)
         {
           /* Do nothing.  */

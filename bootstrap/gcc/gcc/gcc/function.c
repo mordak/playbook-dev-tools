@@ -1,7 +1,7 @@
 /* Expands front end tree to back end RTL for GCC.
    Copyright (C) 1987, 1988, 1989, 1991, 1992, 1993, 1994, 1995, 1996, 1997,
-   1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
-   Free Software Foundation, Inc.
+   1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
+   2010, 2011, 2012 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -37,7 +37,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "system.h"
 #include "coretypes.h"
 #include "tm.h"
-#include "rtl.h"
+#include "rtl-error.h"
 #include "tree.h"
 #include "flags.h"
 #include "except.h"
@@ -51,7 +51,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "recog.h"
 #include "output.h"
 #include "basic-block.h"
-#include "toplev.h"
 #include "hashtab.h"
 #include "ggc.h"
 #include "tm_p.h"
@@ -124,17 +123,15 @@ struct machine_function * (*init_machine_status) (void);
 /* The currently compiled function.  */
 struct function *cfun = 0;
 
-/* These arrays record the INSN_UIDs of the prologue and epilogue insns.  */
-static VEC(int,heap) *prologue;
-static VEC(int,heap) *epilogue;
-
-/* Array of INSN_UIDs to hold the INSN_UIDs for each sibcall epilogue
-   in this function.  */
-static VEC(int,heap) *sibcall_epilogue;
+/* These hashes record the prologue and epilogue insns.  */
+static GTY((if_marked ("ggc_marked_p"), param_is (struct rtx_def)))
+  htab_t prologue_insn_hash;
+static GTY((if_marked ("ggc_marked_p"), param_is (struct rtx_def)))
+  htab_t epilogue_insn_hash;
 
 
 htab_t types_used_by_vars_hash = NULL;
-tree types_used_by_cur_var_decl = NULL;
+VEC(tree,gc) *types_used_by_cur_var_decl;
 
 /* Forward declarations.  */
 
@@ -147,8 +144,8 @@ static tree *get_block_vector (tree, int *);
 extern tree debug_find_var_in_block_tree (tree, tree);
 /* We always define `record_insns' even if it's not used so that we
    can always export `prologue_epilogue_contains'.  */
-static void record_insns (rtx, VEC(int,heap) **) ATTRIBUTE_UNUSED;
-static int contains (const_rtx, VEC(int,heap) **);
+static void record_insns (rtx, rtx, htab_t *) ATTRIBUTE_UNUSED;
+static bool contains (const_rtx, htab_t);
 #ifdef HAVE_return
 static void emit_return_into_block (basic_block);
 #endif
@@ -211,9 +208,9 @@ free_after_parsing (struct function *f)
 void
 free_after_compilation (struct function *f)
 {
-  VEC_free (int, heap, prologue);
-  VEC_free (int, heap, epilogue);
-  VEC_free (int, heap, sibcall_epilogue);
+  prologue_insn_hash = NULL;
+  epilogue_insn_hash = NULL;
+
   if (crtl->emit.regno_pointer_align)
     free (crtl->emit.regno_pointer_align);
 
@@ -245,14 +242,15 @@ get_frame_size (void)
 
 bool
 frame_offset_overflow (HOST_WIDE_INT offset, tree func)
-{  
+{
   unsigned HOST_WIDE_INT size = FRAME_GROWS_DOWNWARD ? -offset : offset;
 
   if (size > ((unsigned HOST_WIDE_INT) 1 << (GET_MODE_BITSIZE (Pmode) - 1))
 	       /* Leave room for the fixed part of the frame.  */
 	       - 64 * UNITS_PER_WORD)
     {
-      error ("%Jtotal size of local objects too large", func);
+      error_at (DECL_SOURCE_LOCATION (func),
+		"total size of local objects too large");
       return TRUE;
     }
 
@@ -279,6 +277,75 @@ get_stack_local_alignment (tree type, enum machine_mode mode)
   return STACK_SLOT_ALIGNMENT (type, mode, alignment);
 }
 
+/* Determine whether it is possible to fit a stack slot of size SIZE and
+   alignment ALIGNMENT into an area in the stack frame that starts at
+   frame offset START and has a length of LENGTH.  If so, store the frame
+   offset to be used for the stack slot in *POFFSET and return true;
+   return false otherwise.  This function will extend the frame size when
+   given a start/length pair that lies at the end of the frame.  */
+
+static bool
+try_fit_stack_local (HOST_WIDE_INT start, HOST_WIDE_INT length,
+		     HOST_WIDE_INT size, unsigned int alignment,
+		     HOST_WIDE_INT *poffset)
+{
+  HOST_WIDE_INT this_frame_offset;
+  int frame_off, frame_alignment, frame_phase;
+
+  /* Calculate how many bytes the start of local variables is off from
+     stack alignment.  */
+  frame_alignment = PREFERRED_STACK_BOUNDARY / BITS_PER_UNIT;
+  frame_off = STARTING_FRAME_OFFSET % frame_alignment;
+  frame_phase = frame_off ? frame_alignment - frame_off : 0;
+
+  /* Round the frame offset to the specified alignment.  */
+
+  /*  We must be careful here, since FRAME_OFFSET might be negative and
+      division with a negative dividend isn't as well defined as we might
+      like.  So we instead assume that ALIGNMENT is a power of two and
+      use logical operations which are unambiguous.  */
+  if (FRAME_GROWS_DOWNWARD)
+    this_frame_offset
+      = (FLOOR_ROUND (start + length - size - frame_phase,
+		      (unsigned HOST_WIDE_INT) alignment)
+	 + frame_phase);
+  else
+    this_frame_offset
+      = (CEIL_ROUND (start - frame_phase,
+		     (unsigned HOST_WIDE_INT) alignment)
+	 + frame_phase);
+
+  /* See if it fits.  If this space is at the edge of the frame,
+     consider extending the frame to make it fit.  Our caller relies on
+     this when allocating a new slot.  */
+  if (frame_offset == start && this_frame_offset < frame_offset)
+    frame_offset = this_frame_offset;
+  else if (this_frame_offset < start)
+    return false;
+  else if (start + length == frame_offset
+	   && this_frame_offset + size > start + length)
+    frame_offset = this_frame_offset + size;
+  else if (this_frame_offset + size > start + length)
+    return false;
+
+  *poffset = this_frame_offset;
+  return true;
+}
+
+/* Create a new frame_space structure describing free space in the stack
+   frame beginning at START and ending at END, and chain it into the
+   function's frame_space_list.  */
+
+static void
+add_frame_space (HOST_WIDE_INT start, HOST_WIDE_INT end)
+{
+  struct frame_space *space = ggc_alloc_frame_space ();
+  space->next = crtl->frame_space_list;
+  crtl->frame_space_list = space;
+  space->start = start;
+  space->length = end - start;
+}
+
 /* Allocate a stack slot of SIZE bytes and return a MEM rtx for it
    with machine mode MODE.
 
@@ -288,19 +355,22 @@ get_stack_local_alignment (tree type, enum machine_mode mode)
    -2 means use BITS_PER_UNIT,
    positive specifies alignment boundary in bits.
 
-   If REDUCE_ALIGNMENT_OK is true, it is OK to reduce alignment.
+   KIND has ASLK_REDUCE_ALIGN bit set if it is OK to reduce
+   alignment and ASLK_RECORD_PAD bit set if we should remember
+   extra space we allocated for alignment purposes.  When we are
+   called from assign_stack_temp_for_type, it is not set so we don't
+   track the same stack slot in two independent lists.
 
    We do not round to stack_boundary here.  */
 
 rtx
 assign_stack_local_1 (enum machine_mode mode, HOST_WIDE_INT size,
-		      int align,
-		      bool reduce_alignment_ok ATTRIBUTE_UNUSED)
+		      int align, int kind)
 {
   rtx x, addr;
   int bigend_correction = 0;
+  HOST_WIDE_INT slot_offset = 0, old_frame_offset;
   unsigned int alignment, alignment_in_bits;
-  int frame_off, frame_alignment, frame_phase;
 
   if (align == 0)
     {
@@ -318,9 +388,6 @@ assign_stack_local_1 (enum machine_mode mode, HOST_WIDE_INT size,
     alignment = align / BITS_PER_UNIT;
 
   alignment_in_bits = alignment * BITS_PER_UNIT;
-
-  if (FRAME_GROWS_DOWNWARD)
-    frame_offset -= size;
 
   /* Ignore alignment if it exceeds MAX_SUPPORTED_STACK_ALIGNMENT.  */
   if (alignment_in_bits > MAX_SUPPORTED_STACK_ALIGNMENT)
@@ -348,7 +415,7 @@ assign_stack_local_1 (enum machine_mode mode, HOST_WIDE_INT size,
 		  /* It is OK to reduce the alignment as long as the
 		     requested size is 0 or the estimated stack
 		     alignment >= mode alignment.  */
-		  gcc_assert (reduce_alignment_ok
+		  gcc_assert ((kind & ASLK_REDUCE_ALIGN)
 		              || size == 0
 			      || (crtl->stack_alignment_estimated
 				  >= GET_MODE_ALIGNMENT (mode)));
@@ -361,38 +428,67 @@ assign_stack_local_1 (enum machine_mode mode, HOST_WIDE_INT size,
 
   if (crtl->stack_alignment_needed < alignment_in_bits)
     crtl->stack_alignment_needed = alignment_in_bits;
-  if (crtl->max_used_stack_slot_alignment < crtl->stack_alignment_needed)
-    crtl->max_used_stack_slot_alignment = crtl->stack_alignment_needed;
+  if (crtl->max_used_stack_slot_alignment < alignment_in_bits)
+    crtl->max_used_stack_slot_alignment = alignment_in_bits;
 
-  /* Calculate how many bytes the start of local variables is off from
-     stack alignment.  */
-  frame_alignment = PREFERRED_STACK_BOUNDARY / BITS_PER_UNIT;
-  frame_off = STARTING_FRAME_OFFSET % frame_alignment;
-  frame_phase = frame_off ? frame_alignment - frame_off : 0;
-
-  /* Round the frame offset to the specified alignment.  The default is
-     to always honor requests to align the stack but a port may choose to
-     do its own stack alignment by defining STACK_ALIGNMENT_NEEDED.  */
-  if (STACK_ALIGNMENT_NEEDED
-      || mode != BLKmode
-      || size != 0)
+  if (mode != BLKmode || size != 0)
     {
-      /*  We must be careful here, since FRAME_OFFSET might be negative and
-	  division with a negative dividend isn't as well defined as we might
-	  like.  So we instead assume that ALIGNMENT is a power of two and
-	  use logical operations which are unambiguous.  */
-      if (FRAME_GROWS_DOWNWARD)
-	frame_offset
-	  = (FLOOR_ROUND (frame_offset - frame_phase,
-			  (unsigned HOST_WIDE_INT) alignment)
-	     + frame_phase);
-      else
-	frame_offset
-	  = (CEIL_ROUND (frame_offset - frame_phase,
-			 (unsigned HOST_WIDE_INT) alignment)
-	     + frame_phase);
+      if (kind & ASLK_RECORD_PAD)
+	{
+	  struct frame_space **psp;
+
+	  for (psp = &crtl->frame_space_list; *psp; psp = &(*psp)->next)
+	    {
+	      struct frame_space *space = *psp;
+	      if (!try_fit_stack_local (space->start, space->length, size,
+					alignment, &slot_offset))
+		continue;
+	      *psp = space->next;
+	      if (slot_offset > space->start)
+		add_frame_space (space->start, slot_offset);
+	      if (slot_offset + size < space->start + space->length)
+		add_frame_space (slot_offset + size,
+				 space->start + space->length);
+	      goto found_space;
+	    }
+	}
+    }
+  else if (!STACK_ALIGNMENT_NEEDED)
+    {
+      slot_offset = frame_offset;
+      goto found_space;
     }
 
+  old_frame_offset = frame_offset;
+
+  if (FRAME_GROWS_DOWNWARD)
+    {
+      frame_offset -= size;
+      try_fit_stack_local (frame_offset, size, size, alignment, &slot_offset);
+
+      if (kind & ASLK_RECORD_PAD)
+	{
+	  if (slot_offset > frame_offset)
+	    add_frame_space (frame_offset, slot_offset);
+	  if (slot_offset + size < old_frame_offset)
+	    add_frame_space (slot_offset + size, old_frame_offset);
+	}
+    }
+  else
+    {
+      frame_offset += size;
+      try_fit_stack_local (old_frame_offset, size, size, alignment, &slot_offset);
+
+      if (kind & ASLK_RECORD_PAD)
+	{
+	  if (slot_offset > old_frame_offset)
+	    add_frame_space (old_frame_offset, slot_offset);
+	  if (slot_offset + size < frame_offset)
+	    add_frame_space (slot_offset + size, frame_offset);
+	}
+    }
+
+ found_space:
   /* On a big-endian machine, if we are allocating more space than we will use,
      use the least significant bytes of those that are allocated.  */
   if (BYTES_BIG_ENDIAN && mode != BLKmode && GET_MODE_SIZE (mode) < size)
@@ -403,16 +499,13 @@ assign_stack_local_1 (enum machine_mode mode, HOST_WIDE_INT size,
   if (virtuals_instantiated)
     addr = plus_constant (frame_pointer_rtx,
 			  trunc_int_for_mode
-			  (frame_offset + bigend_correction
+			  (slot_offset + bigend_correction
 			   + STARTING_FRAME_OFFSET, Pmode));
   else
     addr = plus_constant (virtual_stack_vars_rtx,
 			  trunc_int_for_mode
-			  (frame_offset + bigend_correction,
+			  (slot_offset + bigend_correction,
 			   Pmode));
-
-  if (!FRAME_GROWS_DOWNWARD)
-    frame_offset += size;
 
   x = gen_rtx_MEM (mode, addr);
   set_mem_align (x, alignment_in_bits);
@@ -432,7 +525,7 @@ assign_stack_local_1 (enum machine_mode mode, HOST_WIDE_INT size,
 rtx
 assign_stack_local (enum machine_mode mode, HOST_WIDE_INT size, int align)
 {
-  return assign_stack_local_1 (mode, size, align, false);
+  return assign_stack_local_1 (mode, size, align, ASLK_RECORD_PAD);
 }
 
 
@@ -454,8 +547,7 @@ assign_stack_local (enum machine_mode mode, HOST_WIDE_INT size, int align)
    level where they are defined.  They are marked a "kept" so that
    free_temp_slots will not free them.  */
 
-struct temp_slot GTY(())
-{
+struct GTY(()) temp_slot {
   /* Points to next temporary slot.  */
   struct temp_slot *next;
   /* Points to previous temporary slot.  */
@@ -492,8 +584,7 @@ struct temp_slot GTY(())
 static GTY((param_is(struct temp_slot_address_entry))) htab_t temp_slot_address_table;
 
 /* Entry for the above hash table.  */
-struct temp_slot_address_entry GTY(())
-{
+struct GTY(()) temp_slot_address_entry {
   hashval_t hash;
   rtx address;
   struct temp_slot *temp_slot;
@@ -603,7 +694,7 @@ static void
 insert_temp_slot_address (rtx address, struct temp_slot *temp_slot)
 {
   void **slot;
-  struct temp_slot_address_entry *t = GGC_NEW (struct temp_slot_address_entry);
+  struct temp_slot_address_entry *t = ggc_alloc_temp_slot_address_entry ();
   t->address = address;
   t->temp_slot = temp_slot;
   t->hash = temp_slot_address_compute_hash (t);
@@ -662,7 +753,7 @@ find_temp_slot_from_address (rtx x)
   /* Last resort: Address is a virtual stack var address.  */
   if (GET_CODE (x) == PLUS
       && XEXP (x, 0) == virtual_stack_vars_rtx
-      && GET_CODE (XEXP (x, 1)) == CONST_INT)
+      && CONST_INT_P (XEXP (x, 1)))
     {
       int i;
       for (i = max_slot_level (); i >= 0; i--)
@@ -713,7 +804,7 @@ assign_stack_temp_for_type (enum machine_mode mode, HOST_WIDE_INT size,
   /* Try to find an available, already-allocated temporary of the proper
      mode which meets the size and alignment requirements.  Choose the
      smallest one with the closest alignment.
-   
+
      If assign_stack_temp is called outside of the tree->rtl expansion,
      we cannot reuse the stack slots (that may still refer to
      VIRTUAL_STACK_VARS_REGNUM).  */
@@ -755,7 +846,7 @@ assign_stack_temp_for_type (enum machine_mode mode, HOST_WIDE_INT size,
 
 	  if (best_p->size - rounded_size >= alignment)
 	    {
-	      p = GGC_NEW (struct temp_slot);
+	      p = ggc_alloc_temp_slot ();
 	      p->in_use = p->addr_taken = 0;
 	      p->size = best_p->size - rounded_size;
 	      p->base_offset = best_p->base_offset + rounded_size;
@@ -779,7 +870,7 @@ assign_stack_temp_for_type (enum machine_mode mode, HOST_WIDE_INT size,
     {
       HOST_WIDE_INT frame_offset_old = frame_offset;
 
-      p = GGC_NEW (struct temp_slot);
+      p = ggc_alloc_temp_slot ();
 
       /* We are passing an explicit alignment request to assign_stack_local.
 	 One side effect of that is assign_stack_local will not round SIZE
@@ -789,11 +880,13 @@ assign_stack_temp_for_type (enum machine_mode mode, HOST_WIDE_INT size,
 	 and round it now.  We also make sure ALIGNMENT is at least
 	 BIGGEST_ALIGNMENT.  */
       gcc_assert (mode != BLKmode || align == BIGGEST_ALIGNMENT);
-      p->slot = assign_stack_local (mode,
-				    (mode == BLKmode
-				     ? CEIL_ROUND (size, (int) align / BITS_PER_UNIT)
-				     : size),
-				    align);
+      p->slot = assign_stack_local_1 (mode,
+				      (mode == BLKmode
+				       ? CEIL_ROUND (size,
+						     (int) align
+						     / BITS_PER_UNIT)
+				       : size),
+				      align, 0);
 
       p->align = align;
 
@@ -849,8 +942,11 @@ assign_stack_temp_for_type (enum machine_mode mode, HOST_WIDE_INT size,
   if (type != 0)
     {
       MEM_VOLATILE_P (slot) = TYPE_VOLATILE (type);
-      MEM_SET_IN_STRUCT_P (slot, (AGGREGATE_TYPE_P (type)
-				  || TREE_CODE (type) == COMPLEX_TYPE));
+      gcc_checking_assert (!MEM_SCALAR_P (slot) && !MEM_IN_STRUCT_P (slot));
+      if (AGGREGATE_TYPE_P (type) || TREE_CODE (type) == COMPLEX_TYPE)
+	MEM_IN_STRUCT_P (slot) = 1;
+      else
+	MEM_SCALAR_P (slot) = 1;
     }
   MEM_NOTRAP_P (slot) = 1;
 
@@ -929,7 +1025,7 @@ assign_temp (tree type_or_decl, int keep, int memory_required,
 
 #ifdef PROMOTE_MODE
   if (! dont_promote)
-    mode = promote_mode (type, mode, &unsignedp, 0);
+    mode = promote_mode (type, mode, &unsignedp);
 #endif
 
   return gen_reg_rtx (mode);
@@ -1167,17 +1263,24 @@ void
 free_temp_slots (void)
 {
   struct temp_slot *p, *next;
+  bool some_available = false;
 
   for (p = *temp_slots_at_level (temp_slot_level); p; p = next)
     {
       next = p->next;
 
       if (!p->keep)
-	make_slot_available (p);
+	{
+	  make_slot_available (p);
+	  some_available = true;
+	}
     }
 
-  remove_unused_temp_slot_addresses ();
-  combine_temp_slots ();
+  if (some_available)
+    {
+      remove_unused_temp_slot_addresses ();
+      combine_temp_slots ();
+    }
 }
 
 /* Push deeper into the nesting level for stack temporaries.  */
@@ -1195,15 +1298,20 @@ void
 pop_temp_slots (void)
 {
   struct temp_slot *p, *next;
+  bool some_available = false;
 
   for (p = *temp_slots_at_level (temp_slot_level); p; p = next)
     {
       next = p->next;
       make_slot_available (p);
+      some_available = true;
     }
 
-  remove_unused_temp_slot_addresses ();
-  combine_temp_slots ();
+  if (some_available)
+    {
+      remove_unused_temp_slot_addresses ();
+      combine_temp_slots ();
+    }
 
   temp_slot_level--;
 }
@@ -1313,6 +1421,11 @@ instantiate_new_reg (rtx x, HOST_WIDE_INT *poffset)
       new_rtx = arg_pointer_rtx;
 #endif
       offset = cfa_offset;
+    }
+  else if (x == virtual_preferred_stack_boundary_rtx)
+    {
+      new_rtx = GEN_INT (crtl->preferred_stack_boundary / BITS_PER_UNIT);
+      offset = 0;
     }
   else
     return NULL_RTX;
@@ -1465,7 +1578,7 @@ instantiate_virtual_regs_in_insn (rtx insn)
 	  && recog_data.n_operands >= 3
 	  && recog_data.operand_loc[1] == &XEXP (SET_SRC (set), 0)
 	  && recog_data.operand_loc[2] == &XEXP (SET_SRC (set), 1)
-	  && GET_CODE (recog_data.operand[2]) == CONST_INT
+	  && CONST_INT_P (recog_data.operand[2])
 	  && (new_rtx = instantiate_new_reg (recog_data.operand[1], &offset)))
 	{
 	  offset += INTVAL (recog_data.operand[2]);
@@ -1601,7 +1714,13 @@ instantiate_virtual_regs_in_insn (rtx insn)
       if (!safe_insn_predicate (insn_code, i, x))
 	{
 	  start_sequence ();
-	  x = force_reg (insn_data[insn_code].operand[i].mode, x);
+	  if (REG_P (x))
+	    {
+	      gcc_assert (REGNO (x) <= LAST_VIRTUAL_REGISTER);
+	      x = copy_to_reg (x);
+	    }
+	  else
+	    x = force_reg (insn_data[insn_code].operand[i].mode, x);
 	  seq = get_insns ();
 	  end_sequence ();
 	  if (seq)
@@ -1628,7 +1747,7 @@ instantiate_virtual_regs_in_insn (rtx insn)
       if (!check_asm_operands (PATTERN (insn)))
 	{
 	  error_for_asm (insn, "impossible constraint in %<asm%>");
-	  delete_insn (insn);
+	  delete_insn_and_edges (insn);
 	}
     }
   else
@@ -1682,8 +1801,21 @@ instantiate_expr (tree *tp, int *walk_subtrees, void *data ATTRIBUTE_UNUSED)
   if (! EXPR_P (t))
     {
       *walk_subtrees = 0;
-      if (DECL_P (t) && DECL_RTL_SET_P (t))
-	instantiate_decl_rtl (DECL_RTL (t));
+      if (DECL_P (t))
+	{
+	  if (DECL_RTL_SET_P (t))
+	    instantiate_decl_rtl (DECL_RTL (t));
+	  if (TREE_CODE (t) == PARM_DECL && DECL_NAMELESS (t)
+	      && DECL_INCOMING_RTL (t))
+	    instantiate_decl_rtl (DECL_INCOMING_RTL (t));
+	  if ((TREE_CODE (t) == VAR_DECL
+	       || TREE_CODE (t) == RESULT_DECL)
+	      && DECL_HAS_VALUE_EXPR_P (t))
+	    {
+	      tree v = DECL_VALUE_EXPR (t);
+	      walk_tree (&v, instantiate_expr, NULL, NULL);
+	    }
+	}
     }
   return NULL;
 }
@@ -1696,7 +1828,7 @@ instantiate_decls_1 (tree let)
 {
   tree t;
 
-  for (t = BLOCK_VARS (let); t; t = TREE_CHAIN (t))
+  for (t = BLOCK_VARS (let); t; t = DECL_CHAIN (t))
     {
       if (DECL_RTL_SET_P (t))
 	instantiate_decl_rtl (DECL_RTL (t));
@@ -1718,10 +1850,11 @@ instantiate_decls_1 (tree let)
 static void
 instantiate_decls (tree fndecl)
 {
-  tree decl, t, next;
+  tree decl;
+  unsigned ix;
 
   /* Process all parameters of the function.  */
-  for (decl = DECL_ARGUMENTS (fndecl); decl; decl = TREE_CHAIN (decl))
+  for (decl = DECL_ARGUMENTS (fndecl); decl; decl = DECL_CHAIN (decl))
     {
       instantiate_decl_rtl (DECL_RTL (decl));
       instantiate_decl_rtl (DECL_INCOMING_RTL (decl));
@@ -1732,19 +1865,25 @@ instantiate_decls (tree fndecl)
 	}
     }
 
+  if ((decl = DECL_RESULT (fndecl))
+      && TREE_CODE (decl) == RESULT_DECL)
+    {
+      if (DECL_RTL_SET_P (decl))
+	instantiate_decl_rtl (DECL_RTL (decl));
+      if (DECL_HAS_VALUE_EXPR_P (decl))
+	{
+	  tree v = DECL_VALUE_EXPR (decl);
+	  walk_tree (&v, instantiate_expr, NULL, NULL);
+	}
+    }
+
   /* Now process all variables defined in the function or its subblocks.  */
   instantiate_decls_1 (DECL_INITIAL (fndecl));
 
-  t = cfun->local_decls;
-  cfun->local_decls = NULL_TREE;
-  for (; t; t = next)
-    {
-      next = TREE_CHAIN (t);
-      decl = TREE_VALUE (t);
-      if (DECL_RTL_SET_P (decl))
-	instantiate_decl_rtl (DECL_RTL (decl));
-      ggc_free (t);
-    }
+  FOR_EACH_LOCAL_DECL (cfun, ix, decl)
+    if (DECL_RTL_SET_P (decl))
+      instantiate_decl_rtl (DECL_RTL (decl));
+  VEC_free (tree, gc, cfun->local_decls);
 }
 
 /* Pass through the INSNS of function FNDECL and convert virtual register
@@ -1782,8 +1921,11 @@ instantiate_virtual_regs (void)
 	    || GET_CODE (PATTERN (insn)) == ADDR_DIFF_VEC
 	    || GET_CODE (PATTERN (insn)) == ASM_INPUT)
 	  continue;
-
-	instantiate_virtual_regs_in_insn (insn);
+	else if (DEBUG_INSN_P (insn))
+	  for_each_rtx (&INSN_VAR_LOCATION (insn),
+			instantiate_virtual_regs_in_rtx, NULL);
+	else
+	  instantiate_virtual_regs_in_insn (insn);
 
 	if (INSN_DELETED_P (insn))
 	  continue;
@@ -1791,7 +1933,7 @@ instantiate_virtual_regs (void)
 	for_each_rtx (&REG_NOTES (insn), instantiate_virtual_regs_in_rtx, NULL);
 
 	/* Instantiate any virtual registers in CALL_INSN_FUNCTION_USAGE.  */
-	if (GET_CODE (insn) == CALL_INSN)
+	if (CALL_P (insn))
 	  for_each_rtx (&CALL_INSN_FUNCTION_USAGE (insn),
 			instantiate_virtual_regs_in_rtx, NULL);
       }
@@ -1804,6 +1946,18 @@ instantiate_virtual_regs (void)
   /* Indicate that, from now on, assign_stack_local should use
      frame_pointer_rtx.  */
   virtuals_instantiated = 1;
+
+  /* See allocate_dynamic_stack_space for the rationale.  */
+#ifdef SETJMP_VIA_SAVE_AREA
+  if (flag_stack_usage && cfun->calls_setjmp)
+    {
+      int align = PREFERRED_STACK_BOUNDARY / BITS_PER_UNIT;
+      dynamic_offset = (dynamic_offset + align - 1) / align * align;
+      current_function_dynamic_stack_size
+	+= current_function_dynamic_alloc_count * dynamic_offset;
+    }
+#endif
+
   return 0;
 }
 
@@ -1817,7 +1971,7 @@ struct rtl_opt_pass pass_instantiate_virtual_regs =
   NULL,                                 /* sub */
   NULL,                                 /* next */
   0,                                    /* static_pass_number */
-  0,                                    /* tv_id */
+  TV_NONE,                              /* tv_id */
   0,                                    /* properties_required */
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
@@ -1835,42 +1989,42 @@ struct rtl_opt_pass pass_instantiate_virtual_regs =
 int
 aggregate_value_p (const_tree exp, const_tree fntype)
 {
+  const_tree type = (TYPE_P (exp)) ? exp : TREE_TYPE (exp);
   int i, regno, nregs;
   rtx reg;
 
-  const_tree type = (TYPE_P (exp)) ? exp : TREE_TYPE (exp);
-
-  /* DECL node associated with FNTYPE when relevant, which we might need to
-     check for by-invisible-reference returns, typically for CALL_EXPR input
-     EXPressions.  */
-  const_tree fndecl = NULL_TREE;
-  
   if (fntype)
     switch (TREE_CODE (fntype))
       {
       case CALL_EXPR:
-	fndecl = get_callee_fndecl (fntype);
-	fntype = (fndecl
-		  ? TREE_TYPE (fndecl)
-		  : TREE_TYPE (TREE_TYPE (CALL_EXPR_FN (fntype))));
+	{
+	  tree fndecl = get_callee_fndecl (fntype);
+	  fntype = (fndecl
+		    ? TREE_TYPE (fndecl)
+		    : TREE_TYPE (TREE_TYPE (CALL_EXPR_FN (fntype))));
+	}
 	break;
       case FUNCTION_DECL:
-	fndecl = fntype;
-	fntype = TREE_TYPE (fndecl);
+	fntype = TREE_TYPE (fntype);
 	break;
       case FUNCTION_TYPE:
       case METHOD_TYPE:
         break;
       case IDENTIFIER_NODE:
-	fntype = 0;
+	fntype = NULL_TREE;
 	break;
       default:
-	/* We don't expect other rtl types here.  */
+	/* We don't expect other tree types here.  */
 	gcc_unreachable ();
       }
 
-  if (TREE_CODE (type) == VOID_TYPE)
+  if (VOID_TYPE_P (type))
     return 0;
+
+  /* If a record should be passed the same as its first (and only) member
+     don't pass it as an aggregate.  */
+  if (TREE_CODE (type) == RECORD_TYPE && TYPE_TRANSPARENT_AGGR (type))
+    return aggregate_value_p (first_field (type), fntype);
 
   /* If the front end has decided that this needs to be passed by
      reference, do so.  */
@@ -1878,24 +2032,21 @@ aggregate_value_p (const_tree exp, const_tree fntype)
       && DECL_BY_REFERENCE (exp))
     return 1;
 
-  /* If the EXPression is a CALL_EXPR, honor DECL_BY_REFERENCE set on the
-     called function RESULT_DECL, meaning the function returns in memory by
-     invisible reference.  This check lets front-ends not set TREE_ADDRESSABLE
-     on the function type, which used to be the way to request such a return
-     mechanism but might now be causing troubles at gimplification time if
-     temporaries with the function type need to be created.  */
-  if (TREE_CODE (exp) == CALL_EXPR && fndecl && DECL_RESULT (fndecl)
-      && DECL_BY_REFERENCE (DECL_RESULT (fndecl)))
+  /* Function types that are TREE_ADDRESSABLE force return in memory.  */
+  if (fntype && TREE_ADDRESSABLE (fntype))
     return 1;
-      
-  if (targetm.calls.return_in_memory (type, fntype))
-    return 1;
+
   /* Types that are TREE_ADDRESSABLE must be constructed in memory,
      and thus can't be returned in registers.  */
   if (TREE_ADDRESSABLE (type))
     return 1;
+
   if (flag_pcc_struct_return && AGGREGATE_TYPE_P (type))
     return 1;
+
+  if (targetm.calls.return_in_memory (type, fntype))
+    return 1;
+
   /* Make sure we have suitable call-clobbered regs to return
      the value in; if not, we must return it in memory.  */
   reg = hard_function_value (type, 0, fntype, 0);
@@ -1910,6 +2061,7 @@ aggregate_value_p (const_tree exp, const_tree fntype)
   for (i = 0; i < nregs; i++)
     if (! call_used_regs[regno + i])
       return 1;
+
   return 0;
 }
 
@@ -1921,7 +2073,7 @@ use_register_for_decl (const_tree decl)
 {
   if (!targetm.calls.allocate_stack_slots_for_args())
     return true;
-  
+
   /* Honor volatile.  */
   if (TREE_SIDE_EFFECTS (decl))
     return false;
@@ -1986,6 +2138,14 @@ pass_by_reference (CUMULATIVE_ARGS *ca, enum machine_mode mode,
       /* GCC post 3.4 passes *all* variable sized types by reference.  */
       if (!TYPE_SIZE (type) || TREE_CODE (TYPE_SIZE (type)) != INTEGER_CST)
 	return true;
+
+      /* If a record type should be passed the same as its first (and only)
+	 member, use the type and mode of that member.  */
+      if (TREE_CODE (type) == RECORD_TYPE && TYPE_TRANSPARENT_AGGR (type))
+	{
+	  type = TREE_TYPE (first_field (type));
+	  mode = TYPE_MODE (type);
+	}
     }
 
   return targetm.calls.pass_by_reference (ca, mode, type, named_arg);
@@ -2042,7 +2202,7 @@ struct assign_parm_data_one
 static void
 assign_parms_initialize_all (struct assign_parm_data_all *all)
 {
-  tree fntype;
+  tree fntype ATTRIBUTE_UNUSED;
 
   memset (all, 0, sizeof (*all));
 
@@ -2064,25 +2224,13 @@ assign_parms_initialize_all (struct assign_parm_data_all *all)
    entries of the component type.  Return a new list of substitutions are
    needed, else the old list.  */
 
-static tree
-split_complex_args (tree args)
+static void
+split_complex_args (VEC(tree, heap) **args)
 {
+  unsigned i;
   tree p;
 
-  /* Before allocating memory, check for the common case of no complex.  */
-  for (p = args; p; p = TREE_CHAIN (p))
-    {
-      tree type = TREE_TYPE (p);
-      if (TREE_CODE (type) == COMPLEX_TYPE
-	  && targetm.calls.split_complex_arg (type))
-        goto found;
-    }
-  return args;
-
- found:
-  args = copy_list (args);
-
-  for (p = args; p; p = TREE_CHAIN (p))
+  FOR_EACH_VEC_ELT (tree, *args, i, p)
     {
       tree type = TREE_TYPE (p);
       if (TREE_CODE (type) == COMPLEX_TYPE
@@ -2093,6 +2241,7 @@ split_complex_args (tree args)
 	  bool addressable = TREE_ADDRESSABLE (p);
 
 	  /* Rewrite the PARM_DECL's type with its component.  */
+	  p = copy_node (p);
 	  TREE_TYPE (p) = subtype;
 	  DECL_ARG_TYPE (p) = TREE_TYPE (DECL_ARG_TYPE (p));
 	  DECL_MODE (p) = VOIDmode;
@@ -2106,34 +2255,36 @@ split_complex_args (tree args)
 	  DECL_IGNORED_P (p) = addressable;
 	  TREE_ADDRESSABLE (p) = 0;
 	  layout_decl (p, 0);
+	  VEC_replace (tree, *args, i, p);
 
 	  /* Build a second synthetic decl.  */
-	  decl = build_decl (PARM_DECL, NULL_TREE, subtype);
+	  decl = build_decl (EXPR_LOCATION (p),
+			     PARM_DECL, NULL_TREE, subtype);
 	  DECL_ARG_TYPE (decl) = DECL_ARG_TYPE (p);
 	  DECL_ARTIFICIAL (decl) = addressable;
 	  DECL_IGNORED_P (decl) = addressable;
 	  layout_decl (decl, 0);
-
-	  /* Splice it in; skip the new decl.  */
-	  TREE_CHAIN (decl) = TREE_CHAIN (p);
-	  TREE_CHAIN (p) = decl;
-	  p = decl;
+	  VEC_safe_insert (tree, heap, *args, ++i, decl);
 	}
     }
-
-  return args;
 }
 
 /* A subroutine of assign_parms.  Adjust the parameter list to incorporate
    the hidden struct return argument, and (abi willing) complex args.
    Return the new parameter list.  */
 
-static tree
+static VEC(tree, heap) *
 assign_parms_augmented_arg_list (struct assign_parm_data_all *all)
 {
   tree fndecl = current_function_decl;
   tree fntype = TREE_TYPE (fndecl);
-  tree fnargs = DECL_ARGUMENTS (fndecl);
+  VEC(tree, heap) *fnargs = NULL;
+  tree arg;
+
+  for (arg = DECL_ARGUMENTS (fndecl); arg; arg = DECL_CHAIN (arg))
+    VEC_safe_push (tree, heap, fnargs, arg);
+
+  all->orig_fnargs = DECL_ARGUMENTS (fndecl);
 
   /* If struct value address is treated as the first argument, make it so.  */
   if (aggregate_value_p (DECL_RESULT (fndecl), fndecl)
@@ -2143,21 +2294,23 @@ assign_parms_augmented_arg_list (struct assign_parm_data_all *all)
       tree type = build_pointer_type (TREE_TYPE (fntype));
       tree decl;
 
-      decl = build_decl (PARM_DECL, NULL_TREE, type);
+      decl = build_decl (DECL_SOURCE_LOCATION (fndecl),
+			 PARM_DECL, get_identifier (".result_ptr"), type);
       DECL_ARG_TYPE (decl) = type;
       DECL_ARTIFICIAL (decl) = 1;
-      DECL_IGNORED_P (decl) = 1;
+      DECL_NAMELESS (decl) = 1;
+      TREE_CONSTANT (decl) = 1;
 
-      TREE_CHAIN (decl) = fnargs;
-      fnargs = decl;
+      DECL_CHAIN (decl) = all->orig_fnargs;
+      all->orig_fnargs = decl;
+      VEC_safe_insert (tree, heap, fnargs, 0, decl);
+
       all->function_result_decl = decl;
     }
 
-  all->orig_fnargs = fnargs;
-
   /* If the target wants to split complex arguments into scalars, do so.  */
   if (targetm.calls.split_complex_arg)
-    fnargs = split_complex_args (fnargs);
+    split_complex_args (&fnargs);
 
   return fnargs;
 }
@@ -2172,13 +2325,14 @@ assign_parm_find_data_types (struct assign_parm_data_all *all, tree parm,
 {
   tree nominal_type, passed_type;
   enum machine_mode nominal_mode, passed_mode, promoted_mode;
+  int unsignedp;
 
   memset (data, 0, sizeof (*data));
 
   /* NAMED_ARG is a misnomer.  We really mean 'non-variadic'. */
   if (!cfun->stdarg)
     data->named_arg = 1;  /* No variadic parms.  */
-  else if (TREE_CHAIN (parm))
+  else if (DECL_CHAIN (parm))
     data->named_arg = 1;  /* Not the last non-variadic parm. */
   else if (targetm.calls.strict_argument_naming (&all->args_so_far))
     data->named_arg = 1;  /* Only variadic ones are unnamed.  */
@@ -2207,12 +2361,13 @@ assign_parm_find_data_types (struct assign_parm_data_all *all, tree parm,
   passed_mode = TYPE_MODE (passed_type);
   nominal_mode = TYPE_MODE (nominal_type);
 
-  /* If the parm is to be passed as a transparent union, use the type of
-     the first field for the tests below.  We have already verified that
-     the modes are the same.  */
-  if (TREE_CODE (passed_type) == UNION_TYPE
-      && TYPE_TRANSPARENT_UNION (passed_type))
-    passed_type = TREE_TYPE (TYPE_FIELDS (passed_type));
+  /* If the parm is to be passed as a transparent union or record, use the
+     type of the first field for the tests below.  We have already verified
+     that the modes are the same.  */
+  if ((TREE_CODE (passed_type) == UNION_TYPE
+       || TREE_CODE (passed_type) == RECORD_TYPE)
+      && TYPE_TRANSPARENT_AGGR (passed_type))
+    passed_type = TREE_TYPE (first_field (passed_type));
 
   /* See if this arg was passed by invisible reference.  */
   if (pass_by_reference (&all->args_so_far, passed_mode,
@@ -2224,13 +2379,9 @@ assign_parm_find_data_types (struct assign_parm_data_all *all, tree parm,
     }
 
   /* Find mode as it is passed by the ABI.  */
-  promoted_mode = passed_mode;
-  if (targetm.calls.promote_function_args (TREE_TYPE (current_function_decl)))
-    {
-      int unsignedp = TYPE_UNSIGNED (passed_type);
-      promoted_mode = promote_mode (passed_type, promoted_mode,
-				    &unsignedp, 1);
-    }
+  unsignedp = TYPE_UNSIGNED (passed_type);
+  promoted_mode = promote_function_mode (passed_type, passed_mode, &unsignedp,
+				         TREE_TYPE (current_function_decl), 0);
 
  egress:
   data->nominal_type = nominal_type;
@@ -2277,13 +2428,10 @@ assign_parm_find_entry_rtl (struct assign_parm_data_all *all,
       return;
     }
 
-#ifdef FUNCTION_INCOMING_ARG
-  entry_parm = FUNCTION_INCOMING_ARG (all->args_so_far, data->promoted_mode,
-				      data->passed_type, data->named_arg);
-#else
-  entry_parm = FUNCTION_ARG (all->args_so_far, data->promoted_mode,
-			     data->passed_type, data->named_arg);
-#endif
+  entry_parm = targetm.calls.function_incoming_arg (&all->args_so_far,
+						    data->promoted_mode,
+						    data->passed_type,
+						    data->named_arg);
 
   if (entry_parm == 0)
     data->promoted_mode = data->passed_mode;
@@ -2307,13 +2455,9 @@ assign_parm_find_entry_rtl (struct assign_parm_data_all *all,
       if (targetm.calls.pretend_outgoing_varargs_named (&all->args_so_far))
 	{
 	  rtx tem;
-#ifdef FUNCTION_INCOMING_ARG
-	  tem = FUNCTION_INCOMING_ARG (all->args_so_far, data->promoted_mode,
-				       data->passed_type, true);
-#else
-	  tem = FUNCTION_ARG (all->args_so_far, data->promoted_mode,
-			      data->passed_type, true);
-#endif
+	  tem = targetm.calls.function_incoming_arg (&all->args_so_far,
+						     data->promoted_mode,
+						     data->passed_type, true);
 	  in_regs = tem != NULL;
 	}
     }
@@ -2438,20 +2582,25 @@ assign_parm_find_stack_rtl (tree parm, struct assign_parm_data_one *data)
     stack_parm = gen_rtx_PLUS (Pmode, stack_parm, offset_rtx);
   stack_parm = gen_rtx_MEM (data->promoted_mode, stack_parm);
 
-  set_mem_attributes (stack_parm, parm, 1);
-  /* set_mem_attributes could set MEM_SIZE to the passed mode's size,
-     while promoted mode's size is needed.  */
-  if (data->promoted_mode != BLKmode
-      && data->promoted_mode != DECL_MODE (parm))
+  if (!data->passed_pointer)
     {
-      set_mem_size (stack_parm, GEN_INT (GET_MODE_SIZE (data->promoted_mode)));
-      if (MEM_EXPR (stack_parm) && MEM_OFFSET (stack_parm))
+      set_mem_attributes (stack_parm, parm, 1);
+      /* set_mem_attributes could set MEM_SIZE to the passed mode's size,
+	 while promoted mode's size is needed.  */
+      if (data->promoted_mode != BLKmode
+	  && data->promoted_mode != DECL_MODE (parm))
 	{
-	  int offset = subreg_lowpart_offset (DECL_MODE (parm),
-					      data->promoted_mode);
-	  if (offset)
-	    set_mem_offset (stack_parm,
-			    plus_constant (MEM_OFFSET (stack_parm), -offset));
+	  set_mem_size (stack_parm,
+			GEN_INT (GET_MODE_SIZE (data->promoted_mode)));
+	  if (MEM_EXPR (stack_parm) && MEM_OFFSET (stack_parm))
+	    {
+	      int offset = subreg_lowpart_offset (DECL_MODE (parm),
+						  data->promoted_mode);
+	      if (offset)
+		set_mem_offset (stack_parm,
+				plus_constant (MEM_OFFSET (stack_parm),
+					       -offset));
+	    }
 	}
     }
 
@@ -2459,12 +2608,12 @@ assign_parm_find_stack_rtl (tree parm, struct assign_parm_data_one *data)
   align = BITS_PER_UNIT;
 
   /* If we're padding upward, we know that the alignment of the slot
-     is FUNCTION_ARG_BOUNDARY.  If we're using slot_offset, we're
+     is TARGET_FUNCTION_ARG_BOUNDARY.  If we're using slot_offset, we're
      intentionally forcing upward padding.  Otherwise we have to come
      up with a guess at the alignment based on OFFSET_RTX.  */
   if (data->locate.where_pad != downward || data->entry_parm)
     align = boundary;
-  else if (GET_CODE (offset_rtx) == CONST_INT)
+  else if (CONST_INT_P (offset_rtx))
     {
       align = INTVAL (offset_rtx) * BITS_PER_UNIT | boundary;
       align = align & -align;
@@ -2497,7 +2646,7 @@ assign_parm_adjust_entry_rtl (struct assign_parm_data_one *data)
 	 locations.  The Irix 6 ABI has examples of this.  */
       if (GET_CODE (entry_parm) == PARALLEL)
 	emit_group_store (validize_mem (stack_parm), entry_parm,
-			  data->passed_type, 
+			  data->passed_type,
 			  int_size_in_bytes (data->passed_type));
       else
 	{
@@ -2622,7 +2771,7 @@ assign_parm_setup_block_p (struct assign_parm_data_one *data)
   return false;
 }
 
-/* A subroutine of assign_parms.  Arrange for the parameter to be 
+/* A subroutine of assign_parms.  Arrange for the parameter to be
    present and valid in DATA->STACK_RTL.  */
 
 static void
@@ -2765,6 +2914,21 @@ assign_parm_setup_block (struct assign_parm_data_all *all,
   SET_DECL_RTL (parm, stack_parm);
 }
 
+/* A subroutine of assign_parm_setup_reg, called through note_stores.
+   This collects sets and clobbers of hard registers in a HARD_REG_SET,
+   which is pointed to by DATA.  */
+static void
+record_hard_reg_sets (rtx x, const_rtx pat ATTRIBUTE_UNUSED, void *data)
+{
+  HARD_REG_SET *pset = (HARD_REG_SET *)data;
+  if (REG_P (x) && REGNO (x) < FIRST_PSEUDO_REGISTER)
+    {
+      int nregs = hard_regno_nregs[REGNO (x)][GET_MODE (x)];
+      while (nregs-- > 0)
+	SET_HARD_REG_BIT (*pset, REGNO (x) + nregs);
+    }
+}
+
 /* A subroutine of assign_parms.  Allocate a pseudo to hold the current
    parameter.  Get it there.  Perform all ABI specified conversions.  */
 
@@ -2772,18 +2936,19 @@ static void
 assign_parm_setup_reg (struct assign_parm_data_all *all, tree parm,
 		       struct assign_parm_data_one *data)
 {
-  rtx parmreg;
+  rtx parmreg, validated_mem;
+  rtx equiv_stack_parm;
   enum machine_mode promoted_nominal_mode;
   int unsignedp = TYPE_UNSIGNED (TREE_TYPE (parm));
   bool did_conversion = false;
+  bool need_conversion, moved;
 
   /* Store the parm in a pseudoregister during the function, but we may
-     need to do it in a wider mode.  */
-
-  /* This is not really promoting for a call.  However we need to be
-     consistent with assign_parm_find_data_types and expand_expr_real_1.  */
+     need to do it in a wider mode.  Using 2 here makes the result
+     consistent with promote_decl_mode and thus expand_expr_real_1.  */
   promoted_nominal_mode
-    = promote_mode (data->nominal_type, data->nominal_mode, &unsignedp, 1);
+    = promote_function_mode (data->nominal_type, data->nominal_mode, &unsignedp,
+			     TREE_TYPE (current_function_decl), 2);
 
   parmreg = gen_reg_rtx (promoted_nominal_mode);
 
@@ -2803,12 +2968,21 @@ assign_parm_setup_reg (struct assign_parm_data_all *all, tree parm,
 
   assign_parm_remove_parallels (data);
 
-  /* Copy the value into the register.  */
-  if (data->nominal_mode != data->passed_mode
-      || promoted_nominal_mode != data->promoted_mode)
-    {
-      int save_tree_used;
+  /* Copy the value into the register, thus bridging between
+     assign_parm_find_data_types and expand_expr_real_1.  */
 
+  equiv_stack_parm = data->stack_parm;
+  validated_mem = validize_mem (data->entry_parm);
+
+  need_conversion = (data->nominal_mode != data->passed_mode
+		     || promoted_nominal_mode != data->promoted_mode);
+  moved = false;
+
+  if (need_conversion
+      && GET_MODE_CLASS (data->nominal_mode) == MODE_INT
+      && data->nominal_mode == data->passed_mode
+      && data->nominal_mode == GET_MODE (data->entry_parm))
+    {
       /* ENTRY_PARM has been converted to PROMOTED_MODE, its
 	 mode, by the caller.  We now have to convert it to
 	 NOMINAL_MODE, if different.  However, PARMREG may be in
@@ -2824,13 +2998,71 @@ assign_parm_setup_reg (struct assign_parm_data_all *all, tree parm,
 
 	 In addition, the conversion may involve a call, which could
 	 clobber parameters which haven't been copied to pseudo
-	 registers yet.  Therefore, we must first copy the parm to
-	 a pseudo reg here, and save the conversion until after all
+	 registers yet.
+
+	 First, we try to emit an insn which performs the necessary
+	 conversion.  We verify that this insn does not clobber any
+	 hard registers.  */
+
+      enum insn_code icode;
+      rtx op0, op1;
+
+      icode = can_extend_p (promoted_nominal_mode, data->passed_mode,
+			    unsignedp);
+
+      op0 = parmreg;
+      op1 = validated_mem;
+      if (icode != CODE_FOR_nothing
+	  && insn_data[icode].operand[0].predicate (op0, promoted_nominal_mode)
+	  && insn_data[icode].operand[1].predicate (op1, data->passed_mode))
+	{
+	  enum rtx_code code = unsignedp ? ZERO_EXTEND : SIGN_EXTEND;
+	  rtx insn, insns;
+	  HARD_REG_SET hardregs;
+
+	  start_sequence ();
+	  insn = gen_extend_insn (op0, op1, promoted_nominal_mode,
+				  data->passed_mode, unsignedp);
+	  emit_insn (insn);
+	  insns = get_insns ();
+
+	  moved = true;
+	  CLEAR_HARD_REG_SET (hardregs);
+	  for (insn = insns; insn && moved; insn = NEXT_INSN (insn))
+	    {
+	      if (INSN_P (insn))
+		note_stores (PATTERN (insn), record_hard_reg_sets,
+			     &hardregs);
+	      if (!hard_reg_set_empty_p (hardregs))
+		moved = false;
+	    }
+
+	  end_sequence ();
+
+	  if (moved)
+	    {
+	      emit_insn (insns);
+	      if (equiv_stack_parm != NULL_RTX)
+		equiv_stack_parm = gen_rtx_fmt_e (code, GET_MODE (parmreg),
+						  equiv_stack_parm);
+	    }
+	}
+    }
+
+  if (moved)
+    /* Nothing to do.  */
+    ;
+  else if (need_conversion)
+    {
+      /* We did not have an insn to convert directly, or the sequence
+	 generated appeared unsafe.  We must first copy the parm to a
+	 pseudo reg, and save the conversion until after all
 	 parameters have been moved.  */
 
+      int save_tree_used;
       rtx tempreg = gen_reg_rtx (GET_MODE (data->entry_parm));
 
-      emit_move_insn (tempreg, validize_mem (data->entry_parm));
+      emit_move_insn (tempreg, validated_mem);
 
       push_to_sequence2 (all->first_conversion_insn, all->last_conversion_insn);
       tempreg = convert_to_mode (data->nominal_mode, tempreg, unsignedp);
@@ -2860,7 +3092,7 @@ assign_parm_setup_reg (struct assign_parm_data_all *all, tree parm,
       did_conversion = true;
     }
   else
-    emit_move_insn (parmreg, validize_mem (data->entry_parm));
+    emit_move_insn (parmreg, validated_mem);
 
   /* If we were passed a pointer but the actual value can safely live
      in a register, put it in one.  */
@@ -2945,7 +3177,7 @@ assign_parm_setup_reg (struct assign_parm_data_all *all, tree parm,
 	}
       else if ((set = single_set (linsn)) != 0
 	       && SET_DEST (set) == parmreg)
-	set_unique_reg_note (linsn, REG_EQUIV, data->stack_parm);
+	set_unique_reg_note (linsn, REG_EQUIV, equiv_stack_parm);
     }
 
   /* For pointer data type, suggest pointer register.  */
@@ -3043,12 +3275,14 @@ assign_parm_setup_stack (struct assign_parm_data_all *all, tree parm,
    undo the frobbing that we did in assign_parms_augmented_arg_list.  */
 
 static void
-assign_parms_unsplit_complex (struct assign_parm_data_all *all, tree fnargs)
+assign_parms_unsplit_complex (struct assign_parm_data_all *all,
+			      VEC(tree, heap) *fnargs)
 {
   tree parm;
   tree orig_fnargs = all->orig_fnargs;
+  unsigned i = 0;
 
-  for (parm = orig_fnargs; parm; parm = TREE_CHAIN (parm))
+  for (parm = orig_fnargs; parm; parm = TREE_CHAIN (parm), ++i)
     {
       if (TREE_CODE (TREE_TYPE (parm)) == COMPLEX_TYPE
 	  && targetm.calls.split_complex_arg (TREE_TYPE (parm)))
@@ -3056,8 +3290,8 @@ assign_parms_unsplit_complex (struct assign_parm_data_all *all, tree fnargs)
 	  rtx tmp, real, imag;
 	  enum machine_mode inner = GET_MODE_INNER (DECL_MODE (parm));
 
-	  real = DECL_RTL (fnargs);
-	  imag = DECL_RTL (TREE_CHAIN (fnargs));
+	  real = DECL_RTL (VEC_index (tree, fnargs, i));
+	  imag = DECL_RTL (VEC_index (tree, fnargs, i + 1));
 	  if (inner != GET_MODE (real))
 	    {
 	      real = gen_lowpart_SUBREG (inner, real);
@@ -3090,8 +3324,8 @@ assign_parms_unsplit_complex (struct assign_parm_data_all *all, tree fnargs)
 	    tmp = gen_rtx_CONCAT (DECL_MODE (parm), real, imag);
 	  SET_DECL_RTL (parm, tmp);
 
-	  real = DECL_INCOMING_RTL (fnargs);
-	  imag = DECL_INCOMING_RTL (TREE_CHAIN (fnargs));
+	  real = DECL_INCOMING_RTL (VEC_index (tree, fnargs, i));
+	  imag = DECL_INCOMING_RTL (VEC_index (tree, fnargs, i + 1));
 	  if (inner != GET_MODE (real))
 	    {
 	      real = gen_lowpart_SUBREG (inner, real);
@@ -3099,20 +3333,8 @@ assign_parms_unsplit_complex (struct assign_parm_data_all *all, tree fnargs)
 	    }
 	  tmp = gen_rtx_CONCAT (DECL_MODE (parm), real, imag);
 	  set_decl_incoming_rtl (parm, tmp, false);
-	  fnargs = TREE_CHAIN (fnargs);
+	  i++;
 	}
-      else
-	{
-	  SET_DECL_RTL (parm, DECL_RTL (fnargs));
-	  set_decl_incoming_rtl (parm, DECL_INCOMING_RTL (fnargs), false);
-
-	  /* Set MEM_EXPR to the original decl, i.e. to PARM,
-	     instead of the copy of decl, i.e. FNARGS.  */
-	  if (DECL_INCOMING_RTL (parm) && MEM_P (DECL_INCOMING_RTL (parm)))
-	    set_mem_expr (DECL_INCOMING_RTL (parm), parm);
-	}
-
-      fnargs = TREE_CHAIN (fnargs);
     }
 }
 
@@ -3123,7 +3345,9 @@ static void
 assign_parms (tree fndecl)
 {
   struct assign_parm_data_all all;
-  tree fnargs, parm;
+  tree parm;
+  VEC(tree, heap) *fnargs;
+  unsigned i;
 
   crtl->args.internal_arg_pointer
     = targetm.calls.internal_arg_pointer ();
@@ -3131,7 +3355,7 @@ assign_parms (tree fndecl)
   assign_parms_initialize_all (&all);
   fnargs = assign_parms_augmented_arg_list (&all);
 
-  for (parm = fnargs; parm; parm = TREE_CHAIN (parm))
+  FOR_EACH_VEC_ELT (tree, fnargs, i, parm)
     {
       struct assign_parm_data_one data;
 
@@ -3149,8 +3373,9 @@ assign_parms (tree fndecl)
       /* Estimate stack alignment from parameter alignment.  */
       if (SUPPORTS_STACK_ALIGNMENT)
         {
-          unsigned int align = FUNCTION_ARG_BOUNDARY (data.promoted_mode,
-						      data.passed_type);
+          unsigned int align
+	    = targetm.calls.function_arg_boundary (data.promoted_mode,
+						   data.passed_type);
 	  align = MINIMUM_ALIGNMENT (data.passed_type, data.promoted_mode,
 				     align);
 	  if (TYPE_ALIGN (data.nominal_type) > align)
@@ -3163,8 +3388,8 @@ assign_parms (tree fndecl)
 	      crtl->stack_alignment_estimated = align;
 	    }
 	}
-	
-      if (cfun->stdarg && !TREE_CHAIN (parm))
+
+      if (cfun->stdarg && !DECL_CHAIN (parm))
 	assign_parms_setup_varargs (&all, &data, false);
 
       /* Find out where the parameter arrives in this function.  */
@@ -3181,8 +3406,8 @@ assign_parms (tree fndecl)
       set_decl_incoming_rtl (parm, data.entry_parm, data.passed_pointer);
 
       /* Update info on where next arg arrives in registers.  */
-      FUNCTION_ARG_ADVANCE (all.args_so_far, data.promoted_mode,
-			    data.passed_type, data.named_arg);
+      targetm.calls.function_arg_advance (&all.args_so_far, data.promoted_mode,
+					  data.passed_type, data.named_arg);
 
       assign_parm_adjust_stack_rtl (&data);
 
@@ -3194,8 +3419,10 @@ assign_parms (tree fndecl)
 	assign_parm_setup_stack (&all, parm, &data);
     }
 
-  if (targetm.calls.split_complex_arg && fnargs != all.orig_fnargs)
+  if (targetm.calls.split_complex_arg)
     assign_parms_unsplit_complex (&all, fnargs);
+
+  VEC_free (tree, heap, fnargs);
 
   /* Output all parameter conversion instructions (possibly including calls)
      now that all parameters have been copied out of hard registers.  */
@@ -3220,7 +3447,7 @@ assign_parms (tree fndecl)
 		  crtl->stack_alignment_estimated = align;
 		}
 	    }
-	} 
+	}
     }
 
   /* If we are receiving a struct value address as the first argument, set up
@@ -3234,13 +3461,22 @@ assign_parms (tree fndecl)
       rtx x;
 
       if (DECL_BY_REFERENCE (result))
-	x = addr;
+	{
+	  SET_DECL_VALUE_EXPR (result, all.function_result_decl);
+	  x = addr;
+	}
       else
 	{
+	  SET_DECL_VALUE_EXPR (result,
+			       build1 (INDIRECT_REF, TREE_TYPE (result),
+				       all.function_result_decl));
 	  addr = convert_memory_address (Pmode, addr);
 	  x = gen_rtx_MEM (DECL_MODE (result), addr);
 	  set_mem_attributes (x, result, 1);
 	}
+
+      DECL_HAS_VALUE_EXPR_P (result) = 1;
+
       SET_DECL_RTL (result, x);
     }
 
@@ -3265,7 +3501,7 @@ assign_parms (tree fndecl)
     = (all.stack_args_size.var == 0 ? GEN_INT (-all.stack_args_size.constant)
        : expand_expr (size_diffop (all.stack_args_size.var,
 				   size_int (-all.stack_args_size.constant)),
-		      NULL_RTX, VOIDmode, 0));
+		      NULL_RTX, VOIDmode, EXPAND_NORMAL));
 #else
   crtl->args.arg_offset_rtx = ARGS_SIZE_RTX (all.stack_args_size);
 #endif
@@ -3273,8 +3509,9 @@ assign_parms (tree fndecl)
   /* See how many bytes, if any, of its args a function should try to pop
      on return.  */
 
-  crtl->args.pops_args = RETURN_POPS_ARGS (fndecl, TREE_TYPE (fndecl),
-						 crtl->args.size);
+  crtl->args.pops_args = targetm.calls.return_pops_args (fndecl,
+							 TREE_TYPE (fndecl),
+							 crtl->args.size);
 
   /* For stdarg.h function, save info about
      regs and stack space used by the named args.  */
@@ -3348,13 +3585,15 @@ gimple_seq
 gimplify_parameters (void)
 {
   struct assign_parm_data_all all;
-  tree fnargs, parm;
+  tree parm;
   gimple_seq stmts = NULL;
+  VEC(tree, heap) *fnargs;
+  unsigned i;
 
   assign_parms_initialize_all (&all);
   fnargs = assign_parms_augmented_arg_list (&all);
 
-  for (parm = fnargs; parm; parm = TREE_CHAIN (parm))
+  FOR_EACH_VEC_ELT (tree, fnargs, i, parm)
     {
       struct assign_parm_data_one data;
 
@@ -3366,8 +3605,8 @@ gimplify_parameters (void)
 	continue;
 
       /* Update info on where next arg arrives in registers.  */
-      FUNCTION_ARG_ADVANCE (all.args_so_far, data.promoted_mode,
-			    data.passed_type, data.named_arg);
+      targetm.calls.function_arg_advance (&all.args_so_far, data.promoted_mode,
+					  data.passed_type, data.named_arg);
 
       /* ??? Once upon a time variable_size stuffed parameter list
 	 SAVE_EXPRs (amongst others) onto a pending sizes list.  This
@@ -3397,28 +3636,28 @@ gimplify_parameters (void)
 		       && compare_tree_int (DECL_SIZE_UNIT (parm),
 					    STACK_CHECK_MAX_VAR_SIZE) > 0))
 		{
-		  local = create_tmp_var (type, get_name (parm));
+		  local = create_tmp_reg (type, get_name (parm));
 		  DECL_IGNORED_P (local) = 0;
 		  /* If PARM was addressable, move that flag over
 		     to the local copy, as its address will be taken,
-		     not the PARMs.  */
+		     not the PARMs.  Keep the parms address taken
+		     as we'll query that flag during gimplification.  */
 		  if (TREE_ADDRESSABLE (parm))
-		    {
-		      TREE_ADDRESSABLE (parm) = 0;
-		      TREE_ADDRESSABLE (local) = 1;
-		    }
+		    TREE_ADDRESSABLE (local) = 1;
 		}
 	      else
 		{
 		  tree ptr_type, addr;
 
 		  ptr_type = build_pointer_type (type);
-		  addr = create_tmp_var (ptr_type, get_name (parm));
+		  addr = create_tmp_reg (ptr_type, get_name (parm));
 		  DECL_IGNORED_P (addr) = 0;
 		  local = build_fold_indirect_ref (addr);
 
 		  t = built_in_decls[BUILT_IN_ALLOCA];
 		  t = build_call_expr (t, 1, DECL_SIZE_UNIT (parm));
+		  /* The call has been built for a variable-sized object.  */
+		  ALLOCA_FOR_VAR_P (t) = 1;
 		  t = fold_convert (ptr_type, t);
 		  t = build2 (MODIFY_EXPR, TREE_TYPE (addr), addr, t);
 		  gimplify_and_add (t, &stmts);
@@ -3431,6 +3670,8 @@ gimplify_parameters (void)
 	    }
 	}
     }
+
+  VEC_free (tree, heap, fnargs);
 
   return stmts;
 }
@@ -3453,9 +3694,10 @@ gimplify_parameters (void)
    FNDECL is the function in which the argument was defined.
 
    There are two types of rounding that are done.  The first, controlled by
-   FUNCTION_ARG_BOUNDARY, forces the offset from the start of the argument
-   list to be aligned to the specific boundary (in bits).  This rounding
-   affects the initial and starting offsets, but not the argument size.
+   TARGET_FUNCTION_ARG_BOUNDARY, forces the offset from the start of the
+   argument list to be aligned to the specific boundary (in bits).  This
+   rounding affects the initial and starting offsets, but not the argument
+   size.
 
    The second, controlled by FUNCTION_ARG_PADDING and PARM_BOUNDARY,
    optionally rounds the size of the parm to PARM_BOUNDARY.  The
@@ -3506,7 +3748,7 @@ locate_and_pad_parm (enum machine_mode passed_mode, tree type, int in_regs,
   sizetree
     = type ? size_in_bytes (type) : size_int (GET_MODE_SIZE (passed_mode));
   where_pad = FUNCTION_ARG_PADDING (passed_mode, type);
-  boundary = FUNCTION_ARG_BOUNDARY (passed_mode, type);
+  boundary = targetm.calls.function_arg_boundary (passed_mode, type);
   locate->where_pad = where_pad;
 
   /* Alignment can't exceed MAX_SUPPORTED_STACK_ALIGNMENT.  */
@@ -3540,8 +3782,6 @@ locate_and_pad_parm (enum machine_mode passed_mode, tree type, int in_regs,
      calling function side.  */
   if (crtl->stack_alignment_needed < boundary)
     crtl->stack_alignment_needed = boundary;
-  if (crtl->max_used_stack_slot_alignment < crtl->stack_alignment_needed)
-    crtl->max_used_stack_slot_alignment = crtl->stack_alignment_needed;
   if (crtl->preferred_stack_boundary < boundary)
     crtl->preferred_stack_boundary = boundary;
 
@@ -3739,13 +3979,13 @@ setjmp_vars_warning (bitmap setjmp_crosses, tree block)
 {
   tree decl, sub;
 
-  for (decl = BLOCK_VARS (block); decl; decl = TREE_CHAIN (decl))
+  for (decl = BLOCK_VARS (block); decl; decl = DECL_CHAIN (decl))
     {
       if (TREE_CODE (decl) == VAR_DECL
 	  && DECL_RTL_SET_P (decl)
 	  && REG_P (DECL_RTL (decl))
 	  && regno_clobbered_at_setjmp (setjmp_crosses, REGNO (DECL_RTL (decl))))
-	warning (OPT_Wclobbered, "variable %q+D might be clobbered by" 
+	warning (OPT_Wclobbered, "variable %q+D might be clobbered by"
                  " %<longjmp%> or %<vfork%>", decl);
     }
 
@@ -3761,18 +4001,18 @@ setjmp_args_warning (bitmap setjmp_crosses)
 {
   tree decl;
   for (decl = DECL_ARGUMENTS (current_function_decl);
-       decl; decl = TREE_CHAIN (decl))
+       decl; decl = DECL_CHAIN (decl))
     if (DECL_RTL (decl) != 0
 	&& REG_P (DECL_RTL (decl))
 	&& regno_clobbered_at_setjmp (setjmp_crosses, REGNO (DECL_RTL (decl))))
-      warning (OPT_Wclobbered, 
+      warning (OPT_Wclobbered,
                "argument %q+D might be clobbered by %<longjmp%> or %<vfork%>",
 	       decl);
 }
 
 /* Generate warning messages for variables live across setjmp.  */
 
-void 
+void
 generate_setjmp_warnings (void)
 {
   bitmap setjmp_crosses = regstat_get_setjmp_crosses ();
@@ -3786,6 +4026,46 @@ generate_setjmp_warnings (void)
 }
 
 
+/* Reverse the order of elements in the fragment chain T of blocks,
+   and return the new head of the chain (old last element).  */
+
+static tree
+block_fragments_nreverse (tree t)
+{
+  tree prev = 0, block, next;
+  for (block = t; block; block = next)
+    {
+      next = BLOCK_FRAGMENT_CHAIN (block);
+      BLOCK_FRAGMENT_CHAIN (block) = prev;
+      prev = block;
+    }
+  return prev;
+}
+
+/* Reverse the order of elements in the chain T of blocks,
+   and return the new head of the chain (old last element).
+   Also do the same on subblocks and reverse the order of elements
+   in BLOCK_FRAGMENT_CHAIN as well.  */
+
+static tree
+blocks_nreverse_all (tree t)
+{
+  tree prev = 0, block, next;
+  for (block = t; block; block = next)
+    {
+      next = BLOCK_CHAIN (block);
+      BLOCK_CHAIN (block) = prev;
+      BLOCK_SUBBLOCKS (block) = blocks_nreverse_all (BLOCK_SUBBLOCKS (block));
+      if (BLOCK_FRAGMENT_CHAIN (block)
+	  && BLOCK_FRAGMENT_ORIGIN (block) == NULL_TREE)
+	BLOCK_FRAGMENT_CHAIN (block)
+	  = block_fragments_nreverse (BLOCK_FRAGMENT_CHAIN (block));
+      prev = block;
+    }
+  return prev;
+}
+
+
 /* Identify BLOCKs referenced by more than one NOTE_INSN_BLOCK_{BEG,END},
    and create duplicate blocks.  */
 /* ??? Need an option to either create block fragments or to create
@@ -3812,7 +4092,7 @@ reorder_blocks (void)
 
   /* Recreate the block tree from the note nesting.  */
   reorder_blocks_1 (get_insns (), block, &block_stack);
-  BLOCK_SUBBLOCKS (block) = blocks_nreverse (BLOCK_SUBBLOCKS (block));
+  BLOCK_SUBBLOCKS (block) = blocks_nreverse_all (BLOCK_SUBBLOCKS (block));
 
   VEC_free (tree, heap, block_stack);
 }
@@ -3844,9 +4124,8 @@ reorder_blocks_1 (rtx insns, tree current_block, VEC(tree,heap) **p_block_stack)
 	      tree block = NOTE_BLOCK (insn);
 	      tree origin;
 
-	      origin = (BLOCK_FRAGMENT_ORIGIN (block)
-			? BLOCK_FRAGMENT_ORIGIN (block)
-			: block);
+	      gcc_assert (BLOCK_FRAGMENT_ORIGIN (block) == NULL_TREE);
+	      origin = block;
 
 	      /* If we have seen this block before, that means it now
 		 spans multiple address regions.  Create a new fragment.  */
@@ -3883,8 +4162,6 @@ reorder_blocks_1 (rtx insns, tree current_block, VEC(tree,heap) **p_block_stack)
 	  else if (NOTE_KIND (insn) == NOTE_INSN_BLOCK_END)
 	    {
 	      NOTE_BLOCK (insn) = VEC_pop (tree, *p_block_stack);
-	      BLOCK_SUBBLOCKS (current_block)
-		= blocks_nreverse (BLOCK_SUBBLOCKS (current_block));
 	      current_block = BLOCK_SUPERCONTEXT (current_block);
 	    }
 	}
@@ -3897,12 +4174,12 @@ reorder_blocks_1 (rtx insns, tree current_block, VEC(tree,heap) **p_block_stack)
 tree
 blocks_nreverse (tree t)
 {
-  tree prev = 0, decl, next;
-  for (decl = t; decl; decl = next)
+  tree prev = 0, block, next;
+  for (block = t; block; block = next)
     {
-      next = BLOCK_CHAIN (decl);
-      BLOCK_CHAIN (decl) = prev;
-      prev = decl;
+      next = BLOCK_CHAIN (block);
+      BLOCK_CHAIN (block) = prev;
+      prev = block;
     }
   return prev;
 }
@@ -3986,7 +4263,7 @@ number_blocks (tree fn)
 
 /* If VAR is present in a subblock of BLOCK, return the subblock.  */
 
-tree
+DEBUG_FUNCTION tree
 debug_find_var_in_block_tree (tree var, tree block)
 {
   tree t;
@@ -4031,7 +4308,7 @@ invoke_set_current_function_hook (tree fndecl)
       if (optimization_current_node != opts)
 	{
 	  optimization_current_node = opts;
-	  cl_optimization_restore (TREE_OPTIMIZATION (opts));
+	  cl_optimization_restore (&global_options, TREE_OPTIMIZATION (opts));
 	}
 
       targetm.set_current_function (fndecl);
@@ -4074,7 +4351,7 @@ pop_cfun (void)
 
 /* Return value of funcdef and increase it.  */
 int
-get_next_funcdef_no (void) 
+get_next_funcdef_no (void)
 {
   return funcdef_no++;
 }
@@ -4098,9 +4375,7 @@ allocate_struct_function (tree fndecl, bool abstract_p)
   tree result;
   tree fntype = fndecl ? TREE_TYPE (fndecl) : NULL_TREE;
 
-  cfun = GGC_CNEW (struct function);
-
-  cfun->function_frequency = FUNCTION_FREQUENCY_NORMAL;
+  cfun = ggc_alloc_cleared_function ();
 
   init_eh_for_function ();
 
@@ -4128,15 +4403,15 @@ allocate_struct_function (tree fndecl, bool abstract_p)
 	  cfun->returns_struct = 1;
 	}
 
-      cfun->stdarg
-	= (fntype
-	   && TYPE_ARG_TYPES (fntype) != 0
-	   && (TREE_VALUE (tree_last (TYPE_ARG_TYPES (fntype)))
-	       != void_type_node));
-      
+      cfun->stdarg = stdarg_p (fntype);
+
       /* Assume all registers in stdarg functions need to be saved.  */
       cfun->va_list_gpr_size = VA_LIST_MAX_GPR_SIZE;
       cfun->va_list_fpr_size = VA_LIST_MAX_FPR_SIZE;
+
+      /* ??? This could be set on a per-function basis by the front-end
+         but is this worth the hassle?  */
+      cfun->can_throw_non_call_exceptions = flag_non_call_exceptions;
     }
 }
 
@@ -4150,7 +4425,7 @@ push_struct_function (tree fndecl)
   allocate_struct_function (fndecl, false);
 }
 
-/* Reset cfun, and other non-struct-function variables to defaults as
+/* Reset crtl and other non-struct-function variables to defaults as
    appropriate for emitting rtl at the start of a function.  */
 
 static void
@@ -4162,6 +4437,12 @@ prepare_function_start (void)
   init_varasm_status ();
   init_expr ();
   default_rtl_profile ();
+
+  if (flag_stack_usage)
+    {
+      cfun->su = ggc_alloc_cleared_stack_usage ();
+      cfun->su->static_stack_size = -1;
+    }
 
   cse_not_expected = ! optimize;
 
@@ -4214,18 +4495,11 @@ init_function_start (tree subr)
     warning (OPT_Waggregate_return, "function returns an aggregate");
 }
 
-/* Make sure all values used by the optimization passes have sane
-   defaults.  */
+/* Make sure all values used by the optimization passes have sane defaults.  */
 unsigned int
 init_function_for_compilation (void)
 {
   reg_renumber = 0;
-
-  /* No prologue/epilogue insns yet.  Make sure that these vectors are
-     empty.  */
-  gcc_assert (VEC_length (int, prologue) == 0);
-  gcc_assert (VEC_length (int, epilogue) == 0);
-  gcc_assert (VEC_length (int, sibcall_epilogue) == 0);
   return 0;
 }
 
@@ -4233,13 +4507,13 @@ struct rtl_opt_pass pass_init_function =
 {
  {
   RTL_PASS,
-  NULL,                                 /* name */
-  NULL,                                 /* gate */   
-  init_function_for_compilation,        /* execute */       
+  "*init_function",                     /* name */
+  NULL,                                 /* gate */
+  init_function_for_compilation,        /* execute */
   NULL,                                 /* sub */
   NULL,                                 /* next */
   0,                                    /* static_pass_number */
-  0,                                    /* tv_id */
+  TV_NONE,                              /* tv_id */
   0,                                    /* properties_required */
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
@@ -4274,12 +4548,8 @@ stack_protect_prologue (void)
   tree guard_decl = targetm.stack_protect_guard ();
   rtx x, y;
 
-  /* Avoid expand_expr here, because we don't want guard_decl pulled
-     into registers unless absolutely necessary.  And we know that
-     crtl->stack_protect_guard is a local stack slot, so this skips
-     all the fluff.  */
-  x = validize_mem (DECL_RTL (crtl->stack_protect_guard));
-  y = validize_mem (DECL_RTL (guard_decl));
+  x = expand_normal (crtl->stack_protect_guard);
+  y = expand_normal (guard_decl);
 
   /* Allow the target to copy from Y to X without leaking Y into a
      register.  */
@@ -4312,12 +4582,8 @@ stack_protect_epilogue (void)
   rtx label = gen_label_rtx ();
   rtx x, y, tmp;
 
-  /* Avoid expand_expr here, because we don't want guard_decl pulled
-     into registers unless absolutely necessary.  And we know that
-     crtl->stack_protect_guard is a local stack slot, so this skips
-     all the fluff.  */
-  x = validize_mem (DECL_RTL (crtl->stack_protect_guard));
-  y = validize_mem (DECL_RTL (guard_decl));
+  x = expand_normal (crtl->stack_protect_guard);
+  y = expand_normal (guard_decl);
 
   /* Allow the target to compare Y with X without leaking either into
      a register.  */
@@ -4462,13 +4728,21 @@ expand_function_start (tree subr)
   if (cfun->static_chain_decl)
     {
       tree parm = cfun->static_chain_decl;
-      rtx local = gen_reg_rtx (Pmode);
+      rtx local, chain, insn;
 
-      set_decl_incoming_rtl (parm, static_chain_incoming_rtx, false);
+      local = gen_reg_rtx (Pmode);
+      chain = targetm.calls.static_chain (current_function_decl, true);
+
+      set_decl_incoming_rtl (parm, chain, false);
       SET_DECL_RTL (parm, local);
       mark_reg_pointer (local, TYPE_ALIGN (TREE_TYPE (TREE_TYPE (parm))));
 
-      emit_move_insn (local, static_chain_incoming_rtx);
+      insn = emit_move_insn (local, chain);
+
+      /* Mark the register as eliminable, similar to parameters.  */
+      if (MEM_P (chain)
+	  && reg_mentioned_p (arg_pointer_rtx, XEXP (chain, 0)))
+	set_unique_reg_note (insn, REG_EQUIV, chain);
     }
 
   /* If the function receives a non-local goto, then store the
@@ -4608,7 +4882,7 @@ do_warn_unused_parameter (tree fn)
   tree decl;
 
   for (decl = DECL_ARGUMENTS (fn);
-       decl; decl = TREE_CHAIN (decl))
+       decl; decl = DECL_CHAIN (decl))
     if (!TREE_USED (decl) && TREE_CODE (decl) == PARM_DECL
 	&& DECL_NAME (decl) && !DECL_ARTIFICIAL (decl)
 	&& !TREE_NO_WARNING (decl))
@@ -4639,11 +4913,15 @@ expand_function_end (void)
       for (insn = get_insns (); insn; insn = NEXT_INSN (insn))
 	if (CALL_P (insn))
 	  {
+	    rtx max_frame_size = GEN_INT (STACK_CHECK_MAX_FRAME_SIZE);
 	    start_sequence ();
-	    probe_stack_range (STACK_OLD_CHECK_PROTECT,
-			       GEN_INT (STACK_CHECK_MAX_FRAME_SIZE));
+	    if (STACK_CHECK_MOVING_SP)
+	      anti_adjust_stack_and_probe (max_frame_size, true);
+	    else
+	      probe_stack_range (STACK_OLD_CHECK_PROTECT, max_frame_size);
 	    seq = get_insns ();
 	    end_sequence ();
+	    set_insn_locators (seq, prologue_locator);
 	    emit_insn_before (seq, stack_check_probe_note);
 	    break;
 	  }
@@ -4674,7 +4952,7 @@ expand_function_end (void)
   /* Output the label for the actual return from the function.  */
   emit_label (return_label);
 
-  if (USING_SJLJ_EXCEPTIONS)
+  if (targetm.except_unwind_info (&global_options) == UI_SJLJ)
     {
       /* Let except.c know where it should emit the call to unregister
 	 the function context for sjlj exceptions.  */
@@ -4686,7 +4964,7 @@ expand_function_end (void)
       /* We want to ensure that instructions that may trap are not
 	 moved into the epilogue by scheduling, because we don't
 	 always emit unwind information for the epilogue.  */
-      if (flag_non_call_exceptions)
+      if (cfun->can_throw_non_call_exceptions)
 	emit_insn (gen_blockage ());
     }
 
@@ -4736,10 +5014,9 @@ expand_function_end (void)
 	  else if (GET_MODE (real_decl_rtl) != GET_MODE (decl_rtl))
 	    {
 	      int unsignedp = TYPE_UNSIGNED (TREE_TYPE (decl_result));
-
-	      if (targetm.calls.promote_function_return (TREE_TYPE (current_function_decl)))
-		promote_mode (TREE_TYPE (decl_result), GET_MODE (decl_rtl),
-			      &unsignedp, 1);
+	      promote_function_mode (TREE_TYPE (decl_result),
+				     GET_MODE (decl_rtl), &unsignedp,
+				     TREE_TYPE (current_function_decl), 1);
 
 	      convert_move (real_decl_rtl, decl_rtl, unsignedp);
 	    }
@@ -4820,7 +5097,6 @@ expand_function_end (void)
 
     start_sequence ();
     clobber_return_register ();
-    expand_naked_return ();
     seq = get_insns ();
     end_sequence ();
 
@@ -4828,12 +5104,14 @@ expand_function_end (void)
   }
 
   /* Output the label for the naked return from the function.  */
-  emit_label (naked_return_label);
+  if (naked_return_label)
+    emit_label (naked_return_label);
 
   /* @@@ This is a kludge.  We want to ensure that instructions that
      may trap are not moved into the epilogue by scheduling, because
      we don't always emit unwind information for the epilogue.  */
-  if (! USING_SJLJ_EXCEPTIONS && flag_non_call_exceptions)
+  if (cfun->can_throw_non_call_exceptions
+      && targetm.except_unwind_info (&global_options) != UI_SJLJ)
     emit_insn (gen_blockage ());
 
   /* If stack protection is enabled for this function, check the guard.  */
@@ -4846,10 +5124,15 @@ expand_function_end (void)
   if (! EXIT_IGNORE_STACK
       && cfun->calls_alloca)
     {
-      rtx tem = 0;
+      rtx tem = 0, seq;
 
-      emit_stack_save (SAVE_FUNCTION, &tem, parm_birth_insn);
-      emit_stack_restore (SAVE_FUNCTION, tem, NULL_RTX);
+      start_sequence ();
+      emit_stack_save (SAVE_FUNCTION, &tem);
+      seq = get_insns ();
+      end_sequence ();
+      emit_insn_before (seq, parm_birth_insn);
+
+      emit_stack_restore (SAVE_FUNCTION, tem);
     }
 
   /* ??? This should no longer be necessary since stupid is no longer with
@@ -4886,21 +5169,55 @@ get_arg_pointer_save_area (void)
       push_topmost_sequence ();
       emit_insn_after (seq, entry_of_function ());
       pop_topmost_sequence ();
+
+      crtl->arg_pointer_save_area_init = true;
     }
 
   return ret;
 }
 
-/* Extend a vector that records the INSN_UIDs of INSNS
-   (a list of one or more insns).  */
+/* Add a list of INSNS to the hash HASHP, possibly allocating HASHP
+   for the first time.  */
 
 static void
-record_insns (rtx insns, VEC(int,heap) **vecp)
+record_insns (rtx insns, rtx end, htab_t *hashp)
 {
   rtx tmp;
+  htab_t hash = *hashp;
 
-  for (tmp = insns; tmp != NULL_RTX; tmp = NEXT_INSN (tmp))
-    VEC_safe_push (int, heap, *vecp, INSN_UID (tmp));
+  if (hash == NULL)
+    *hashp = hash
+      = htab_create_ggc (17, htab_hash_pointer, htab_eq_pointer, NULL);
+
+  for (tmp = insns; tmp != end; tmp = NEXT_INSN (tmp))
+    {
+      void **slot = htab_find_slot (hash, tmp, INSERT);
+      gcc_assert (*slot == NULL);
+      *slot = tmp;
+    }
+}
+
+/* INSN has been duplicated or replaced by as COPY, perhaps by duplicating a
+   basic block, splitting or peepholes.  If INSN is a prologue or epilogue
+   insn, then record COPY as well.  */
+
+void
+maybe_copy_prologue_epilogue_insn (rtx insn, rtx copy)
+{
+  htab_t hash;
+  void **slot;
+
+  hash = epilogue_insn_hash;
+  if (!hash || !htab_find (hash, insn))
+    {
+      hash = prologue_insn_hash;
+      if (!hash || !htab_find (hash, insn))
+	return;
+    }
+
+  slot = htab_find_slot (hash, copy, INSERT);
+  gcc_assert (*slot == NULL);
+  *slot = copy;
 }
 
 /* Set the locator of the insn chain starting at INSN to LOC.  */
@@ -4915,49 +5232,34 @@ set_insn_locators (rtx insn, int loc)
     }
 }
 
-/* Determine how many INSN_UIDs in VEC are part of INSN.  Because we can
-   be running after reorg, SEQUENCE rtl is possible.  */
+/* Determine if any INSNs in HASH are, or are part of, INSN.  Because
+   we can be running after reorg, SEQUENCE rtl is possible.  */
 
-static int
-contains (const_rtx insn, VEC(int,heap) **vec)
+static bool
+contains (const_rtx insn, htab_t hash)
 {
-  int i, j;
+  if (hash == NULL)
+    return false;
 
-  if (NONJUMP_INSN_P (insn)
-      && GET_CODE (PATTERN (insn)) == SEQUENCE)
+  if (NONJUMP_INSN_P (insn) && GET_CODE (PATTERN (insn)) == SEQUENCE)
     {
-      int count = 0;
+      int i;
       for (i = XVECLEN (PATTERN (insn), 0) - 1; i >= 0; i--)
-	for (j = VEC_length (int, *vec) - 1; j >= 0; --j)
-	  if (INSN_UID (XVECEXP (PATTERN (insn), 0, i))
-	      == VEC_index (int, *vec, j))
-	    count++;
-      return count;
+	if (htab_find (hash, XVECEXP (PATTERN (insn), 0, i)))
+	  return true;
+      return false;
     }
-  else
-    {
-      for (j = VEC_length (int, *vec) - 1; j >= 0; --j)
-	if (INSN_UID (insn) == VEC_index (int, *vec, j))
-	  return 1;
-    }
-  return 0;
+
+  return htab_find (hash, insn) != NULL;
 }
 
 int
 prologue_epilogue_contains (const_rtx insn)
 {
-  if (contains (insn, &prologue))
+  if (contains (insn, prologue_insn_hash))
     return 1;
-  if (contains (insn, &epilogue))
+  if (contains (insn, epilogue_insn_hash))
     return 1;
-  return 0;
-}
-
-int
-sibcall_epilogue_contains (const_rtx insn)
-{
-  if (sibcall_epilogue)
-    return contains (insn, &sibcall_epilogue);
   return 0;
 }
 
@@ -4979,17 +5281,50 @@ emit_return_into_block (basic_block bb)
 static void
 thread_prologue_and_epilogue_insns (void)
 {
-  int inserted = 0;
+  bool inserted;
+  rtx seq ATTRIBUTE_UNUSED, epilogue_end ATTRIBUTE_UNUSED;
+  edge entry_edge ATTRIBUTE_UNUSED;
   edge e;
-#if defined (HAVE_sibcall_epilogue) || defined (HAVE_epilogue) || defined (HAVE_return) || defined (HAVE_prologue)
-  rtx seq;
-#endif
-#if defined (HAVE_epilogue) || defined(HAVE_return)
-  rtx epilogue_end = NULL_RTX;
-#endif
   edge_iterator ei;
 
   rtl_profile_for_bb (ENTRY_BLOCK_PTR);
+
+  inserted = false;
+  seq = NULL_RTX;
+  epilogue_end = NULL_RTX;
+
+  /* Can't deal with multiple successors of the entry block at the
+     moment.  Function should always have at least one entry
+     point.  */
+  gcc_assert (single_succ_p (ENTRY_BLOCK_PTR));
+  entry_edge = single_succ_edge (ENTRY_BLOCK_PTR);
+
+  if (flag_split_stack
+      && (lookup_attribute ("no_split_stack", DECL_ATTRIBUTES (cfun->decl))
+	  == NULL))
+    {
+#ifndef HAVE_split_stack_prologue
+      gcc_unreachable ();
+#else
+      gcc_assert (HAVE_split_stack_prologue);
+
+      start_sequence ();
+      emit_insn (gen_split_stack_prologue ());
+      seq = get_insns ();
+      end_sequence ();
+
+      record_insns (seq, NULL, &prologue_insn_hash);
+      set_insn_locators (seq, prologue_locator);
+
+      /* This relies on the fact that committing the edge insertion
+	 will look for basic blocks within the inserted instructions,
+	 which in turn relies on the fact that we are not in CFG
+	 layout mode here.  */
+      insert_insn_on_edge (seq, entry_edge);
+      inserted = true;
+#endif
+    }
+
 #ifdef HAVE_prologue
   if (HAVE_prologue)
     {
@@ -4997,34 +5332,27 @@ thread_prologue_and_epilogue_insns (void)
       seq = gen_prologue ();
       emit_insn (seq);
 
-      /* Insert an explicit USE for the frame pointer 
+      /* Insert an explicit USE for the frame pointer
          if the profiling is on and the frame pointer is required.  */
       if (crtl->profile && frame_pointer_needed)
 	emit_use (hard_frame_pointer_rtx);
 
       /* Retain a map of the prologue insns.  */
-      record_insns (seq, &prologue);
+      record_insns (seq, NULL, &prologue_insn_hash);
       emit_note (NOTE_INSN_PROLOGUE_END);
- 
-#ifndef PROFILE_BEFORE_PROLOGUE
+
       /* Ensure that instructions are not moved into the prologue when
 	 profiling is on.  The call to the profiling routine can be
 	 emitted within the live range of a call-clobbered register.  */
-      if (crtl->profile)
+      if (!targetm.profile_before_prologue () && crtl->profile)
         emit_insn (gen_blockage ());
-#endif
 
       seq = get_insns ();
       end_sequence ();
       set_insn_locators (seq, prologue_locator);
 
-      /* Can't deal with multiple successors of the entry block
-         at the moment.  Function should always have at least one
-         entry point.  */
-      gcc_assert (single_succ_p (ENTRY_BLOCK_PTR));
-
-      insert_insn_on_edge (seq, single_succ_edge (ENTRY_BLOCK_PTR));
-      inserted = 1;
+      insert_insn_on_edge (seq, entry_edge);
+      inserted = true;
     }
 #endif
 
@@ -5049,9 +5377,7 @@ thread_prologue_and_epilogue_insns (void)
       basic_block last;
       rtx label;
 
-      FOR_EACH_EDGE (e, ei, EXIT_BLOCK_PTR->preds)
-	if (e->flags & EDGE_FALLTHRU)
-	  break;
+      e = find_fallthru_edge (EXIT_BLOCK_PTR->preds);
       if (e == NULL)
 	goto epilogue_done;
       last = e->src;
@@ -5135,14 +5461,44 @@ thread_prologue_and_epilogue_insns (void)
 	}
     }
 #endif
+
+  /* A small fib -- epilogue is not yet completed, but we wish to re-use
+     this marker for the splits of EH_RETURN patterns, and nothing else
+     uses the flag in the meantime.  */
+  epilogue_completed = 1;
+
+#ifdef HAVE_eh_return
+  /* Find non-fallthru edges that end with EH_RETURN instructions.  On
+     some targets, these get split to a special version of the epilogue
+     code.  In order to be able to properly annotate these with unwind
+     info, try to split them now.  If we get a valid split, drop an
+     EPILOGUE_BEG note and mark the insns as epilogue insns.  */
+  FOR_EACH_EDGE (e, ei, EXIT_BLOCK_PTR->preds)
+    {
+      rtx prev, last, trial;
+
+      if (e->flags & EDGE_FALLTHRU)
+	continue;
+      last = BB_END (e->src);
+      if (!eh_returnjump_p (last))
+	continue;
+
+      prev = PREV_INSN (last);
+      trial = try_split (PATTERN (last), last, 1);
+      if (trial == last)
+	continue;
+
+      record_insns (NEXT_INSN (prev), NEXT_INSN (trial), &epilogue_insn_hash);
+      emit_note_after (NOTE_INSN_EPILOGUE_BEG, prev);
+    }
+#endif
+
   /* Find the edge that falls through to EXIT.  Other edges may exist
      due to RETURN instructions, but those don't need epilogues.
      There really shouldn't be a mixture -- either all should have
      been converted or none, however...  */
 
-  FOR_EACH_EDGE (e, ei, EXIT_BLOCK_PTR->preds)
-    if (e->flags & EDGE_FALLTHRU)
-      break;
+  e = find_fallthru_edge (EXIT_BLOCK_PTR->preds);
   if (e == NULL)
     goto epilogue_done;
 
@@ -5152,17 +5508,18 @@ thread_prologue_and_epilogue_insns (void)
       start_sequence ();
       epilogue_end = emit_note (NOTE_INSN_EPILOGUE_BEG);
       seq = gen_epilogue ();
-      emit_jump_insn (seq);
+      if (seq)
+	emit_jump_insn (seq);
 
       /* Retain a map of the epilogue insns.  */
-      record_insns (seq, &epilogue);
+      record_insns (seq, NULL, &epilogue_insn_hash);
       set_insn_locators (seq, epilogue_locator);
 
       seq = get_insns ();
       end_sequence ();
 
       insert_insn_on_edge (seq, e);
-      inserted = 1;
+      inserted = true;
     }
   else
 #endif
@@ -5217,6 +5574,7 @@ epilogue_done:
 	}
 
       start_sequence ();
+      emit_note (NOTE_INSN_EPILOGUE_BEG);
       emit_insn (gen_sibcall_epilogue ());
       seq = get_insns ();
       end_sequence ();
@@ -5224,7 +5582,7 @@ epilogue_done:
       /* Retain a map of the epilogue insns.  Used in life analysis to
 	 avoid getting rid of sibcall epilogue insns.  Do this before we
 	 actually emit the sequence.  */
-      record_insns (seq, &sibcall_epilogue);
+      record_insns (seq, NULL, &epilogue_insn_hash);
       set_insn_locators (seq, epilogue_locator);
 
       emit_insn_before (seq, insn);
@@ -5245,7 +5603,7 @@ epilogue_done:
       for (insn = epilogue_end; insn; insn = next)
 	{
 	  next = NEXT_INSN (insn);
-	  if (NOTE_P (insn) 
+	  if (NOTE_P (insn)
 	      && (NOTE_KIND (insn) == NOTE_INSN_FUNCTION_BEG))
 	    reorder_insns (insn, insn, PREV_INSN (epilogue_end));
 	}
@@ -5258,23 +5616,26 @@ epilogue_done:
   df_update_entry_exit_and_calls ();
 }
 
-/* Reposition the prologue-end and epilogue-begin notes after instruction
-   scheduling and delayed branch scheduling.  */
+/* Reposition the prologue-end and epilogue-begin notes after
+   instruction scheduling.  */
 
 void
 reposition_prologue_and_epilogue_notes (void)
 {
-#if defined (HAVE_prologue) || defined (HAVE_epilogue)
-  rtx insn, last, note;
-  int len;
-
-  if ((len = VEC_length (int, prologue)) > 0)
+#if defined (HAVE_prologue) || defined (HAVE_epilogue) \
+    || defined (HAVE_sibcall_epilogue)
+  /* Since the hash table is created on demand, the fact that it is
+     non-null is a signal that it is non-empty.  */
+  if (prologue_insn_hash != NULL)
     {
-      last = 0, note = 0;
+      size_t len = htab_elements (prologue_insn_hash);
+      rtx insn, last = NULL, note = NULL;
 
-      /* Scan from the beginning until we reach the last prologue insn.
-	 We apparently can't depend on basic_block_{head,end} after
-	 reorg has run.  */
+      /* Scan from the beginning until we reach the last prologue insn.  */
+      /* ??? While we do have the CFG intact, there are two problems:
+	 (1) The prologue can contain loops (typically probing the stack),
+	     which means that the end of the prologue isn't in the first bb.
+	 (2) Sometimes the PROLOGUE_END note gets pushed into the next bb.  */
       for (insn = get_insns (); insn; insn = NEXT_INSN (insn))
 	{
 	  if (NOTE_P (insn))
@@ -5282,7 +5643,7 @@ reposition_prologue_and_epilogue_notes (void)
 	      if (NOTE_KIND (insn) == NOTE_INSN_PROLOGUE_END)
 		note = insn;
 	    }
-	  else if (contains (insn, &prologue))
+	  else if (contains (insn, prologue_insn_hash))
 	    {
 	      last = insn;
 	      if (--len == 0)
@@ -5292,14 +5653,17 @@ reposition_prologue_and_epilogue_notes (void)
 
       if (last)
 	{
-	  /* Find the prologue-end note if we haven't already, and
-	     move it to just after the last prologue insn.  */
-	  if (note == 0)
+	  if (note == NULL)
 	    {
-	      for (note = last; (note = NEXT_INSN (note));)
-		if (NOTE_P (note)
-		    && NOTE_KIND (note) == NOTE_INSN_PROLOGUE_END)
-		  break;
+	      /* Scan forward looking for the PROLOGUE_END note.  It should
+		 be right at the beginning of the block, possibly with other
+		 insn notes that got moved there.  */
+	      for (note = NEXT_INSN (last); ; note = NEXT_INSN (note))
+		{
+		  if (NOTE_P (note)
+		      && NOTE_KIND (note) == NOTE_INSN_PROLOGUE_END)
+		    break;
+		}
 	    }
 
 	  /* Avoid placing note between CODE_LABEL and BASIC_BLOCK note.  */
@@ -5309,42 +5673,51 @@ reposition_prologue_and_epilogue_notes (void)
 	}
     }
 
-  if ((len = VEC_length (int, epilogue)) > 0)
+  if (epilogue_insn_hash != NULL)
     {
-      last = 0, note = 0;
+      edge_iterator ei;
+      edge e;
 
-      /* Scan from the end until we reach the first epilogue insn.
-	 We apparently can't depend on basic_block_{head,end} after
-	 reorg has run.  */
-      for (insn = get_last_insn (); insn; insn = PREV_INSN (insn))
+      FOR_EACH_EDGE (e, ei, EXIT_BLOCK_PTR->preds)
 	{
-	  if (NOTE_P (insn))
-	    {
-	      if (NOTE_KIND (insn) == NOTE_INSN_EPILOGUE_BEG)
-		note = insn;
-	    }
-	  else if (contains (insn, &epilogue))
-	    {
-	      last = insn;
-	      if (--len == 0)
-		break;
-	    }
-	}
+	  rtx insn, first = NULL, note = NULL;
+	  basic_block bb = e->src;
 
-      if (last)
-	{
-	  /* Find the epilogue-begin note if we haven't already, and
-	     move it to just before the first epilogue insn.  */
-	  if (note == 0)
+	  /* Scan from the beginning until we reach the first epilogue insn. */
+	  FOR_BB_INSNS (bb, insn)
 	    {
-	      for (note = insn; (note = PREV_INSN (note));)
-		if (NOTE_P (note)
-		    && NOTE_KIND (note) == NOTE_INSN_EPILOGUE_BEG)
-		  break;
+	      if (NOTE_P (insn))
+		{
+		  if (NOTE_KIND (insn) == NOTE_INSN_EPILOGUE_BEG)
+		    {
+		      note = insn;
+		      if (first != NULL)
+			break;
+		    }
+		}
+	      else if (first == NULL && contains (insn, epilogue_insn_hash))
+		{
+		  first = insn;
+		  if (note != NULL)
+		    break;
+		}
 	    }
 
-	  if (PREV_INSN (last) != note)
-	    reorder_insns (note, note, PREV_INSN (last));
+	  if (note)
+	    {
+	      /* If the function has a single basic block, and no real
+		 epilogue insns (e.g. sibcall with no cleanup), the
+		 epilogue note can get scheduled before the prologue
+		 note.  If we have frame related prologue insns, having
+		 them scanned during the epilogue will result in a crash.
+		 In this case re-order the epilogue note to just before
+		 the last insn in the block.  */
+	      if (first == NULL)
+		first = BB_END (bb);
+
+	      if (PREV_INSN (first) != note)
+		reorder_insns (note, note, PREV_INSN (first));
+	    }
 	}
     }
 #endif /* HAVE_prologue or HAVE_epilogue */
@@ -5354,14 +5727,9 @@ reposition_prologue_and_epilogue_notes (void)
 const char *
 current_function_name (void)
 {
+  if (cfun == NULL)
+    return "<none>";
   return lang_hooks.decl_printable_name (cfun->decl, 2);
-}
-
-/* Returns the raw (mangled) name of the current function.  */
-const char *
-current_function_assembler_name (void)
-{
-  return IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (cfun->decl));
 }
 
 
@@ -5398,8 +5766,15 @@ void
 used_types_insert (tree t)
 {
   while (POINTER_TYPE_P (t) || TREE_CODE (t) == ARRAY_TYPE)
-    t = TREE_TYPE (t);
-  t = TYPE_MAIN_VARIANT (t);
+    if (TYPE_NAME (t))
+      break;
+    else
+      t = TREE_TYPE (t);
+  if (TREE_CODE (t) == ERROR_MARK)
+    return;
+  if (TYPE_NAME (t) == NULL_TREE
+      || TYPE_NAME (t) == TYPE_NAME (TYPE_MAIN_VARIANT (t)))
+    t = TYPE_MAIN_VARIANT (t);
   if (debug_info_level > DINFO_LEVEL_NONE)
     {
       if (cfun)
@@ -5408,9 +5783,7 @@ used_types_insert (tree t)
 	/* So this might be a type referenced by a global variable.
 	   Record that type so that we can later decide to emit its debug
 	   information.  */
-	types_used_by_cur_var_decl =
-	  tree_cons (t, NULL, types_used_by_cur_var_decl);
-
+        VEC_safe_push (tree, gc, types_used_by_cur_var_decl, t);
     }
 }
 
@@ -5469,8 +5842,7 @@ types_used_by_var_decl_insert (tree type, tree var_decl)
       if (*slot == NULL)
 	{
 	  struct types_used_by_vars_entry *entry;
-	  entry = (struct types_used_by_vars_entry*) ggc_alloc
-		    (sizeof (struct types_used_by_vars_entry));
+	  entry = ggc_alloc_types_used_by_vars_entry ();
 	  entry->type = type;
 	  entry->var_decl = var_decl;
 	  *slot = entry;
@@ -5482,13 +5854,13 @@ struct rtl_opt_pass pass_leaf_regs =
 {
  {
   RTL_PASS,
-  NULL,                                 /* name */
+  "*leaf_regs",                         /* name */
   NULL,                                 /* gate */
   rest_of_handle_check_leaf_regs,       /* execute */
   NULL,                                 /* sub */
   NULL,                                 /* next */
   0,                                    /* static_pass_number */
-  0,                                    /* tv_id */
+  TV_NONE,                              /* tv_id */
   0,                                    /* properties_required */
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
@@ -5502,12 +5874,17 @@ rest_of_handle_thread_prologue_and_epilogue (void)
 {
   if (optimize)
     cleanup_cfg (CLEANUP_EXPENSIVE);
+
   /* On some machines, the prologue and epilogue code, or parts thereof,
      can be represented as RTL.  Doing so lets us schedule insns between
      it and the rest of the code and also allows delayed branch
      scheduling to operate in the epilogue.  */
-
   thread_prologue_and_epilogue_insns ();
+
+  /* The stack usage info is finalized during prologue expansion.  */
+  if (flag_stack_usage)
+    output_stack_usage ();
+
   return 0;
 }
 
@@ -5535,7 +5912,7 @@ struct rtl_opt_pass pass_thread_prologue_and_epilogue =
 
 
 /* This mini-pass fixes fall-out from SSA in asm statements that have
-   in-out constraints.  Say you start with 
+   in-out constraints.  Say you start with
 
      orig = inout;
      asm ("": "+mr" (inout));
@@ -5723,7 +6100,7 @@ struct rtl_opt_pass pass_match_asm_constraints =
   NULL,                                 /* sub */
   NULL,                                 /* next */
   0,                                    /* static_pass_number */
-  0,					/* tv_id */
+  TV_NONE,				/* tv_id */
   0,                                    /* properties_required */
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */

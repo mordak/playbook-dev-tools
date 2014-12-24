@@ -1,5 +1,6 @@
 /* Definitions for branch prediction routines in the GNU compiler.
-   Copyright (C) 2001, 2003, 2004, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2001, 2003, 2004, 2007, 2008, 2010
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -40,5 +41,8 @@ extern int counts_to_freqs (void);
 extern void estimate_bb_frequencies (void);
 extern const char *predictor_name (enum br_predictor);
 extern tree build_predict_expr (enum br_predictor, enum prediction);
+extern void tree_estimate_probability (void);
+extern void compute_function_frequency (void);
+extern void rebuild_frequencies (void);
 
 #endif  /* GCC_PREDICT_H */

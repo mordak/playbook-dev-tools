@@ -1,6 +1,6 @@
 /* Java(TM) language-specific utility routines.
    Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
-   2005, 2006, 2007, 2008 Free Software Foundation, Inc.
+   2005, 2006, 2007, 2008, 2010, 2012 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -30,11 +30,8 @@ The Free Software Foundation is independent of Sun Microsystems, Inc.  */
 #include "tm.h"
 #include "tree.h"
 #include "input.h"
-#include "rtl.h"
-#include "expr.h"
 #include "java-tree.h"
 #include "jcf.h"
-#include "toplev.h"
 #include "langhooks.h"
 #include "langhooks-def.h"
 #include "flags.h"
@@ -45,13 +42,17 @@ The Free Software Foundation is independent of Sun Microsystems, Inc.  */
 #include "tree-dump.h"
 #include "opts.h"
 #include "options.h"
+#include "target.h"
 
 static bool java_init (void);
 static void java_finish (void);
-static unsigned int java_init_options (unsigned int, const char **);
+static unsigned int java_option_lang_mask (void);
+static void java_init_options_struct (struct gcc_options *);
+static void java_init_options (unsigned int, struct cl_decoded_option *);
 static bool java_post_options (const char **);
 
-static int java_handle_option (size_t scode, const char *arg, int value);
+static bool java_handle_option (size_t, const char *, int, int, location_t,
+				const struct cl_option_handlers *);
 static void put_decl_string (const char *, int);
 static void put_decl_node (tree, int);
 static void java_print_error_function (diagnostic_context *, const char *,
@@ -63,6 +64,8 @@ static void dump_compound_expr (dump_info_p, tree);
 static bool java_decl_ok_for_sibcall (const_tree);
 
 static enum classify_record java_classify_record (tree type);
+
+static tree java_eh_personality (void);
 
 #ifndef TARGET_OBJECT_SUFFIX
 # define TARGET_OBJECT_SUFFIX ".o"
@@ -111,8 +114,7 @@ static int dependency_tracking = 0;
 #define DEPEND_TARGET_SET 4
 #define DEPEND_FILE_ALREADY_SET 8
 
-struct language_function GTY(())
-{
+struct GTY(()) language_function {
   int unused;
 };
 
@@ -122,6 +124,10 @@ struct language_function GTY(())
 #define LANG_HOOKS_INIT java_init
 #undef LANG_HOOKS_FINISH
 #define LANG_HOOKS_FINISH java_finish
+#undef LANG_HOOKS_OPTION_LANG_MASK
+#define LANG_HOOKS_OPTION_LANG_MASK java_option_lang_mask
+#undef LANG_HOOKS_INIT_OPTIONS_STRUCT
+#define LANG_HOOKS_INIT_OPTIONS_STRUCT java_init_options_struct
 #undef LANG_HOOKS_INIT_OPTIONS
 #define LANG_HOOKS_INIT_OPTIONS java_init_options
 #undef LANG_HOOKS_HANDLE_OPTION
@@ -130,14 +136,14 @@ struct language_function GTY(())
 #define LANG_HOOKS_POST_OPTIONS java_post_options
 #undef LANG_HOOKS_PARSE_FILE
 #define LANG_HOOKS_PARSE_FILE java_parse_file
-#undef LANG_HOOKS_MARK_ADDRESSABLE
-#define LANG_HOOKS_MARK_ADDRESSABLE java_mark_addressable
 #undef LANG_HOOKS_DUP_LANG_SPECIFIC_DECL
 #define LANG_HOOKS_DUP_LANG_SPECIFIC_DECL java_dup_lang_specific_decl
 #undef LANG_HOOKS_DECL_PRINTABLE_NAME
 #define LANG_HOOKS_DECL_PRINTABLE_NAME lang_printable_name
 #undef LANG_HOOKS_PRINT_ERROR_FUNCTION
 #define LANG_HOOKS_PRINT_ERROR_FUNCTION	java_print_error_function
+#undef LANG_HOOKS_WRITE_GLOBALS
+#define LANG_HOOKS_WRITE_GLOBALS java_write_globals
 
 #undef LANG_HOOKS_TYPE_FOR_MODE
 #define LANG_HOOKS_TYPE_FOR_MODE java_type_for_mode
@@ -161,15 +167,23 @@ struct language_function GTY(())
 #undef LANG_HOOKS_ATTRIBUTE_TABLE
 #define LANG_HOOKS_ATTRIBUTE_TABLE java_attribute_table
 
+#undef LANG_HOOKS_EH_PERSONALITY
+#define LANG_HOOKS_EH_PERSONALITY java_eh_personality
+
+#undef LANG_HOOKS_EH_USE_CXA_END_CLEANUP
+#define LANG_HOOKS_EH_USE_CXA_END_CLEANUP  true
+
 /* Each front end provides its own.  */
-const struct lang_hooks lang_hooks = LANG_HOOKS_INITIALIZER;
+struct lang_hooks lang_hooks = LANG_HOOKS_INITIALIZER;
 
 /*
  * process java-specific compiler command-line options
- * return 0, but do not complain if the option is not recognized.
+ * return false, but do not complain if the option is not recognized.
  */
-static int
-java_handle_option (size_t scode, const char *arg, int value)
+static bool
+java_handle_option (size_t scode, const char *arg, int value,
+		    int kind ATTRIBUTE_UNUSED, location_t loc ATTRIBUTE_UNUSED,
+		    const struct cl_option_handlers *handlers ATTRIBUTE_UNUSED)
 {
   enum opt_code code = (enum opt_code) scode;
 
@@ -250,7 +264,6 @@ java_handle_option (size_t scode, const char *arg, int value)
 
     case OPT_faux_classpath:
     case OPT_fclasspath_:
-    case OPT_fCLASSPATH_:
       jcf_path_classpath_arg (arg);
       break;
 
@@ -260,7 +273,7 @@ java_handle_option (size_t scode, const char *arg, int value)
 
     case OPT_fdump_:
       if (!dump_switch_p (arg))
-	return 0;
+	return false;
       break;
 
     case OPT_fencoding_:
@@ -289,7 +302,7 @@ java_handle_option (size_t scode, const char *arg, int value)
       gcc_unreachable ();
     }
 
-  return 1;
+  return true;
 }
 
 /* Global open file.  */
@@ -389,7 +402,9 @@ put_decl_node (tree node, int verbosity)
                  if verbosity is higher than 1.  */
               && verbosity >= 1)
 	    {
-	      put_decl_node (TYPE_NAME (DECL_CONTEXT (node)),
+	      put_decl_node (TREE_CODE (DECL_CONTEXT (node)) == FUNCTION_DECL
+			     ? DECL_CONTEXT (node)
+			     : TYPE_NAME (DECL_CONTEXT (node)),
                                verbosity);
 	      put_decl_string (".", 1);
 	    }
@@ -519,25 +534,36 @@ lang_init_source (int level)
 }
 
 static unsigned int
-java_init_options (unsigned int argc ATTRIBUTE_UNUSED,
-		   const char **argv ATTRIBUTE_UNUSED)
+java_option_lang_mask (void)
 {
-  flag_bounds_check = 1;
-  flag_exceptions = 1;
-  flag_non_call_exceptions = 1;
+  return CL_Java;
+}
+
+/* Initialize options structure OPTS.  */
+
+static void
+java_init_options_struct (struct gcc_options *opts)
+{
+  opts->x_flag_bounds_check = 1;
+  opts->x_flag_exceptions = 1;
+  opts->x_flag_non_call_exceptions = 1;
 
   /* In Java floating point operations never trap.  */
-  flag_trapping_math = 0;
+  opts->x_flag_trapping_math = 0;
+  opts->frontend_set_flag_trapping_math = true;
 
   /* In Java arithmetic overflow always wraps around.  */
-  flag_wrapv = 1;
+  opts->x_flag_wrapv = 1;
 
   /* Java requires left-to-right evaluation of subexpressions.  */
-  flag_evaluation_order = 1;
+  opts->x_flag_evaluation_order = 1;
+}
 
+static void
+java_init_options (unsigned int decoded_options_count ATTRIBUTE_UNUSED,
+		   struct cl_decoded_option *decoded_options ATTRIBUTE_UNUSED)
+{
   jcf_path_init ();
-
-  return CL_Java;
 }
 
 /* Post-switch processing.  */
@@ -545,6 +571,13 @@ static bool
 java_post_options (const char **pfilename)
 {
   const char *filename = *pfilename;
+
+  /* Excess precision other than "fast" requires front-end
+     support.  */
+  if (flag_excess_precision_cmdline == EXCESS_PRECISION_STANDARD
+      && TARGET_FLT_EVAL_METHOD_NON_DEFAULT)
+    sorry ("-fexcess-precision=standard for Java");
+  flag_excess_precision_cmdline = EXCESS_PRECISION_FAST;
 
   /* An absolute requirement: if we're not using indirect dispatch, we
      must always verify everything.  */
@@ -568,13 +601,13 @@ java_post_options (const char **pfilename)
       filename = "stdin";
 
       if (dependency_tracking)
-	error ("can't do dependency tracking with input from stdin");
+	error ("can%'t do dependency tracking with input from stdin");
     }
   else
     {
       if (dependency_tracking)
 	{
-	  char *dot;
+	  const char *dot;
 
 	  /* If the target is set and the output filename is set, then
 	     there's no processing to do here.  Otherwise we must
@@ -584,7 +617,7 @@ java_post_options (const char **pfilename)
 	    {
 	      dot = strrchr (filename, '.');
 	      if (dot == NULL)
-		error ("couldn't determine target name for dependency tracking");
+		error ("couldn%'t determine target name for dependency tracking");
 	      else
 		{
 		  char *buf = XNEWVEC (char, dot - filename +
@@ -868,12 +901,20 @@ java_classify_record (tree type)
   if (! CLASS_P (type))
     return RECORD_IS_STRUCT;
 
-  /* ??? GDB does not support DW_TAG_interface_type as of December,
-     2007.  Re-enable this at a later time.  */
-  if (0 && CLASS_INTERFACE (TYPE_NAME (type)))
+  if (CLASS_INTERFACE (TYPE_NAME (type)))
     return RECORD_IS_INTERFACE;
 
   return RECORD_IS_CLASS;
+}
+
+static GTY(()) tree java_eh_personality_decl;
+
+static tree
+java_eh_personality (void)
+{
+  if (!java_eh_personality_decl)
+    java_eh_personality_decl = build_personality_function ("gcj");
+  return java_eh_personality_decl;
 }
 
 #include "gt-java-lang.h"

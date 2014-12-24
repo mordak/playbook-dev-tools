@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2001-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 2001-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -64,8 +64,8 @@ package body Osint.C is
 
       if not Status then
          Fail
-           ("error while closing expanded source file ",
-            Get_Name_String (Output_File_Name));
+           ("error while closing expanded source file "
+            & Get_Name_String (Output_File_Name));
       end if;
    end Close_Debug_File;
 
@@ -81,8 +81,8 @@ package body Osint.C is
 
       if not Status then
          Fail
-           ("error while closing list file ",
-            Get_Name_String (Output_File_Name));
+           ("error while closing list file "
+            & Get_Name_String (Output_File_Name));
       end if;
    end Close_List_File;
 
@@ -98,8 +98,8 @@ package body Osint.C is
 
       if not Status then
          Fail
-           ("error while closing ALI file ",
-            Get_Name_String (Output_File_Name));
+           ("error while closing ALI file "
+            & Get_Name_String (Output_File_Name));
       end if;
    end Close_Output_Library_Info;
 
@@ -115,8 +115,8 @@ package body Osint.C is
 
       if not Status then
          Fail
-           ("error while closing representation info file ",
-            Get_Name_String (Output_File_Name));
+           ("error while closing representation info file "
+            & Get_Name_String (Output_File_Name));
       end if;
    end Close_Repinfo_File;
 
@@ -202,8 +202,12 @@ package body Osint.C is
    --------------------------------
 
    procedure Create_Output_Library_Info is
+      Dummy : Boolean;
+      pragma Unreferenced (Dummy);
+
    begin
       Set_Library_Info_Name;
+      Delete_File (Name_Buffer (1 .. Name_Len), Dummy);
       Create_File_And_Check (Output_FD, Text);
    end Create_Output_Library_Info;
 
@@ -235,6 +239,17 @@ package body Osint.C is
          return 2;
       end if;
    end Debug_File_Eol_Length;
+
+   ---------------------------------
+   -- Get_Output_Object_File_Name --
+   ---------------------------------
+
+   function Get_Output_Object_File_Name return String is
+   begin
+      pragma Assert (Output_Object_File_Name /= null);
+
+      return Output_Object_File_Name.all;
+   end Get_Output_Object_File_Name;
 
    -----------------------
    -- More_Source_Files --
@@ -401,8 +416,8 @@ package body Osint.C is
 
       if not Status then
          Fail
-           ("error while closing tree file ",
-            Get_Name_String (Output_File_Name));
+           ("error while closing tree file "
+            & Get_Name_String (Output_File_Name));
       end if;
    end Tree_Close;
 

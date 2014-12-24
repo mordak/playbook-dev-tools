@@ -47,7 +47,7 @@ fi
 cat <<EOF
 ${LIB_SEARCH_DIRS}
 
-ENTRY(_mainCRTStartup)
+${RELOCATING+ENTRY (_mainCRTStartup)}
 
 SECTIONS
 {
@@ -56,6 +56,7 @@ SECTIONS
     ${RELOCATING+ *(.init)}
     *(.text)
     ${R_TEXT}
+    ${RELOCATING+ *(.text.*)}
     *(.glue_7t)
     *(.glue_7)
     ${CONSTRUCTING+ ___CTOR_LIST__ = .; __CTOR_LIST__ = . ; 
@@ -73,7 +74,7 @@ SECTIONS
      on fork.  This used to be named ".data$nocopy".  The linker used
      to include this between __data_start__ and __data_end__, but that
      breaks building the cygwin32 dll.  Instead, we name the section
-     ".data_cygwin_nocopy" and explictly include it after __data_end__. */
+     ".data_cygwin_nocopy" and explicitly include it after __data_end__. */
 
   .data ${RELOCATING+BLOCK(__section_alignment__)} : 
   {

@@ -2,7 +2,7 @@
 @ Division routines, written by Richard Earnshaw, (rearnsha@armltd.co.uk)
 
 /* Copyright 1995, 1996, 1998, 1999, 2000, 2003, 2004, 2005, 2007, 2008,
-   2009  Free Software Foundation, Inc.
+   2009, 2010 Free Software Foundation, Inc.
 
 This file is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -27,8 +27,17 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #if defined(__ELF__) && defined(__linux__)
 .section .note.GNU-stack,"",%progbits
 .previous
-#endif
+#endif  /* __ELF__ and __linux__ */
 
+#ifdef __ARM_EABI__
+/* Some attributes that are common to all routines in this file.  */
+	/* Tag_ABI_align_needed: This code does not require 8-byte
+	   alignment from the caller.  */
+	/* .eabi_attribute 24, 0  -- default setting.  */
+	/* Tag_ABI_align_preserved: This code preserves 8-byte
+	   alignment in any callee.  */
+	.eabi_attribute 25, 1
+#endif /* __ARM_EABI__ */
 /* ------------------------------------------------------------------------ */
 
 /* We need to know what prefix to add to function names.  */
@@ -95,12 +104,25 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #endif
 
 #if defined(__ARM_ARCH_7__) || defined(__ARM_ARCH_7A__) \
-	|| defined(__ARM_ARCH_7R__) || defined(__ARM_ARCH_7M__)
+	|| defined(__ARM_ARCH_7R__) || defined(__ARM_ARCH_7M__) \
+	|| defined(__ARM_ARCH_7EM__)
 # define __ARM_ARCH__ 7
 #endif
 
 #ifndef __ARM_ARCH__
 #error Unable to determine architecture.
+#endif
+
+/* There are times when we might prefer Thumb1 code even if ARM code is
+   permitted, for example, the code might be smaller, or there might be
+   interworking problems with switching to ARM state if interworking is
+   disabled.  */
+#if (defined(__thumb__)			\
+     && !defined(__thumb2__)		\
+     && (!defined(__THUMB_INTERWORK__)	\
+	 || defined (__OPTIMIZE_SIZE__)	\
+	 || defined(__ARM_ARCH_6M__)))
+# define __prefer_thumb__
 #endif
 
 /* How to return from a function call depends on the architecture variant.  */
@@ -256,16 +278,91 @@ LSYM(Lend_fde):
 .endm
 #endif
 
-.macro ARM_LDIV0 name
+#ifdef __ARM_EABI__
+.macro ARM_LDIV0 name signed
+	cmp	r0, #0
+	.ifc	\signed, unsigned
+	movne	r0, #0xffffffff
+	.else
+	movgt	r0, #0x7fffffff
+	movlt	r0, #0x80000000
+	.endif
+	b	SYM (__aeabi_idiv0) __PLT__
+.endm
+#else
+.macro ARM_LDIV0 name signed
 	str	lr, [sp, #-8]!
 98:	cfi_push 98b - __\name, 0xe, -0x8, 0x8
 	bl	SYM (__div0) __PLT__
 	mov	r0, #0			@ About as wrong as it could be.
 	RETLDM	unwind=98b
 .endm
+#endif
 
 
-.macro THUMB_LDIV0 name
+#ifdef __ARM_EABI__
+.macro THUMB_LDIV0 name signed
+#if defined(__ARM_ARCH_6M__)
+	.ifc \signed, unsigned
+	cmp	r0, #0
+	beq	1f
+	mov	r0, #0
+	mvn	r0, r0		@ 0xffffffff
+1:
+	.else
+	cmp	r0, #0
+	beq	2f
+	blt	3f
+	mov	r0, #0
+	mvn	r0, r0
+	lsr	r0, r0, #1	@ 0x7fffffff
+	b	2f
+3:	mov	r0, #0x80
+	lsl	r0, r0, #24	@ 0x80000000
+2:
+	.endif
+	push	{r0, r1, r2}
+	ldr	r0, 4f
+	adr	r1, 4f
+	add	r0, r1
+	str	r0, [sp, #8]
+	@ We know we are not on armv4t, so pop pc is safe.
+	pop	{r0, r1, pc}
+	.align	2
+4:
+	.word	__aeabi_idiv0 - 4b
+#elif defined(__thumb2__)
+	.syntax unified
+	.ifc \signed, unsigned
+	cbz	r0, 1f
+	mov	r0, #0xffffffff
+1:
+	.else
+	cmp	r0, #0
+	do_it	gt
+	movgt	r0, #0x7fffffff
+	do_it	lt
+	movlt	r0, #0x80000000
+	.endif
+	b.w	SYM(__aeabi_idiv0) __PLT__
+#else
+	.align	2
+	bx	pc
+	nop
+	.arm
+	cmp	r0, #0
+	.ifc	\signed, unsigned
+	movne	r0, #0xffffffff
+	.else
+	movgt	r0, #0x7fffffff
+	movlt	r0, #0x80000000
+	.endif
+	b	SYM(__aeabi_idiv0) __PLT__
+	.thumb
+#endif
+.endm
+#else
+.macro THUMB_LDIV0 name signed
 	push	{ r1, lr }
 98:	cfi_push 98b - __\name, 0xe, -0x4, 0x8
 	bl	SYM (__div0)
@@ -277,18 +374,19 @@ LSYM(Lend_fde):
 	pop	{ r1, pc }
 #endif
 .endm
+#endif
 
 .macro FUNC_END name
 	SIZE (__\name)
 .endm
 
-.macro DIV_FUNC_END name
+.macro DIV_FUNC_END name signed
 	cfi_start	__\name, LSYM(Lend_div0)
 LSYM(Ldiv0):
 #ifdef __thumb__
-	THUMB_LDIV0 \name
+	THUMB_LDIV0 \name \signed
 #else
-	ARM_LDIV0 \name
+	ARM_LDIV0 \name \signed
 #endif
 	cfi_end	LSYM(Lend_div0)
 	FUNC_END \name
@@ -413,6 +511,12 @@ SYM (__\name):
 #define yyl r2
 #endif	
 
+#ifdef __ARM_EABI__
+.macro	WEAK name
+	.weak SYM (__\name)
+.endm
+#endif
+
 #ifdef __thumb__
 /* Register aliases.  */
 
@@ -437,6 +541,27 @@ pc		.req	r15
 
 #if __ARM_ARCH__ >= 5 && ! defined (__OPTIMIZE_SIZE__)
 
+#if defined (__thumb2__)
+	clz	\curbit, \dividend
+	clz	\result, \divisor
+	sub	\curbit, \result, \curbit
+	rsb	\curbit, \curbit, #31
+	adr	\result, 1f
+	add	\curbit, \result, \curbit, lsl #4
+	mov	\result, #0
+	mov	pc, \curbit
+.p2align 3
+1:
+	.set	shift, 32
+	.rept	32
+	.set	shift, shift - 1
+	cmp.w	\dividend, \divisor, lsl #shift
+	nop.n
+	adc.w	\result, \result, \result
+	it	cs
+	subcs.w	\dividend, \dividend, \divisor, lsl #shift
+	.endr
+#else
 	clz	\curbit, \dividend
 	clz	\result, \divisor
 	sub	\curbit, \result, \curbit
@@ -452,6 +577,7 @@ pc		.req	r15
 	adc	\result, \result, \result
 	subcs	\dividend, \dividend, \divisor, lsl #shift
 	.endr
+#endif
 
 #else /* __ARM_ARCH__ < 5 || defined (__OPTIMIZE_SIZE__) */
 #if __ARM_ARCH__ >= 5
@@ -499,18 +625,23 @@ pc		.req	r15
 
 	@ Division loop
 1:	cmp	\dividend, \divisor
+	do_it	hs, t
 	subhs	\dividend, \dividend, \divisor
 	orrhs	\result,   \result,   \curbit
 	cmp	\dividend, \divisor,  lsr #1
+	do_it	hs, t
 	subhs	\dividend, \dividend, \divisor, lsr #1
 	orrhs	\result,   \result,   \curbit,  lsr #1
 	cmp	\dividend, \divisor,  lsr #2
+	do_it	hs, t
 	subhs	\dividend, \dividend, \divisor, lsr #2
 	orrhs	\result,   \result,   \curbit,  lsr #2
 	cmp	\dividend, \divisor,  lsr #3
+	do_it	hs, t
 	subhs	\dividend, \dividend, \divisor, lsr #3
 	orrhs	\result,   \result,   \curbit,  lsr #3
 	cmp	\dividend, #0			@ Early termination?
+	do_it	ne, t
 	movnes	\curbit,   \curbit,  lsr #4	@ No, any more bits to do?
 	movne	\divisor,  \divisor, lsr #4
 	bne	1b
@@ -799,13 +930,14 @@ LSYM(Lgot_result):
 /* ------------------------------------------------------------------------ */
 #ifdef L_udivsi3
 
+#if defined(__prefer_thumb__)
+
 	FUNC_START udivsi3
 	FUNC_ALIAS aeabi_uidiv udivsi3
 
-#ifdef __thumb__
-
 	cmp	divisor, #0
 	beq	LSYM(Ldiv0)
+LSYM(udivsi3_skip_div0_test):
 	mov	curbit, #1
 	mov	result, #0
 	
@@ -819,9 +951,16 @@ LSYM(Lgot_result):
 	pop	{ work }
 	RET
 
-#else /* ARM version.  */
+#else /* ARM version/Thumb-2.  */
 
+	ARM_FUNC_START udivsi3
+	ARM_FUNC_ALIAS aeabi_uidiv udivsi3
+
+	/* Note: if called via udivsi3_skip_div0_test, this will unnecessarily
+	   check for division-by-zero a second time.  */
+LSYM(udivsi3_skip_div0_test):
 	subs	r2, r1, #1
+	do_it	eq
 	RETc(eq)
 	bcc	LSYM(Ldiv0)
 	cmp	r0, r1
@@ -834,7 +973,8 @@ LSYM(Lgot_result):
 	mov	r0, r2
 	RET	
 
-11:	moveq	r0, #1
+11:	do_it	eq, e
+	moveq	r0, #1
 	movne	r0, #0
 	RET
 
@@ -845,19 +985,24 @@ LSYM(Lgot_result):
 
 #endif /* ARM version */
 
-	DIV_FUNC_END udivsi3
+	DIV_FUNC_END udivsi3 unsigned
 
+#if defined(__prefer_thumb__)
 FUNC_START aeabi_uidivmod
-#ifdef __thumb__
+	cmp	r1, #0
+	beq	LSYM(Ldiv0)
 	push	{r0, r1, lr}
-	bl	SYM(__udivsi3)
+	bl	LSYM(udivsi3_skip_div0_test)
 	POP	{r1, r2, r3}
 	mul	r2, r0
 	sub	r1, r1, r2
 	bx	r3
 #else
+ARM_FUNC_START aeabi_uidivmod
+	cmp	r1, #0
+	beq	LSYM(Ldiv0)
 	stmfd	sp!, { r0, r1, lr }
-	bl	SYM(__udivsi3)
+	bl	LSYM(udivsi3_skip_div0_test)
 	ldmfd	sp!, { r1, r2, lr }
 	mul	r3, r2, r0
 	sub	r1, r1, r3
@@ -904,19 +1049,20 @@ LSYM(Lover10):
 
 #endif /* ARM version.  */
 	
-	DIV_FUNC_END umodsi3
+	DIV_FUNC_END umodsi3 unsigned
 
 #endif /* L_umodsi3 */
 /* ------------------------------------------------------------------------ */
 #ifdef L_divsi3
 
+#if defined(__prefer_thumb__)
+
 	FUNC_START divsi3	
 	FUNC_ALIAS aeabi_idiv divsi3
 
-#ifdef __thumb__
 	cmp	divisor, #0
 	beq	LSYM(Ldiv0)
-	
+LSYM(divsi3_skip_div0_test):
 	push	{ work }
 	mov	work, dividend
 	eor	work, divisor		@ Save the sign of the result.
@@ -945,15 +1091,21 @@ LSYM(Lover12):
 	pop	{ work }
 	RET
 
-#else /* ARM version.  */
+#else /* ARM/Thumb-2 version.  */
 	
+	ARM_FUNC_START divsi3	
+	ARM_FUNC_ALIAS aeabi_idiv divsi3
+
 	cmp	r1, #0
-	eor	ip, r0, r1			@ save the sign of the result.
 	beq	LSYM(Ldiv0)
+LSYM(divsi3_skip_div0_test):
+	eor	ip, r0, r1			@ save the sign of the result.
+	do_it	mi
 	rsbmi	r1, r1, #0			@ loops below use unsigned.
 	subs	r2, r1, #1			@ division by 1 or -1 ?
 	beq	10f
 	movs	r3, r0
+	do_it	mi
 	rsbmi	r3, r0, #0			@ positive dividend value
 	cmp	r3, r1
 	bls	11f
@@ -963,14 +1115,18 @@ LSYM(Lover12):
 	ARM_DIV_BODY r3, r1, r0, r2
 	
 	cmp	ip, #0
+	do_it	mi
 	rsbmi	r0, r0, #0
 	RET	
 
 10:	teq	ip, r0				@ same sign ?
+	do_it	mi
 	rsbmi	r0, r0, #0
 	RET	
 
-11:	movlo	r0, #0
+11:	do_it	lo
+	movlo	r0, #0
+	do_it	eq,t
 	moveq	r0, ip, asr #31
 	orreq	r0, r0, #1
 	RET
@@ -979,24 +1135,30 @@ LSYM(Lover12):
 
 	cmp	ip, #0
 	mov	r0, r3, lsr r2
+	do_it	mi
 	rsbmi	r0, r0, #0
 	RET
 
 #endif /* ARM version */
 	
-	DIV_FUNC_END divsi3
+	DIV_FUNC_END divsi3 signed
 
+#if defined(__prefer_thumb__)
 FUNC_START aeabi_idivmod
-#ifdef __thumb__
+	cmp	r1, #0
+	beq	LSYM(Ldiv0)
 	push	{r0, r1, lr}
-	bl	SYM(__divsi3)
+	bl	LSYM(divsi3_skip_div0_test)
 	POP	{r1, r2, r3}
 	mul	r2, r0
 	sub	r1, r1, r2
 	bx	r3
 #else
+ARM_FUNC_START aeabi_idivmod
+	cmp	r1, #0
+	beq	LSYM(Ldiv0)
 	stmfd	sp!, { r0, r1, lr }
-	bl	SYM(__divsi3)
+	bl	LSYM(divsi3_skip_div0_test)
 	ldmfd	sp!, { r1, r2, lr }
 	mul	r3, r2, r0
 	sub	r1, r1, r3
@@ -1062,21 +1224,25 @@ LSYM(Lover12):
 
 #endif /* ARM version */
 	
-	DIV_FUNC_END modsi3
+	DIV_FUNC_END modsi3 signed
 
 #endif /* L_modsi3 */
 /* ------------------------------------------------------------------------ */
 #ifdef L_dvmd_tls
 
-	FUNC_START div0
-	FUNC_ALIAS aeabi_idiv0 div0
-	FUNC_ALIAS aeabi_ldiv0 div0
-
+#ifdef __ARM_EABI__
+	WEAK aeabi_idiv0
+	WEAK aeabi_ldiv0
+	FUNC_START aeabi_idiv0
+	FUNC_START aeabi_ldiv0
 	RET
-
 	FUNC_END aeabi_ldiv0
 	FUNC_END aeabi_idiv0
+#else
+	FUNC_START div0
+	RET
 	FUNC_END div0
+#endif
 	
 #endif /* L_divmodsi_tools */
 /* ------------------------------------------------------------------------ */
@@ -1086,25 +1252,76 @@ LSYM(Lover12):
 /* Constant taken from <asm/signal.h>.  */
 #define SIGFPE	8
 
+#ifdef __ARM_EABI__
+	WEAK aeabi_idiv0
+	WEAK aeabi_ldiv0
+	ARM_FUNC_START aeabi_idiv0
+	ARM_FUNC_START aeabi_ldiv0
+#else
 	ARM_FUNC_START div0
+#endif
 
 	do_push	{r1, lr}
 	mov	r0, #SIGFPE
 	bl	SYM(raise) __PLT__
 	RETLDM	r1
 
+#ifdef __ARM_EABI__
+	FUNC_END aeabi_ldiv0
+	FUNC_END aeabi_idiv0
+#else
 	FUNC_END div0
+#endif
 	
 #endif /* L_dvmd_lnx */
+#ifdef L_clear_cache
+#if defined __ARM_EABI__ && defined __linux__
+@ EABI GNU/Linux call to cacheflush syscall.
+	ARM_FUNC_START clear_cache
+	do_push	{r7}
+#if __ARM_ARCH__ >= 7 || defined(__ARM_ARCH_6T2__)
+	movw	r7, #2
+	movt	r7, #0xf
+#else
+	mov	r7, #0xf0000
+	add	r7, r7, #2
+#endif
+	mov	r2, #0
+	swi	0
+	do_pop	{r7}
+	RET
+	FUNC_END clear_cache
+#else
+#error "This is only for ARM EABI GNU/Linux"
+#endif
+#endif /* L_clear_cache */
 
 #ifdef L_dvmd_nto
 @ QNX nto division-by zero handler.  Used in place of L_dvmd_tls
-        FUNC_START div0
 
-        ldr     lr, [sp], #4
+#ifdef __ARM_EABI__
+        WEAK aeabi_idiv0
+        WEAK aeabi_ldiv0
+        ARM_FUNC_START aeabi_idiv0
+        ARM_FUNC_START aeabi_ldiv0
+	FUNC_ALIAS div0 aeabi_ldiv0
+#else
+        ARM_FUNC_START div0
+#endif
+
+#ifndef __ARM_EABI__
+        ldr     lr, [sp], #4 
+#endif
         .word   0xe7fffffe
         RET
-        SIZE    (__div0)
+
+#ifdef __ARM_EABI__
+        FUNC_END aeabi_ldiv0
+        FUNC_END aeabi_idiv0
+        FUNC_END div0
+#else
+        FUNC_END div0
+#endif
 
 #endif /* L_dvmd_nto */
 /* ------------------------------------------------------------------------ */
@@ -1523,6 +1740,111 @@ LSYM(Lchange_\register):
 	
 #endif /* L_interwork_call_via_rX */
 #endif /* !__thumb2__ */
+
+/* Functions to support compact pic switch tables in thumb1 state.
+   All these routines take an index into the table in r0.  The
+   table is at LR & ~1 (but this must be rounded up in the case
+   of 32-bit entires).  They are only permitted to clobber r12
+   and r14 and r0 must be preserved on exit.  */
+#ifdef L_thumb1_case_sqi
+	
+	.text
+	.align 0
+        .force_thumb
+	.syntax unified
+	THUMB_FUNC_START __gnu_thumb1_case_sqi
+	push	{r1}
+	mov	r1, lr
+	lsrs	r1, r1, #1
+	lsls	r1, r1, #1
+	ldrsb	r1, [r1, r0]
+	lsls	r1, r1, #1
+	add	lr, lr, r1
+	pop	{r1}
+	bx	lr
+	SIZE (__gnu_thumb1_case_sqi)
+#endif
+
+#ifdef L_thumb1_case_uqi
+	
+	.text
+	.align 0
+        .force_thumb
+	.syntax unified
+	THUMB_FUNC_START __gnu_thumb1_case_uqi
+	push	{r1}
+	mov	r1, lr
+	lsrs	r1, r1, #1
+	lsls	r1, r1, #1
+	ldrb	r1, [r1, r0]
+	lsls	r1, r1, #1
+	add	lr, lr, r1
+	pop	{r1}
+	bx	lr
+	SIZE (__gnu_thumb1_case_uqi)
+#endif
+
+#ifdef L_thumb1_case_shi
+	
+	.text
+	.align 0
+        .force_thumb
+	.syntax unified
+	THUMB_FUNC_START __gnu_thumb1_case_shi
+	push	{r0, r1}
+	mov	r1, lr
+	lsrs	r1, r1, #1
+	lsls	r0, r0, #1
+	lsls	r1, r1, #1
+	ldrsh	r1, [r1, r0]
+	lsls	r1, r1, #1
+	add	lr, lr, r1
+	pop	{r0, r1}
+	bx	lr
+	SIZE (__gnu_thumb1_case_shi)
+#endif
+
+#ifdef L_thumb1_case_uhi
+	
+	.text
+	.align 0
+        .force_thumb
+	.syntax unified
+	THUMB_FUNC_START __gnu_thumb1_case_uhi
+	push	{r0, r1}
+	mov	r1, lr
+	lsrs	r1, r1, #1
+	lsls	r0, r0, #1
+	lsls	r1, r1, #1
+	ldrh	r1, [r1, r0]
+	lsls	r1, r1, #1
+	add	lr, lr, r1
+	pop	{r0, r1}
+	bx	lr
+	SIZE (__gnu_thumb1_case_uhi)
+#endif
+
+#ifdef L_thumb1_case_si
+	
+	.text
+	.align 0
+        .force_thumb
+	.syntax unified
+	THUMB_FUNC_START __gnu_thumb1_case_si
+	push	{r0, r1}
+	mov	r1, lr
+	adds.n	r1, r1, #2	/* Align to word.  */
+	lsrs	r1, r1, #2
+	lsls	r0, r0, #2
+	lsls	r1, r1, #2
+	ldr	r0, [r1, r0]
+	adds	r0, r0, r1
+	mov	lr, r0
+	pop	{r0, r1}
+	mov	pc, lr		/* We know we were called from thumb code.  */
+	SIZE (__gnu_thumb1_case_si)
+#endif
+
 #endif /* Arch supports thumb.  */
 
 #ifndef __symbian__

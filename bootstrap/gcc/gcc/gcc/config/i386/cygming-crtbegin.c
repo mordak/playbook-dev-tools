@@ -1,5 +1,5 @@
 /* crtbegin object for windows32 targets.
-   Copyright (C) 2007, 2009  Free Software Foundation, Inc.
+   Copyright (C) 2007, 2009, 2010  Free Software Foundation, Inc.
 
    Contributed by Danny Smith <dannysmith@users.sourceforge.net>
 
@@ -64,7 +64,7 @@ extern void _Jv_RegisterClasses (const void *) TARGET_ATTRIBUTE_WEAK;
    register/deregister it with the exception handling library code.  */
 #if DWARF2_UNWIND_INFO
 static EH_FRAME_SECTION_CONST char __EH_FRAME_BEGIN__[]
-  __attribute__((section(EH_FRAME_SECTION_NAME), aligned(4)))
+  __attribute__((used, section(EH_FRAME_SECTION_NAME), aligned(4)))
   = { };
 
 static struct object obj;
@@ -72,7 +72,7 @@ static struct object obj;
 
 #if TARGET_USE_JCR_SECTION
 static void *__JCR_LIST__[]
-  __attribute__ ((unused, section(JCR_SECTION_NAME), aligned(4)))
+  __attribute__ ((used, section(JCR_SECTION_NAME), aligned(4)))
   = { };
 #endif
 

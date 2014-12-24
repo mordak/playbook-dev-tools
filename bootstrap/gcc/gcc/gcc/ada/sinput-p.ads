@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -31,6 +31,13 @@ with Scans; use Scans;
 
 package Sinput.P is
 
+   procedure Clear_Source_File_Table;
+   --  This procedure frees memory allocated in the Source_File table (in the
+   --  private part of package Sinput). It should only be used when it is
+   --  guaranteed that all source files that have been loaded so far will not
+   --  be accessed before being reloaded. It is intended for tools that parse
+   --  several times sources, to avoid memory leaks.
+
    function Load_Project_File (Path : String) return Source_File_Index;
    --  Load the source of a project source file into memory and initialize the
    --  Scans state.
@@ -47,7 +54,7 @@ package Sinput.P is
    --  the file cannot possibly be a legal subunit. This function does NOT do a
    --  complete parse of the file, or build a tree. It is used in gnatmake and
    --  gprbuild to decide if a body without a spec in a project file needs to
-   --  be compiled or not.
+   --  be compiled or not. Returns False if X = No_Source_File.
 
    type Saved_Project_Scan_State is limited private;
    --  Used to save project scan state in following two routines

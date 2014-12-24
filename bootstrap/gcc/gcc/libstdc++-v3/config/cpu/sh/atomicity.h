@@ -25,47 +25,51 @@
 
 #ifdef __SH4A__
 
-#ifndef _GLIBCXX_ATOMICITY_H
-#define _GLIBCXX_ATOMICITY_H	1
+#include <ext/atomicity.h>
 
-typedef int _Atomic_word;
-
-static inline _Atomic_word
-__attribute__ ((__unused__))
-__exchange_and_add (volatile _Atomic_word* __mem, int __val)
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
 {
-  _Atomic_word __result;
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
-  __asm__ __volatile__
-    ("0:\n"
-     "\tmovli.l\t@%2,r0\n"
-     "\tmov\tr0,%1\n"
-     "\tadd\t%3,r0\n"
-     "\tmovco.l\tr0,@%2\n"
-     "\tbf\t0b"
-     : "+m" (*__mem), "=r" (__result)
-     : "r" (__mem), "rI08" (__val)
-     : "r0");
+  typedef int _Atomic_word;
 
-  return __result;
-}
+  _Atomic_word
+  __attribute__ ((__unused__))
+  __exchange_and_add (volatile _Atomic_word* __mem, int __val) throw ()
+  {
+    _Atomic_word __result;
+
+    __asm__ __volatile__
+      ("0:\n"
+       "\tmovli.l\t@%2,r0\n"
+       "\tmov\tr0,%1\n"
+       "\tadd\t%3,r0\n"
+       "\tmovco.l\tr0,@%2\n"
+       "\tbf\t0b"
+       : "+m" (*__mem), "=&r" (__result)
+       : "r" (__mem), "rI08" (__val)
+       : "r0");
+
+    return __result;
+  }
 
 
-static inline void
-__attribute__ ((__unused__))
-__atomic_add (volatile _Atomic_word* __mem, int __val)
-{
-  asm("0:\n"
-      "\tmovli.l\t@%1,r0\n"
-      "\tadd\t%2,r0\n"
-      "\tmovco.l\tr0,@%1\n"
-      "\tbf\t0b"
-      : "+m" (*__mem)
-      : "r" (__mem), "rI08" (__val)
-      : "r0");
-}
+  void
+  __attribute__ ((__unused__))
+  __atomic_add (volatile _Atomic_word* __mem, int __val) throw ()
+  {
+    asm("0:\n"
+	"\tmovli.l\t@%1,r0\n"
+	"\tadd\t%2,r0\n"
+	"\tmovco.l\tr0,@%1\n"
+	"\tbf\t0b"
+	: "+m" (*__mem)
+	: "r" (__mem), "rI08" (__val)
+	: "r0");
+  }
 
-#endif
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #else /* !__SH4A__ */
 
@@ -79,11 +83,13 @@ namespace
   __gnu_cxx::__mutex atomic_mutex;
 } // anonymous namespace
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   _Atomic_word
   __attribute__ ((__unused__))
-  __exchange_and_add(volatile _Atomic_word* __mem, int __val)
+  __exchange_and_add(volatile _Atomic_word* __mem, int __val) throw ()
   {
     __gnu_cxx::__scoped_lock sentry(atomic_mutex);
     _Atomic_word __result;
@@ -94,9 +100,10 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 
   void
   __attribute__ ((__unused__))
-  __atomic_add(volatile _Atomic_word* __mem, int __val)
+  __atomic_add(volatile _Atomic_word* __mem, int __val) throw ()
   { __exchange_and_add(__mem, __val); }
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif /* !__SH4A__ */

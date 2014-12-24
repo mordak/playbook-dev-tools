@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -58,7 +58,7 @@ assert_entry_pointer_array_valid(const entry_pointer_array a_p_entries) const
   for (size_type pos = 0; pos < m_num_e; ++pos)
     {
       entry_pointer p_e = a_p_entries[pos];
-      while (p_e != NULL)
+      while (p_e != 0)
         {
 	  ++iterated_num_used_e;
 	  assert_entry_pointer_valid(p_e, traits_base::m_store_extra_indicator);

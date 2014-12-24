@@ -1,7 +1,7 @@
 \input texinfo  @c -*-texinfo-*-
 @c %**start of header
 @setfilename gfc-internals.info
-@set copyrights-gfortran 2007-2008
+@set copyrights-gfortran 2007, 2008, 2009, 2010
 
 @include gcc-common.texi
 
@@ -31,10 +31,11 @@
 @c @end tex
 
 @copying
-Copyright @copyright{} @value{copyrights-gfortran} Free Software Foundation, Inc.
+Copyright @copyright{} @value{copyrights-gfortran} Free Software Foundation,
+Inc.
 
 Permission is granted to copy, distribute and/or modify this document
-under the terms of the GNU Free Documentation License, Version 1.2 or
+under the terms of the GNU Free Documentation License, Version 1.3 or
 any later version published by the Free Software Foundation; with the
 Invariant Sections being ``Funding Free Software'', the Front-Cover
 Texts being (a) (see below), and with the Back-Cover Texts being (b)
@@ -405,6 +406,33 @@ case-block, and @code{extx.case_list} contains the case-values this block
 corresponds to.  The @code{block} member links to the next case in the list.
 
 
+@subsection @code{BLOCK} and @code{ASSOCIATE}
+
+The code related to a @code{BLOCK} statement is stored inside an
+@code{gfc_code} structure (say @var{c})
+with @code{c.op} set to @code{EXEC_BLOCK}.  The
+@code{gfc_namespace} holding the locally defined variables of the
+@code{BLOCK} is stored in @code{c.ext.block.ns}.  The code inside the
+construct is in @code{c.code}.
+
+@code{ASSOCIATE} constructs are based on @code{BLOCK} and thus also have
+the internal storage structure described above (including @code{EXEC_BLOCK}).
+However, for them @code{c.ext.block.assoc} is set additionally and points
+to a linked list of @code{gfc_association_list} structures.  Those
+structures basically store a link of associate-names to target expressions.
+The associate-names themselves are still also added to the @code{BLOCK}'s
+namespace as ordinary symbols, but they have their @code{gfc_symbol}'s
+member @code{assoc} set also pointing to the association-list structure.
+This way associate-names can be distinguished from ordinary variables
+and their target expressions identified.
+
+For association to expressions (as opposed to variables), at the very beginning
+of the @code{BLOCK} construct assignments are automatically generated to
+set the corresponding variables to their target expressions' values, and
+later on the compiler simply disallows using such associate-names in contexts
+that may change the value.
+
+
 @c gfc_expr
 @c --------
 
@@ -424,7 +452,7 @@ the type, rank and, if applicable, shape of the whole expression or expression
 tree of which the current structure is the root.  @code{where} is the locus of
 this expression in the source code.
 
-Depending on the flavour of the expression being described by the object
+Depending on the flavor of the expression being described by the object
 (that is, the value of its @code{expr_type} member), the corresponding structure
 in the @code{value} union will usually contain additional data describing the
 expression's value in a type-specific manner.  The @code{ref} member is used to
@@ -568,6 +596,7 @@ substring reference as described in the subsection above.
 
 @menu
 * Type-bound Procedures:: Type-bound procedures.
+* Type-bound Operators::  Type-bound operators.
 @end menu
 
 
@@ -577,15 +606,14 @@ substring reference as described in the subsection above.
 @node Type-bound Procedures
 @section Type-bound Procedures
 
-Type-bound procedures are stored in the @code{sym_root} of the namespace
+Type-bound procedures are stored in the @code{tb_sym_root} of the namespace
 @code{f2k_derived} associated with the derived-type symbol as @code{gfc_symtree}
 nodes.  The name and symbol of these symtrees corresponds to the binding-name
 of the procedure, i.e. the name that is used to call it from the context of an
 object of the derived-type.
 
-In addition, those and only those symtrees representing a type-bound procedure
-have their @code{typebound} member set; @code{typebound} points to a struct of
-type @code{gfc_typebound_proc} containing the additional data needed:  The
+In addition, this type of symtrees stores in @code{n.tb} a struct of type
+@code{gfc_typebound_proc} containing the additional data needed:  The
 binding attributes (like @code{PASS} and @code{NOPASS}, @code{NON_OVERRIDABLE} 
 or the access-specifier), the binding's target(s) and, if the current binding
 overrides or extends an inherited binding of the same name, @code{overridden}
@@ -600,6 +628,11 @@ passed-object argument, the passed-object dummy argument is first saved by its
 name, and later during resolution phase the corresponding argument is looked for
 and its position remembered as @code{pass_arg_num} in @code{gfc_typebound_proc}.
 The binding's target procedure is pointed-to by @code{u.specific}.
+
+@code{DEFERRED} bindings are just like ordinary specific bindings, except
+that their @code{deferred} flag is set of course and that @code{u.specific}
+points to their ``interface'' defining symbol (might be an abstract interface)
+instead of the target procedure.
 
 At the moment, all type-bound procedure calls are statically dispatched and
 transformed into ordinary procedure calls at resolution time; their actual
@@ -647,6 +680,50 @@ type @code{EXEC_COMPCALL}.  The @code{expr} member of this node holds an
 expression of type @code{EXPR_COMPCALL} of the same structure as mentioned above
 except that its target procedure is of course a @code{SUBROUTINE} and not a
 @code{FUNCTION}.
+
+Expressions that are generated internally (as expansion of a type-bound
+operator call) may also use additional flags and members.
+@code{value.compcall.ignore_pass} signals that even though a @code{PASS}
+attribute may be present the actual argument list should not be updated because
+it already contains the passed-object.
+@code{value.compcall.base_object} overrides, if it is set, the base-object
+(that is normally stored in @code{symtree} and @code{ref} as mentioned above);
+this is needed because type-bound operators can be called on a base-object that
+need not be of type @code{EXPR_VARIABLE} and thus representable in this way.
+Finally, if @code{value.compcall.assign} is set, the call was produced in
+expansion of a type-bound assignment; this means that proper dependency-checking
+needs to be done when relevant.
+
+
+@c Type-bound operators
+@c --------------------
+
+@node Type-bound Operators
+@section Type-bound Operators
+
+Type-bound operators are in fact basically just @code{GENERIC} procedure
+bindings and are represented much in the same way as those (see
+@ref{Type-bound Procedures}).
+
+They come in two flavours:
+User-defined operators (like @code{.MYOPERATOR.})
+are stored in the @code{f2k_derived} namespace's @code{tb_uop_root}
+symtree exactly like ordinary type-bound procedures are stored in
+@code{tb_sym_root}; their symtrees' names are the operator-names (e.g.
+@samp{myoperator} in the example).
+Intrinsic operators on the other hand are stored in the namespace's
+array member @code{tb_op} indexed by the intrinsic operator's enum
+value.  Those need not be packed into @code{gfc_symtree} structures and are
+only @code{gfc_typebound_proc} instances.
+
+When an operator call or assignment is found that can not be handled in
+another way (i.e. neither matches an intrinsic nor interface operator
+definition) but that contains a derived-type expression, all type-bound
+operators defined on that derived-type are checked for a match with
+the operator call.  If there's indeed a relevant definition, the
+operator call is replaced with an internally generated @code{GENERIC}
+type-bound procedure call to the respective definition and that call is
+further processed.
 
 
 @c ---------------------------------------------------------------------

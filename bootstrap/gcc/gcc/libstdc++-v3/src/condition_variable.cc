@@ -1,6 +1,6 @@
 // condition_variable -*- C++ -*-
 
-// Copyright (C) 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2008, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -26,22 +26,24 @@
 
 #if defined(_GLIBCXX_HAS_GTHREADS) && defined(_GLIBCXX_USE_C99_STDINT_TR1)
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
-  condition_variable::condition_variable()
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
+  condition_variable::condition_variable() throw ()
   {
 #ifdef __GTHREAD_COND_INIT
     __native_type __tmp = __GTHREAD_COND_INIT;
     _M_cond = __tmp;
 #else
-    int __e = __gthread_cond_init(&_M_cond, NULL);
+    int __e = __gthread_cond_init(&_M_cond, 0);
 
     if (__e)
       __throw_system_error(__e);
 #endif
   }
 
-  condition_variable::~condition_variable()
+  condition_variable::~condition_variable() throw ()
   {
     // XXX no thread blocked
     /* int __e = */ __gthread_cond_destroy(&_M_cond);
@@ -79,23 +81,13 @@ namespace std
       __throw_system_error(__e);
   }
 
-  condition_variable_any::condition_variable_any()
-  {
-#ifdef __GTHREAD_COND_INIT
-    __native_type __tmp = __GTHREAD_COND_INIT;
-    _M_cond = __tmp;
-#else
-    int __e = __gthread_cond_init(&_M_cond, NULL);
+  condition_variable_any::condition_variable_any() throw ()
+  { }
 
-    if (__e)
-      __throw_system_error(__e);
-#endif
-  }
+  condition_variable_any::~condition_variable_any() throw ()
+  { }
 
-  condition_variable_any::~condition_variable_any()
-  {
-    __gthread_cond_destroy(&_M_cond);
-  }
-}
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif // _GLIBCXX_HAS_GTHREADS && _GLIBCXX_USE_C99_STDINT_TR1

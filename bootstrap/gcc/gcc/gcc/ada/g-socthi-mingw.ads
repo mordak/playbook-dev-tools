@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---                     Copyright (C) 2001-2008, AdaCore                     --
+--                     Copyright (C) 2001-2009, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -42,12 +42,15 @@ with Interfaces.C.Strings;
 with GNAT.Sockets.Thin_Common;
 
 with System;
+with System.CRTL;
 
 package GNAT.Sockets.Thin is
 
    use Thin_Common;
 
    package C renames Interfaces.C;
+
+   use type System.CRTL.ssize_t;
 
    function Socket_Errno return Integer;
    --  Returns last socket error number
@@ -115,22 +118,14 @@ package GNAT.Sockets.Thin is
       Optval  : System.Address;
       Optlen  : not null access C.int) return C.int;
 
-   function C_Inet_Addr
-     (Cp : C.Strings.chars_ptr) return C.int;
-
-   function C_Ioctl
-     (S    : C.int;
-      Req  : C.int;
-      Arg  : Int_Access) return C.int;
+   function Socket_Ioctl
+     (S   : C.int;
+      Req : C.int;
+      Arg : access C.int) return C.int;
 
    function C_Listen
      (S       : C.int;
       Backlog : C.int) return C.int;
-
-   function C_Readv
-     (Fd     : C.int;
-      Iov    : System.Address;
-      Iovcnt : C.int) return C.int;
 
    function C_Recv
      (S     : C.int;
@@ -143,28 +138,32 @@ package GNAT.Sockets.Thin is
       Msg     : System.Address;
       Len     : C.int;
       Flags   : C.int;
-      From    : Sockaddr_In_Access;
+      From    : System.Address;
       Fromlen : not null access C.int) return C.int;
+
+   function C_Recvmsg
+     (S     : C.int;
+      Msg   : System.Address;
+      Flags : C.int) return System.CRTL.ssize_t;
 
    function C_Select
      (Nfds      : C.int;
-      Readfds   : Fd_Set_Access;
-      Writefds  : Fd_Set_Access;
-      Exceptfds : Fd_Set_Access;
+      Readfds   : access Fd_Set;
+      Writefds  : access Fd_Set;
+      Exceptfds : access Fd_Set;
       Timeout   : Timeval_Access) return C.int;
 
-   function C_Send
+   function C_Sendmsg
      (S     : C.int;
       Msg   : System.Address;
-      Len   : C.int;
-      Flags : C.int) return C.int;
+      Flags : C.int) return System.CRTL.ssize_t;
 
    function C_Sendto
      (S     : C.int;
       Msg   : System.Address;
       Len   : C.int;
       Flags : C.int;
-      To    : Sockaddr_In_Access;
+      To    : System.Address;
       Tolen : C.int) return C.int;
 
    function C_Setsockopt
@@ -183,19 +182,11 @@ package GNAT.Sockets.Thin is
       Typ      : C.int;
       Protocol : C.int) return C.int;
 
-   function C_Strerror
-     (Errnum : C.int) return C.Strings.chars_ptr;
-
    function C_System
      (Command : System.Address) return C.int;
 
-   function C_Writev
-     (Fd     : C.int;
-      Iov    : System.Address;
-      Iovcnt : C.int) return C.int;
-
    function WSAStartup
-     (WS_Version     : Interfaces.C.int;
+     (WS_Version     : Interfaces.C.unsigned_short;
       WSADataAddress : System.Address) return Interfaces.C.int;
 
    -------------------------------------------------------
@@ -238,17 +229,13 @@ private
    pragma Import (Stdcall, C_Getpeername, "getpeername");
    pragma Import (Stdcall, C_Getsockname, "getsockname");
    pragma Import (Stdcall, C_Getsockopt, "getsockopt");
-   pragma Import (Stdcall, C_Inet_Addr, "inet_addr");
-   pragma Import (Stdcall, C_Ioctl, "ioctlsocket");
    pragma Import (Stdcall, C_Listen, "listen");
    pragma Import (Stdcall, C_Recv, "recv");
    pragma Import (Stdcall, C_Recvfrom, "recvfrom");
-   pragma Import (Stdcall, C_Send, "send");
    pragma Import (Stdcall, C_Sendto, "sendto");
    pragma Import (Stdcall, C_Setsockopt, "setsockopt");
    pragma Import (Stdcall, C_Shutdown, "shutdown");
    pragma Import (Stdcall, C_Socket, "socket");
-   pragma Import (C, C_Strerror, "strerror");
    pragma Import (C, C_System, "_system");
    pragma Import (Stdcall, Socket_Errno, "WSAGetLastError");
    pragma Import (Stdcall, Set_Socket_Errno, "WSASetLastError");

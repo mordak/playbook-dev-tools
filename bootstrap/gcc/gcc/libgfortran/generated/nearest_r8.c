@@ -1,5 +1,5 @@
 /* Implementation of the NEAREST intrinsic
-   Copyright 2003, 2007, 2009 Free Software Foundation, Inc.
+   Copyright 2003, 2007, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Richard Henderson <rth@redhat.com>.
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -26,6 +26,9 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #include "libgfortran.h"
 
 
+
+#define MATHFUNC(funcname) funcname
+
 #if defined (HAVE_GFC_REAL_8) && defined (HAVE_COPYSIGN) && defined (HAVE_NEXTAFTER)
 
 extern GFC_REAL_8 nearest_r8 (GFC_REAL_8 s, GFC_REAL_8 dir);
@@ -34,15 +37,15 @@ export_proto(nearest_r8);
 GFC_REAL_8
 nearest_r8 (GFC_REAL_8 s, GFC_REAL_8 dir)
 {
-  dir = copysign (__builtin_inf (), dir);
+  dir = MATHFUNC(copysign) (MATHFUNC(__builtin_inf) (), dir);
   if (FLT_EVAL_METHOD != 0)
     {
       /* ??? Work around glibc bug on x86.  */
-      volatile GFC_REAL_8 r = nextafter (s, dir);
+      volatile GFC_REAL_8 r = MATHFUNC(nextafter) (s, dir);
       return r;
     }
   else
-    return nextafter (s, dir);
+    return MATHFUNC(nextafter) (s, dir);
 }
 
 #endif

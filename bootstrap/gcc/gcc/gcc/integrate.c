@@ -1,6 +1,6 @@
 /* Procedure integration for GCC.
    Copyright (C) 1988, 1991, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
-   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008
+   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by Michael Tiemann (tiemann@cygnus.com)
 
@@ -36,10 +36,9 @@ along with GCC; see the file COPYING3.  If not see
 #include "output.h"
 #include "recog.h"
 #include "integrate.h"
-#include "real.h"
 #include "except.h"
 #include "function.h"
-#include "toplev.h"
+#include "diagnostic-core.h"
 #include "intl.h"
 #include "params.h"
 #include "ggc.h"
@@ -53,11 +52,11 @@ along with GCC; see the file COPYING3.  If not see
 
 
 /* Private type used by {get/has}_hard_reg_initial_val.  */
-typedef struct initial_value_pair GTY(()) {
+typedef struct GTY(()) initial_value_pair {
   rtx hard_reg;
   rtx pseudo;
 } initial_value_pair;
-typedef struct initial_value_struct GTY(()) {
+typedef struct GTY(()) initial_value_struct {
   int num_entries;
   int max_entries;
   initial_value_pair * GTY ((length ("%h.num_entries"))) entries;
@@ -112,7 +111,7 @@ set_block_origin_self (tree stmt)
 
 	for (local_decl = BLOCK_VARS (stmt);
 	     local_decl != NULL_TREE;
-	     local_decl = TREE_CHAIN (local_decl))
+	     local_decl = DECL_CHAIN (local_decl))
 	  set_decl_origin_self (local_decl);	/* Potential recursion.  */
       }
 
@@ -148,7 +147,7 @@ set_decl_origin_self (tree decl)
 	{
 	  tree arg;
 
-	  for (arg = DECL_ARGUMENTS (decl); arg; arg = TREE_CHAIN (arg))
+	  for (arg = DECL_ARGUMENTS (decl); arg; arg = DECL_CHAIN (arg))
 	    DECL_ABSTRACT_ORIGIN (arg) = arg;
 	  if (DECL_INITIAL (decl) != NULL_TREE
 	      && DECL_INITIAL (decl) != error_mark_node)
@@ -167,13 +166,22 @@ set_block_abstract_flags (tree stmt, int setting)
 {
   tree local_decl;
   tree subblock;
+  unsigned int i;
 
   BLOCK_ABSTRACT (stmt) = setting;
 
   for (local_decl = BLOCK_VARS (stmt);
        local_decl != NULL_TREE;
-       local_decl = TREE_CHAIN (local_decl))
+       local_decl = DECL_CHAIN (local_decl))
     set_decl_abstract_flags (local_decl, setting);
+
+  for (i = 0; i < BLOCK_NUM_NONLOCALIZED_VARS (stmt); i++)
+    {
+      local_decl = BLOCK_NONLOCALIZED_VAR (stmt, i);
+      if ((TREE_CODE (local_decl) == VAR_DECL && !TREE_STATIC (local_decl))
+	  || TREE_CODE (local_decl) == PARM_DECL)
+	set_decl_abstract_flags (local_decl, setting);
+    }
 
   for (subblock = BLOCK_SUBBLOCKS (stmt);
        subblock != NULL_TREE;
@@ -195,7 +203,7 @@ set_decl_abstract_flags (tree decl, int setting)
     {
       tree arg;
 
-      for (arg = DECL_ARGUMENTS (decl); arg; arg = TREE_CHAIN (arg))
+      for (arg = DECL_ARGUMENTS (decl); arg; arg = DECL_CHAIN (arg))
 	DECL_ABSTRACT (arg) = setting;
       if (DECL_INITIAL (decl) != NULL_TREE
 	  && DECL_INITIAL (decl) != error_mark_node)
@@ -238,10 +246,10 @@ get_hard_reg_initial_val (enum machine_mode mode, unsigned int regno)
   ivs = crtl->hard_reg_initial_vals;
   if (ivs == 0)
     {
-      ivs = GGC_NEW (initial_value_struct);
+      ivs = ggc_alloc_initial_value_struct ();
       ivs->num_entries = 0;
       ivs->max_entries = 5;
-      ivs->entries = GGC_NEWVEC (initial_value_pair, 5);
+      ivs->entries = ggc_alloc_vec_initial_value_pair (5);
       crtl->hard_reg_initial_vals = ivs;
     }
 
@@ -308,7 +316,7 @@ struct rtl_opt_pass pass_initial_value_sets =
   NULL,                                 /* sub */
   NULL,                                 /* next */
   0,                                    /* static_pass_number */
-  0,                                    /* tv_id */
+  TV_NONE,                              /* tv_id */
   0,                                    /* properties_required */
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
@@ -334,7 +342,7 @@ allocate_initial_values (rtx *reg_equiv_memory_loc)
 	{
 	  int regno = REGNO (ivs->entries[i].pseudo);
 	  rtx x = targetm.allocate_initial_value (ivs->entries[i].hard_reg);
-  
+
 	  if (x && REG_N_SETS (REGNO (ivs->entries[i].pseudo)) <= 1)
 	    {
 	      if (MEM_P (x))

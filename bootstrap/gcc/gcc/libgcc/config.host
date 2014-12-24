@@ -1,6 +1,6 @@
 # libgcc host-specific configuration file.
 # Copyright 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
-# 2008, 2009 Free Software Foundation, Inc.
+# 2008, 2009, 2010 Free Software Foundation, Inc.
 
 #This file is part of GCC.
 
@@ -84,6 +84,8 @@ fido-*-*)
 	;;
 frv*)	cpu_type=frv
 	;;
+moxie*)	cpu_type=moxie
+	;;
 i[34567]86-*-*)
 	cpu_type=i386
 	;;
@@ -95,10 +97,18 @@ ia64-*-*)
 hppa*-*-*)
 	cpu_type=pa
 	;;
+lm32*-*-*)
+	cpu_type=lm32
+	;;
 m32r*-*-*)
         cpu_type=m32r
         ;;
 m68k-*-*)
+	;;
+mep*-*-*)
+	;;
+microblaze*-*-*)
+	cpu_type=microblaze
 	;;
 mips*-*-*)
 	cpu_type=mips
@@ -134,15 +144,6 @@ case ${host} in
 *-*-darwin*)
   asm_hidden_op=.private_extern
   tmake_file="t-darwin ${cpu_type}/t-darwin t-slibgcc-darwin"
-  ;;
-*-*-freebsd[12] | *-*-freebsd[12].* | *-*-freebsd*aout*)
-  # This is the place-holder for the generic a.out configuration
-  # of FreeBSD.  No actual configuration resides here since
-  # there was only ever a bare-bones ix86 configuration for
-  # a.out and it exists solely in the machine-specific section.
-  # This place-holder must exist to avoid dropping into
-  # the generic ELF configuration of FreeBSD (i.e. it must be
-  # ordered before that section).
   ;;
 *-*-freebsd*)
   # This is the generic ELF configuration of FreeBSD.  Later
@@ -182,17 +183,15 @@ alpha*-*-netbsd*)
 	;;
 alpha*-*-openbsd*)
 	;;
-alpha*-dec-osf[45]*)
+alpha*-dec-osf5.1*)
 	;;
 alpha64-dec-*vms*)
+	tmake_file="vms/t-vms vms/t-vms64 alpha/t-vms"
 	;;
 alpha*-dec-*vms*)
+	tmake_file="vms/t-vms alpha/t-vms"
 	;;
 arc-*-elf*)
-	;;
-arm-*-coff* | armel-*-coff*)
-	;;
-arm-semi-aof | armel-semi-aof)
 	;;
 arm-wrs-vxworks)
 	;;
@@ -256,8 +255,6 @@ h8300-*-rtems*)
 	;;
 h8300-*-elf*)
 	;;
-h8300-*-*)
-	;;
 hppa*64*-*-linux*)
 	;;
 hppa*-*-linux*)
@@ -277,11 +274,11 @@ i[34567]86-*-elf*)
 	;;
 x86_64-*-elf*)
 	;;
-i[34567]86-*-aout*)
-	;;
 i[34567]86-*-freebsd*)
+	tmake_file="${tmake_file} i386/t-freebsd"
 	;;
 x86_64-*-freebsd*)
+	tmake_file="${tmake_file} i386/t-freebsd"
 	;;
 i[34567]86-*-netbsdelf*)
 	;;
@@ -292,8 +289,6 @@ x86_64-*-netbsd*)
 i[34567]86-*-openbsd2.*|i[34567]86-*openbsd3.[0123])
 	;;
 i[34567]86-*-openbsd*)
-	;;
-i[34567]86-*-coff*)
 	;;
 i[34567]86-*-linux* | i[34567]86-*-kfreebsd*-gnu | i[34567]86-*-knetbsd*-gnu | i[34567]86-*-gnu*)
 	extra_parts="$extra_parts crtprec32.o crtprec64.o crtprec80.o crtfastmath.o"
@@ -316,6 +311,8 @@ i[3456x]86-*-netware*)
 	;;
 i[34567]86-*-nto-qnx*)
 	;;
+x86_64-*-nto-qnx*)
+        ;;
 i[34567]86-*-rtems*)
 	;;
 i[34567]86-*-solaris2*)
@@ -348,6 +345,8 @@ ia64*-*-elf*)
 	tmake_file="ia64/t-ia64"
 	;;
 ia64*-*-freebsd*)
+	extra_parts="crtbegin.o crtend.o crtbeginS.o crtendS.o crtfastmath.o"
+	tmake_file="ia64/t-ia64"
 	;;
 ia64*-*-linux*)
 	extra_parts="crtbegin.o crtend.o crtbeginS.o crtendS.o crtfastmath.o"
@@ -355,8 +354,19 @@ ia64*-*-linux*)
 	;;
 ia64*-*-hpux*)
 	;;
+ia64-hp-*vms*)
+	tmake_file="vms/t-vms vms/t-vms64 ia64/t-vms"
+	;;
 iq2000*-*-elf*)
         ;;
+lm32-*-elf*|lm32-*-rtems*)
+        extra_parts="crtbegin.o crtend.o crti.o crtn.o"
+        tmake_file="lm32/t-lm32 lm32/t-elf t-softfp"
+	;;
+lm32-*-uclinux*)
+        extra_parts="crtbegin.o crtend.o crtbeginS.o crtendS.o crtbeginT.o"
+        tmake_file="lm32/t-lm32 lm32/t-uclinux t-softfp"
+	;;	
 m32r-*-elf*|m32r-*-rtems*)
  	;;
 m32rle-*-elf*)
@@ -369,10 +379,6 @@ m68hc11-*-*|m6811-*-*)
         ;;
 m68hc12-*-*|m6812-*-*)
         ;;
-m68k-*-aout*)
-	;;
-m68k-*-coff*)
-	;;
 m68k-*-elf*)
 	;;
 m68k*-*-netbsdelf*)
@@ -391,13 +397,20 @@ mcore-*-elf)
 	;;
 mcore-*-pe*)
 	;;
+microblaze*-*-*)
+        tmake_file="microblaze/t-microblaze"
+	;;
 mips-sgi-irix[56]*)
 	;;
 mips*-*-netbsd*)			# NetBSD/mips, either endian.
 	;;
 mips64*-*-linux*)
+	extra_parts="$extra_parts crtfastmath.o"
+	tmake_file="{$tmake_file} mips/t-crtfm"
 	;;
 mips*-*-linux*)				# Linux MIPS, either endian.
+	extra_parts="$extra_parts crtfastmath.o"
+	tmake_file="{$tmake_file} mips/t-crtfm"
 	;;
 mips*-*-qnx*)
 	;;
@@ -430,30 +443,30 @@ mips-wrs-vxworks)
 mipstx39-*-elf* | mipstx39el-*-elf*)
 	;;
 mmix-knuth-mmixware)
+	extra_parts="crti.o crtn.o crtbegin.o crtend.o"
+	tmake_file="${tmake_file} ${cpu_type}/t-${cpu_type}"
 	;;
 mn10300-*-*)
 	;;
-pdp11-*-bsd)
-        ;;
+moxie-*-*)
+	tmake_file="moxie/t-moxie moxie/t-moxie-softfp"
+	extra_parts="crtbegin.o crtend.o crti.o crtn.o"
+	;;
 pdp11-*-*)
 	;;
 picochip-*-*)
         ;;
-powerpc64-*-linux*)
-	tmake_file="${tmake_file} rs6000/t-ppccomm rs6000/t-ldbl128 t-softfp"
-	;;
-powerpc64-*-gnu*)
-	tmake_file="${tmake_file} rs6000/t-ldbl128 t-softfp"
-	;;
 powerpc-*-darwin*)
 	;;
 powerpc64-*-darwin*)
 	;;
-powerpc*-*-freebsd*)
+powerpc-*-freebsd*)
+	tmake_file="${tmake_file} rs6000/t-ppccomm rs6000/t-freebsd t-softfp"
 	;;
 powerpc-*-netbsd*)
 	;;
 powerpc-*-eabispe*)
+	tmake_file="${tmake_file} rs6000/t-ppccomm"
 	;;
 powerpc-*-eabisimaltivec*)
 	;;
@@ -464,19 +477,17 @@ powerpc-*-elf*)
 powerpc-*-eabialtivec*)
 	;;
 powerpc-*-eabi*)
+	tmake_file="${tmake_file} rs6000/t-ppccomm"
 	;;
 powerpc-*-qnx*)
 	;;
 powerpc-*-rtems*)
 	;;
-powerpc-*-linux*altivec*)
-	tmake_file="${tmake_file} rs6000/t-ppccomm rs6000/t-ldbl128"
-	;;
-powerpc-*-linux*spe*)
+powerpc-*-linux* | powerpc64-*-linux*)
 	tmake_file="${tmake_file} rs6000/t-ppccomm rs6000/t-ldbl128 t-softfp"
 	;;
-powerpc-*-linux*)
-	tmake_file="${tmake_file} rs6000/t-ppccomm rs6000/t-ldbl128 t-softfp"
+powerpc64-*-gnu*)
+	tmake_file="${tmake_file} rs6000/t-ldbl128 t-softfp"
 	;;
 powerpc-*-gnu-gnualtivec*)
 	tmake_file="${tmake_file} rs6000/t-ldbl128"
@@ -494,19 +505,24 @@ powerpcle-*-eabisim*)
 	;;
 powerpcle-*-eabi*)
 	;;
-rs6000-ibm-aix4.[12]* | powerpc-ibm-aix4.[12]*)
-	;;
 rs6000-ibm-aix4.[3456789]* | powerpc-ibm-aix4.[3456789]*)
 	;;
 rs6000-ibm-aix5.1.* | powerpc-ibm-aix5.1.*)
 	;;
 rs6000-ibm-aix[56789].* | powerpc-ibm-aix[56789].*)
 	;;
+rx-*-elf)
+	extra_parts="crtbegin.o crtend.o"
+	tmake_file="rx/t-rx"
+	;;
 s390-*-linux*)
+	tmake_file="${tmake_file} s390/t-crtstuff s390/t-linux s390/32/t-floattodi"
 	;;
 s390x-*-linux*)
+	tmake_file="${tmake_file} s390/t-crtstuff s390/t-linux"
 	;;
 s390x-ibm-tpf*)
+	tmake_file="${tmake_file} s390/t-crtstuff s390/t-tpf"
 	;;
 score-*-elf)
         ;;
@@ -521,11 +537,11 @@ sh-*-symbianelf* | sh[12346l]*-*-symbianelf* | \
 		;;
 	esac
 	;;
+sh-*-nto*)
+	;;
 sh-*-rtems*)
 	;;
 sh-wrs-vxworks)
-	;;
-sh-*-*)
 	;;
 sparc-*-netbsdelf*)
 	;;
@@ -537,7 +553,7 @@ sparc-*-linux*)		# SPARC's running GNU/Linux, libc6
 	extra_parts="$extra_parts crtfastmath.o"
 	tmake_file="${tmake_file} sparc/t-crtfm"
 	;;
-sparc-*-rtems*)
+sparc-*-rtems* | sparc64-*-rtems* )
 	;;
 sparc64-*-solaris2* | sparcv9-*-solaris2*)
 	;;
@@ -563,6 +579,8 @@ v850e-*-*)
 	;;
 v850-*-*)
 	;;
+vax-*-linux*)
+	;;
 vax-*-netbsdelf*)
 	;;
 vax-*-netbsd*)
@@ -580,6 +598,8 @@ am33_2.0-*-linux*)
 	;;
 m32c-*-elf*|m32c-*-rtems*)
  	;;
+mep*-*-*)
+	;;
 *)
 	echo "*** Configuration ${host} not supported" 1>&2
 	exit 1
@@ -591,13 +611,21 @@ i[34567]86-*-linux* | x86_64-*-linux* | \
   i[34567]86-*-kfreebsd*-gnu | i[34567]86-*-knetbsd*-gnu | \
   i[34567]86-*-gnu*)
 	tmake_file="${tmake_file} t-tls"
+	if test "$libgcc_cv_cfi" = "yes"; then
+		tmake_file="${tmake_file} t-stack i386/t-stack-i386"
+	fi
 	;;
 esac
 
 case ${host} in
 i[34567]86-*-darwin* | x86_64-*-darwin* | \
   i[34567]86-*-kfreebsd*-gnu | x86_64-*-kfreebsd*-gnu | \
-  i[34567]86-*-linux* | x86_64-*-linux*)
+  i[34567]86-*-linux* | x86_64-*-linux* | \
+  i[34567]86-*-qnx* | \
+  i[34567]86-*-gnu* | \
+  i[34567]86-*-solaris2* | \
+  i[34567]86-*-cygwin* | i[34567]86-*-mingw* | x86_64-*-mingw* | \
+  i[34567]86-*-freebsd* | x86_64-*-freebsd*)
 	if test "${host_address}" = 32; then
 		tmake_file="${tmake_file} t-softfp i386/${host_address}/t-fprules-softfp"
 	fi

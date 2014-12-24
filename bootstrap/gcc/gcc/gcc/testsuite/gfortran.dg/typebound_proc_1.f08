@@ -1,8 +1,5 @@
 ! { dg-do compile }
 
-! FIXME: Remove -w after polymorphic entities are supported.
-! { dg-options "-w" }
-
 ! Type-bound procedures
 ! Test that the basic syntax for specific bindings is parsed and resolved.
 
@@ -51,19 +48,19 @@ CONTAINS
   
   SUBROUTINE proc1 (me)
     IMPLICIT NONE
-    TYPE(t1) :: me
+    CLASS(t1) :: me
   END SUBROUTINE proc1
 
   REAL FUNCTION proc2 (x, me)
     IMPLICIT NONE
     REAL :: x
-    TYPE(t1) :: me
+    CLASS(t1) :: me
     proc2 = x / 2
   END FUNCTION proc2
 
   INTEGER FUNCTION proc3 (me)
     IMPLICIT NONE
-    TYPE(t2) :: me
+    CLASS(t2) :: me
     proc3 = 42
   END FUNCTION proc3
 

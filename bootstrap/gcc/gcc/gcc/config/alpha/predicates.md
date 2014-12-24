@@ -1,5 +1,6 @@
 ;; Predicate definitions for DEC Alpha.
-;; Copyright (C) 2004, 2005, 2006, 2007, 2008 Free Software Foundation, Inc.
+;; Copyright (C) 2004, 2005, 2006, 2007, 2008, 2010
+;; Free Software Foundation, Inc.
 ;;
 ;; This file is part of GCC.
 ;;
@@ -112,7 +113,7 @@
 (define_predicate "mode_mask_operand"
   (match_code "const_int,const_double")
 {
-  if (GET_CODE (op) == CONST_INT)
+  if (CONST_INT_P (op))
     {
       HOST_WIDE_INT value = INTVAL (op);
 
@@ -265,8 +266,6 @@
 (define_predicate "direct_call_operand"
   (match_operand 0 "samegp_function_operand")
 {
-  tree op_decl, cfun_sec, op_sec;
-
   /* If profiling is implemented via linker tricks, we can't jump
      to the nogp alternate entry point.  Note that crtl->profile
      would not be correct, since that doesn't indicate if the target
@@ -290,21 +289,7 @@
   if (TARGET_SMALL_TEXT)
     return true;
 
-  /* Otherwise, a decl is "near" if it is defined in the same section.  */
-  if (flag_function_sections)
-    return false;
-
-  op_decl = SYMBOL_REF_DECL (op);
-  if (DECL_ONE_ONLY (current_function_decl)
-      || (op_decl && DECL_ONE_ONLY (op_decl)))
-    return false;
-
-  cfun_sec = DECL_SECTION_NAME (current_function_decl);
-  op_sec = op_decl ? DECL_SECTION_NAME (op_decl) : NULL;
-  return ((!cfun_sec && !op_sec)
-	  || (cfun_sec && op_sec
-	      && strcmp (TREE_STRING_POINTER (cfun_sec),
-		         TREE_STRING_POINTER (op_sec)) == 0));
+  return false;
 })
 
 ;; Return 1 if OP is a valid operand for the MEM of a CALL insn.
@@ -326,7 +311,7 @@
 {
   if (GET_CODE (op) == CONST
       && GET_CODE (XEXP (op, 0)) == PLUS
-      && GET_CODE (XEXP (XEXP (op, 0), 1)) == CONST_INT)
+      && CONST_INT_P (XEXP (XEXP (op, 0), 1)))
     op = XEXP (XEXP (op, 0), 0);
 
   if (GET_CODE (op) == LABEL_REF)
@@ -350,7 +335,7 @@
 
   if (GET_CODE (op) == CONST
       && GET_CODE (XEXP (op, 0)) == PLUS
-      && GET_CODE (XEXP (XEXP (op, 0), 1)) == CONST_INT)
+      && CONST_INT_P (XEXP (XEXP (op, 0), 1)))
     op = XEXP (XEXP (op, 0), 0);
 
   if (GET_CODE (op) != SYMBOL_REF)
@@ -374,7 +359,7 @@
 {
   if (GET_CODE (op) == CONST
       && GET_CODE (XEXP (op, 0)) == PLUS
-      && GET_CODE (XEXP (XEXP (op, 0), 1)) == CONST_INT)
+      && CONST_INT_P (XEXP (XEXP (op, 0), 1)))
     op = XEXP (XEXP (op, 0), 0);
 
   if (GET_CODE (op) != SYMBOL_REF)
@@ -392,7 +377,7 @@
 	    (match_test "GET_CODE (XEXP (op,0)) == PLUS
 			 && (GET_CODE (XEXP (XEXP (op,0), 0)) == SYMBOL_REF
 			     || GET_CODE (XEXP (XEXP (op,0), 0)) == LABEL_REF)
-			 && GET_CODE (XEXP (XEXP (op,0), 1)) == CONST_INT"))))
+			 && CONST_INT_P (XEXP (XEXP (op,0), 1))"))))
 
 ;; Return true if OP is valid for 16-bit DTP relative relocations.
 (define_predicate "dtp16_symbolic_operand"
@@ -439,9 +424,11 @@
        (match_code "mem"))
 {
   rtx base;
+  int offset;
 
   if (MEM_ALIGN (op) >= 32)
     return 1;
+
   op = XEXP (op, 0);
 
   /* LEGITIMIZE_RELOAD_ADDRESS creates (plus (plus reg const_hi) const_lo)
@@ -449,15 +436,30 @@
   if (reload_in_progress
       && GET_CODE (op) == PLUS
       && GET_CODE (XEXP (op, 0)) == PLUS)
-    base = XEXP (XEXP (op, 0), 0);
+    {
+      base = XEXP (XEXP (op, 0), 0);
+      offset = INTVAL (XEXP (op, 1));
+    }
   else
     {
       if (! memory_address_p (mode, op))
 	return 0;
-      base = (GET_CODE (op) == PLUS ? XEXP (op, 0) : op);
+      if (GET_CODE (op) == PLUS)
+	{
+	  base = XEXP (op, 0);
+	  offset = INTVAL (XEXP (op, 1));
+	}
+      else
+	{
+	  base = op;
+	  offset = 0;
+	}
     }
 
-  return (GET_CODE (base) == REG && REGNO_POINTER_ALIGN (REGNO (base)) >= 32);
+  if (offset % GET_MODE_SIZE (mode))
+    return 0;
+
+  return (REG_P (base) && REGNO_POINTER_ALIGN (REGNO (base)) >= 32);
 })
 
 ;; Similar, but return 1 if OP is a MEM which is not alignable.
@@ -467,9 +469,11 @@
        (match_code "mem"))
 {
   rtx base;
+  int offset;
 
   if (MEM_ALIGN (op) >= 32)
     return 0;
+
   op = XEXP (op, 0);
 
   /* LEGITIMIZE_RELOAD_ADDRESS creates (plus (plus reg const_hi) const_lo)
@@ -477,15 +481,30 @@
   if (reload_in_progress
       && GET_CODE (op) == PLUS
       && GET_CODE (XEXP (op, 0)) == PLUS)
-    base = XEXP (XEXP (op, 0), 0);
+    {
+      base = XEXP (XEXP (op, 0), 0);
+      offset = INTVAL (XEXP (op, 1));
+    }
   else
     {
       if (! memory_address_p (mode, op))
 	return 0;
-      base = (GET_CODE (op) == PLUS ? XEXP (op, 0) : op);
+      if (GET_CODE (op) == PLUS)
+	{
+	  base = XEXP (op, 0);
+	  offset = INTVAL (XEXP (op, 1));
+	}
+      else
+	{
+	  base = op;
+	  offset = 0;
+	}
     }
 
-  return (GET_CODE (base) == REG && REGNO_POINTER_ALIGN (REGNO (base)) < 32);
+  if (offset % GET_MODE_SIZE (mode))
+    return 1;
+
+  return (REG_P (base) && REGNO_POINTER_ALIGN (REGNO (base)) < 32);
 })
 
 ;; Return 1 if OP is any memory location.  During reload a pseudo matches.
@@ -542,6 +561,12 @@
 (define_predicate "reg_no_subreg_operand"
   (and (match_code "reg")
        (match_operand 0 "register_operand")))
+
+;; Return 1 if OP is a valid Alpha comparison operator for "cbranch"
+;; instructions.
+(define_predicate "alpha_cbranch_operator"
+  (ior (match_operand 0 "ordered_comparison_operator")
+       (match_code "ordered,unordered")))
 
 ;; Return 1 if OP is a valid Alpha comparison operator for "cmp" style
 ;; instructions.

@@ -1,11 +1,13 @@
 /* { dg-do compile { target powerpc*-*-* } } */
 /* { dg-require-effective-target powerpc_altivec_ok } */
-/* { dg-options "-maltivec -Wall" } */
+/* { dg-options "-maltivec -Wall -Wno-unused-but-set-variable" } */
 
 /* This test checks if AltiVec builtins accept const-qualified
    arguments.  */
 
 #include <altivec.h>
+
+vector unsigned char use_lvsl;
 
 int main (int argc, const char * argv[])
 {
@@ -17,7 +19,7 @@ int main (int argc, const char * argv[])
   vec_dst(&cv, i, 0);
   v = vec_ld(0, &cv);	
   v = vec_lde(0, &cf);
-  vec_lvsl(0, &cf);
+  use_lvsl = vec_lvsl(0, &cf);
   
   return 0;
 }

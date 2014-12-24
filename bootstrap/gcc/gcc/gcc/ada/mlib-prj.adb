@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---                     Copyright (C) 2001-2008, AdaCore                     --
+--                     Copyright (C) 2001-2010, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -229,12 +229,6 @@ package body MLib.Prj is
    --  Indicate if Stand-Alone Libraries are automatically initialized using
    --  the constructor mechanism.
 
-   function Ultimate_Extension_Of
-     (Project : Project_Id;
-      In_Tree : Project_Tree_Ref) return Project_Id;
-   --  Returns the Project_Id of project Project. Returns No_Project
-   --  if Project is No_Project.
-
    ------------------
    -- Add_Argument --
    ------------------
@@ -309,9 +303,9 @@ package body MLib.Prj is
       --  Set to True for the first warning about a unit missing from the
       --  interface set.
 
-      Data : Project_Data := In_Tree.Projects.Table (For_Project);
+      Current_Proj : Project_Id;
 
-      Libgnarl_Needed   : Yes_No_Unknown := Data.Libgnarl_Needed;
+      Libgnarl_Needed   : Yes_No_Unknown := For_Project.Libgnarl_Needed;
       --  Set to True if library needs to be linked with libgnarl
 
       Libdecgnat_Needed : Boolean := False;
@@ -323,11 +317,11 @@ package body MLib.Prj is
 
       Object_Directory_Path : constant String :=
                                 Get_Name_String
-                                  (Data.Object_Directory.Display_Name);
+                                  (For_Project.Object_Directory.Display_Name);
 
-      Standalone   : constant Boolean := Data.Standalone_Library;
+      Standalone   : constant Boolean := For_Project.Standalone_Library;
 
-      Project_Name : constant String := Get_Name_String (Data.Name);
+      Project_Name : constant String := Get_Name_String (For_Project.Name);
 
       Current_Dir  : constant String := Get_Current_Dir;
 
@@ -340,13 +334,12 @@ package body MLib.Prj is
       Success : Boolean := False;
 
       Library_Options : Variable_Value := Nil_Variable_Value;
-      Library_GCC     : Variable_Value := Nil_Variable_Value;
 
       Driver_Name : Name_Id := No_Name;
 
       In_Main_Object_Directory : Boolean := True;
 
-      There_Are_Foreign_Sources : Boolean;
+      Foreign_Sources : Boolean;
 
       Rpath : String_Access := null;
       --  Allocated only if Path Option is supported
@@ -487,15 +480,16 @@ package body MLib.Prj is
 
          elsif P /= No_Project then
             declare
-               Data : Project_Data :=
-                        In_Tree.Projects.Table (For_Project);
+               Proj : Project_Id;
+
             begin
-               while Data.Extends /= No_Project loop
-                  if P = Data.Extends then
+               Proj := For_Project;
+               while Proj.Extends /= No_Project loop
+                  if P = Proj.Extends then
                      return True;
                   end if;
 
-                  Data := In_Tree.Projects.Table (Data.Extends);
+                  Proj := Proj.Extends;
                end loop;
             end;
          end if;
@@ -526,12 +520,12 @@ package body MLib.Prj is
             Lib_File := Name_Find;
             Text := Read_Library_Info (Lib_File, True);
 
-            Id  := ALI.Scan_ALI
-                         (F          => Lib_File,
-                          T          => Text,
-                          Ignore_ED  => False,
-                          Err        => True,
-                          Read_Lines => "D");
+            Id := ALI.Scan_ALI
+                    (F          => Lib_File,
+                     T          => Text,
+                     Ignore_ED  => False,
+                     Err        => True,
+                     Read_Lines => "D");
             Free (Text);
 
             --  Look for s-osinte.ads in the dependencies
@@ -543,8 +537,7 @@ package body MLib.Prj is
                   Libgnarl_Needed := Yes;
 
                   if Main_Project then
-                     In_Tree.Projects.Table (For_Project).Libgnarl_Needed :=
-                       Yes;
+                     For_Project.Libgnarl_Needed := Yes;
                   else
                      exit;
                   end if;
@@ -620,7 +613,7 @@ package body MLib.Prj is
                            if not Interface_ALIs.Get (Afile) then
                               if not Warning_For_Library then
                                  Write_Str ("Warning: In library project """);
-                                 Get_Name_String (Data.Name);
+                                 Get_Name_String (Current_Proj.Name);
                                  To_Mixed (Name_Buffer (1 .. Name_Len));
                                  Write_Str (Name_Buffer (1 .. Name_Len));
                                  Write_Line ("""");
@@ -679,49 +672,45 @@ package body MLib.Prj is
          ---------------------
 
          procedure Process_Project (Project : Project_Id) is
-            Data     : Project_Data := In_Tree.Projects.Table (Project);
-            Imported : Project_List := Data.Imported_Projects;
-            Element  : Project_Element;
+            Imported : Project_List;
 
          begin
             --  Nothing to do if process has already been processed
 
-            if not Processed_Projects.Get (Data.Name) then
-               Processed_Projects.Set (Data.Name, True);
+            if not Processed_Projects.Get (Project.Name) then
+               Processed_Projects.Set (Project.Name, True);
 
                --  Call Process_Project recursively for any imported project.
                --  We first process the imported projects to guarantee that
                --  we have a proper reverse order for the libraries.
 
-               while Imported /= Empty_Project_List loop
-                  Element :=
-                    In_Tree.Project_Lists.Table (Imported);
-
-                  if Element.Project /= No_Project then
-                     Process_Project (Element.Project);
+               Imported := Project.Imported_Projects;
+               while Imported /= null loop
+                  if Imported.Project /= No_Project then
+                     Process_Project (Imported.Project);
                   end if;
 
-                  Imported := Element.Next;
+                  Imported := Imported.Next;
                end loop;
 
                --  If it is a library project, add it to Library_Projs
 
-               if Project /= For_Project and then Data.Library then
+               if Project /= For_Project and then Project.Library then
                   Library_Projs.Increment_Last;
                   Library_Projs.Table (Library_Projs.Last) := Project;
 
                   --  Check if because of this library we need to use libgnarl
 
                   if Libgnarl_Needed = Unknown then
-                     if Data.Libgnarl_Needed = Unknown
-                       and then Data.Object_Directory /= No_Path_Information
+                     if Project.Libgnarl_Needed = Unknown
+                       and then Project.Object_Directory /= No_Path_Information
                      then
                         --  Check if libgnarl is needed for this library
 
                         declare
                            Object_Dir_Path : constant String :=
                                                Get_Name_String
-                                                 (Data.Object_Directory.
+                                                 (Project.Object_Directory.
                                                     Display_Name);
                            Object_Dir      : Dir_Type;
                            Filename        : String (1 .. 255);
@@ -759,10 +748,8 @@ package body MLib.Prj is
                                          (ALI_File, Main_Project => False);
 
                                        if Libgnarl_Needed = Yes then
-                                          Data.Libgnarl_Needed := Yes;
-                                          In_Tree.Projects.Table
-                                            (For_Project).Libgnarl_Needed :=
-                                            Yes;
+                                          Project.Libgnarl_Needed := Yes;
+                                          For_Project.Libgnarl_Needed := Yes;
                                           exit;
                                        end if;
                                     end if;
@@ -774,14 +761,12 @@ package body MLib.Prj is
                         end;
                      end if;
 
-                     if Data.Libgnarl_Needed = Yes then
+                     if Project.Libgnarl_Needed = Yes then
                         Libgnarl_Needed := Yes;
-                        In_Tree.Projects.Table (For_Project).Libgnarl_Needed :=
-                          Yes;
+                        For_Project.Libgnarl_Needed := Yes;
                      end if;
                   end if;
                end if;
-
             end if;
          end Process_Project;
 
@@ -800,8 +785,7 @@ package body MLib.Prj is
          for Index in reverse 1 .. Library_Projs.Last loop
             Current := Library_Projs.Table (Index);
 
-            Get_Name_String
-              (In_Tree.Projects.Table (Current).Library_Dir.Display_Name);
+            Get_Name_String (Current.Library_Dir.Display_Name);
             Opts.Increment_Last;
             Opts.Table (Opts.Last) :=
               new String'("-L" & Name_Buffer (1 .. Name_Len));
@@ -812,11 +796,7 @@ package body MLib.Prj is
 
             Opts.Increment_Last;
             Opts.Table (Opts.Last) :=
-              new String'
-                ("-l" &
-                 Get_Name_String
-                   (In_Tree.Projects.Table
-                      (Current).Library_Name));
+              new String'("-l" & Get_Name_String (Current.Library_Name));
          end loop;
       end Process_Imported_Libraries;
 
@@ -827,13 +807,13 @@ package body MLib.Prj is
 
       --  Fail if project is not a library project
 
-      if not Data.Library then
-         Com.Fail ("project """, Project_Name, """ has no library");
+      if not For_Project.Library then
+         Com.Fail ("project """ & Project_Name & """ has no library");
       end if;
 
       --  Do not attempt to build the library if it is externally built
 
-      if Data.Externally_Built then
+      if For_Project.Externally_Built then
          return;
       end if;
 
@@ -868,11 +848,11 @@ package body MLib.Prj is
 
          if Bind then
             if Gnatbind_Path = null then
-               Com.Fail ("unable to locate ", Gnatbind);
+               Com.Fail ("unable to locate " & Gnatbind);
             end if;
 
             if Gcc_Path = null then
-               Com.Fail ("unable to locate ", Gcc);
+               Com.Fail ("unable to locate " & Gcc);
             end if;
 
             --  Allocate Arguments, if it is the first time we see a standalone
@@ -893,10 +873,11 @@ package body MLib.Prj is
             end if;
 
             Add_Argument
-              (B_Start.all & Get_Name_String (Data.Library_Name) & ".adb");
-            Add_Argument ("-L" & Get_Name_String (Data.Library_Name));
+              (B_Start.all
+               & Get_Name_String (For_Project.Library_Name) & ".adb");
+            Add_Argument ("-L" & Get_Name_String (For_Project.Library_Name));
 
-            if Data.Lib_Auto_Init and then SALs_Use_Constructors then
+            if For_Project.Lib_Auto_Init and then SALs_Use_Constructors then
                Add_Argument (Auto_Initialize);
             end if;
 
@@ -907,7 +888,7 @@ package body MLib.Prj is
                Binder_Package : constant Package_Id :=
                                   Value_Of
                                     (Name        => Name_Binder,
-                                     In_Packages => Data.Decl.Packages,
+                                     In_Packages => For_Project.Decl.Packages,
                                      In_Tree     => In_Tree);
 
             begin
@@ -955,59 +936,53 @@ package body MLib.Prj is
          --  Bind is False, so that First_ALI is set.
 
          declare
-            Unit : Unit_Data;
+            Unit : Unit_Index;
 
          begin
             Library_ALIs.Reset;
             Interface_ALIs.Reset;
             Processed_ALIs.Reset;
 
-            for Source in Unit_Table.First ..
-                          Unit_Table.Last (In_Tree.Units)
-            loop
-               Unit := In_Tree.Units.Table (Source);
-
-               if Unit.File_Names (Body_Part).Name /= No_File
-                 and then Unit.File_Names (Body_Part).Path.Name /= Slash
+            Unit := Units_Htable.Get_First (In_Tree.Units_HT);
+            while Unit /= No_Unit_Index loop
+               if Unit.File_Names (Impl) /= null
+                 and then not Unit.File_Names (Impl).Locally_Removed
                then
-                  if
-                    Check_Project (Unit.File_Names (Body_Part).Project)
-                  then
-                     if Unit.File_Names (Specification).Name = No_File then
+                  if Check_Project (Unit.File_Names (Impl).Project) then
+                     if Unit.File_Names (Spec) = null then
                         declare
                            Src_Ind : Source_File_Index;
 
                         begin
                            Src_Ind := Sinput.P.Load_Project_File
-                             (Get_Name_String
-                                (Unit.File_Names
-                                   (Body_Part).Path.Name));
+                                        (Get_Name_String
+                                          (Unit.File_Names (Impl).Path.Name));
 
                            --  Add the ALI file only if it is not a subunit
 
                            if not
                              Sinput.P.Source_File_Is_Subunit (Src_Ind)
                            then
-                              Add_ALI_For
-                                (Unit.File_Names (Body_Part).Name);
+                              Add_ALI_For (Unit.File_Names (Impl).File);
                               exit when not Bind;
                            end if;
                         end;
 
                      else
-                        Add_ALI_For (Unit.File_Names (Body_Part).Name);
+                        Add_ALI_For (Unit.File_Names (Impl).File);
                         exit when not Bind;
                      end if;
                   end if;
 
-               elsif Unit.File_Names (Specification).Name /= No_File
-                 and then Unit.File_Names (Specification).Path.Name /= Slash
-                 and then Check_Project
-                   (Unit.File_Names (Specification).Project)
+               elsif Unit.File_Names (Spec) /= null
+                 and then not Unit.File_Names (Spec).Locally_Removed
+                 and then Check_Project (Unit.File_Names (Spec).Project)
                then
-                  Add_ALI_For (Unit.File_Names (Specification).Name);
+                  Add_ALI_For (Unit.File_Names (Spec).File);
                   exit when not Bind;
                end if;
+
+               Unit := Units_Htable.Get_Next (In_Tree.Units_HT);
             end loop;
          end;
 
@@ -1039,8 +1014,7 @@ package body MLib.Prj is
                        ALI.Units.Table
                          (ALI.ALIs.Table (A).First_Unit).Last_Arg
                      loop
-                        --  Look for --RTS. If found, add the switch to call
-                        --  gnatbind.
+                        --  If --RTS found, add switch to call gnatbind
 
                         declare
                            Arg : String_Ptr renames Args.Table (Index);
@@ -1176,8 +1150,8 @@ package body MLib.Prj is
             end if;
 
             if not Success then
-               Com.Fail ("could not bind standalone library ",
-                         Get_Name_String (Data.Library_Name));
+               Com.Fail ("could not bind standalone library "
+                         & Get_Name_String (For_Project.Library_Name));
             end if;
          end if;
 
@@ -1209,7 +1183,8 @@ package body MLib.Prj is
             end if;
 
             Add_Argument
-              (B_Start.all & Get_Name_String (Data.Library_Name) & ".adb");
+              (B_Start.all
+               & Get_Name_String (For_Project.Library_Name) & ".adb");
 
             --  If necessary, add the PIC option
 
@@ -1268,8 +1243,8 @@ package body MLib.Prj is
 
             if not Success then
                Com.Fail
-                 ("could not compile binder generated file for library ",
-                  Get_Name_String (Data.Library_Name));
+                ("could not compile binder generated file for library "
+                  & Get_Name_String (For_Project.Library_Name));
             end if;
 
             --  Process binder generated file for pragmas Linker_Options
@@ -1282,20 +1257,18 @@ package body MLib.Prj is
 
       if Link then
 
-         --  If attribute Library_GCC was specified, get the driver name
+         --  If attributes Library_GCC or Linker'Driver were specified, get the
+         --  driver name.
 
-         Library_GCC :=
-           Value_Of (Name_Library_GCC, Data.Decl.Attributes, In_Tree);
-
-         if not Library_GCC.Default then
-            Driver_Name := Library_GCC.Value;
+         if For_Project.Config.Shared_Lib_Driver /= No_File then
+            Driver_Name := Name_Id (For_Project.Config.Shared_Lib_Driver);
          end if;
 
          --  If attribute Library_Options was specified, add these additional
          --  options.
 
-         Library_Options :=
-           Value_Of (Name_Library_Options, Data.Decl.Attributes, In_Tree);
+         Library_Options := Value_Of
+           (Name_Library_Options, For_Project.Decl.Attributes, In_Tree);
 
          if not Library_Options.Default then
             declare
@@ -1320,10 +1293,11 @@ package body MLib.Prj is
          end if;
 
          Lib_Dirpath  :=
-           new String'(Get_Name_String (Data.Library_Dir.Display_Name));
-         Lib_Filename := new String'(Get_Name_String (Data.Library_Name));
+           new String'(Get_Name_String (For_Project.Library_Dir.Display_Name));
+         Lib_Filename := new String'
+           (Get_Name_String (For_Project.Library_Name));
 
-         case Data.Library_Kind is
+         case For_Project.Library_Kind is
             when Static =>
                The_Build_Mode := Static;
 
@@ -1341,9 +1315,9 @@ package body MLib.Prj is
 
          --  Get the library version, if any
 
-         if Data.Lib_Internal_Name /= No_Name then
+         if For_Project.Lib_Internal_Name /= No_Name then
             Lib_Version :=
-              new String'(Get_Name_String (Data.Lib_Internal_Name));
+              new String'(Get_Name_String (For_Project.Lib_Internal_Name));
          end if;
 
          --  Add the objects found in the object directory and the object
@@ -1354,18 +1328,32 @@ package body MLib.Prj is
 
          In_Main_Object_Directory := True;
 
-         There_Are_Foreign_Sources := Data.Other_Sources_Present;
+         --  For gnatmake, when the project specifies more than just Ada as a
+         --  language (even if course we could not find any source file for
+         --  the other languages), we will take all object files found in the
+         --  object directories. Since we know the project supports at least
+         --  Ada, we just have to test whether it has at least two languages,
+         --  and not care about the sources.
 
+         Foreign_Sources := For_Project.Languages.Next /= null;
+         Current_Proj := For_Project;
          loop
-            if Data.Object_Directory /= No_Path_Information then
+            if Current_Proj.Object_Directory /= No_Path_Information then
+
+               --  The following code gets far too indented, I suggest some
+               --  procedural abstraction here. How about making this declare
+               --  block a named procedure???
+
                declare
                   Object_Dir_Path : constant String :=
                                       Get_Name_String
-                                        (Data.Object_Directory.Display_Name);
-                  Object_Dir      : Dir_Type;
-                  Filename        : String (1 .. 255);
-                  Last            : Natural;
-                  Id              : Name_Id;
+                                        (Current_Proj.Object_Directory
+                                         .Display_Name);
+
+                  Object_Dir : Dir_Type;
+                  Filename   : String (1 .. 255);
+                  Last       : Natural;
+                  Id         : Name_Id;
 
                begin
                   Open (Dir => Object_Dir, Dir_Name => Object_Dir_Path);
@@ -1381,16 +1369,17 @@ package body MLib.Prj is
 
                      if Is_Obj (Filename (1 .. Last)) then
                         declare
-                           Object_Path   : constant String :=
-                                             Normalize_Pathname
-                                               (Object_Dir_Path &
-                                                Directory_Separator &
-                                                Filename (1 .. Last));
-                           C_Object_Path : String := Object_Path;
-                           C_Filename    : String := Filename (1 .. Last);
+                           Object_Path  : constant String :=
+                                            Normalize_Pathname
+                                              (Object_Dir_Path
+                                               & Directory_Separator
+                                               & Filename (1 .. Last));
+                           Object_File  : constant String :=
+                                            Filename (1 .. Last);
+
+                           C_Filename    : String := Object_File;
 
                         begin
-                           Canonical_Case_File_Name (C_Object_Path);
                            Canonical_Case_File_Name (C_Filename);
 
                            --  If in the object directory of an extended
@@ -1401,31 +1390,35 @@ package body MLib.Prj is
                              or else
                                C_Filename (1 .. B_Start'Length) /= B_Start.all
                            then
-                              Name_Len := Last;
-                              Name_Buffer (1 .. Name_Len) :=
-                                C_Filename (1 .. Last);
+                              Name_Len := 0;
+                              Add_Str_To_Name_Buffer (C_Filename);
                               Id := Name_Find;
 
                               if not Objects_Htable.Get (Id) then
                                  declare
                                     ALI_File : constant String :=
-                                                 Ext_To
-                                                   (C_Filename
-                                                      (1 .. Last), "ali");
+                                                 Ext_To (C_Filename, "ali");
+
                                     ALI_Path : constant String :=
-                                                 Ext_To (C_Object_Path, "ali");
-                                    Add_It   : Boolean :=
-                                                 There_Are_Foreign_Sources
-                                                 or else
-                                                   (Last > 5
-                                                    and then
-                                                    C_Filename
-                                                      (1 .. B_Start'Length) =
-                                                      B_Start.all);
-                                    Fname    : File_Name_Type;
-                                    Proj     : Project_Id;
+                                                 Ext_To (Object_Path, "ali");
+
+                                    Add_It : Boolean;
+                                    Fname  : File_Name_Type;
+                                    Proj   : Project_Id;
+                                    Index  : Unit_Index;
 
                                  begin
+                                    --  The following assignment could use
+                                    --  a comment ???
+
+                                    Add_It :=
+                                      Foreign_Sources
+                                        or else
+                                          (Last >= 5
+                                             and then
+                                               C_Filename (1 .. B_Start'Length)
+                                                 = B_Start.all);
+
                                     if Is_Regular_File (ALI_Path) then
 
                                        --  If there is an ALI file, check if
@@ -1435,36 +1428,27 @@ package body MLib.Prj is
                                        --  the library.
 
                                        if not Add_It then
-                                          for Index in
-                                            1 .. Unit_Table.Last
-                                                   (In_Tree.Units)
-                                          loop
-                                             if In_Tree.Units.Table
-                                                 (Index).File_Names
-                                                   (Body_Part).Name /= No_File
+                                          Index :=
+                                            Units_Htable.Get_First
+                                             (In_Tree.Units_HT);
+                                          while Index /= null loop
+                                             if Index.File_Names (Impl) /=
+                                               null
                                              then
                                                 Proj :=
-                                                  In_Tree.Units.Table (Index).
-                                                  File_Names
-                                                    (Body_Part).Project;
+                                                  Index.File_Names (Impl)
+                                                  .Project;
                                                 Fname :=
-                                                  In_Tree.Units.Table (Index).
-                                                   File_Names (Body_Part).Name;
+                                                  Index.File_Names (Impl).File;
 
-                                             elsif
-                                               In_Tree.Units.Table
-                                                 (Index).File_Names
-                                                 (Specification).Name /=
-                                                                       No_File
+                                             elsif Index.File_Names (Spec) /=
+                                               null
                                              then
                                                 Proj :=
-                                                  In_Tree.Units.Table
-                                                    (Index).File_Names
-                                                     (Specification).Project;
+                                                  Index.File_Names (Spec)
+                                                  .Project;
                                                 Fname :=
-                                                  In_Tree.Units.Table
-                                                    (Index).File_Names
-                                                     (Specification).Name;
+                                                  Index.File_Names (Spec).File;
 
                                              else
                                                 Proj := No_Project;
@@ -1497,6 +1481,10 @@ package body MLib.Prj is
                                              end if;
 
                                              exit when Add_It;
+
+                                             Index :=
+                                               Units_Htable.Get_Next
+                                                 (In_Tree.Units_HT);
                                           end loop;
                                        end if;
 
@@ -1517,7 +1505,7 @@ package body MLib.Prj is
                                           Check_Libs (ALI_Path, True);
                                        end if;
 
-                                    elsif There_Are_Foreign_Sources then
+                                    elsif Foreign_Sources then
                                        Objects.Append
                                          (new String'(Object_Path));
                                     end if;
@@ -1532,17 +1520,17 @@ package body MLib.Prj is
 
                exception
                   when Directory_Error =>
-                     Com.Fail ("cannot find object directory """,
-                               Get_Name_String
-                                 (Data.Object_Directory.Display_Name),
-                               """");
+                     Com.Fail ("cannot find object directory """
+                               & Get_Name_String
+                                  (Current_Proj.Object_Directory.Display_Name)
+                               & """");
                end;
             end if;
 
-            exit when Data.Extends = No_Project;
+            exit when Current_Proj.Extends = No_Project;
 
             In_Main_Object_Directory  := False;
-            Data := In_Tree.Projects.Table (Data.Extends);
+            Current_Proj := Current_Proj.Extends;
          end loop;
 
          --  Add the -L and -l switches for the imported Library Project Files,
@@ -1750,10 +1738,10 @@ package body MLib.Prj is
          --  the library directory (by Copy_ALI_Files, below).
 
          if Standalone then
-            Data := In_Tree.Projects.Table (For_Project);
+            Current_Proj := For_Project;
 
             declare
-               Iface : String_List_Id := Data.Lib_Interface_ALIs;
+               Iface : String_List_Id := For_Project.Lib_Interface_ALIs;
                ALI   : File_Name_Type;
 
             begin
@@ -1768,7 +1756,7 @@ package body MLib.Prj is
                   Iface := In_Tree.String_Elements.Table (Iface).Next;
                end loop;
 
-               Iface := Data.Lib_Interface_ALIs;
+               Iface := For_Project.Lib_Interface_ALIs;
 
                if not Opt.Quiet_Output then
 
@@ -1810,16 +1798,15 @@ package body MLib.Prj is
             --  the library file and any ALI file of a source of the project.
 
             begin
-               Get_Name_String
-                 (In_Tree.Projects.Table (For_Project).Library_Dir.Name);
+               Get_Name_String (For_Project.Library_Dir.Display_Name);
                Change_Dir (Name_Buffer (1 .. Name_Len));
 
             exception
                when others =>
                   Com.Fail
-                    ("unable to access library directory """,
-                     Name_Buffer (1 .. Name_Len),
-                     """");
+                    ("unable to access library directory """
+                     & Name_Buffer (1 .. Name_Len)
+                     & """");
             end;
 
             Open (Dir, ".");
@@ -1836,13 +1823,13 @@ package body MLib.Prj is
                      Canonical_Case_File_Name (Name (1 .. Last));
                      Delete := False;
 
-                     if (The_Build_Mode = Static and then
-                           Name (1 .. Last) =  Archive_Name)
+                     if (The_Build_Mode = Static
+                          and then Name (1 .. Last) =  Archive_Name)
                        or else
-                         ((The_Build_Mode = Dynamic or else
-                             The_Build_Mode = Relocatable)
-                          and then
-                            Name (1 .. Last) = DLL_Name)
+                         ((The_Build_Mode = Dynamic
+                            or else
+                           The_Build_Mode = Relocatable)
+                          and then Name (1 .. Last) = DLL_Name)
                      then
                         Delete := True;
 
@@ -1850,28 +1837,28 @@ package body MLib.Prj is
                        and then Name (Last - 3 .. Last) = ".ali"
                      then
                         declare
-                           Unit : Unit_Data;
+                           Unit : Unit_Index;
 
                         begin
                            --  Compare with ALI file names of the project
 
-                           for Index in
-                             1 .. Unit_Table.Last (In_Tree.Units)
-                           loop
-                              Unit := In_Tree.Units.Table (Index);
-
-                              if Unit.File_Names (Body_Part).Project /=
-                                No_Project
+                           Unit := Units_Htable.Get_First (In_Tree.Units_HT);
+                           while Unit /= No_Unit_Index loop
+                              if Unit.File_Names (Impl) /= null
+                                and then Unit.File_Names (Impl).Project /=
+                                                                 No_Project
                               then
-                                 if  Ultimate_Extension_Of
-                                   (Unit.File_Names (Body_Part).Project,
-                                    In_Tree) = For_Project
+                                 if Ultimate_Extending_Project_Of
+                                      (Unit.File_Names (Impl).Project) =
+                                                                 For_Project
                                  then
                                     Get_Name_String
-                                      (Unit.File_Names (Body_Part).Name);
-                                    Name_Len := Name_Len -
-                                      File_Extension
-                                        (Name (1 .. Name_Len))'Length;
+                                      (Unit.File_Names (Impl).File);
+                                    Name_Len :=
+                                      Name_Len -
+                                        File_Extension
+                                          (Name (1 .. Name_Len))'Length;
+
                                     if Name_Buffer (1 .. Name_Len) =
                                       Name (1 .. Last - 4)
                                     then
@@ -1880,24 +1867,25 @@ package body MLib.Prj is
                                     end if;
                                  end if;
 
-                              elsif Ultimate_Extension_Of
-                                (Unit.File_Names (Specification).Project,
-                                 In_Tree) = For_Project
+                              elsif Unit.File_Names (Spec) /= null
+                                and then Ultimate_Extending_Project_Of
+                                           (Unit.File_Names (Spec).Project) =
+                                                                   For_Project
                               then
-                                 Get_Name_String
-                                   (Unit.File_Names (Specification).Name);
+                                 Get_Name_String (Unit.File_Names (Spec).File);
                                  Name_Len :=
                                    Name_Len -
-                                   File_Extension
-                                     (Name (1 .. Name_Len))'Length;
+                                     File_Extension (Name (1 .. Last))'Length;
 
                                  if Name_Buffer (1 .. Name_Len) =
-                                   Name (1 .. Last - 4)
+                                      Name (1 .. Last - 4)
                                  then
                                     Delete := True;
                                     exit;
                                  end if;
                               end if;
+
+                              Unit := Units_Htable.Get_Next (In_Tree.Units_HT);
                            end loop;
                         end;
                      end if;
@@ -1925,10 +1913,10 @@ package body MLib.Prj is
                   Interfaces    => Arguments (1 .. Argument_Number),
                   Lib_Filename  => Lib_Filename.all,
                   Lib_Dir       => Lib_Dirpath.all,
-                  Symbol_Data   => Data.Symbol_Data,
+                  Symbol_Data   => Current_Proj.Symbol_Data,
                   Driver_Name   => Driver_Name,
                   Lib_Version   => Lib_Version.all,
-                  Auto_Init     => Data.Lib_Auto_Init);
+                  Auto_Init     => Current_Proj.Lib_Auto_Init);
 
             when Static =>
                MLib.Build_Library
@@ -1951,36 +1939,33 @@ package body MLib.Prj is
 
          Copy_ALI_Files
            (Files      => Ali_Files.all,
-            To         => In_Tree.Projects.Table
-                            (For_Project).Library_ALI_Dir.Name,
+            To         => For_Project.Library_ALI_Dir.Display_Name,
             Interfaces => Arguments (1 .. Argument_Number));
 
          --  Copy interface sources if Library_Src_Dir specified
 
          if Standalone
-           and then In_Tree.Projects.Table
-                      (For_Project).Library_Src_Dir /= No_Path_Information
+           and then For_Project.Library_Src_Dir /= No_Path_Information
          then
             --  Clean the interface copy directory: remove any source that
             --  could be a source of the project.
 
             begin
-               Get_Name_String
-                 (In_Tree.Projects.Table (For_Project).Library_Src_Dir.Name);
+               Get_Name_String (For_Project.Library_Src_Dir.Display_Name);
                Change_Dir (Name_Buffer (1 .. Name_Len));
 
             exception
                when others =>
                   Com.Fail
-                    ("unable to access library source copy directory """,
-                     Name_Buffer (1 .. Name_Len),
-                     """");
+                    ("unable to access library source copy directory """
+                     & Name_Buffer (1 .. Name_Len)
+                     & """");
             end;
 
             declare
                Dir    : Dir_Type;
                Delete : Boolean := False;
-               Unit   : Unit_Data;
+               Unit   : Unit_Index;
 
                Name : String (1 .. 200);
                Last : Natural;
@@ -2001,32 +1986,34 @@ package body MLib.Prj is
 
                      --  Compare with source file names of the project
 
-                     for Index in 1 .. Unit_Table.Last (In_Tree.Units) loop
-                        Unit := In_Tree.Units.Table (Index);
-
-                        if Ultimate_Extension_Of
-                            (Unit.File_Names (Body_Part).Project, In_Tree) =
-                            For_Project
+                     Unit := Units_Htable.Get_First (In_Tree.Units_HT);
+                     while Unit /= No_Unit_Index loop
+                        if Unit.File_Names (Impl) /= null
+                          and then Ultimate_Extending_Project_Of
+                            (Unit.File_Names (Impl).Project) = For_Project
                           and then
                             Get_Name_String
-                              (Unit.File_Names (Body_Part).Name) =
+                              (Unit.File_Names (Impl).File) =
                             Name (1 .. Last)
                         then
                            Delete := True;
                            exit;
                         end if;
 
-                        if Ultimate_Extension_Of
-                           (Unit.File_Names (Specification).Project, In_Tree) =
-                           For_Project
+                        if Unit.File_Names (Spec) /= null
+                          and then Ultimate_Extending_Project_Of
+                            (Unit.File_Names (Spec).Project) =
+                             For_Project
                           and then
                            Get_Name_String
-                             (Unit.File_Names (Specification).Name) =
+                             (Unit.File_Names (Spec).File) =
                            Name (1 .. Last)
                         then
                            Delete := True;
                            exit;
                         end if;
+
+                        Unit := Units_Htable.Get_Next (In_Tree.Units_HT);
                      end loop;
                   end if;
 
@@ -2043,8 +2030,7 @@ package body MLib.Prj is
               (For_Project => For_Project,
                In_Tree     => In_Tree,
                Interfaces  => Arguments (1 .. Argument_Number),
-               To_Dir      => In_Tree.Projects.Table
-                                (For_Project).Library_Src_Dir.Display_Name);
+               To_Dir      => For_Project.Library_Src_Dir.Display_Name);
          end if;
       end if;
 
@@ -2060,7 +2046,7 @@ package body MLib.Prj is
    procedure Check (Filename : String) is
    begin
       if not Is_Regular_File (Filename) then
-         Com.Fail (Filename, " not found.");
+         Com.Fail (Filename & " not found.");
       end if;
    end Check;
 
@@ -2084,8 +2070,6 @@ package body MLib.Prj is
    procedure Check_Library
      (For_Project : Project_Id; In_Tree : Project_Tree_Ref)
    is
-      Data    : constant Project_Data :=
-                  In_Tree.Projects.Table (For_Project);
       Lib_TS  : Time_Stamp_Type;
       Current : constant Dir_Name_Str := Get_Current_Dir;
 
@@ -2093,19 +2077,20 @@ package body MLib.Prj is
       --  No need to build the library if there is no object directory,
       --  hence no object files to build the library.
 
-      if Data.Library then
+      if For_Project.Library then
          declare
             Lib_Name : constant File_Name_Type :=
-              Library_File_Name_For (For_Project, In_Tree);
+                         Library_File_Name_For (For_Project, In_Tree);
          begin
-            Change_Dir (Get_Name_String (Data.Library_Dir.Name));
+            Change_Dir
+              (Get_Name_String (For_Project.Library_Dir.Display_Name));
             Lib_TS := File_Stamp (Lib_Name);
-            In_Tree.Projects.Table (For_Project).Library_TS := Lib_TS;
+            For_Project.Library_TS := Lib_TS;
          end;
 
-         if not Data.Externally_Built
-           and then not Data.Need_To_Build_Lib
-           and then Data.Object_Directory /= No_Path_Information
+         if not For_Project.Externally_Built
+           and then not For_Project.Need_To_Build_Lib
+           and then For_Project.Object_Directory /= No_Path_Information
          then
             declare
                Obj_TS     : Time_Stamp_Type;
@@ -2119,7 +2104,8 @@ package body MLib.Prj is
                --  If the library file does not exist, then the time stamp will
                --  be Empty_Time_Stamp, earlier than any other time stamp.
 
-               Change_Dir (Get_Name_String (Data.Object_Directory.Name));
+               Change_Dir
+                 (Get_Name_String (For_Project.Object_Directory.Display_Name));
                Open (Dir => Object_Dir, Dir_Name => ".");
 
                --  For all entries in the object directory
@@ -2148,8 +2134,7 @@ package body MLib.Prj is
 
                         --  Library must be rebuilt
 
-                        In_Tree.Projects.Table
-                          (For_Project).Need_To_Build_Lib := True;
+                        For_Project.Need_To_Build_Lib := True;
                         exit;
                      end if;
                   end if;
@@ -2186,19 +2171,11 @@ package body MLib.Prj is
       First_Unit  : ALI.Unit_Id;
       Second_Unit : ALI.Unit_Id;
 
-      Data : Unit_Data;
-
       Copy_Subunits : Boolean := False;
       --  When True, indicates that subunits, if any, need to be copied too
 
       procedure Copy (File_Name : File_Name_Type);
       --  Copy one source of the project to the target directory
-
-      function Is_Same_Or_Extension
-        (Extending : Project_Id;
-         Extended  : Project_Id) return Boolean;
-      --  Return True if project Extending is equal to or extends project
-      --  Extended.
 
       ----------
       -- Copy --
@@ -2208,63 +2185,32 @@ package body MLib.Prj is
          Success : Boolean;
          pragma Warnings (Off, Success);
 
+         Source : Standard.Prj.Source_Id;
       begin
-         Unit_Loop :
-         for Index in Unit_Table.First ..
-                      Unit_Table.Last (In_Tree.Units)
-         loop
-            Data := In_Tree.Units.Table (Index);
+         Source := Find_Source
+           (In_Tree, For_Project,
+            In_Extended_Only => True,
+            Base_Name => File_Name);
 
-            --  Find and copy the immediate or inherited source
-
-            for J in Data.File_Names'Range loop
-               if Is_Same_Or_Extension
-                    (For_Project, Data.File_Names (J).Project)
-                 and then Data.File_Names (J).Name = File_Name
-               then
-                  Copy_File
-                    (Get_Name_String (Data.File_Names (J).Path.Name),
-                     Target,
-                     Success,
-                     Mode => Overwrite,
-                     Preserve => Preserve);
-                  exit Unit_Loop;
-               end if;
-            end loop;
-         end loop Unit_Loop;
+         if Source /= No_Source
+           and then not Source.Locally_Removed
+           and then Source.Replaced_By = No_Source
+         then
+            Copy_File
+              (Get_Name_String (Source.Path.Name),
+               Target,
+               Success,
+               Mode     => Overwrite,
+               Preserve => Preserve);
+         end if;
       end Copy;
-
-      --------------------------
-      -- Is_Same_Or_Extension --
-      --------------------------
-
-      function Is_Same_Or_Extension
-        (Extending : Project_Id;
-         Extended  : Project_Id) return Boolean
-      is
-         Ext : Project_Id;
-
-      begin
-         Ext := Extending;
-         while Ext /= No_Project loop
-            if Ext = Extended then
-               return True;
-            end if;
-
-            Ext := In_Tree.Projects.Table (Ext).Extends;
-         end loop;
-
-         return False;
-      end Is_Same_Or_Extension;
 
    --  Start of processing for Copy_Interface_Sources
 
    begin
       --  Change the working directory to the object directory
 
-      Change_Dir
-        (Get_Name_String
-           (In_Tree.Projects.Table (For_Project).Object_Directory.Name));
+      Change_Dir (Get_Name_String (For_Project.Object_Directory.Display_Name));
 
       for Index in Interfaces'Range loop
 
@@ -2337,6 +2283,11 @@ package body MLib.Prj is
          for Index in 1 .. Argument_Number loop
             Write_Char (' ');
             Write_Str (Arguments (Index).all);
+
+            if not Opt.Verbose_Mode and then Index > 4 then
+               Write_Str (" ...");
+               exit;
+            end if;
          end loop;
 
          Write_Eol;
@@ -2539,28 +2490,5 @@ package body MLib.Prj is
    begin
       return C_SALs_Init_Using_Constructors /= 0;
    end SALs_Use_Constructors;
-
-   ---------------------------
-   -- Ultimate_Extension_Of --
-   ---------------------------
-
-   function Ultimate_Extension_Of
-     (Project : Project_Id;
-      In_Tree : Project_Tree_Ref) return Project_Id
-   is
-      Result : Project_Id := Project;
-      Data   : Project_Data;
-
-   begin
-      if Project /= No_Project then
-         loop
-            Data := In_Tree.Projects.Table (Result);
-            exit when Data.Extended_By = No_Project;
-            Result := Data.Extended_By;
-         end loop;
-      end if;
-
-      return Result;
-   end Ultimate_Extension_Of;
 
 end MLib.Prj;

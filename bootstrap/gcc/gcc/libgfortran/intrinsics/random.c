@@ -1,5 +1,6 @@
 /* Implementation of the RANDOM intrinsics
-   Copyright 2002, 2004, 2005, 2006, 2007, 2009 Free Software Foundation, Inc.
+   Copyright 2002, 2004, 2005, 2006, 2007, 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Lars Segerlund <seger@linuxmail.org>
    and Steve Kargl.
 
@@ -85,7 +86,7 @@ rnumber_4 (GFC_REAL_4 *f, GFC_UINTEGER_4 v)
 #error "GFC_REAL_4_RADIX has unknown value"
 #endif
   v = v & mask;
-  *f = (GFC_REAL_4) v * (GFC_REAL_4) 0x1.p-32f;
+  *f = (GFC_REAL_4) v * GFC_REAL_4_LITERAL(0x1.p-32);
 }
 
 static inline void
@@ -100,7 +101,7 @@ rnumber_8 (GFC_REAL_8 *f, GFC_UINTEGER_8 v)
 #error "GFC_REAL_8_RADIX has unknown value"
 #endif
   v = v & mask;
-  *f = (GFC_REAL_8) v * (GFC_REAL_8) 0x1.p-64;
+  *f = (GFC_REAL_8) v * GFC_REAL_8_LITERAL(0x1.p-64);
 }
 
 #ifdef HAVE_GFC_REAL_10
@@ -117,7 +118,7 @@ rnumber_10 (GFC_REAL_10 *f, GFC_UINTEGER_8 v)
 #error "GFC_REAL_10_RADIX has unknown value"
 #endif
   v = v & mask;
-  *f = (GFC_REAL_10) v * (GFC_REAL_10) 0x1.p-64;
+  *f = (GFC_REAL_10) v * GFC_REAL_10_LITERAL(0x1.p-64);
 }
 #endif
 
@@ -137,8 +138,8 @@ rnumber_16 (GFC_REAL_16 *f, GFC_UINTEGER_8 v1, GFC_UINTEGER_8 v2)
 #error "GFC_REAL_16_RADIX has unknown value"
 #endif
   v2 = v2 & mask;
-  *f = (GFC_REAL_16) v1 * (GFC_REAL_16) 0x1.p-64
-    + (GFC_REAL_16) v2 * (GFC_REAL_16) 0x1.p-128;
+  *f = (GFC_REAL_16) v1 * GFC_REAL_16_LITERAL(0x1.p-64)
+    + (GFC_REAL_16) v2 * GFC_REAL_16_LITERAL(0x1.p-128);
 }
 #endif
 /* libgfortran previously had a Mersenne Twister, taken from the paper:
@@ -374,8 +375,8 @@ arandom_r4 (gfc_array_r4 *x)
   for (n = 0; n < dim; n++)
     {
       count[n] = 0;
-      stride[n] = x->dim[n].stride;
-      extent[n] = x->dim[n].ubound + 1 - x->dim[n].lbound;
+      stride[n] = GFC_DESCRIPTOR_STRIDE(x,n);
+      extent[n] = GFC_DESCRIPTOR_EXTENT(x,n);
       if (extent[n] <= 0)
         return;
     }
@@ -441,8 +442,8 @@ arandom_r8 (gfc_array_r8 *x)
   for (n = 0; n < dim; n++)
     {
       count[n] = 0;
-      stride[n] = x->dim[n].stride;
-      extent[n] = x->dim[n].ubound + 1 - x->dim[n].lbound;
+      stride[n] = GFC_DESCRIPTOR_STRIDE(x,n);
+      extent[n] = GFC_DESCRIPTOR_EXTENT(x,n);
       if (extent[n] <= 0)
         return;
     }
@@ -511,8 +512,8 @@ arandom_r10 (gfc_array_r10 *x)
   for (n = 0; n < dim; n++)
     {
       count[n] = 0;
-      stride[n] = x->dim[n].stride;
-      extent[n] = x->dim[n].ubound + 1 - x->dim[n].lbound;
+      stride[n] = GFC_DESCRIPTOR_STRIDE(x,n);
+      extent[n] = GFC_DESCRIPTOR_EXTENT(x,n);
       if (extent[n] <= 0)
         return;
     }
@@ -583,8 +584,8 @@ arandom_r16 (gfc_array_r16 *x)
   for (n = 0; n < dim; n++)
     {
       count[n] = 0;
-      stride[n] = x->dim[n].stride;
-      extent[n] = x->dim[n].ubound + 1 - x->dim[n].lbound;
+      stride[n] = GFC_DESCRIPTOR_STRIDE(x,n);
+      extent[n] = GFC_DESCRIPTOR_EXTENT(x,n);
       if (extent[n] <= 0)
         return;
     }
@@ -690,13 +691,13 @@ random_seed_i4 (GFC_INTEGER_4 *size, gfc_array_i4 *put, gfc_array_i4 *get)
         runtime_error ("Array rank of PUT is not 1.");
 
       /* If the array is too small, abort.  */
-      if (((put->dim[0].ubound + 1 - put->dim[0].lbound)) < kiss_size)
+      if (GFC_DESCRIPTOR_EXTENT(put,0) < kiss_size)
         runtime_error ("Array size of PUT is too small.");
 
       /*  We copy the seed given by the user.  */
       for (i = 0; i < kiss_size; i++)
 	memcpy (seed + i * sizeof(GFC_UINTEGER_4),
-		&(put->data[(kiss_size - 1 - i) * put->dim[0].stride]),
+		&(put->data[(kiss_size - 1 - i) * GFC_DESCRIPTOR_STRIDE(put,0)]),
 		sizeof(GFC_UINTEGER_4));
 
       /* We put it after scrambling the bytes, to paper around users who
@@ -712,7 +713,7 @@ random_seed_i4 (GFC_INTEGER_4 *size, gfc_array_i4 *put, gfc_array_i4 *get)
 	runtime_error ("Array rank of GET is not 1.");
 
       /* If the array is too small, abort.  */
-      if (((get->dim[0].ubound + 1 - get->dim[0].lbound)) < kiss_size)
+      if (GFC_DESCRIPTOR_EXTENT(get,0) < kiss_size)
 	runtime_error ("Array size of GET is too small.");
 
       /* Unscramble the seed.  */
@@ -720,7 +721,7 @@ random_seed_i4 (GFC_INTEGER_4 *size, gfc_array_i4 *put, gfc_array_i4 *get)
 
       /*  Then copy it back to the user variable.  */
       for (i = 0; i < kiss_size; i++)
-       memcpy (&(get->data[(kiss_size - 1 - i) * get->dim[0].stride]),
+	memcpy (&(get->data[(kiss_size - 1 - i) * GFC_DESCRIPTOR_STRIDE(get,0)]),
                seed + i * sizeof(GFC_UINTEGER_4),
                sizeof(GFC_UINTEGER_4));
     }
@@ -757,12 +758,12 @@ random_seed_i8 (GFC_INTEGER_8 *size, gfc_array_i8 *put, gfc_array_i8 *get)
         runtime_error ("Array rank of PUT is not 1.");
 
       /* If the array is too small, abort.  */
-      if (((put->dim[0].ubound + 1 - put->dim[0].lbound)) < kiss_size / 2)
+      if (GFC_DESCRIPTOR_EXTENT(put,0) < kiss_size / 2)
         runtime_error ("Array size of PUT is too small.");
 
       /*  This code now should do correct strides.  */
       for (i = 0; i < kiss_size / 2; i++)
-	memcpy (&kiss_seed[2*i], &(put->data[i * put->dim[0].stride]),
+	memcpy (&kiss_seed[2*i], &(put->data[i * GFC_DESCRIPTOR_STRIDE(put,0)]),
 		sizeof (GFC_UINTEGER_8));
     }
 
@@ -774,12 +775,12 @@ random_seed_i8 (GFC_INTEGER_8 *size, gfc_array_i8 *put, gfc_array_i8 *get)
 	runtime_error ("Array rank of GET is not 1.");
 
       /* If the array is too small, abort.  */
-      if (((get->dim[0].ubound + 1 - get->dim[0].lbound)) < kiss_size / 2)
+      if (GFC_DESCRIPTOR_EXTENT(get,0) < kiss_size / 2)
 	runtime_error ("Array size of GET is too small.");
 
       /*  This code now should do correct strides.  */
       for (i = 0; i < kiss_size / 2; i++)
-	memcpy (&(get->data[i * get->dim[0].stride]), &kiss_seed[2*i],
+	memcpy (&(get->data[i * GFC_DESCRIPTOR_STRIDE(get,0)]), &kiss_seed[2*i],
 		sizeof (GFC_UINTEGER_8));
     }
 

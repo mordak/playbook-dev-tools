@@ -1,5 +1,6 @@
 /* Iterator routines for manipulating GENERIC and GIMPLE tree statements.
-   Copyright (C) 2003, 2004, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2003, 2004, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Andrew MacLeod  <amacleod@redhat.com>
 
 This file is part of GCC.
@@ -61,6 +62,47 @@ free_stmt_list (tree t)
   stmt_list_cache = t;
 }
 
+/* A subroutine of append_to_statement_list{,_force}.  T is not NULL.  */
+
+static void
+append_to_statement_list_1 (tree t, tree *list_p)
+{
+  tree list = *list_p;
+  tree_stmt_iterator i;
+
+  if (!list)
+    {
+      if (t && TREE_CODE (t) == STATEMENT_LIST)
+	{
+	  *list_p = t;
+	  return;
+	}
+      *list_p = list = alloc_stmt_list ();
+    }
+
+  i = tsi_last (list);
+  tsi_link_after (&i, t, TSI_CONTINUE_LINKING);
+}
+
+/* Add T to the end of the list container pointed to by LIST_P.
+   If T is an expression with no effects, it is ignored.  */
+
+void
+append_to_statement_list (tree t, tree *list_p)
+{
+  if (t && TREE_SIDE_EFFECTS (t))
+    append_to_statement_list_1 (t, list_p);
+}
+
+/* Similar, but the statement is always added, regardless of side effects.  */
+
+void
+append_to_statement_list_force (tree t, tree *list_p)
+{
+  if (t != NULL_TREE)
+    append_to_statement_list_1 (t, list_p);
+}
+
 /* Links a statement, or a chain of statements, before the current stmt.  */
 
 void
@@ -89,7 +131,7 @@ tsi_link_before (tree_stmt_iterator *i, tree t, enum tsi_iterator_update mode)
     }
   else
     {
-      head = GGC_NEW (struct tree_statement_list_node);
+      head = ggc_alloc_tree_statement_list_node ();
       head->prev = NULL;
       head->next = NULL;
       head->stmt = t;
@@ -165,7 +207,7 @@ tsi_link_after (tree_stmt_iterator *i, tree t, enum tsi_iterator_update mode)
     }
   else
     {
-      head = GGC_NEW (struct tree_statement_list_node);
+      head = ggc_alloc_tree_statement_list_node ();
       head->prev = NULL;
       head->next = NULL;
       head->stmt = t;
@@ -238,64 +280,6 @@ tsi_delink (tree_stmt_iterator *i)
   i->ptr = next;
 }
 
-/* Move all statements in the statement list after I to a new
-   statement list.  I itself is unchanged.  */
-
-tree
-tsi_split_statement_list_after (const tree_stmt_iterator *i)
-{
-  struct tree_statement_list_node *cur, *next;
-  tree old_sl, new_sl;
-
-  cur = i->ptr;
-  /* How can we possibly split after the end, or before the beginning?  */
-  gcc_assert (cur);
-  next = cur->next;
-
-  old_sl = i->container;
-  new_sl = alloc_stmt_list ();
-  TREE_SIDE_EFFECTS (new_sl) = 1;
-
-  STATEMENT_LIST_HEAD (new_sl) = next;
-  STATEMENT_LIST_TAIL (new_sl) = STATEMENT_LIST_TAIL (old_sl);
-  STATEMENT_LIST_TAIL (old_sl) = cur;
-  cur->next = NULL;
-  next->prev = NULL;
-
-  return new_sl;
-}
-
-/* Move all statements in the statement list before I to a new
-   statement list.  I is set to the head of the new list.  */
-
-tree
-tsi_split_statement_list_before (tree_stmt_iterator *i)
-{
-  struct tree_statement_list_node *cur, *prev;
-  tree old_sl, new_sl;
-
-  cur = i->ptr;
-  /* How can we possibly split after the end, or before the beginning?  */
-  gcc_assert (cur);
-  prev = cur->prev;
-
-  old_sl = i->container;
-  new_sl = alloc_stmt_list ();
-  TREE_SIDE_EFFECTS (new_sl) = 1;
-  i->container = new_sl;
-
-  STATEMENT_LIST_HEAD (new_sl) = cur;
-  STATEMENT_LIST_TAIL (new_sl) = STATEMENT_LIST_TAIL (old_sl);
-  STATEMENT_LIST_TAIL (old_sl) = prev;
-  cur->prev = NULL;
-  if (prev)
-    prev->next = NULL;
-  else
-    STATEMENT_LIST_HEAD (old_sl) = NULL;
-
-  return new_sl;
-}
-
 /* Return the first expression in a sequence of COMPOUND_EXPRs,
    or in a STATEMENT_LIST.  */
 
@@ -320,19 +304,6 @@ expr_first (tree expr)
 /* Return the last expression in a sequence of COMPOUND_EXPRs,
    or in a STATEMENT_LIST.  */
 
-#define EXPR_LAST_BODY do { \
-  if (expr == NULL_TREE) \
-    return expr;\
-  if (TREE_CODE (expr) == STATEMENT_LIST) \
-    { \
-      struct tree_statement_list_node *n = STATEMENT_LIST_TAIL (expr); \
-      return n ? n->stmt : NULL_TREE; \
-    } \
-  while (TREE_CODE (expr) == COMPOUND_EXPR) \
-    expr = TREE_OPERAND (expr, 1); \
-  return expr; \
-} while (0)
-
 tree
 expr_last (tree expr)
 {
@@ -347,31 +318,6 @@ expr_last (tree expr)
 
   while (TREE_CODE (expr) == COMPOUND_EXPR)
     expr = TREE_OPERAND (expr, 1);
-
-  return expr;
-}
-
-/* If EXPR is a single statement return it.  If EXPR is a
-   STATEMENT_LIST containing exactly one statement S, return S.
-   Otherwise, return NULL.  */
-
-tree 
-expr_only (tree expr)
-{
-  if (expr == NULL_TREE)
-    return NULL_TREE;
-
-  if (TREE_CODE (expr) == STATEMENT_LIST)
-    {
-      struct tree_statement_list_node *n = STATEMENT_LIST_TAIL (expr);
-      if (n && STATEMENT_LIST_HEAD (expr) == n)
-	return n->stmt;
-      else
-	return NULL_TREE;
-    }
-
-  if (TREE_CODE (expr) == COMPOUND_EXPR)
-    return NULL_TREE;
 
   return expr;
 }

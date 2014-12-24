@@ -1,3 +1,21 @@
+dnl Copyright (C) 2005, 2006, 2007, 2008 Free Software Foundation, Inc.
+dnl
+dnl This file is part of GCC.
+dnl
+dnl GCC is free software; you can redistribute it and/or modify
+dnl it under the terms of the GNU General Public License as published by
+dnl the Free Software Foundation; either version 3, or (at your option)
+dnl any later version.
+dnl
+dnl GCC is distributed in the hope that it will be useful,
+dnl but WITHOUT ANY WARRANTY; without even the implied warranty of
+dnl MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+dnl GNU General Public License for more details.
+dnl
+dnl You should have received a copy of the GNU General Public License
+dnl along with GCC; see the file COPYING3.  If not see
+dnl <http://www.gnu.org/licenses/>.
+
 dnl See whether we need a declaration for a function.
 dnl The result is highly dependent on the INCLUDES passed in, so make sure
 dnl to use a different cache variable name in this macro if it is invoked
@@ -424,6 +442,26 @@ AC_DEFUN([gcc_GAS_VERSION_GTE_IFELSE],
 ifelse([$1], elf, [_gcc_GAS_VERSION_GTE_IFELSE($@)],
                   [_gcc_GAS_VERSION_GTE_IFELSE(,$@)])])
 
+dnl # gcc_GAS_FLAGS
+dnl # Used by gcc_GAS_CHECK_FEATURE 
+dnl #
+AC_DEFUN([gcc_GAS_FLAGS],
+[AC_CACHE_CHECK([assembler flags], gcc_cv_as_flags,
+[ case "$target" in
+  i[[34567]]86-*-linux*)
+    dnl Always pass --32 to ia32 Linux assembler.
+    gcc_cv_as_flags="--32"
+    ;;
+  powerpc*-*-darwin*)
+    dnl Always pass -arch ppc to assembler.
+    gcc_cv_as_flags="-arch ppc"
+    ;;
+  *)
+    gcc_cv_as_flags=" "
+    ;;
+  esac])
+])
+
 dnl gcc_GAS_CHECK_FEATURE(description, cv, [[elf,]major,minor,patchlevel],
 dnl [extra switches to as], [assembler input],
 dnl [extra testing logic], [command if feature available])
@@ -436,14 +474,15 @@ dnl if assembly succeeds.  If EXTRA TESTING LOGIC is not the empty string,
 dnl then it is run instead of simply setting CV to "yes" - it is responsible
 dnl for doing so, if appropriate.
 AC_DEFUN([gcc_GAS_CHECK_FEATURE],
-[AC_CACHE_CHECK([assembler for $1], [$2],
+[AC_REQUIRE([gcc_GAS_FLAGS])dnl
+AC_CACHE_CHECK([assembler for $1], [$2],
  [[$2]=no
   ifelse([$3],,,[dnl
   if test $in_tree_gas = yes; then
     gcc_GAS_VERSION_GTE_IFELSE($3, [[$2]=yes])
   el])if test x$gcc_cv_as != x; then
     echo ifelse(m4_substr([$5],0,1),[$], "[$5]", '[$5]') > conftest.s
-    if AC_TRY_COMMAND([$gcc_cv_as $4 -o conftest.o conftest.s >&AS_MESSAGE_LOG_FD])
+    if AC_TRY_COMMAND([$gcc_cv_as $gcc_cv_as_flags $4 -o conftest.o conftest.s >&AS_MESSAGE_LOG_FD])
     then
 	ifelse([$6],, [$2]=yes, [$6])
     else

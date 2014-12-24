@@ -1,6 +1,6 @@
 /* BFD backend for MIPS BSD (a.out) binaries.
    Copyright 1993, 1994, 1995, 1997, 1998, 1999, 2000, 2001, 2002, 2003,
-   2007 Free Software Foundation, Inc.
+   2005, 2007, 2009, 2011 Free Software Foundation, Inc.
    Written by Ralph Campbell.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -23,7 +23,6 @@
 
 /* #define ENTRY_CAN_BE_ZERO */
 #define N_HEADER_IN_TEXT(x) 1
-#define N_SHARED_LIB(x) 0
 #define N_TXTADDR(x) \
     (N_MAGIC(x) != ZMAGIC ? (x).a_entry :	/* object file or NMAGIC */\
 	    TEXT_START_ADDR + EXEC_BYTES_SIZE	/* no padding */\
@@ -427,6 +426,7 @@ const bfd_target aout_mips_little_vec =
     MY_symbol_leading_char,
     ' ',				/* ar_pad_char */
     15,				/* ar_max_namelen */
+    0,				/* match priority.  */
     bfd_getl64, bfd_getl_signed_64, bfd_putl64,
     bfd_getl32, bfd_getl_signed_32, bfd_putl32,
     bfd_getl16, bfd_getl_signed_16, bfd_putl16, /* data */
@@ -468,6 +468,7 @@ const bfd_target aout_mips_big_vec =
     MY_symbol_leading_char,
     ' ',				/* ar_pad_char */
     15,				/* ar_max_namelen */
+    0,				/* match priority.  */
     bfd_getb64, bfd_getb_signed_64, bfd_putb64,
     bfd_getb32, bfd_getb_signed_32, bfd_putb32,
     bfd_getb16, bfd_getb_signed_16, bfd_putb16, /* data */

@@ -1,4 +1,4 @@
-/* Copyright (C) 2008, 2009 Free Software Foundation, Inc.
+/* Copyright (C) 2008, 2009, 2010 Free Software Foundation, Inc.
 
    This file is part of GCC.
 
@@ -24,6 +24,8 @@
 #ifndef _X86INTRIN_H_INCLUDED
 #define _X86INTRIN_H_INCLUDED
 
+#include <ia32intrin.h>
+
 #ifdef __MMX__
 #include <mmintrin.h>
 #endif
@@ -44,16 +46,12 @@
 #include <tmmintrin.h>
 #endif
 
-#ifdef __SSE4a__
+#ifdef __SSE4A__
 #include <ammintrin.h>
 #endif
 
 #if defined (__SSE4_2__) || defined (__SSE4_1__)
 #include <smmintrin.h>
-#endif
-
-#ifdef __SSE5__
-#include <bmmintrin.h>
 #endif
 
 #if defined (__AES__) || defined (__PCLMUL__)
@@ -65,6 +63,34 @@
 
 #ifdef __3dNOW__
 #include <mm3dnow.h>
+#endif
+
+#ifdef __FMA4__
+#include <fma4intrin.h>
+#endif
+
+#ifdef __XOP__
+#include <xopintrin.h>
+#endif
+
+#ifdef __LWP__
+#include <lwpintrin.h>
+#endif
+
+#ifdef __ABM__
+#include <abmintrin.h>
+#endif
+
+#ifdef __BMI__
+#include <bmiintrin.h>
+#endif
+
+#ifdef __TBM__
+#include <tbmintrin.h>
+#endif
+
+#ifdef __POPCNT__
+#include <popcntintrin.h>
 #endif
 
 #endif /* _X86INTRIN_H_INCLUDED */

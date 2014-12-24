@@ -5,7 +5,7 @@
 
 #define N 64
 
-char x[N] __attribute__ ((__aligned__(16)));
+char x[N] __attribute__ ((__aligned__(__BIGGEST_ALIGNMENT__)));
 
 __attribute__ ((noinline)) int
 foo (int len, int *z) {
@@ -39,6 +39,6 @@ int main (void)
 }
 
 /* { dg-final { scan-tree-dump-times "vectorized 1 loops" 2 "vect" { target vect_unpack } } } */
-/* { dg-final { scan-tree-dump-times "vectorized 1 loops" 1 "vect" { target { ! vect_unpack } } } } */
+/* { dg-final { if [ istarget sparc*-*-* ] { scan-tree-dump-times "vectorized 1 loops" 1 "vect" { xfail ilp32 } } else { scan-tree-dump-times "vectorized 1 loops" 1 "vect" { target { ! vect_unpack } } } } } */
 /* { dg-final { cleanup-tree-dump "vect" } } */
 

@@ -19,7 +19,7 @@
 #along with GCC; see the file COPYING3.  If not see
 #<http://www.gnu.org/licenses/>.
 
-AC_PREREQ(2.59)
+AC_PREREQ(2.64)
 AC_INIT(package-unused, version-unused,, libobjc)
 AC_CONFIG_SRCDIR([objc/objc.h])
 GCC_TOPLEV_SUBDIRS
@@ -27,7 +27,7 @@ GCC_TOPLEV_SUBDIRS
 # We need the following definitions because AC_PROG_LIBTOOL relies on them
 PACKAGE=libobjc
 # Version is pulled out to make it a bit easier to change using sed.
-VERSION=2:0:0
+VERSION=3:0:0
 AC_SUBST(VERSION)
 
 # This works around the fact that libtool configuration may change LD
@@ -153,13 +153,18 @@ GCC_NO_EXECUTABLES
 m4_rename([_AC_ARG_VAR_PRECIOUS],[real_PRECIOUS])
 m4_define([_AC_ARG_VAR_PRECIOUS],[])
 AC_PROG_CC
-m4_rename([real_PRECIOUS],[_AC_ARG_VAR_PRECIOUS])
+m4_rename_force([real_PRECIOUS],[_AC_ARG_VAR_PRECIOUS])
 
 # extra LD Flags which are required for targets
+ACX_LT_HOST_FLAGS
 case "${host}" in
   *-darwin*)
     # Darwin needs -single_module when linking libobjc
-    extra_ldflags_libobjc=-Wl,-single_module
+    extra_ldflags_libobjc='$(lt_host_flags) -Wl,-single_module'
+    ;;
+  *-cygwin*|*-mingw*)
+    # Tell libtool to build DLLs on Windows
+    extra_ldflags_libobjc='$(lt_host_flags)'
     ;;
 esac
 AC_SUBST(extra_ldflags_libobjc)
@@ -211,6 +216,8 @@ if test $target_thread_file != single; then
         [Define if the compiler has a thread header that is non single.])
 fi 
 
+# Check if we have thread-local storage
+GCC_CHECK_TLS
 
 AC_MSG_CHECKING([for exception model to use])
 AC_LANG_PUSH(C)

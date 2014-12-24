@@ -3,7 +3,7 @@
 // { dg-do compile }
 // This tests the mangling of empty template argument list in a template
 // id.
-// { dg-final {scan-assembler "_ZNK5DummyclI3GenEENT_3SigIE10ResultTypeERKS2_" } }
+// { dg-final { scan-assembler "_ZNK5DummyclI3GenEENT_3SigIE10ResultTypeERKS2_" } }
 
 
 struct Void {};
@@ -39,4 +39,3 @@ int myfunction() {
 int main() {
   myfunction();
 }
-

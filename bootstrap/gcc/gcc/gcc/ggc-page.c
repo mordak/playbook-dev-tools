@@ -1,6 +1,6 @@
 /* "Bag-of-pages" garbage collector for the GNU compiler.
-   Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008
-   Free Software Foundation, Inc.
+   Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008, 2009,
+   2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -25,37 +25,25 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree.h"
 #include "rtl.h"
 #include "tm_p.h"
-#include "toplev.h"
+#include "diagnostic-core.h"
 #include "flags.h"
 #include "ggc.h"
+#include "ggc-internal.h"
 #include "timevar.h"
 #include "params.h"
 #include "tree-flow.h"
+#include "cfgloop.h"
+#include "plugin.h"
 
 /* Prefer MAP_ANON(YMOUS) to /dev/zero, since we don't need to keep a
    file open.  Prefer either to valloc.  */
 #ifdef HAVE_MMAP_ANON
 # undef HAVE_MMAP_DEV_ZERO
-
-# include <sys/mman.h>
-# ifndef MAP_FAILED
-#  define MAP_FAILED -1
-# endif
-# if !defined (MAP_ANONYMOUS) && defined (MAP_ANON)
-#  define MAP_ANONYMOUS MAP_ANON
-# endif
 # define USING_MMAP
-
 #endif
 
 #ifdef HAVE_MMAP_DEV_ZERO
-
-# include <sys/mman.h>
-# ifndef MAP_FAILED
-#  define MAP_FAILED -1
-# endif
 # define USING_MMAP
-
 #endif
 
 #ifndef USING_MMAP
@@ -156,6 +144,24 @@ along with GCC; see the file COPYING3.  If not see
 #define OFFSET_TO_BIT(OFFSET, ORDER) \
   (((OFFSET) * DIV_MULT (ORDER)) >> DIV_SHIFT (ORDER))
 
+/* We use this structure to determine the alignment required for
+   allocations.  For power-of-two sized allocations, that's not a
+   problem, but it does matter for odd-sized allocations.
+   We do not care about alignment for floating-point types.  */
+
+struct max_alignment {
+  char c;
+  union {
+    HOST_WIDEST_INT i;
+    void *p;
+  } u;
+};
+
+/* The biggest alignment required.  */
+
+#define MAX_ALIGNMENT (offsetof (struct max_alignment, u))
+
+
 /* The number of extra orders, not corresponding to power-of-two sized
    objects.  */
 
@@ -172,41 +178,34 @@ along with GCC; see the file COPYING3.  If not see
    thing you need to do to add a new special allocation size.  */
 
 static const size_t extra_order_size_table[] = {
-  sizeof (struct var_ann_d),
+  /* Extra orders for small non-power-of-two multiples of MAX_ALIGNMENT.
+     There are a lot of structures with these sizes and explicitly
+     listing them risks orders being dropped because they changed size.  */
+  MAX_ALIGNMENT * 3,
+  MAX_ALIGNMENT * 5,
+  MAX_ALIGNMENT * 6,
+  MAX_ALIGNMENT * 7,
+  MAX_ALIGNMENT * 9,
+  MAX_ALIGNMENT * 10,
+  MAX_ALIGNMENT * 11,
+  MAX_ALIGNMENT * 12,
+  MAX_ALIGNMENT * 13,
+  MAX_ALIGNMENT * 14,
+  MAX_ALIGNMENT * 15,
   sizeof (struct tree_decl_non_common),
   sizeof (struct tree_field_decl),
   sizeof (struct tree_parm_decl),
   sizeof (struct tree_var_decl),
-  sizeof (struct tree_list),
-  sizeof (struct tree_ssa_name),
+  sizeof (struct tree_type),
   sizeof (struct function),
   sizeof (struct basic_block_def),
-  sizeof (bitmap_element),
-  sizeof (bitmap_head),
-  TREE_EXP_SIZE (2),
-  RTL_SIZE (2),			/* MEM, PLUS, etc.  */
-  RTL_SIZE (9),			/* INSN */
+  sizeof (struct cgraph_node),
+  sizeof (struct loop),
 };
 
 /* The total number of orders.  */
 
 #define NUM_ORDERS (HOST_BITS_PER_PTR + NUM_EXTRA_ORDERS)
-
-/* We use this structure to determine the alignment required for
-   allocations.  For power-of-two sized allocations, that's not a
-   problem, but it does matter for odd-sized allocations.  */
-
-struct max_alignment {
-  char c;
-  union {
-    HOST_WIDEST_INT i;
-    long double d;
-  } u;
-};
-
-/* The biggest alignment required.  */
-
-#define MAX_ALIGNMENT (offsetof (struct max_alignment, u))
 
 /* Compute the smallest nonnegative number which when added to X gives
    a multiple of F.  */
@@ -322,6 +321,16 @@ typedef struct page_table_chain
 
 #endif
 
+#ifdef ENABLE_GC_ALWAYS_COLLECT
+/* List of free objects to be verified as actually free on the
+   next collection.  */
+struct free_object
+{
+  void *object;
+  struct free_object *next;
+};
+#endif
+
 /* The rest of the global variables.  */
 static struct globals
 {
@@ -408,34 +417,30 @@ static struct globals
 #ifdef ENABLE_GC_ALWAYS_COLLECT
   /* List of free objects to be verified as actually free on the
      next collection.  */
-  struct free_object
-  {
-    void *object;
-    struct free_object *next;
-  } *free_object_list;
+  struct free_object *free_object_list;
 #endif
 
 #ifdef GATHER_STATISTICS
   struct
   {
-    /* Total memory allocated with ggc_alloc.  */
+    /* Total GC-allocated memory.  */
     unsigned long long total_allocated;
-    /* Total overhead for memory to be allocated with ggc_alloc.  */
+    /* Total overhead for GC-allocated memory.  */
     unsigned long long total_overhead;
 
     /* Total allocations and overhead for sizes less than 32, 64 and 128.
        These sizes are interesting because they are typical cache line
        sizes.  */
-   
+
     unsigned long long total_allocated_under32;
     unsigned long long total_overhead_under32;
-  
+
     unsigned long long total_allocated_under64;
     unsigned long long total_overhead_under64;
-  
+
     unsigned long long total_allocated_under128;
     unsigned long long total_overhead_under128;
-  
+
     /* The allocations for each of the allocation orders.  */
     unsigned long long total_allocated_per_order[NUM_ORDERS];
 
@@ -626,7 +631,7 @@ found:
 
 /* Prints the page-entry for object size ORDER, for debugging.  */
 
-void
+DEBUG_FUNCTION void
 debug_print_page_list (int order)
 {
   page_entry *p;
@@ -670,7 +675,7 @@ alloc_anon (char *pref ATTRIBUTE_UNUSED, size_t size)
   G.bytes_mapped += size;
 
   /* Pretend we don't have access to the allocated pages.  We'll enable
-     access to smaller pieces of the area in ggc_alloc.  Discard the
+     access to smaller pieces of the area in ggc_internal_alloc.  Discard the
      handle to avoid handle leak.  */
   VALGRIND_DISCARD (VALGRIND_MAKE_MEM_NOACCESS (page, size));
 
@@ -932,7 +937,7 @@ free_page (page_entry *entry)
       /* We cannot free a page from a context deeper than the current
 	 one.  */
       gcc_assert (entry->context_depth == top->context_depth);
-      
+
       /* Put top element into freed slot.  */
       G.by_depth[i] = top;
       G.save_in_use[i] = G.save_in_use[G.by_depth_in_use-1];
@@ -1055,13 +1060,13 @@ void *
 ggc_alloc_typed_stat (enum gt_types_enum type ATTRIBUTE_UNUSED, size_t size
 		      MEM_STAT_DECL)
 {
-  return ggc_alloc_stat (size PASS_MEM_STAT);
+  return ggc_internal_alloc_stat (size PASS_MEM_STAT);
 }
 
 /* Allocate a chunk of memory of SIZE bytes.  Its contents are undefined.  */
 
 void *
-ggc_alloc_stat (size_t size MEM_STAT_DECL)
+ggc_internal_alloc_stat (size_t size MEM_STAT_DECL)
 {
   size_t order, word, bit, object_offset, object_size;
   struct page_entry *entry;
@@ -1400,7 +1405,7 @@ ggc_free (void *p)
 
 #ifdef ENABLE_GC_ALWAYS_COLLECT
   /* In the completely-anal-checking mode, we do *not* immediately free
-     the data, but instead verify that the data is *actually* not 
+     the data, but instead verify that the data is *actually* not
      reachable the next time we collect.  */
   {
     struct free_object *fo = XNEW (struct free_object);
@@ -1427,7 +1432,7 @@ ggc_free (void *p)
 	/* If the page is completely full, then it's supposed to
 	   be after all pages that aren't.  Since we've freed one
 	   object from a page that was full, we need to move the
-	   page to the head of the list. 
+	   page to the head of the list.
 
 	   PE is the node we want to move.  Q is the previous node
 	   and P is the next node in the list.  */
@@ -1471,7 +1476,7 @@ ggc_free (void *p)
 static void
 compute_inverse (unsigned order)
 {
-  size_t size, inv; 
+  size_t size, inv;
   unsigned int e;
 
   size = OBJECT_SIZE (order);
@@ -1584,20 +1589,6 @@ init_ggc (void)
   G.by_depth_max = INITIAL_PTE_COUNT;
   G.by_depth = XNEWVEC (page_entry *, G.by_depth_max);
   G.save_in_use = XNEWVEC (unsigned long *, G.by_depth_max);
-}
-
-/* Start a new GGC zone.  */
-
-struct alloc_zone *
-new_ggc_zone (const char *name ATTRIBUTE_UNUSED)
-{
-  return NULL;
-}
-
-/* Destroy a GGC zone.  */
-void
-destroy_ggc_zone (struct alloc_zone *zone ATTRIBUTE_UNUSED)
-{
 }
 
 /* Merge the SAVE_IN_USE_P and IN_USE_P arrays in P so that IN_USE_P
@@ -1731,7 +1722,7 @@ sweep_pages (void)
 		G.pages[order] = next;
 	      else
 		previous->next = next;
-	    
+
 	      /* Splice P out of the back pointers too.  */
 	      if (next)
 		next->prev = previous;
@@ -1937,6 +1928,8 @@ ggc_collect (void)
   /* Indicate that we've seen collections at this context depth.  */
   G.context_depth_collections = ((unsigned long)1 << (G.context_depth + 1)) - 1;
 
+  invoke_plugin_callbacks (PLUGIN_GGC_START, NULL);
+
   clear_marks ();
   ggc_mark_roots ();
 #ifdef GATHER_STATISTICS
@@ -1947,6 +1940,8 @@ ggc_collect (void)
   sweep_pages ();
 
   G.allocated_last_gc = G.allocated;
+
+  invoke_plugin_callbacks (PLUGIN_GGC_END, NULL);
 
   timevar_pop (TV_GC);
 
@@ -2027,7 +2022,7 @@ ggc_print_statistics (void)
 	   SCALE (G.allocated), STAT_LABEL(G.allocated),
 	   SCALE (total_overhead), STAT_LABEL (total_overhead));
 
-#ifdef GATHER_STATISTICS  
+#ifdef GATHER_STATISTICS
   {
     fprintf (stderr, "\nTotal allocations and overheads during the compilation process\n");
 
@@ -2048,7 +2043,7 @@ ggc_print_statistics (void)
              G.stats.total_overhead_under128);
     fprintf (stderr, "Total Allocated under 128B:            %10lld\n",
              G.stats.total_allocated_under128);
-   
+
     for (i = 0; i < NUM_ORDERS; i++)
       if (G.stats.total_allocated_per_order[i])
         {
@@ -2063,12 +2058,14 @@ ggc_print_statistics (void)
 #endif
 }
 
+struct ggc_pch_ondisk
+{
+  unsigned totals[NUM_ORDERS];
+};
+
 struct ggc_pch_data
 {
-  struct ggc_pch_ondisk
-  {
-    unsigned totals[NUM_ORDERS];
-  } d;
+  struct ggc_pch_ondisk d;
   size_t base[NUM_ORDERS];
   size_t written[NUM_ORDERS];
 };
@@ -2158,7 +2155,7 @@ ggc_pch_write_object (struct ggc_pch_data *d ATTRIBUTE_UNUSED,
 		      size_t size, bool is_string ATTRIBUTE_UNUSED)
 {
   unsigned order;
-  static const char emptyBytes[256];
+  static const char emptyBytes[256] = { 0 };
 
   if (size < NUM_SIZE_LOOKUP)
     order = size_lookup[size];
@@ -2170,7 +2167,7 @@ ggc_pch_write_object (struct ggc_pch_data *d ATTRIBUTE_UNUSED,
     }
 
   if (fwrite (x, size, 1, f) != 1)
-    fatal_error ("can't write PCH file: %m");
+    fatal_error ("can%'t write PCH file: %m");
 
   /* If SIZE is not the same as OBJECT_SIZE(order), then we need to pad the
      object out to OBJECT_SIZE(order).  This happens for strings.  */
@@ -2186,13 +2183,13 @@ ggc_pch_write_object (struct ggc_pch_data *d ATTRIBUTE_UNUSED,
       if (padding <= sizeof(emptyBytes))
         {
           if (fwrite (emptyBytes, 1, padding, f) != padding)
-            fatal_error ("can't write PCH file");
+            fatal_error ("can%'t write PCH file");
         }
       else
         {
           /* Larger than our buffer?  Just default to fseek.  */
           if (fseek (f, padding, SEEK_CUR) != 0)
-            fatal_error ("can't write PCH file");
+            fatal_error ("can%'t write PCH file");
         }
     }
 
@@ -2201,14 +2198,14 @@ ggc_pch_write_object (struct ggc_pch_data *d ATTRIBUTE_UNUSED,
       && fseek (f, ROUND_UP_VALUE (d->d.totals[order] * OBJECT_SIZE (order),
 				   G.pagesize),
 		SEEK_CUR) != 0)
-    fatal_error ("can't write PCH file: %m");
+    fatal_error ("can%'t write PCH file: %m");
 }
 
 void
 ggc_pch_finish (struct ggc_pch_data *d, FILE *f)
 {
   if (fwrite (&d->d, sizeof (d->d), 1, f) != 1)
-    fatal_error ("can't write PCH file: %m");
+    fatal_error ("can%'t write PCH file: %m");
   free (d);
 }
 
@@ -2298,7 +2295,7 @@ ggc_pch_read (FILE *f, void *addr)
   /* Allocate the appropriate page-table entries for the pages read from
      the PCH file.  */
   if (fread (&d, sizeof (d), 1, f) != 1)
-    fatal_error ("can't read PCH file: %m");
+    fatal_error ("can%'t read PCH file: %m");
 
   for (i = 0; i < NUM_ORDERS; i++)
     {
@@ -2358,3 +2355,12 @@ ggc_pch_read (FILE *f, void *addr)
   /* Update the statistics.  */
   G.allocated = G.allocated_last_gc = offs - (char *)addr;
 }
+
+struct alloc_zone
+{
+  int dummy;
+};
+
+struct alloc_zone rtl_zone;
+struct alloc_zone tree_zone;
+struct alloc_zone tree_id_zone;

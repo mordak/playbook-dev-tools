@@ -1,7 +1,11 @@
 /* Skip on MIPS, where LOGICAL_OP_NON_SHORT_CIRCUIT inhibits the setcc
    optimizations that expose the VRP opportunity.  */
-/* { dg-do compile { target { ! mips*-*-* } } } */
+/* Skip on S/390 and avr.  Lower values in BRANCH_COST lead to two conditional
+   jumps when evaluating an && condition.  VRP is not able to optimize
+   this.  */
+/* { dg-do compile { target { ! "mips*-*-* s390*-*-*  avr-*-* mn10300-*-*" } } } */
 /* { dg-options "-O2 -fdump-tree-vrp -fdump-tree-dom" } */
+/* { dg-options "-O2 -fdump-tree-vrp -fdump-tree-dom -march=i586" { target { i?86-*-* && ilp32 } } } */
 
 int h(int x, int y)
 {
@@ -30,12 +34,10 @@ int f(int x)
 
 /* Test that x and y are never compared to 0 -- they're always known to be
    0 or 1.  */
-/* xfail: PR middle-end/38219  */
-/* { dg-final { scan-tree-dump-times "\[xy\]\[^ \]* !=" 0 "vrp1" { xfail powerpc*-*-* }} } */
+/* { dg-final { scan-tree-dump-times "\[xy\]\[^ \]* !=" 0 "vrp1" } } */
 
 /* This one needs more copy propagation that only happens in dom1.  */
-/* xfail: PR middle-end/38219  */
-/* { dg-final { scan-tree-dump-times "x\[^ \]* & y" 1 "dom1" { xfail powerpc*-*-* } } } */
+/* { dg-final { scan-tree-dump-times "x\[^ \]* & y" 1 "dom1" } } */
 /* { dg-final { scan-tree-dump-times "x\[^ \]* & y" 1 "vrp1" { xfail *-*-* } } } */
 
 /* These two are fully simplified by VRP.  */

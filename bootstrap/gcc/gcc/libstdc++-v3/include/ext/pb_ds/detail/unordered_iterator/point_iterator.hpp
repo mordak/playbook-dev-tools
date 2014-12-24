@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -72,7 +72,7 @@ public:
   inline
   point_iterator_()
 
-    : m_p_value(NULL)
+    : m_p_value(0)
   { }
 
   // Copy constructor.
@@ -86,7 +86,7 @@ public:
   inline pointer
   operator->() const
   {
-    _GLIBCXX_DEBUG_ASSERT(m_p_value != NULL);
+    _GLIBCXX_DEBUG_ASSERT(m_p_value != 0);
 
     return (m_p_value);
   }
@@ -95,7 +95,7 @@ public:
   inline reference
   operator*() const
   {
-    _GLIBCXX_DEBUG_ASSERT(m_p_value != NULL);
+    _GLIBCXX_DEBUG_ASSERT(m_p_value != 0);
 
     return (*m_p_value);
   }

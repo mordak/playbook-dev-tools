@@ -7,7 +7,7 @@
 --                                 B o d y                                  --
 --                                                                          --
 --             Copyright (C) 1991-1994, Florida State University            --
---                     Copyright (C) 1995-2008, AdaCore                     --
+--                     Copyright (C) 1995-2009, AdaCore                     --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -42,15 +42,15 @@
 --  include:
 
 --  - It is vulnerable to bad Task_Id values, to the extent of possibly
---     trashing memory and crashing the runtime system.
+--    trashing memory and crashing the runtime system.
 
 --  - It requires dynamic storage allocation for each new attribute value,
---     except for types that happen to be the same size as System.Address, or
---     shorter.
+--    except for types that happen to be the same size as System.Address, or
+--    shorter.
 
---  -  Instantiations at other than the library level rely on being able to
---     do down-level calls to a procedure declared in the generic package body.
---     This makes it potentially vulnerable to compiler changes.
+--  - Instantiations at other than the library level rely on being able to
+--    do down-level calls to a procedure declared in the generic package body.
+--    This makes it potentially vulnerable to compiler changes.
 
 --  The main implementation issue here is that the connection from task to
 --  attribute is a potential source of dangling references.
@@ -221,7 +221,6 @@
 --  general use 'Unchecked_Access instead of 'Access as the package can be
 --  instantiated from within a local context.
 
-with System.Error_Reporting;
 with System.Storage_Elements;
 with System.Task_Primitives.Operations;
 with System.Tasking;
@@ -237,8 +236,7 @@ pragma Elaborate_All (System.Tasking.Task_Attributes);
 
 package body Ada.Task_Attributes is
 
-   use System.Error_Reporting,
-       System.Tasking.Initialization,
+   use System.Tasking.Initialization,
        System.Tasking,
        System.Tasking.Task_Attributes,
        Ada.Exceptions;
@@ -249,8 +247,8 @@ package body Ada.Task_Attributes is
    -- Unchecked Conversions --
    ---------------------------
 
-   --  The following type corresponds to Dummy_Wrapper,
-   --  declared in System.Tasking.Task_Attributes.
+   --  The following type corresponds to Dummy_Wrapper, declared in
+   --  System.Tasking.Task_Attributes.
 
    type Wrapper;
    type Access_Wrapper is access all Wrapper;
@@ -276,8 +274,7 @@ package body Ada.Task_Attributes is
    --  For reference to directly addressed task attributes
 
    pragma Warnings (On);
-   --  End of warnings off region for directly addressed
-   --  attribute conversion functions.
+   --  End warnings off region for directly addressed attribute conversions
 
    function To_Access_Address is new Ada.Unchecked_Conversion
      (Access_Node, Access_Address);
@@ -306,8 +303,6 @@ package body Ada.Task_Attributes is
    function To_Lib_Level_Deallocator is new Ada.Unchecked_Conversion
      (Local_Deallocator, Deallocator);
    --  To defeat accessibility check
-
-   pragma Warnings (On);
 
    ------------------------
    -- Storage Management --
@@ -402,9 +397,9 @@ package body Ada.Task_Attributes is
                P := P.Next;
             end loop;
 
-            --  Unlock the RTS here to follow the lock ordering rule
-            --  that prevent us from using new (i.e the Global_Lock) while
-            --  holding any other lock.
+            --  Unlock the RTS here to follow the lock ordering rule that
+            --  prevent us from using new (i.e the Global_Lock) while holding
+            --  any other lock.
 
             POP.Unlock_RTS;
             W := new Wrapper'
@@ -426,9 +421,6 @@ package body Ada.Task_Attributes is
                raise;
          end;
       end if;
-
-      pragma Assert (Shutdown ("Should never get here in Reference"));
-      return null;
 
    exception
       when Tasking_Error | Program_Error =>
@@ -719,9 +711,9 @@ begin
                In_Use := In_Use or Two_To_J;
                Local.Index := J;
 
-               --  This unchecked conversions can give a warning when the
-               --  alignment is incorrect, but it will not be used in such a
-               --  case anyway, so the warning can be safely ignored.
+               --  This unchecked conversion can give a warning when the
+               --  alignment is incorrect, but it will not be used in such
+               --  a case anyway, so the warning can be safely ignored.
 
                pragma Warnings (Off);
                To_Attribute_Handle (Local.Initial_Value'Access).all :=

@@ -1,6 +1,6 @@
 /* Definitions of target machine for GNU compiler, for CRX.
    Copyright (C) 1991, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
-   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008
+   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
 
    This file is part of GCC.
@@ -53,17 +53,6 @@ do {								\
 #endif
 
 #define TARGET_VERSION fputs (" (CRX/ELF)", stderr);
-
-/* Put each function in its own section so that PAGE-instruction
- * relaxation can do its best.  */
-#define OPTIMIZATION_OPTIONS(LEVEL, SIZEFLAG)	\
-    do {					\
-	if ((LEVEL) || (SIZEFLAG))		\
-	    flag_function_sections = 1;	\
-    } while (0)
-
-/* Show we can debug even without a frame pointer.  */
-#define CAN_DEBUG_WITHOUT_FP
 
 /*****************************************************************************/
 /* STORAGE LAYOUT							     */
@@ -237,8 +226,6 @@ enum reg_class
 
 #define REGNO_OK_FOR_INDEX_P(REGNO)	   REGNO_OK_FOR_BASE_P(REGNO)
 
-#define PREFERRED_RELOAD_CLASS(X,CLASS) CLASS
-
 #define SECONDARY_RELOAD_CLASS(CLASS, MODE, X) \
   crx_secondary_reload_class (CLASS, MODE, X)
 
@@ -291,17 +278,12 @@ enum reg_class
 
 #define FIRST_PARM_OFFSET(FNDECL)  0
 
-#define FRAME_POINTER_REQUIRED (cfun->calls_alloca)
-
 #define ELIMINABLE_REGS \
   { \
     { ARG_POINTER_REGNUM,   STACK_POINTER_REGNUM}, \
     { ARG_POINTER_REGNUM,   FRAME_POINTER_REGNUM}, \
     { FRAME_POINTER_REGNUM, STACK_POINTER_REGNUM}  \
   }
-
-#define CAN_ELIMINATE(FROM, TO) \
- ((TO) == STACK_POINTER_REGNUM ? ! frame_pointer_needed : 1)
 
 #define INITIAL_ELIMINATION_OFFSET(FROM, TO, OFFSET)			\
   do {									\
@@ -318,11 +300,6 @@ enum reg_class
 
 #define PUSH_ROUNDING(BYTES) (((BYTES) + 3) & ~3)
 
-#define RETURN_POPS_ARGS(FNDECL, FUNTYPE, SIZE)   0
-
-#define FUNCTION_ARG(CUM, MODE, TYPE, NAMED) \
-  ((rtx) crx_function_arg(&(CUM), (MODE), (TYPE), (NAMED)))
-
 #ifndef CUMULATIVE_ARGS
 struct cumulative_args
 {
@@ -337,9 +314,6 @@ struct cumulative_args
 
 #define INIT_CUMULATIVE_ARGS(CUM, FNTYPE, LIBNAME, FNDECL, N_NAMED_ARGS) \
   crx_init_cumulative_args(&(CUM), (FNTYPE), (LIBNAME))
-
-#define FUNCTION_ARG_ADVANCE(CUM, MODE, TYPE, NAMED) \
-  crx_function_arg_advance(&(CUM), (MODE), (TYPE), (NAMED))
 
 #define FUNCTION_ARG_REGNO_P(REGNO)  crx_function_arg_regno_p(REGNO)
 
@@ -365,7 +339,7 @@ struct cumulative_args
 #undef  FUNCTION_PROFILER
 #define FUNCTION_PROFILER(STREAM, LABELNO)	\
 {						\
-    sorry ("Profiler support for CRX");		\
+    sorry ("profiler support for CRX");		\
 }
 	
 /*****************************************************************************/
@@ -373,11 +347,6 @@ struct cumulative_args
 /*****************************************************************************/
 
 #define TRAMPOLINE_SIZE	32
-
-#define INITIALIZE_TRAMPOLINE(addr, fnaddr, static_chain)	\
-{								\
-    sorry ("Trampoline support for CRX");			\
-}
 
 /*****************************************************************************/
 /* ADDRESSING MODES							     */
@@ -403,22 +372,6 @@ struct cumulative_args
 #define REG_OK_FOR_BASE_P(X)	1
 #define REG_OK_FOR_INDEX_P(X)	1
 #endif /* REG_OK_STRICT */
-
-#ifdef REG_OK_STRICT
-#define GO_IF_LEGITIMATE_ADDRESS(MODE, X, LABEL)			\
-{									\
-  if (crx_legitimate_address_p (MODE, X, 1))				\
-      goto LABEL;							\
-}
-#else
-#define GO_IF_LEGITIMATE_ADDRESS(MODE, X, LABEL)			\
-{									\
-  if (crx_legitimate_address_p (MODE, X, 0))				\
-      goto LABEL;							\
-}
-#endif /* REG_OK_STRICT */
-
-#define GO_IF_MODE_DEPENDENT_ADDRESS(ADDR, LABEL)
 
 #define LEGITIMATE_CONSTANT_P(X)  1
 
@@ -521,12 +474,5 @@ struct cumulative_args
 #define Pmode		SImode
 
 #define FUNCTION_MODE	QImode
-
-/*****************************************************************************/
-/* EXTERNAL DECLARATIONS FOR VARIABLES DEFINED IN CRX.C			     */
-/*****************************************************************************/
-
-extern rtx crx_compare_op0;    /* operand 0 for comparisons */
-extern rtx crx_compare_op1;    /* operand 1 for comparisons */
 
 #endif /* ! GCC_CRX_H */

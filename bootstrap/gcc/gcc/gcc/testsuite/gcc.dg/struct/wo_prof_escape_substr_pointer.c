@@ -24,6 +24,8 @@ typedef struct
   int c;
 }str_with_substr_t;
 
+int foo;
+
 int
 main (void)
 {
@@ -37,9 +39,11 @@ main (void)
   for (i=0; i < N; i++)
     A[i].sub_str->a = 5;
 
+  foo = A[56].sub_str->a;
+
   return 0;
 }
 
 /*--------------------------------------------------------------------------*/
-/* { dg-final { scan-ipa-dump "is a field in the structure" "ipa_struct_reorg" } } */
+/* { dg-final { scan-ipa-dump "is a field in the structure" "ipa_struct_reorg" { xfail *-*-* } } } */
 /* { dg-final { cleanup-ipa-dump "*" } } */

@@ -2,15 +2,15 @@
    exceptions.  */
 /* Developed by Ziemowit Laski <zlaski@apple.com>.  */
 
-#include <objc/Object.h>
 #include <stdio.h>
+#include <stdlib.h>
+#import "../../../objc-obj-c++-shared/Object1.h"
 
 /* The following is not required in actual user code; we include it
    here to check that the compiler generates an internal definition of
    _setjmp that is consistent with what <setjmp.h> provides.  */
 #include <setjmp.h>
 
-extern void abort(void);
 #define CHECK_IF(expr) if(!(expr)) abort()
 
 @interface Frob: Object
@@ -74,3 +74,4 @@ int main (void) {
 	test((Object *)-1);
 	return 0;
 }
+#import "../../../objc-obj-c++-shared/Object1-implementation.h"

@@ -1,5 +1,5 @@
 /* Prototypes for m32r.c functions used in the md file & elsewhere.
-   Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007
+   Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2009, 2010
    Free Software Foundation, Inc.
 
    This file is part of GCC.
@@ -29,15 +29,13 @@ extern void   m32r_expand_prologue (void);
 extern void   m32r_expand_epilogue (void);
 extern int    direct_return (void);
 extern void   m32r_load_pic_register (void);
-
-#ifdef TREE_CODE
 extern enum m32r_function_type m32r_compute_function_type (tree);
-#endif /* TREE_CODE */
 
 #ifdef RTX_CODE
 extern int    easy_di_const (rtx);
 extern int    easy_df_const (rtx);
 extern rtx    gen_compare (enum rtx_code, rtx, rtx, int);
+extern bool   gen_cond_store (enum rtx_code, rtx, rtx, rtx);
 extern rtx    gen_split_move_double (rtx *);
 extern int    m32r_address_code (rtx);
 extern void   m32r_initialize_trampoline (rtx, rtx, rtx);
@@ -45,8 +43,6 @@ extern int    zero_and_one (rtx, rtx);
 extern char * emit_cond_move (rtx *, rtx);
 extern void   m32r_output_block_move (rtx, rtx *);
 extern int    m32r_expand_block_move (rtx *);
-extern void   m32r_print_operand (FILE *, rtx, int);
-extern void   m32r_print_operand_address (FILE *, rtx);
 extern int    m32r_not_same_reg (rtx, rtx);
 extern int    m32r_hard_regno_rename_ok (unsigned int, unsigned int);
 extern int    m32r_legitimate_pic_operand_p (rtx);

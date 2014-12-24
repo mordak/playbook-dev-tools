@@ -29,11 +29,11 @@ end module global
  use global
  integer :: a,b, c(20)
  integer(8) :: ierr
- character*80 :: buffer(3)
+ character(80) :: buffer(3)
 
 ! Appending to a USE associated namelist is an extension.
 
- NAMELIST /NL/ a,b                              ! { dg-warning "already is USE associated" }
+ NAMELIST /NL/ a,b                              ! { dg-error "already is USE associated" }
 
  a=1 ; b=2
 
@@ -54,7 +54,7 @@ end module global
 
 ! R912
 !Was correctly picked up before patch.
- write(6, NML=NL, iostat = ierr)                ! { dg-warning "requires default INTEGER" }
+ write(6, NML=NL, iostat = ierr)                ! { dg-error "requires default INTEGER" }
 
 ! Constraints
 !Was correctly picked up before patch.

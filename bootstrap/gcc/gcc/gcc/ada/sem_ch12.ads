@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -34,8 +34,8 @@ package Sem_Ch12 is
    procedure Analyze_Function_Instantiation             (N : Node_Id);
    procedure Analyze_Formal_Object_Declaration          (N : Node_Id);
    procedure Analyze_Formal_Type_Declaration            (N : Node_Id);
-   procedure Analyze_Formal_Subprogram                  (N : Node_Id);
-   procedure Analyze_Formal_Package                     (N : Node_Id);
+   procedure Analyze_Formal_Subprogram_Declaration      (N : Node_Id);
+   procedure Analyze_Formal_Package_Declaration         (N : Node_Id);
 
    procedure Start_Generic;
    --  Must be invoked before starting to process a generic spec or body
@@ -47,12 +47,14 @@ package Sem_Ch12 is
    procedure Check_Generic_Child_Unit
      (Gen_Id           : Node_Id;
       Parent_Installed : in out Boolean);
-   --  If the name of the generic unit in an instantiation or a renaming
-   --  is a selected component, then the prefix may be an instance and the
-   --  selector may  designate a child unit. Retrieve the parent generic
-   --  and search for the child unit that must be declared within. Similarly,
-   --  if this is the name of a generic child unit within an instantiation of
-   --  its own parent, retrieve the parent generic.
+   --  If the name of the generic unit in an instantiation or a renaming is a
+   --  selected component, then the prefix may be an instance and the selector
+   --  may designate a child unit. Retrieve the parent generic and search for
+   --  the child unit that must be declared within. Similarly, if this is the
+   --  name of a generic child unit within an instantiation of its own parent,
+   --  retrieve the parent generic. If the parent is installed as a result of
+   --  this call, then Parent_Installed is set True, otherwise Parent_Installed
+   --  is unchanged by the call.
 
    function Copy_Generic_Node
      (N             : Node_Id;
@@ -62,7 +64,9 @@ package Sem_Ch12 is
    --  repeatedly: once to produce a copy on which semantic analysis of
    --  the generic is performed, and once for each instantiation. The tree
    --  being copied is not semantically analyzed, except that references to
-   --  global entities are marked on terminal nodes.
+   --  global entities are marked on terminal nodes. Note that this function
+   --  copies any aspect specifications from the input node N to the returned
+   --  node, as well as the setting of the Has_Aspects flag.
 
    function Get_Instance_Of (A : Entity_Id) return Entity_Id;
    --  Retrieve actual associated with given generic parameter.

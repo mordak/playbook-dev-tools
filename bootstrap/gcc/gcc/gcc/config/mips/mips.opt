@@ -1,6 +1,6 @@
 ; Options for the MIPS port of the compiler
 ;
-; Copyright (C) 2005, 2007, 2008 Free Software Foundation, Inc.
+; Copyright (C) 2005, 2007, 2008, 2010, 2011 Free Software Foundation, Inc.
 ;
 ; This file is part of GCC.
 ;
@@ -17,6 +17,12 @@
 ; You should have received a copy of the GNU General Public License
 ; along with GCC; see the file COPYING3.  If not see
 ; <http://www.gnu.org/licenses/>.
+
+EB
+Driver
+
+EL
+Driver
 
 mabi=
 Target RejectNegative Joined
@@ -208,6 +214,10 @@ mlong64
 Target Report RejectNegative Mask(LONG64)
 Use a 64-bit long type
 
+mmcount-ra-address
+Target Report Var(TARGET_MCOUNT_RA_ADDRESS)
+Pass the address of the ra save location to _mcount in $12
+
 mmemcpy
 Target Report Mask(MEMCPY)
 Don't optimize block moves
@@ -220,12 +230,16 @@ mmt
 Target Report Var(TARGET_MT)
 Allow the use of MT instructions
 
+mno-float
+Target Report RejectNegative Var(TARGET_NO_FLOAT) Condition(TARGET_SUPPORTS_NO_FLOAT)
+Prevent the use of all floating-point operations
+
 mno-flush-func
 Target RejectNegative
 Do not use a cache-flushing function before calling stack trampolines
 
 mno-mdmx
-Target Report RejectNegative InverseVar(MDMX)
+Target Report RejectNegative Var(TARGET_MDMX, 0)
 Do not use MDMX instructions
 
 mno-mips16
@@ -243,6 +257,10 @@ Use paired-single floating-point instructions
 mr10k-cache-barrier=
 Target Joined RejectNegative
 -mr10k-cache-barrier=SETTING	Specify when r10k cache barriers should be inserted
+
+mrelax-pic-calls
+Target Report Mask(RELAX_PIC_CALLS)
+Try to allow the linker to turn PIC calls into direct calls
 
 mshared
 Target Report Var(TARGET_SHARED) Init(1)
@@ -268,6 +286,10 @@ msym32
 Target Report Var(TARGET_SYM32)
 Assume all symbols have 32-bit values
 
+msynci
+Target Report Mask(SYNCI)
+Use synci instruction to invalidate i-cache
+
 mtune=
 Target RejectNegative Joined Var(mips_tune_string)
 -mtune=PROCESSOR	Optimize the output for PROCESSOR
@@ -283,3 +305,6 @@ Perform VR4130-specific alignment optimizations
 mxgot
 Target Report Var(TARGET_XGOT)
 Lift restrictions on GOT size
+
+noasmopt
+Driver

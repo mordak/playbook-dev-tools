@@ -16,11 +16,7 @@
 // <http://www.gnu.org/licenses/>.
 
 #include <list>
-#include <testsuite_hooks.h>
- 
-struct T { int i; };
-
-int swap_calls;
+#include "1.h"
 
 namespace std
 {
@@ -30,37 +26,10 @@ namespace std
     { ++swap_calls; }
 }
 
-// Should use list specialization for swap.
-void test01()
-{
-  bool test __attribute__((unused)) = true;
-  std::list<T> A;
-  std::list<T> B;
-  swap_calls = 0;
-  std::swap(A, B);
-  VERIFY(1 == swap_calls);
-}
-
-// Should use list specialization for swap.
-void test02()
-{
-  bool test __attribute__((unused)) = true;
-  using namespace std;
-  list<T> A;
-  list<T> B;
-  swap_calls = 0;
-  swap(A, B);
-  VERIFY(1 == swap_calls);
-}
-
-#if !__GXX_WEAK__ && _MT_ALLOCATOR_H
-template class __gnu_cxx::__mt_alloc<std::_List_node<T> >;
-#endif
-
 // See c++/13658 for background info.
 int main()
 {
-  test01();
-  test02();
+  swap11<std::list<T> >();
+  swap12<std::list<T> >();
   return 0;
 }

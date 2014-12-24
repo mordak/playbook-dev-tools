@@ -32,7 +32,9 @@
 #include <locale>
 #include <bits/c++locale_internal.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   template<> 
     void
@@ -76,8 +78,29 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	    }
 	  else
 	    {
-	      _M_data->_M_grouping = __nl_langinfo_l(GROUPING, __cloc);
-	      _M_data->_M_grouping_size = strlen(_M_data->_M_grouping);
+	      const char* __src = __nl_langinfo_l(GROUPING, __cloc);
+	      const size_t __len = strlen(__src);
+	      if (__len)
+		{
+		  __try
+		    {
+		      char* __dst = new char[__len + 1];
+		      memcpy(__dst, __src, __len + 1);
+		      _M_data->_M_grouping = __dst;
+		    }
+		  __catch(...)
+		    {
+		      delete _M_data;
+		      _M_data = 0;
+		      __throw_exception_again;
+		    }
+		}
+	      else
+		{
+		  _M_data->_M_grouping = "";
+		  _M_data->_M_use_grouping = false;
+		}
+	      _M_data->_M_grouping_size = __len;
 	    }
 	}
 
@@ -92,7 +115,11 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
  
   template<> 
     numpunct<char>::~numpunct()
-    { delete _M_data; }
+    {
+      if (_M_data->_M_grouping_size)
+	delete [] _M_data->_M_grouping;
+      delete _M_data;
+    }
    
 #ifdef _GLIBCXX_USE_WCHAR_T
   template<> 
@@ -143,8 +170,29 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	    }
 	  else
 	    {
-	      _M_data->_M_grouping = __nl_langinfo_l(GROUPING, __cloc);
-	      _M_data->_M_grouping_size = strlen(_M_data->_M_grouping);
+	      const char* __src = __nl_langinfo_l(GROUPING, __cloc);
+	      const size_t __len = strlen(__src);
+	      if (__len)
+		{
+		  __try
+		    {
+		      char* __dst = new char[__len + 1];
+		      memcpy(__dst, __src, __len + 1);
+		      _M_data->_M_grouping = __dst;
+		    }
+		  __catch(...)
+		    {
+		      delete _M_data;
+		      _M_data = 0;
+		      __throw_exception_again;
+		    }
+		}
+	      else
+		{
+		  _M_data->_M_grouping = "";
+		  _M_data->_M_use_grouping = false;
+		}
+	      _M_data->_M_grouping_size = __len;
 	    }
 	}
 
@@ -159,7 +207,12 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
   template<> 
     numpunct<wchar_t>::~numpunct()
-    { delete _M_data; }
+    {
+      if (_M_data->_M_grouping_size)
+	delete [] _M_data->_M_grouping;
+      delete _M_data;
+    }
  #endif
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace

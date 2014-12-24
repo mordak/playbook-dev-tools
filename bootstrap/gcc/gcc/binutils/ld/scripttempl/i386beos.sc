@@ -38,7 +38,7 @@ ${RELOCATING-OUTPUT_FORMAT(${RELOCATEABLE_OUTPUT_FORMAT})}
 
 ${LIB_SEARCH_DIRS}
 
-ENTRY(__start)
+${RELOCATING+ENTRY (__start)}
 ${RELOCATING+header = .;}
 ${RELOCATING+__fltused = .; /* set up floating pt for MS .obj\'s */}
 ${RELOCATING+__ldused = .;}
@@ -68,7 +68,7 @@ SECTIONS
      on fork.  This used to be named ".data$nocopy".  The linker used
      to include this between __data_start__ and __data_end__, but that
      breaks building the cygwin32 dll.  Instead, we name the section
-     ".data_cygwin_nocopy" and explictly include it after __data_end__. */
+     ".data_cygwin_nocopy" and explicitly include it after __data_end__. */
 
   .data ${RELOCATING+BLOCK(__section_alignment__)} : 
   {

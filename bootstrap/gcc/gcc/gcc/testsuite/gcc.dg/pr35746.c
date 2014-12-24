@@ -6,8 +6,7 @@ int foo(int i);
 void bar()
 {
   __complex__ int i;
-  X j;			/* { dg-error "undeclared.*appears.*expected" } */
-
-  if (i = foo(j))	/* { dg-error "undeclared" } */
+  X j;			/* { dg-error "unknown" } */
+  if (i = foo(j))
     ;
 }

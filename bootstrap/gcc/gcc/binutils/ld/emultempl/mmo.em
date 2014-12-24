@@ -1,5 +1,5 @@
 # This shell script emits a C file. -*- C -*-
-#   Copyright 2001, 2002, 2003, 2004, 2006, 2007, 2008
+#   Copyright 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
 #   Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
@@ -35,6 +35,8 @@ fragment <<EOF
    get a weird testcase right; ld-mmix/bpo-22, forcing ELF to be
    output from the mmo emulation: -m mmo --oformat elf64-mmix!  */
 #include "elf-bfd.h"
+
+static void gld${EMULATION_NAME}_after_allocation (void);
 EOF
 
 source_em ${srcdir}/emultempl/elf-generic.em
@@ -46,8 +48,10 @@ fragment <<EOF
    SEC_READONLY sections right after MMO_TEXT_SECTION_NAME.  Much borrowed
    from elf32.em.  */
 
-static bfd_boolean
-mmo_place_orphan (asection *s)
+static lang_output_section_statement_type *
+mmo_place_orphan (asection *s,
+		  const char *secname,
+		  int constraint ATTRIBUTE_UNUSED)
 {
   static struct orphan_save hold_text =
     {
@@ -56,17 +60,15 @@ mmo_place_orphan (asection *s)
       0, 0, 0, 0
     };
   struct orphan_save *place;
-  const char *secname;
   lang_output_section_statement_type *after;
   lang_output_section_statement_type *os;
 
   /* We have nothing to say for anything other than a final link.  */
   if (link_info.relocatable
       || (s->flags & (SEC_EXCLUDE | SEC_LOAD)) != SEC_LOAD)
-    return FALSE;
+    return NULL;
 
   /* Only care for sections we're going to load.  */
-  secname = s->name;
   os = lang_output_section_find (secname);
 
   /* We have an output section by this name.  Place the section inside it
@@ -74,13 +76,13 @@ mmo_place_orphan (asection *s)
   if (os != NULL)
     {
       lang_add_section (&os->children, s, os);
-      return TRUE;
+      return os;
     }
 
   /* If this section does not have .text-type section flags or there's no
      MMO_TEXT_SECTION_NAME, we don't have anything to say.  */
   if ((s->flags & (SEC_CODE | SEC_READONLY)) == 0)
-    return FALSE;
+    return NULL;
 
   if (hold_text.os == NULL)
     hold_text.os = lang_output_section_find (hold_text.name);
@@ -93,7 +95,7 @@ mmo_place_orphan (asection *s)
 
   /* If there's an output section by this name, we'll use it, regardless
      of section flags, in contrast to what's done in elf32.em.  */
-  os = lang_insert_orphan (s, secname, after, place, NULL, NULL);
+  os = lang_insert_orphan (s, secname, 0, after, place, NULL, NULL);
 
   /* We need an output section for .text as a root, so if there was none
      (might happen with a peculiar linker script such as in "map
@@ -102,7 +104,7 @@ mmo_place_orphan (asection *s)
   if (hold_text.os == NULL)
     hold_text.os = os;
 
-  return TRUE;
+  return os;
 }
 
 /* Remove the spurious settings of SEC_RELOC that make it to the output at
@@ -119,11 +121,10 @@ mmo_wipe_sec_reloc_flag (bfd *abfd, asection *sec, void *ptr ATTRIBUTE_UNUSED)
 /* Iterate with bfd_map_over_sections over mmo_wipe_sec_reloc_flag... */
 
 static void
-mmo_finish (void)
+gld${EMULATION_NAME}_after_allocation (void)
 {
   bfd_map_over_sections (link_info.output_bfd, mmo_wipe_sec_reloc_flag, NULL);
   gld${EMULATION_NAME}_map_segments (FALSE);
-  finish_default ();
 }
 
 /* To get on-demand global register allocation right, we need to parse the
@@ -150,9 +151,9 @@ mmo_after_open (void)
 		   is->the_bfd);
 	}
     }
+  after_open_default ();
 }
 EOF
 
 LDEMUL_PLACE_ORPHAN=mmo_place_orphan
-LDEMUL_FINISH=mmo_finish
 LDEMUL_AFTER_OPEN=mmo_after_open

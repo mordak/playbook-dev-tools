@@ -76,6 +76,39 @@
        (ior (match_test "op == CONST0_RTX (GET_MODE (op))")
 	    (match_test "op == CONST1_RTX (GET_MODE (op))"))))
 
+(define_predicate "qi_mask_operand"
+  (and (match_code "const_int")
+       (match_test "UINTVAL (op) == 0xff")))
+
+(define_predicate "hi_mask_operand"
+  (and (match_code "const_int")
+       (match_test "UINTVAL (op) == 0xffff")))
+
+(define_predicate "si_mask_operand"
+  (and (match_code "const_int")
+       (match_test "UINTVAL (op) == 0xffffffff")))
+
+(define_predicate "and_load_operand"
+  (ior (match_operand 0 "qi_mask_operand")
+       (match_operand 0 "hi_mask_operand")
+       (match_operand 0 "si_mask_operand")))
+
+(define_predicate "low_bitmask_operand"
+  (and (match_test "ISA_HAS_EXT_INS")
+       (match_code "const_int")
+       (match_test "low_bitmask_len (mode, INTVAL (op)) > 16")))
+
+(define_predicate "and_reg_operand"
+  (ior (match_operand 0 "register_operand")
+       (and (match_test "!TARGET_MIPS16")
+	    (match_operand 0 "const_uns_arith_operand"))
+       (match_operand 0 "low_bitmask_operand")
+       (match_operand 0 "si_mask_operand")))
+
+(define_predicate "and_operand"
+  (ior (match_operand 0 "and_load_operand")
+       (match_operand 0 "and_reg_operand")))
+
 (define_predicate "d_operand"
   (and (match_code "reg")
        (match_test "TARGET_MIPS16
@@ -85,6 +118,10 @@
 (define_predicate "lo_operand"
   (and (match_code "reg")
        (match_test "REGNO (op) == LO_REGNUM")))
+
+(define_predicate "hilo_operand"
+  (and (match_code "reg")
+       (match_test "MD_REG_P (REGNO (op))")))
 
 (define_predicate "fcc_reload_operand"
   (and (match_code "reg,subreg")
@@ -211,6 +248,14 @@
     }
 })
 
+(define_predicate "cprestore_save_slot_operand"
+  (and (match_code "mem")
+       (match_test "mips_cprestore_address_p (XEXP (op, 0), false)")))
+
+(define_predicate "cprestore_load_slot_operand"
+  (and (match_code "mem")
+       (match_test "mips_cprestore_address_p (XEXP (op, 0), true)")))
+
 (define_predicate "consttable_operand"
   (match_test "CONSTANT_P (op)"))
 
@@ -285,6 +330,12 @@
 (define_predicate "order_operator"
   (match_code "lt,ltu,le,leu,ge,geu,gt,gtu"))
 
+;; For NE, cstore uses sltu instructions in which the first operand is $0.
+;; This isn't possible in mips16 code.
+
+(define_predicate "mips_cstore_operator"
+  (ior (match_code "eq,gt,gtu,ge,geu,lt,ltu,le,leu")
+       (and (match_code "ne") (match_test "!TARGET_MIPS16"))))
 
 (define_predicate "small_data_pattern"
   (and (match_code "set,parallel,unspec,unspec_volatile,prefetch")

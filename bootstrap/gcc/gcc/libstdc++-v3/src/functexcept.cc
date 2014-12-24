@@ -1,4 +1,5 @@
-// Copyright (C) 2001, 2002, 2003, 2005, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2005, 2009, 2010
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -24,10 +25,13 @@
 #include <cstdlib>
 #include <exception>
 #include <stdexcept>
-#include <system_error>
 #include <new>
 #include <typeinfo>
 #include <ios>
+#include <system_error>
+#include <future>
+#include <functional>
+#include <regex>
 
 #ifdef _GLIBCXX_USE_NLS
 # include <libintl.h>
@@ -36,7 +40,9 @@
 # define _(msgid)   (msgid)
 #endif
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
 #if __EXCEPTIONS
   void
@@ -98,6 +104,18 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   void
   __throw_system_error(int __i)
   { throw system_error(error_code(__i, generic_category())); }
+
+  void
+  __throw_future_error(int __i)
+  { throw future_error(make_error_code(future_errc(__i))); }
+
+  void
+  __throw_bad_function_call()
+  { throw bad_function_call(); }
+
+  void
+  __throw_regex_error(regex_constants::error_type __ecode)
+  { throw regex_error(__ecode); }
 #else
   void
   __throw_bad_exception(void)
@@ -156,8 +174,21 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   { std::abort(); }
 
   void
-  __throw_system_error(int __i)
+  __throw_system_error(int)
+  { std::abort(); }
+
+  void
+  __throw_future_error(int)
+  { std::abort(); }
+
+  void
+  __throw_bad_function_call()
+  { std::abort(); }
+
+  void
+  __throw_regex_error(regex_constants::error_type __ecode)
   { std::abort(); }
 #endif //__EXCEPTIONS
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace

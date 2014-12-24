@@ -33,6 +33,8 @@
 #define _GLIBCXX_PARALLEL_TYPES_H 1
 
 #include <cstdlib>
+#include <limits>
+#include <tr1/cstdint>
 
 namespace __gnu_parallel
 {
@@ -79,7 +81,7 @@ namespace __gnu_parallel
     };
 
   /// Merging algorithms: 
-  // bubblesort-alike, loser-tree variants, enum sentinel.
+  // bubblesort-alike, loser-tree variants, enum __sentinel.
   enum _MultiwayMergeAlgorithm
     {
       LOSER_TREE
@@ -92,7 +94,7 @@ namespace __gnu_parallel
       LINEAR 
     };
 
-  /// Sorting/merging algorithms: sampling, exact.
+  /// Sorting/merging algorithms: sampling, __exact.
   enum _SplittingAlgorithm 
     { 
       SAMPLING, 
@@ -108,48 +110,28 @@ namespace __gnu_parallel
       EQUAL_SPLIT 
     };
 
-  /// Integer Types.
-  // XXX need to use <cstdint>
-  /** @brief 16-bit signed integer. */
-  typedef short int16;
-
-  /** @brief 16-bit unsigned integer. */
-  typedef unsigned short uint16;
-
-  /** @brief 32-bit signed integer. */
-  typedef int int32;
-
-  /** @brief 32-bit unsigned integer. */
-  typedef unsigned int uint32;
-
-  /** @brief 64-bit signed integer. */
-  typedef long long int64;
-
-  /** @brief 64-bit unsigned integer. */
-  typedef unsigned long long uint64;
-
   /**
-   * @brief Unsigned integer to index elements.
+   * @brief Unsigned integer to index __elements.
    * The total number of elements for each algorithm must fit into this type.
    */
-  typedef uint64 sequence_index_t;
+  typedef uint64_t _SequenceIndex;
 
   /**
    * @brief Unsigned integer to index a thread number.
    * The maximum thread number (for each processor) must fit into this type.
    */
-  typedef uint16 thread_index_t;
+  typedef uint16_t _ThreadIndex;
 
   // XXX atomics interface?
   /// Longest compare-and-swappable integer type on this platform.
-  typedef int64 lcas_t;
+  typedef int64_t _CASable;
 
-  // XXX numeric_limits::digits?
-  /// Number of bits of ::lcas_t.
-  static const int lcas_t_bits = sizeof(lcas_t) * 8;
+  /// Number of bits of _CASable.
+  static const int _CASable_bits = std::numeric_limits<_CASable>::digits;
 
-  /// ::lcas_t with the right half of bits set to 1.
-  static const lcas_t lcas_t_mask = ((lcas_t(1) << (lcas_t_bits / 2)) - 1);
+  /// ::_CASable with the right half of bits set to 1.
+  static const _CASable _CASable_mask =
+                            ((_CASable(1) << (_CASable_bits / 2)) - 1);
 }
 
 #endif /* _GLIBCXX_PARALLEL_TYPES_H */

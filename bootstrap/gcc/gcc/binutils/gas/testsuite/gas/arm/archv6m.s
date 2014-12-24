@@ -5,7 +5,7 @@
 	.align	2
 	.global	foo
 foo:
-	msr apsr,r6
+	msr apsr_nzcvq,r6
 	msr epsr,r9
 	mrs r2, iapsr
 	yield
@@ -14,3 +14,7 @@ foo:
 	sev
 	add r0, r0, r1
 	nop
+	dmb
+	dsb
+	isb
+	

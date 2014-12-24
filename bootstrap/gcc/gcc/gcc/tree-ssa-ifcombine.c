@@ -1,5 +1,5 @@
 /* Combining of if-expressions on trees.
-   Copyright (C) 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
    Contributed by Richard Guenther <rguenther@suse.de>
 
 This file is part of GCC.
@@ -25,7 +25,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree.h"
 #include "basic-block.h"
 #include "timevar.h"
-#include "diagnostic.h"
+#include "tree-pretty-print.h"
 #include "tree-flow.h"
 #include "tree-pass.h"
 #include "tree-dump.h"
@@ -107,8 +107,8 @@ bb_no_side_effects_p (basic_block bb)
     {
       gimple stmt = gsi_stmt (gsi);
 
-      if (gimple_has_volatile_ops (stmt)
-	  || !ZERO_SSA_OPERANDS (stmt, SSA_OP_ALL_VIRTUALS))
+      if (gimple_has_side_effects (stmt)
+	  || gimple_vuse (stmt))
 	return false;
     }
 
@@ -340,6 +340,9 @@ ifcombine_ifandif (basic_block inner_cond_bb, basic_block outer_cond_bb)
       t2 = force_gimple_operand_gsi (&gsi, t2, true, NULL_TREE,
 				     true, GSI_SAME_STMT);
       t = fold_build2 (EQ_EXPR, boolean_type_node, t2, t);
+      t = canonicalize_cond_expr_cond (t);
+      if (!t)
+	return false;
       gimple_cond_set_condition_from_tree (inner_cond, t);
       update_stmt (inner_cond);
 
@@ -356,6 +359,39 @@ ifcombine_ifandif (basic_block inner_cond_bb, basic_block outer_cond_bb)
 	  fprintf (dump_file, ") | (1 << ");
 	  print_generic_expr (dump_file, bit2, 0);
 	  fprintf (dump_file, ")\n");
+	}
+
+      return true;
+    }
+
+  /* See if we have two comparisons that we can merge into one.  */
+  else if (TREE_CODE_CLASS (gimple_cond_code (inner_cond)) == tcc_comparison
+	   && TREE_CODE_CLASS (gimple_cond_code (outer_cond)) == tcc_comparison)
+    {
+      tree t;
+
+      if (!(t = maybe_fold_and_comparisons (gimple_cond_code (inner_cond),
+					    gimple_cond_lhs (inner_cond),
+					    gimple_cond_rhs (inner_cond),
+					    gimple_cond_code (outer_cond),
+					    gimple_cond_lhs (outer_cond),
+					    gimple_cond_rhs (outer_cond))))
+	return false;
+      t = canonicalize_cond_expr_cond (t);
+      if (!t)
+	return false;
+      gimple_cond_set_condition_from_tree (inner_cond, t);
+      update_stmt (inner_cond);
+
+      /* Leave CFG optimization to cfg_cleanup.  */
+      gimple_cond_set_condition_from_tree (outer_cond, boolean_true_node);
+      update_stmt (outer_cond);
+
+      if (dump_file)
+	{
+	  fprintf (dump_file, "optimizing two comparisons to ");
+	  print_generic_expr (dump_file, t, 0);
+	  fprintf (dump_file, "\n");
 	}
 
       return true;
@@ -450,6 +486,9 @@ ifcombine_iforif (basic_block inner_cond_bb, basic_block outer_cond_bb)
 				    true, GSI_SAME_STMT);
       t = fold_build2 (NE_EXPR, boolean_type_node, t,
 		       build_int_cst (TREE_TYPE (t), 0));
+      t = canonicalize_cond_expr_cond (t);
+      if (!t)
+	return false;
       gimple_cond_set_condition_from_tree (inner_cond, t);
       update_stmt (inner_cond);
 
@@ -474,51 +513,18 @@ ifcombine_iforif (basic_block inner_cond_bb, basic_block outer_cond_bb)
   /* See if we have two comparisons that we can merge into one.
      This happens for C++ operator overloading where for example
      GE_EXPR is implemented as GT_EXPR || EQ_EXPR.  */
-  else if (TREE_CODE_CLASS (gimple_cond_code (inner_cond)) == tcc_comparison
-	   && TREE_CODE_CLASS (gimple_cond_code (outer_cond)) == tcc_comparison
-	   && operand_equal_p (gimple_cond_lhs (inner_cond),
-			       gimple_cond_lhs (outer_cond), 0)
-	   && operand_equal_p (gimple_cond_rhs (inner_cond),
-			       gimple_cond_rhs (outer_cond), 0))
+    else if (TREE_CODE_CLASS (gimple_cond_code (inner_cond)) == tcc_comparison
+	   && TREE_CODE_CLASS (gimple_cond_code (outer_cond)) == tcc_comparison)
     {
-      enum tree_code code1 = gimple_cond_code (inner_cond);
-      enum tree_code code2 = gimple_cond_code (outer_cond);
-      enum tree_code code;
       tree t;
 
-#define CHK(a,b) ((code1 == a ## _EXPR && code2 == b ## _EXPR) \
-		  || (code2 == a ## _EXPR && code1 == b ## _EXPR))
-      /* Merge the two condition codes if possible.  */
-      if (code1 == code2)
-	code = code1;
-      else if (CHK (EQ, LT))
-	code = LE_EXPR;
-      else if (CHK (EQ, GT))
-	code = GE_EXPR;
-      else if (CHK (LT, LE))
-	code = LE_EXPR;
-      else if (CHK (GT, GE))
-	code = GE_EXPR;
-      else if (INTEGRAL_TYPE_P (TREE_TYPE (gimple_cond_lhs (inner_cond)))
-	       || flag_unsafe_math_optimizations)
-	{
-	  if (CHK (LT, GT))
-	    code = NE_EXPR;
-	  else if (CHK (LT, NE))
-	    code = NE_EXPR;
-	  else if (CHK (GT, NE))
-	    code = NE_EXPR;
-	  else
-	    return false;
-	}
-      /* We could check for combinations leading to trivial true/false.  */
-      else
+      if (!(t = maybe_fold_or_comparisons (gimple_cond_code (inner_cond),
+					   gimple_cond_lhs (inner_cond),
+					   gimple_cond_rhs (inner_cond),
+					   gimple_cond_code (outer_cond),
+					   gimple_cond_lhs (outer_cond),
+					   gimple_cond_rhs (outer_cond))))
 	return false;
-#undef CHK
-
-      /* Do it.  */
-      t = fold_build2 (code, boolean_type_node, gimple_cond_lhs (outer_cond),
-		       gimple_cond_rhs (outer_cond));
       t = canonicalize_cond_expr_cond (t);
       if (!t)
 	return false;
@@ -619,6 +625,7 @@ tree_ssa_ifcombine (void)
   int i;
 
   bbs = blocks_in_phiopt_order ();
+  calculate_dominance_info (CDI_DOMINATORS);
 
   for (i = 0; i < n_basic_blocks - NUM_FIXED_BLOCKS; ++i)
     {
@@ -641,7 +648,7 @@ gate_ifcombine (void)
   return 1;
 }
 
-struct gimple_opt_pass pass_tree_ifcombine = 
+struct gimple_opt_pass pass_tree_ifcombine =
 {
  {
   GIMPLE_PASS,

@@ -1,7 +1,7 @@
 // Components for manipulating sequences of characters -*- C++ -*-
 
 // Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-// 2006, 2007, 2008, 2009
+// 2006, 2007, 2008, 2009, 2010, 2011
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -24,9 +24,9 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file basic_string.tcc
+/** @file bits/basic_string.tcc
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{string}
  */
 
 //
@@ -41,9 +41,11 @@
 
 #pragma GCC system_header
 
-#include <cxxabi-forced.h>
+#include <bits/cxxabi_forced.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   template<typename _CharT, typename _Traits, typename _Alloc>
     const typename basic_string<_CharT, _Traits, _Alloc>::size_type
@@ -129,9 +131,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	  return _S_empty_rep()._M_refdata();
 #endif
 	// NB: Not required, but considered best practice.
-	if (__builtin_expect(__gnu_cxx::__is_null_pointer(__beg)
-			     && __beg != __end, 0))
-	  __throw_logic_error(__N("basic_string::_S_construct NULL not valid"));
+	if (__gnu_cxx::__is_null_pointer(__beg) && __beg != __end)
+	  __throw_logic_error(__N("basic_string::_S_construct null not valid"));
 
 	const size_type __dnew = static_cast<size_type>(std::distance(__beg,
 								      __end));
@@ -384,6 +385,29 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
              }
            return *this;
          }
+     }
+
+   template<typename _CharT, typename _Traits, typename _Alloc>
+     typename basic_string<_CharT, _Traits, _Alloc>::iterator
+     basic_string<_CharT, _Traits, _Alloc>::
+     erase(iterator __first, iterator __last)
+     {
+       _GLIBCXX_DEBUG_PEDASSERT(__first >= _M_ibegin() && __first <= __last
+				&& __last <= _M_iend());
+
+       // NB: This isn't just an optimization (bail out early when
+       // there is nothing to do, really), it's also a correctness
+       // issue vs MT, see libstdc++/40518.
+       const size_type __size = __last - __first;
+       if (__size)
+	 {
+	   const size_type __pos = __first - _M_ibegin();
+	   _M_mutate(__pos, __size, size_type(0));
+	   _M_rep()->_M_set_leaked();
+	   return iterator(_M_data() + __pos);
+	 }
+       else
+	 return __first;
      }
 
    template<typename _CharT, typename _Traits, typename _Alloc>
@@ -1106,7 +1130,6 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
   // Inhibit implicit instantiations for required instantiations,
   // which are defined via explicit instantiations elsewhere.
-  // NB: This syntax is a GNU extension.
 #if _GLIBCXX_EXTERN_TEMPLATE > 0
   extern template class basic_string<char>;
   extern template
@@ -1139,6 +1162,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 #endif
 #endif
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace std
 
 #endif

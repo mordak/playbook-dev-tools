@@ -1,5 +1,5 @@
 /* Common block and equivalence list handling
-   Copyright (C) 2000, 2003, 2004, 2005, 2006, 2007, 2008
+   Copyright (C) 2000, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by Canqun Yang <canqun@nudt.edu.cn>
 
@@ -96,11 +96,9 @@ along with GCC; see the file COPYING3.  If not see
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "target.h"
-#include "tree.h"
-#include "toplev.h"
 #include "tm.h"
-#include "rtl.h"
+#include "tree.h"
+#include "output.h"	/* For decl_default_tls_model.  */
 #include "gfortran.h"
 #include "trans.h"
 #include "trans-types.h"
@@ -132,7 +130,7 @@ get_segment_info (gfc_symbol * sym, HOST_WIDE_INT offset)
 
   /* Make sure we've got the character length.  */
   if (sym->ts.type == BT_CHARACTER)
-    gfc_conv_const_charlen (sym->ts.cl);
+    gfc_conv_const_charlen (sym->ts.u.cl);
 
   /* Create the segment_info and fill it in.  */
   s = (segment_info *) gfc_getmem (sizeof (segment_info));
@@ -278,8 +276,8 @@ build_field (segment_info *h, tree union_type, record_layout_info rli)
   unsigned HOST_WIDE_INT desired_align, known_align;
 
   name = get_identifier (h->sym->name);
-  field = build_decl (FIELD_DECL, name, h->field);
-  gfc_set_decl_location (field, &h->sym->declared_at);
+  field = build_decl (h->sym->declared_at.lb->location,
+		      FIELD_DECL, name, h->field);
   known_align = (offset & -offset) * BITS_PER_UNIT;
   if (known_align == 0 || known_align > BIGGEST_ALIGNMENT)
     known_align = BIGGEST_ALIGNMENT;
@@ -323,6 +321,7 @@ build_field (segment_info *h, tree union_type, record_layout_info rli)
     {
       tree new_type;
       TREE_THIS_VOLATILE (field) = 1;
+      TREE_SIDE_EFFECTS (field) = 1;
       new_type = build_qualified_type (TREE_TYPE (field), TYPE_QUAL_VOLATILE);
       TREE_TYPE (field) = new_type;
     }
@@ -349,7 +348,8 @@ build_equiv_decl (tree union_type, bool is_init, bool is_saved)
     }
 
   snprintf (name, sizeof (name), "equiv.%d", serial++);
-  decl = build_decl (VAR_DECL, get_identifier (name), union_type);
+  decl = build_decl (input_location,
+		     VAR_DECL, get_identifier (name), union_type);
   DECL_ARTIFICIAL (decl) = 1;
   DECL_IGNORED_P (decl) = 1;
 
@@ -398,8 +398,11 @@ build_common_decl (gfc_common_head *com, tree union_type, bool is_init)
 	  if (strcmp (com->name, BLANK_COMMON_NAME))
 	    gfc_warning ("Named COMMON block '%s' at %L shall be of the "
 			 "same size", com->name, &com->where);
+	  DECL_SIZE (decl) = TYPE_SIZE (union_type);
 	  DECL_SIZE_UNIT (decl) = size;
+	  DECL_MODE (decl) = TYPE_MODE (union_type);
 	  TREE_TYPE (decl) = union_type;
+	  layout_decl (decl, 0);
 	}
      }
 
@@ -412,8 +415,9 @@ build_common_decl (gfc_common_head *com, tree union_type, bool is_init)
   /* If there is no backend_decl for the common block, build it.  */
   if (decl == NULL_TREE)
     {
-      decl = build_decl (VAR_DECL, get_identifier (com->name), union_type);
-      SET_DECL_ASSEMBLER_NAME (decl, gfc_sym_mangled_common_id (com));
+      decl = build_decl (input_location,
+			 VAR_DECL, get_identifier (com->name), union_type);
+      gfc_set_decl_assembler_name (decl, gfc_sym_mangled_common_id (com));
       TREE_PUBLIC (decl) = 1;
       TREE_STATIC (decl) = 1;
       DECL_IGNORED_P (decl) = 1;
@@ -428,7 +432,7 @@ build_common_decl (gfc_common_head *com, tree union_type, bool is_init)
 	     what C will do.  */
 	  tree field = NULL_TREE;
 	  field = TYPE_FIELDS (TREE_TYPE (decl));
-	  if (TREE_CHAIN (field) == NULL_TREE)
+	  if (DECL_CHAIN (field) == NULL_TREE)
 	    DECL_ALIGN (decl) = TYPE_ALIGN (TREE_TYPE (field));
 	}
       DECL_USER_ALIGN (decl) = 0;
@@ -527,8 +531,8 @@ get_init_field (segment_info *head, tree union_type, tree *field_init,
   tmp = build_range_type (gfc_array_index_type,
 			  gfc_index_zero_node, tmp);
   tmp = build_array_type (type, tmp);
-  field = build_decl (FIELD_DECL, NULL_TREE, tmp);
-  gfc_set_decl_location (field, &gfc_current_locus);
+  field = build_decl (gfc_current_locus.lb->location,
+		      FIELD_DECL, NULL_TREE, tmp);
 
   known_align = BIGGEST_ALIGNMENT;
 
@@ -604,7 +608,7 @@ create_common (gfc_common_head *com, segment_info *head, bool saw_equiv)
     {
       is_init = true;
       *field_link = field;
-      field_link = &TREE_CHAIN (field);
+      field_link = &DECL_CHAIN (field);
     }
 
   for (s = head; s; s = s->next)
@@ -613,7 +617,7 @@ create_common (gfc_common_head *com, segment_info *head, bool saw_equiv)
 
       /* Link the field into the type.  */
       *field_link = s->field;
-      field_link = &TREE_CHAIN (s->field);
+      field_link = &DECL_CHAIN (s->field);
 
       /* Has initial value.  */
       if (s->sym->value)
@@ -634,7 +638,6 @@ create_common (gfc_common_head *com, segment_info *head, bool saw_equiv)
   if (is_init)
     {
       tree ctor, tmp;
-      HOST_WIDE_INT offset = 0;
       VEC(constructor_elt,gc) *v = NULL;
 
       if (field != NULL_TREE && field_init != NULL_TREE)
@@ -646,11 +649,12 @@ create_common (gfc_common_head *com, segment_info *head, bool saw_equiv)
 	      {
 		/* Add the initializer for this field.  */
 		tmp = gfc_conv_initializer (s->sym->value, &s->sym->ts,
-		    TREE_TYPE (s->field), s->sym->attr.dimension,
-		    s->sym->attr.pointer || s->sym->attr.allocatable);
+					    TREE_TYPE (s->field),
+					    s->sym->attr.dimension,
+					    s->sym->attr.pointer
+					    || s->sym->attr.allocatable, false);
 
 		CONSTRUCTOR_APPEND_ELT (v, s->field, tmp);
-		offset = s->offset + s->length;
 	      }
 	  }
 
@@ -675,10 +679,9 @@ create_common (gfc_common_head *com, segment_info *head, bool saw_equiv)
     {
       tree var_decl;
 
-      var_decl = build_decl (VAR_DECL, DECL_NAME (s->field),
+      var_decl = build_decl (s->sym->declared_at.lb->location,
+			     VAR_DECL, DECL_NAME (s->field),
 			     TREE_TYPE (s->field));
-      gfc_set_decl_location (var_decl, &s->sym->declared_at);
-      TREE_PUBLIC (var_decl) = TREE_PUBLIC (decl);
       TREE_STATIC (var_decl) = TREE_STATIC (decl);
       TREE_USED (var_decl) = TREE_USED (decl);
       if (s->sym->attr.use_assoc)
@@ -687,7 +690,9 @@ create_common (gfc_common_head *com, segment_info *head, bool saw_equiv)
 	TREE_ADDRESSABLE (var_decl) = 1;
       /* This is a fake variable just for debugging purposes.  */
       TREE_ASM_WRITTEN (var_decl) = 1;
-      
+      /* Fake variables are not visible from other translation units. */
+      TREE_PUBLIC (var_decl) = 0;
+
       /* To preserve identifier names in COMMON, chain to procedure
          scope unless at top level in a module definition.  */
       if (com
@@ -698,8 +703,9 @@ create_common (gfc_common_head *com, segment_info *head, bool saw_equiv)
 	gfc_add_decl_to_function (var_decl);
 
       SET_DECL_VALUE_EXPR (var_decl,
-			   fold_build3 (COMPONENT_REF, TREE_TYPE (s->field),
-					decl, s->field, NULL_TREE));
+			   fold_build3_loc (input_location, COMPONENT_REF,
+					    TREE_TYPE (s->field),
+					    decl, s->field, NULL_TREE));
       DECL_HAS_VALUE_EXPR_P (var_decl) = 1;
       GFC_DECL_COMMON_OR_EQUIV (var_decl) = 1;
 
@@ -828,7 +834,7 @@ calculate_offset (gfc_expr *e)
           case AR_ELEMENT:
 	    n = element_number (&reference->u.ar);
 	    if (element_type->type == BT_CHARACTER)
-	      gfc_conv_const_charlen (element_type->cl);
+	      gfc_conv_const_charlen (element_type->u.cl);
 	    element_size =
               int_size_in_bytes (gfc_typenode_for_spec (element_type));
 	    offset += n * element_size;
@@ -1055,14 +1061,12 @@ translate_common (gfc_common_head *common, gfc_symbol *var_list)
   HOST_WIDE_INT offset;
   HOST_WIDE_INT current_offset;
   unsigned HOST_WIDE_INT align;
-  unsigned HOST_WIDE_INT max_align;
   bool saw_equiv;
 
   common_segment = NULL;
   offset = 0;
   current_offset = 0;
   align = 1;
-  max_align = 1;
   saw_equiv = false;
 
   /* Add symbols to the segment.  */
@@ -1105,7 +1109,7 @@ translate_common (gfc_common_head *common, gfc_symbol *var_list)
 	  if (gfc_option.flag_align_commons)
 	    offset = align_segment (&align);
 
-	  if (offset & (max_align - 1))
+	  if (offset)
 	    {
 	      /* The required offset conflicts with previous alignment
 		 requirements.  Insert padding immediately before this
@@ -1124,17 +1128,10 @@ translate_common (gfc_common_head *common, gfc_symbol *var_list)
 				 s->sym->name, &common->where);
 		}
 	    }
-	  else
-	    {
-	      /* Offset the whole common block.  */
-	      apply_segment_offset (common_segment, offset);
-	    }
 
 	  /* Apply the offset to the new segments.  */
 	  apply_segment_offset (current_segment, offset);
 	  current_offset += offset;
-	  if (max_align < align)
-	    max_align = align;
 
 	  /* Add the new segments to the common block.  */
 	  common_segment = add_segments (common_segment, current_segment);
@@ -1154,11 +1151,11 @@ translate_common (gfc_common_head *common, gfc_symbol *var_list)
   if (common_segment->offset != 0 && gfc_option.warn_align_commons)
     {
       if (strcmp (common->name, BLANK_COMMON_NAME))
-	gfc_warning ("COMMON '%s' at %L requires %d bytes of padding at start; "
+	gfc_warning ("COMMON '%s' at %L requires %d bytes of padding; "
 		     "reorder elements or use -fno-align-commons",
 		     common->name, &common->where, (int)common_segment->offset);
       else
-	gfc_warning ("COMMON at %L requires %d bytes of padding at start; "
+	gfc_warning ("COMMON at %L requires %d bytes of padding; "
 		     "reorder elements or use -fno-align-commons",
 		     &common->where, (int)common_segment->offset);
     }

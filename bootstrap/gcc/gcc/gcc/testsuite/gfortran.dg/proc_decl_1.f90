@@ -1,4 +1,6 @@
 ! { dg-do compile }
+! { dg-options "-std=legacy" }
+!
 ! This tests various error messages for PROCEDURE declarations.
 ! Contributed by Janus Weil <jaydub66@gmail.com>
 
@@ -19,8 +21,15 @@ module m
   public:: h
   procedure(),public:: h  ! { dg-error "was already specified" }
 
-end module m
+contains
 
+  subroutine abc
+    procedure() :: abc2
+  entry abc2(x)  ! { dg-error "PROCEDURE attribute conflicts with ENTRY attribute" }
+    real x
+  end subroutine
+
+end module m
 
 program prog
 
@@ -40,10 +49,6 @@ program prog
   procedure(dcos) :: my1
   procedure(amax0) :: my2  ! { dg-error "not allowed in PROCEDURE statement" }
 
-  type t
-    procedure(),pointer:: p  ! { dg-error "not yet implemented" }
-  end type
-
   real f, x
   f(x) = sin(x**2)
   external oo
@@ -53,6 +58,8 @@ program prog
 
   procedure ( ) :: r 
   procedure ( up ) :: s  ! { dg-error "must be explicit" }
+
+  procedure(t) :: t  ! { dg-error "may not be used as its own interface" }
 
   call s
 
@@ -68,13 +75,3 @@ contains
   end subroutine foo 
 
 end program
-
-
-subroutine abc
-
- procedure() :: abc2
-
-entry abc2(x)  ! { dg-error "PROCEDURE attribute conflicts with ENTRY attribute" }
- real x
-
-end subroutine

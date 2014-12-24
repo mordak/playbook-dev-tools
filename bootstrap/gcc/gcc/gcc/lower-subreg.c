@@ -1,5 +1,5 @@
 /* Decompose multiword subregs.
-   Copyright (C) 2007, 2008, 2009 Free Software Foundation, Inc.
+   Copyright (C) 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Richard Henderson <rth@redhat.com>
 		  Ian Lance Taylor <iant@google.com>
 
@@ -33,6 +33,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "basic-block.h"
 #include "recog.h"
 #include "bitmap.h"
+#include "dce.h"
 #include "expr.h"
 #include "except.h"
 #include "regs.h"
@@ -62,6 +63,12 @@ static bitmap decomposable_context;
 /* Bit N in this bitmap is set if regno N is used in a context in
    which it can not be decomposed.  */
 static bitmap non_decomposable_context;
+
+/* Bit N in this bitmap is set if regno N is used in a subreg
+   which changes the mode but not the size.  This typically happens
+   when the register accessed as a floating-point value; we want to
+   avoid generating accesses to its subwords in integer modes.  */
+static bitmap subreg_context;
 
 /* Bit N in the bitmap in element M of this array is set if there is a
    copy from reg M to reg N.  */
@@ -289,6 +296,7 @@ find_decomposable_subregs (rtx *px, void *data)
 	  && !MODES_TIEABLE_P (GET_MODE (x), GET_MODE (inner)))
 	{
 	  bitmap_set_bit (non_decomposable_context, regno);
+	  bitmap_set_bit (subreg_context, regno);
 	  return -1;
 	}
     }
@@ -388,7 +396,7 @@ simplify_subreg_concatn (enum machine_mode outermode, rtx op,
 			 unsigned int byte)
 {
   unsigned int inner_size;
-  enum machine_mode innermode;
+  enum machine_mode innermode, partmode;
   rtx part;
   unsigned int final_offset;
 
@@ -401,11 +409,24 @@ simplify_subreg_concatn (enum machine_mode outermode, rtx op,
 
   inner_size = GET_MODE_SIZE (innermode) / XVECLEN (op, 0);
   part = XVECEXP (op, 0, byte / inner_size);
+  partmode = GET_MODE (part);
+
+  /* VECTOR_CSTs in debug expressions are expanded into CONCATN instead of
+     regular CONST_VECTORs.  They have vector or integer modes, depending
+     on the capabilities of the target.  Cope with them.  */
+  if (partmode == VOIDmode && VECTOR_MODE_P (innermode))
+    partmode = GET_MODE_INNER (innermode);
+  else if (partmode == VOIDmode)
+    {
+      enum mode_class mclass = GET_MODE_CLASS (innermode);
+      partmode = mode_for_size (inner_size * BITS_PER_UNIT, mclass, 0);
+    }
+
   final_offset = byte % inner_size;
   if (final_offset + GET_MODE_SIZE (outermode) > inner_size)
     return NULL_RTX;
 
-  return simplify_gen_subreg (outermode, part, GET_MODE (part), final_offset);
+  return simplify_gen_subreg (outermode, part, partmode, final_offset);
 }
 
 /* Wrapper around simplify_gen_subreg which handles CONCATN.  */
@@ -531,28 +552,32 @@ resolve_subreg_use (rtx *px, void *data)
   return 0;
 }
 
-/* We are deleting INSN.  Move any EH_REGION notes to INSNS.  */
+/* This is called via for_each_rtx.  Look for SUBREGs which can be
+   decomposed and decomposed REGs that need copying.  */
 
-static void
-move_eh_region_note (rtx insn, rtx insns)
+static int
+adjust_decomposed_uses (rtx *px, void *data ATTRIBUTE_UNUSED)
 {
-  rtx note, p;
+  rtx x = *px;
 
-  note = find_reg_note (insn, REG_EH_REGION, NULL_RTX);
-  if (note == NULL_RTX)
-    return;
+  if (x == NULL_RTX)
+    return 0;
 
-  gcc_assert (CALL_P (insn)
-	      || (flag_non_call_exceptions && may_trap_p (PATTERN (insn))));
-
-  for (p = insns; p != NULL_RTX; p = NEXT_INSN (p))
+  if (resolve_subreg_p (x))
     {
-      if (CALL_P (p)
-	  || (flag_non_call_exceptions
-	      && INSN_P (p)
-	      && may_trap_p (PATTERN (p))))
-	add_reg_note (p, REG_EH_REGION, XEXP (note, 0));
+      x = simplify_subreg_concatn (GET_MODE (x), SUBREG_REG (x),
+				   SUBREG_BYTE (x));
+
+      if (x)
+	*px = x;
+      else
+	x = copy_rtx (*px);
     }
+
+  if (resolve_reg_p (x))
+    *px = copy_rtx (x);
+
+  return 0;
 }
 
 /* Resolve any decomposed registers which appear in register notes on
@@ -612,7 +637,7 @@ can_decompose_p (rtx x)
 	return (validate_subreg (word_mode, GET_MODE (x), x, UNITS_PER_WORD)
 		&& HARD_REGNO_MODE_OK (regno, word_mode));
       else
-	return !bitmap_bit_p (non_decomposable_context, regno);
+	return !bitmap_bit_p (subreg_context, regno);
     }
 
   return true;
@@ -819,7 +844,7 @@ resolve_simple_move (rtx set, rtx insn)
   insns = get_insns ();
   end_sequence ();
 
-  move_eh_region_note (insn, insns);
+  copy_reg_eh_region_note_forward (insn, insns, NULL_RTX);
 
   emit_insn_before (insns, insn);
 
@@ -886,6 +911,18 @@ resolve_use (rtx pat, rtx insn)
   return false;
 }
 
+/* A VAR_LOCATION can be simplified.  */
+
+static void
+resolve_debug (rtx insn)
+{
+  for_each_rtx (&PATTERN (insn), adjust_decomposed_uses, NULL_RTX);
+
+  df_insn_rescan (insn);
+
+  resolve_reg_notes (insn);
+}
+
 /* Checks if INSN is a decomposable multiword-shift or zero-extend and
    sets the decomposable_context bitmap accordingly.  A non-zero value
    is returned if a decomposable insn has been found.  */
@@ -922,7 +959,7 @@ find_decomposable_shift_zext (rtx insn)
     }
   else /* left or right shift */
     {
-      if (GET_CODE (XEXP (op, 1)) != CONST_INT
+      if (!CONST_INT_P (XEXP (op, 1))
 	  || INTVAL (XEXP (op, 1)) < BITS_PER_WORD
 	  || GET_MODE_BITSIZE (GET_MODE (op_operand)) != 2 * BITS_PER_WORD)
 	return 0;
@@ -983,13 +1020,6 @@ resolve_shift_zext (rtx insn)
   offset1 = UNITS_PER_WORD * dest_reg_num;
   offset2 = UNITS_PER_WORD * (1 - dest_reg_num);
   src_offset = UNITS_PER_WORD * src_reg_num;
-
-  if (WORDS_BIG_ENDIAN != BYTES_BIG_ENDIAN)
-    {
-      offset1 += UNITS_PER_WORD - 1;
-      offset2 += UNITS_PER_WORD - 1;
-      src_offset += UNITS_PER_WORD - 1;
-    }
 
   start_sequence ();
 
@@ -1068,6 +1098,9 @@ decompose_multiword_subregs (void)
       return;
   }
 
+  if (df)
+    run_word_dce ();
+
   /* FIXME: When the dataflow branch is merged, we can change this
      code to look for each multi-word pseudo-register and to find each
      insn which sets or uses that register.  That should be faster
@@ -1075,6 +1108,7 @@ decompose_multiword_subregs (void)
 
   decomposable_context = BITMAP_ALLOC (NULL);
   non_decomposable_context = BITMAP_ALLOC (NULL);
+  subreg_context = BITMAP_ALLOC (NULL);
 
   reg_copy_graph = VEC_alloc (bitmap, heap, max);
   VEC_safe_grow (bitmap, heap, reg_copy_graph, max);
@@ -1158,18 +1192,18 @@ decompose_multiword_subregs (void)
 
 	  FOR_BB_INSNS (bb, insn)
 	    {
-	      rtx next, pat;
+	      rtx pat;
 
 	      if (!INSN_P (insn))
 		continue;
-
-	      next = NEXT_INSN (insn);
 
 	      pat = PATTERN (insn);
 	      if (GET_CODE (pat) == CLOBBER)
 		resolve_clobber (pat, insn);
 	      else if (GET_CODE (pat) == USE)
 		resolve_use (pat, insn);
+	      else if (DEBUG_INSN_P (insn))
+		resolve_debug (insn);
 	      else
 		{
 		  rtx set;
@@ -1196,7 +1230,7 @@ decompose_multiword_subregs (void)
 			 basic block and still produce the correct control
 			 flow graph for it.  */
 		      gcc_assert (!cfi
-				  || (flag_non_call_exceptions
+				  || (cfun->can_throw_non_call_exceptions
 				      && can_throw_internal (insn)));
 
 		      insn = resolve_simple_move (set, insn);
@@ -1284,15 +1318,16 @@ decompose_multiword_subregs (void)
     unsigned int i;
     bitmap b;
 
-    for (i = 0; VEC_iterate (bitmap, reg_copy_graph, i, b); ++i)
+    FOR_EACH_VEC_ELT (bitmap, reg_copy_graph, i, b)
       if (b)
 	BITMAP_FREE (b);
   }
 
-  VEC_free (bitmap, heap, reg_copy_graph);  
+  VEC_free (bitmap, heap, reg_copy_graph);
 
   BITMAP_FREE (decomposable_context);
   BITMAP_FREE (non_decomposable_context);
+  BITMAP_FREE (subreg_context);
 }
 
 /* Gate function for lower subreg pass.  */

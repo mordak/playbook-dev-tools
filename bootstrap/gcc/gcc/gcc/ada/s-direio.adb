@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -61,7 +61,6 @@ package body System.Direct_IO is
 
    function AFCB_Allocate (Control_Block : Direct_AFCB) return FCB.AFCB_Ptr is
       pragma Unreferenced (Control_Block);
-
    begin
       return new Direct_AFCB;
    end AFCB_Allocate;
@@ -74,7 +73,6 @@ package body System.Direct_IO is
 
    procedure AFCB_Close (File : not null access Direct_AFCB) is
       pragma Unreferenced (File);
-
    begin
       null;
    end AFCB_Close;
@@ -108,8 +106,8 @@ package body System.Direct_IO is
    is
       Dummy_File_Control_Block : Direct_AFCB;
       pragma Warnings (Off, Dummy_File_Control_Block);
-      --  Yes, we know this is never assigned a value, only the tag
-      --  is used for dispatching purposes, so that's expected.
+      --  Yes, we know this is never assigned a value, only the tag is used for
+      --  dispatching purposes, so that's expected.
 
    begin
       FIO.Open (File_Ptr  => AP (File),
@@ -129,7 +127,7 @@ package body System.Direct_IO is
    function End_Of_File (File : File_Type) return Boolean is
    begin
       FIO.Check_Read_Status (AP (File));
-      return Count (File.Index) > Size (File);
+      return File.Index > Size (File);
    end End_Of_File;
 
    -----------
@@ -139,7 +137,7 @@ package body System.Direct_IO is
    function Index (File : File_Type) return Positive_Count is
    begin
       FIO.Check_File_Open (AP (File));
-      return Count (File.Index);
+      return File.Index;
    end Index;
 
    ----------
@@ -154,8 +152,8 @@ package body System.Direct_IO is
    is
       Dummy_File_Control_Block : Direct_AFCB;
       pragma Warnings (Off, Dummy_File_Control_Block);
-      --  Yes, we know this is never assigned a value, only the tag
-      --  is used for dispatching purposes, so that's expected.
+      --  Yes, we know this is never assigned a value, only the tag is used for
+      --  dispatching purposes, so that's expected.
 
    begin
       FIO.Open (File_Ptr  => AP (File),
@@ -225,11 +223,7 @@ package body System.Direct_IO is
       --  last operation as other, to force the file position to be reset
       --  on the next read.
 
-      if File.Bytes = Size then
-         File.Last_Op := Op_Read;
-      else
-         File.Last_Op := Op_Other;
-      end if;
+      File.Last_Op := (if File.Bytes = Size then Op_Read else Op_Other);
    end Read;
 
    --  The following is the required overriding for Stream.Read, which is
@@ -252,10 +246,9 @@ package body System.Direct_IO is
       pragma Warnings (Off, File);
       --  File is actually modified via Unrestricted_Access below, but
       --  GNAT will generate a warning anyway.
-      --  Note that we do not use pragma Unmodified here, since in -gnatc
-      --  mode, GNAT will complain that File is modified for
-      --  "File.Index := 1;"
-
+      --
+      --  Note that we do not use pragma Unmodified here, since in -gnatc mode,
+      --  GNAT will complain that File is modified for "File.Index := 1;"
    begin
       FIO.Reset (AP (File)'Unrestricted_Access, Mode);
       File.Index := 1;
@@ -265,7 +258,6 @@ package body System.Direct_IO is
    procedure Reset (File : in out File_Type) is
       pragma Warnings (Off, File);
       --  See above (other Reset procedure) for explanations on this pragma
-
    begin
       FIO.Reset (AP (File)'Unrestricted_Access);
       File.Index := 1;
@@ -380,11 +372,7 @@ package body System.Direct_IO is
       --  last operation as other, to force the file position to be reset
       --  on the next write.
 
-      if File.Bytes = Size then
-         File.Last_Op := Op_Write;
-      else
-         File.Last_Op := Op_Other;
-      end if;
+      File.Last_Op := (if File.Bytes = Size then Op_Write else Op_Other);
    end Write;
 
    --  The following is the required overriding for Stream.Write, which is

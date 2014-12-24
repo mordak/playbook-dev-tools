@@ -1,7 +1,7 @@
 /* Definitions of target machine for GNU compiler,
    for IBM RS/6000 POWER running AIX version 4.3.
    Copyright (C) 1998, 1999, 2000, 2001, 2003, 2004, 2005, 2006,
-   2007 Free Software Foundation, Inc.
+   2007, 2009, 2010 Free Software Foundation, Inc.
    Contributed by David Edelsohn (edelsohn@gnu.org).
 
    This file is part of GCC.
@@ -20,14 +20,8 @@
    along with GCC; see the file COPYING3.  If not see
    <http://www.gnu.org/licenses/>.  */
 
-/* Sometimes certain combinations of command options do not make sense
-   on a particular target machine.  You can define a macro
-   `OVERRIDE_OPTIONS' to take account of this.  This macro, if
-   defined, is executed once just after all the command options have
-   been parsed.
-
-   The macro SUBTARGET_OVERRIDE_OPTIONS is provided for subtargets, to
-   get control.  */
+/* The macro SUBTARGET_OVERRIDE_OPTIONS is provided for subtargets, to
+   get control in TARGET_OPTION_OVERRIDE.  */
 
 #define NON_POWERPC_MASKS (MASK_POWER | MASK_POWER2)
 #define SUBTARGET_OVERRIDE_OPTIONS					\
@@ -104,7 +98,7 @@ do {									\
 #define CPP_SPEC "%{posix: -D_POSIX_SOURCE}\
    %{ansi: -D_ANSI_C_SOURCE}\
    %{maix64: -D__64BIT__}\
-   %{mpe: -I/usr/lpp/ppe.poe/include}\
+   %{mpe: -I%R/usr/lpp/ppe.poe/include}\
    %{pthread: -D_THREAD_SAFE}"
 
 /* The GNU C++ standard library requires that these macros be 
@@ -113,7 +107,7 @@ do {									\
 #define CPLUSPLUS_CPP_SPEC			\
   "-D_ALL_SOURCE				\
    %{maix64: -D__64BIT__}			\
-   %{mpe: -I/usr/lpp/ppe.poe/include}		\
+   %{mpe: -I%R/usr/lpp/ppe.poe/include}		\
    %{pthread: -D_THREAD_SAFE}"
 
 #undef TARGET_DEFAULT
@@ -141,11 +135,11 @@ do {									\
 #define	MULTILIB_DEFAULTS { "mcpu=common" }
 
 #undef LIB_SPEC
-#define LIB_SPEC "%{pg:-L/lib/profiled -L/usr/lib/profiled}\
-   %{p:-L/lib/profiled -L/usr/lib/profiled}\
+#define LIB_SPEC "%{pg:-L%R/lib/profiled -L%R/usr/lib/profiled}\
+   %{p:-L%R/lib/profiled -L%R/usr/lib/profiled}\
    %{!maix64:%{!shared:%{g*:-lg}}}\
-   %{mpe:-L/usr/lpp/ppe.poe/lib -lmpi -lvtd}\
-   %{pthread:-L/usr/lib/threads -lpthreads -lc_r /usr/lib/libc.a}\
+   %{mpe:-L%R/usr/lpp/ppe.poe/lib -lmpi -lvtd}\
+   %{pthread:-L%R/usr/lib/threads -lpthreads -lc_r %R/usr/lib/libc.a}\
    %{!pthread:-lc}"
 
 #undef LINK_SPEC
@@ -187,3 +181,5 @@ do {									\
 
 /* This target uses the aix64.opt file.  */
 #define TARGET_USES_AIX64_OPT 1
+
+#define TARGET_AIX_VERSION 43

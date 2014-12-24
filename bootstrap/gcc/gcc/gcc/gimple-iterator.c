@@ -1,5 +1,5 @@
 /* Iterator routines for GIMPLE statements.
-   Copyright (C) 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2007, 2008, 2010 Free Software Foundation, Inc.
    Contributed by Aldy Hernandez  <aldy@quesejoda.com>
 
 This file is part of GCC.
@@ -45,9 +45,9 @@ static void
 update_modified_stmts (gimple_seq seq)
 {
   gimple_stmt_iterator gsi;
- 
+
   if (!ssa_operands_active ())
-    return;  
+    return;
   for (gsi = gsi_start (seq); !gsi_end_p (gsi); gsi_next (&gsi))
     update_stmt_if_modified (gsi_stmt (gsi));
 }
@@ -60,11 +60,40 @@ static void
 update_bb_for_stmts (gimple_seq_node first, basic_block bb)
 {
   gimple_seq_node n;
-  
+
   for (n = first; n; n = n->next)
     gimple_set_bb (n->stmt, bb);
 }
 
+/* Set the frequencies for the cgraph_edges for each of the calls
+   starting at FIRST for their new position within BB.  */
+
+static void
+update_call_edge_frequencies (gimple_seq_node first, basic_block bb)
+{
+  struct cgraph_node *cfun_node = NULL;
+  int bb_freq = 0;
+  gimple_seq_node n;
+
+  for (n = first; n ; n = n->next)
+    if (is_gimple_call (n->stmt))
+      {
+	struct cgraph_edge *e;
+
+	/* These function calls are expensive enough that we want
+	   to avoid calling them if we never see any calls.  */
+	if (cfun_node == NULL)
+	  {
+	    cfun_node = cgraph_node (current_function_decl);
+	    bb_freq = (compute_call_stmt_bb_frequency
+		       (current_function_decl, bb));
+	  }
+
+	e = cgraph_edge (cfun_node, n->stmt);
+	if (e != NULL)
+	  e->frequency = bb_freq;
+      }
+}
 
 /* Insert the sequence delimited by nodes FIRST and LAST before
    iterator I.  M specifies how to update iterator I after insertion
@@ -358,16 +387,19 @@ gsi_split_seq_before (gimple_stmt_iterator *i)
 
 /* Replace the statement pointed-to by GSI to STMT.  If UPDATE_EH_INFO
    is true, the exception handling information of the original
-   statement is moved to the new statement.  */
+   statement is moved to the new statement.  Assignments must only be
+   replaced with assignments to the same LHS.  */
 
 void
 gsi_replace (gimple_stmt_iterator *gsi, gimple stmt, bool update_eh_info)
 {
-  int eh_region;
   gimple orig_stmt = gsi_stmt (*gsi);
 
   if (stmt == orig_stmt)
     return;
+
+  gcc_assert (!gimple_has_lhs (orig_stmt)
+	      || gimple_get_lhs (orig_stmt) == gimple_get_lhs (stmt));
 
   gimple_set_location (stmt, gimple_location (orig_stmt));
   gimple_set_bb (stmt, gsi_bb (*gsi));
@@ -375,18 +407,15 @@ gsi_replace (gimple_stmt_iterator *gsi, gimple stmt, bool update_eh_info)
   /* Preserve EH region information from the original statement, if
      requested by the caller.  */
   if (update_eh_info)
-    {
-      eh_region = lookup_stmt_eh_region (orig_stmt);
-      if (eh_region >= 0)
-	{
-	  remove_stmt_from_eh_region (orig_stmt);
-	  add_stmt_to_eh_region (stmt, eh_region);
-	}
-    }
+    maybe_clean_or_replace_eh_stmt (orig_stmt, stmt);
 
   gimple_duplicate_stmt_histograms (cfun, stmt, cfun, orig_stmt);
+
+  /* Free all the data flow information for ORIG_STMT.  */
+  gimple_set_bb (orig_stmt, NULL);
   gimple_remove_stmt_histograms (cfun, orig_stmt);
   delink_stmt_imm_use (orig_stmt);
+
   *gsi_stmt_ptr (gsi) = stmt;
   gimple_set_modified (stmt, true);
   update_modified_stmt (stmt);
@@ -408,7 +437,7 @@ gsi_insert_before_without_update (gimple_stmt_iterator *i, gimple stmt,
 {
   gimple_seq_node n;
 
-  n = GGC_NEW (struct gimple_seq_node_d);
+  n = ggc_alloc_gimple_seq_node_d ();
   n->prev = n->next = NULL;
   n->stmt = stmt;
   gsi_insert_seq_nodes_before (i, n, n, m);
@@ -443,7 +472,7 @@ gsi_insert_after_without_update (gimple_stmt_iterator *i, gimple stmt,
 {
   gimple_seq_node n;
 
-  n = GGC_NEW (struct gimple_seq_node_d);
+  n = ggc_alloc_gimple_seq_node_d ();
   n->prev = n->next = NULL;
   n->stmt = stmt;
   gsi_insert_seq_nodes_after (i, n, n, m);
@@ -478,6 +507,9 @@ gsi_remove (gimple_stmt_iterator *i, bool remove_permanently)
   gimple_seq_node cur, next, prev;
   gimple stmt = gsi_stmt (*i);
 
+  if (gimple_code (stmt) != GIMPLE_PHI)
+    insert_debug_temps_for_defs (i);
+
   /* Free all the data flow information for STMT.  */
   gimple_set_bb (stmt, NULL);
   delink_stmt_imm_use (stmt);
@@ -485,7 +517,7 @@ gsi_remove (gimple_stmt_iterator *i, bool remove_permanently)
 
   if (remove_permanently)
     {
-      remove_stmt_from_eh_region (stmt);
+      remove_stmt_from_eh_lp (stmt);
       gimple_remove_stmt_histograms (cfun, stmt);
     }
 
@@ -565,9 +597,7 @@ void
 gsi_move_to_bb_end (gimple_stmt_iterator *from, basic_block bb)
 {
   gimple_stmt_iterator last = gsi_last_bb (bb);
-#ifdef ENABLE_CHECKING
-  gcc_assert (gsi_bb (last) == bb);
-#endif
+  gcc_checking_assert (gsi_bb (last) == bb);
 
   /* Have to check gsi_end_p because it could be an empty block.  */
   if (!gsi_end_p (last) && is_ctrl_stmt (gsi_stmt (last)))
@@ -604,7 +634,7 @@ gsi_insert_seq_on_edge (edge e, gimple_seq seq)
 
    In all cases, the returned *GSI points to the correct location.  The
    return value is true if insertion should be done after the location,
-   or false if it should be done before the location.  If new basic block
+   or false if it should be done before the location.  If a new basic block
    has to be created, it is stored in *NEW_BB.  */
 
 static bool
@@ -623,9 +653,9 @@ gimple_find_edge_insert_loc (edge e, gimple_stmt_iterator *gsi,
      would have to examine the PHIs to prove that none of them used
      the value set by the statement we want to insert on E.  That
      hardly seems worth the effort.  */
-restart:
+ restart:
   if (single_pred_p (dest)
-      && ! phi_nodes (dest)
+      && gimple_seq_empty_p (phi_nodes (dest))
       && dest != EXIT_BLOCK_PTR)
     {
       *gsi = gsi_start_bb (dest);
@@ -667,10 +697,13 @@ restart:
       if (!stmt_ends_bb_p (tmp))
 	return true;
 
-      if (gimple_code (tmp) == GIMPLE_RETURN)
-        {
-	  gsi_prev (gsi);
-	  return true;
+      switch (gimple_code (tmp))
+	{
+	case GIMPLE_RETURN:
+	case GIMPLE_RESX:
+	  return false;
+	default:
+	  break;
         }
     }
 
@@ -690,11 +723,19 @@ basic_block
 gsi_insert_on_edge_immediate (edge e, gimple stmt)
 {
   gimple_stmt_iterator gsi;
+  struct gimple_seq_node_d node;
   basic_block new_bb = NULL;
+  bool ins_after;
 
   gcc_assert (!PENDING_STMT (e));
 
-  if (gimple_find_edge_insert_loc (e, &gsi, &new_bb))
+  ins_after = gimple_find_edge_insert_loc (e, &gsi, &new_bb);
+
+  node.stmt = stmt;
+  node.prev = node.next = NULL;
+  update_call_edge_frequencies (&node, gsi.bb);
+
+  if (ins_after)
     gsi_insert_after (&gsi, stmt, GSI_NEW_STMT);
   else
     gsi_insert_before (&gsi, stmt, GSI_NEW_STMT);
@@ -710,10 +751,14 @@ gsi_insert_seq_on_edge_immediate (edge e, gimple_seq stmts)
 {
   gimple_stmt_iterator gsi;
   basic_block new_bb = NULL;
+  bool ins_after;
 
   gcc_assert (!PENDING_STMT (e));
 
-  if (gimple_find_edge_insert_loc (e, &gsi, &new_bb))
+  ins_after = gimple_find_edge_insert_loc (e, &gsi, &new_bb);
+  update_call_edge_frequencies (gimple_seq_first (stmts), gsi.bb);
+
+  if (ins_after)
     gsi_insert_seq_after (&gsi, stmts, GSI_NEW_STMT);
   else
     gsi_insert_seq_before (&gsi, stmts, GSI_NEW_STMT);
@@ -752,10 +797,14 @@ gsi_commit_one_edge_insert (edge e, basic_block *new_bb)
     {
       gimple_stmt_iterator gsi;
       gimple_seq seq = PENDING_STMT (e);
+      bool ins_after;
 
       PENDING_STMT (e) = NULL;
 
-      if (gimple_find_edge_insert_loc (e, &gsi, new_bb))
+      ins_after = gimple_find_edge_insert_loc (e, &gsi, new_bb);
+      update_call_edge_frequencies (gimple_seq_first (seq), gsi.bb);
+
+      if (ins_after)
 	gsi_insert_seq_after (&gsi, seq, GSI_NEW_STMT);
       else
 	gsi_insert_seq_before (&gsi, seq, GSI_NEW_STMT);

@@ -11,11 +11,12 @@
 @copying
 @c man begin COPYRIGHT
 Copyright @copyright{} 1987, 1989, 1991, 1992, 1993, 1994, 1995, 1996,
-1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008
+1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
+2008, 2009, 2010, 2011
 Free Software Foundation, Inc.
 
 Permission is granted to copy, distribute and/or modify this document
-under the terms of the GNU Free Documentation License, Version 1.2 or
+under the terms of the GNU Free Documentation License, Version 1.3 or
 any later version published by the Free Software Foundation.  A copy of
 the license is included in the
 @c man end
@@ -214,7 +215,8 @@ Standard C@.  In its default mode, the GNU C preprocessor does not do a
 few things required by the standard.  These are features which are
 rarely, if ever, used, and may cause surprising changes to the meaning
 of a program which does not expect them.  To get strict ISO Standard C,
-you should use the @option{-std=c89} or @option{-std=c99} options, depending
+you should use the @option{-std=c90}, @option{-std=c99} or
+@option{-std=c1x} options, depending
 on which version of the standard you want.  To get all the mandatory
 diagnostics, you must also use @option{-pedantic}.  @xref{Invocation}.
 
@@ -1935,7 +1937,7 @@ in the near future.
 @item __OBJC__
 This macro is defined, with value 1, when the Objective-C compiler is in
 use.  You can use @code{__OBJC__} to test whether a header is compiled
-by a C compiler or a Objective-C compiler.
+by a C compiler or an Objective-C compiler.
 
 @item __ASSEMBLER__
 This macro is defined with value 1 when preprocessing assembly
@@ -2063,7 +2065,7 @@ are defined.  If they are defined, their value is 1.
 
 @item __GNUC_GNU_INLINE__
 GCC defines this macro if functions declared @code{inline} will be
-handled in GCC's traditional gnu89 mode.  Object files will contain
+handled in GCC's traditional gnu90 mode.  Object files will contain
 externally visible definitions of all functions declared @code{inline}
 without @code{extern} or @code{static}.  They will not contain any
 definitions of any functions declared @code{extern inline}.
@@ -2076,10 +2078,10 @@ inline}.  They will not contain definitions of any functions declared
 @code{inline} without @code{extern}.
 
 If this macro is defined, GCC supports the @code{gnu_inline} function
-attribute as a way to always get the gnu89 behavior.  Support for
+attribute as a way to always get the gnu90 behavior.  Support for
 this and @code{__GNUC_GNU_INLINE__} was added in GCC 4.1.3.  If
 neither macro is defined, an older version of GCC is being used:
-@code{inline} functions will be compiled in gnu89 mode, and the
+@code{inline} functions will be compiled in gnu90 mode, and the
 @code{gnu_inline} function attribute will not be recognized.
 
 @item __CHAR_UNSIGNED__
@@ -2117,13 +2119,50 @@ OSF/rose @option{-mno-underscores} option).
 @itemx __WINT_TYPE__
 @itemx __INTMAX_TYPE__
 @itemx __UINTMAX_TYPE__
+@itemx __SIG_ATOMIC_TYPE__
+@itemx __INT8_TYPE__
+@itemx __INT16_TYPE__
+@itemx __INT32_TYPE__
+@itemx __INT64_TYPE__
+@itemx __UINT8_TYPE__
+@itemx __UINT16_TYPE__
+@itemx __UINT32_TYPE__
+@itemx __UINT64_TYPE__
+@itemx __INT_LEAST8_TYPE__
+@itemx __INT_LEAST16_TYPE__
+@itemx __INT_LEAST32_TYPE__
+@itemx __INT_LEAST64_TYPE__
+@itemx __UINT_LEAST8_TYPE__
+@itemx __UINT_LEAST16_TYPE__
+@itemx __UINT_LEAST32_TYPE__
+@itemx __UINT_LEAST64_TYPE__
+@itemx __INT_FAST8_TYPE__
+@itemx __INT_FAST16_TYPE__
+@itemx __INT_FAST32_TYPE__
+@itemx __INT_FAST64_TYPE__
+@itemx __UINT_FAST8_TYPE__
+@itemx __UINT_FAST16_TYPE__
+@itemx __UINT_FAST32_TYPE__
+@itemx __UINT_FAST64_TYPE__
+@itemx __INTPTR_TYPE__
+@itemx __UINTPTR_TYPE__
 These macros are defined to the correct underlying types for the
 @code{size_t}, @code{ptrdiff_t}, @code{wchar_t}, @code{wint_t},
-@code{intmax_t}, and @code{uintmax_t}
-typedefs, respectively.  They exist to make the standard header files
-@file{stddef.h} and @file{wchar.h} work correctly.  You should not use
-these macros directly; instead, include the appropriate headers and use
-the typedefs.
+@code{intmax_t}, @code{uintmax_t}, @code{sig_atomic_t}, @code{int8_t},
+@code{int16_t}, @code{int32_t}, @code{int64_t}, @code{uint8_t},
+@code{uint16_t}, @code{uint32_t}, @code{uint64_t},
+@code{int_least8_t}, @code{int_least16_t}, @code{int_least32_t},
+@code{int_least64_t}, @code{uint_least8_t}, @code{uint_least16_t},
+@code{uint_least32_t}, @code{uint_least64_t}, @code{int_fast8_t},
+@code{int_fast16_t}, @code{int_fast32_t}, @code{int_fast64_t},
+@code{uint_fast8_t}, @code{uint_fast16_t}, @code{uint_fast32_t},
+@code{uint_fast64_t}, @code{intptr_t}, and @code{uintptr_t} typedefs,
+respectively.  They exist to make the standard header files
+@file{stddef.h}, @file{stdint.h}, and @file{wchar.h} work correctly.
+You should not use these macros directly; instead, include the
+appropriate headers and use the typedefs.  Some of these macros may
+not be defined on particular systems if GCC does not provide a
+@file{stdint.h} header on those systems.
 
 @item __CHAR_BIT__
 Defined to the number of bits used in the representation of the
@@ -2137,14 +2176,77 @@ this macro directly; instead, include the appropriate headers.
 @itemx __INT_MAX__
 @itemx __LONG_MAX__
 @itemx __LONG_LONG_MAX__
+@itemx __WINT_MAX__
+@itemx __SIZE_MAX__
+@itemx __PTRDIFF_MAX__
 @itemx __INTMAX_MAX__
+@itemx __UINTMAX_MAX__
+@itemx __SIG_ATOMIC_MAX__
+@itemx __INT8_MAX__
+@itemx __INT16_MAX__
+@itemx __INT32_MAX__
+@itemx __INT64_MAX__
+@itemx __UINT8_MAX__
+@itemx __UINT16_MAX__
+@itemx __UINT32_MAX__
+@itemx __UINT64_MAX__
+@itemx __INT_LEAST8_MAX__
+@itemx __INT_LEAST16_MAX__
+@itemx __INT_LEAST32_MAX__
+@itemx __INT_LEAST64_MAX__
+@itemx __UINT_LEAST8_MAX__
+@itemx __UINT_LEAST16_MAX__
+@itemx __UINT_LEAST32_MAX__
+@itemx __UINT_LEAST64_MAX__
+@itemx __INT_FAST8_MAX__
+@itemx __INT_FAST16_MAX__
+@itemx __INT_FAST32_MAX__
+@itemx __INT_FAST64_MAX__
+@itemx __UINT_FAST8_MAX__
+@itemx __UINT_FAST16_MAX__
+@itemx __UINT_FAST32_MAX__
+@itemx __UINT_FAST64_MAX__
+@itemx __INTPTR_MAX__
+@itemx __UINTPTR_MAX__
+@itemx __WCHAR_MIN__
+@itemx __WINT_MIN__
+@itemx __SIG_ATOMIC_MIN__
 Defined to the maximum value of the @code{signed char}, @code{wchar_t},
 @code{signed short},
-@code{signed int}, @code{signed long}, @code{signed long long}, and
-@code{intmax_t} types
-respectively.  They exist to make the standard header given numerical limits
-work correctly.  You should not use these macros directly; instead, include
-the appropriate headers.
+@code{signed int}, @code{signed long}, @code{signed long long},
+@code{wint_t}, @code{size_t}, @code{ptrdiff_t},
+@code{intmax_t}, @code{uintmax_t}, @code{sig_atomic_t}, @code{int8_t},
+@code{int16_t}, @code{int32_t}, @code{int64_t}, @code{uint8_t},
+@code{uint16_t}, @code{uint32_t}, @code{uint64_t},
+@code{int_least8_t}, @code{int_least16_t}, @code{int_least32_t},
+@code{int_least64_t}, @code{uint_least8_t}, @code{uint_least16_t},
+@code{uint_least32_t}, @code{uint_least64_t}, @code{int_fast8_t},
+@code{int_fast16_t}, @code{int_fast32_t}, @code{int_fast64_t},
+@code{uint_fast8_t}, @code{uint_fast16_t}, @code{uint_fast32_t},
+@code{uint_fast64_t}, @code{intptr_t}, and @code{uintptr_t} types and
+to the minimum value of the @code{wchar_t}, @code{wint_t}, and
+@code{sig_atomic_t} types respectively.  They exist to make the
+standard header given numerical limits work correctly.  You should not
+use these macros directly; instead, include the appropriate headers.
+Some of these macros may not be defined on particular systems if GCC
+does not provide a @file{stdint.h} header on those systems.
+
+@item __INT8_C
+@itemx __INT16_C
+@itemx __INT32_C
+@itemx __INT64_C
+@itemx __UINT8_C
+@itemx __UINT16_C
+@itemx __UINT32_C
+@itemx __UINT64_C
+@itemx __INTMAX_C
+@itemx __UINTMAX_C
+Defined to implementations of the standard @file{stdint.h} macros with
+the same names without the leading @code{__}.  They exist the make the
+implementation of that header work correctly.  You should not use
+these macros directly; instead, include the appropriate headers.  Some
+of these macros may not be defined on particular systems if GCC does
+not provide a @file{stdint.h} header on those systems.
 
 @item __SIZEOF_INT__
 @itemx __SIZEOF_LONG__
@@ -2162,6 +2264,35 @@ Defined to the number of bytes of the C standard data types: @code{int},
 @code{long}, @code{long long}, @code{short}, @code{void *}, @code{float},
 @code{double}, @code{long double}, @code{size_t}, @code{wchar_t}, @code{wint_t}
 and @code{ptrdiff_t}.
+
+@item __BYTE_ORDER__
+@itemx __ORDER_LITTLE_ENDIAN__
+@itemx __ORDER_BIG_ENDIAN__
+@itemx __ORDER_PDP_ENDIAN__
+@code{__BYTE_ORDER__} is defined to one of the values
+@code{__ORDER_LITTLE_ENDIAN__}, @code{__ORDER_BIG_ENDIAN__}, or
+@code{__ORDER_PDP_ENDIAN__} to reflect the layout of multi-byte and
+multi-word quantities in memory.  If @code{__BYTE_ORDER__} is equal to
+@code{__ORDER_LITTLE_ENDIAN__} or @code{__ORDER_BIG_ENDIAN__}, then
+multi-byte and multi-word quantities are laid out identically: the
+byte (word) at the lowest address is the least significant or most
+significant byte (word) of the quantity, respectively.  If
+@code{__BYTE_ORDER__} is equal to @code{__ORDER_PDP_ENDIAN__}, then
+bytes in 16-bit words are laid out in a little-endian fashion, whereas
+the 16-bit subwords of a 32-bit quantity are laid out in big-endian
+fashion.
+
+You should use these macros for testing like this:
+
+@smallexample
+/* @r{Test for a little-endian machine} */
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+@end smallexample
+
+@item __FLOAT_WORD_ORDER__
+@code{__FLOAT_WORD_ORDER__} is defined to one of the values
+@code{__ORDER_LITTLE_ENDIAN__} or @code{__ORDER_BIG_ENDIAN__} to reflect
+the layout of the words of multi-word floating-point quantities.
 
 @item __DEPRECATED
 This macro is defined, with value 1, when compiling a C++ source file
@@ -2243,6 +2374,15 @@ and swap operations on operands 1, 2, 4, 8 or 16 bytes in length, respectively.
 This macro is defined when the compiler is emitting Dwarf2 CFI directives
 to the assembler.  When this is defined, it is possible to emit those same
 directives in inline assembly.
+
+@item __FP_FAST_FMA
+@itemx __FP_FAST_FMAF
+@itemx __FP_FAST_FMAL
+These macros are defined with value 1 if the backend supports the
+@code{fma}, @code{fmaf}, and @code{fmal} builtin functions, so that
+the include file @file{math.h} can define the macros
+@code{FP_FAST_FMA}, @code{FP_FAST_FMAF}, and @code{FP_FAST_FMAL}
+for compatibility with the 1999 C standard.
 @end table
 
 @node System-specific Predefined Macros
@@ -2289,7 +2429,7 @@ check specifically for features you need, using a tool such as
 @subsection C++ Named Operators
 @cindex named operators
 @cindex C++ named operators
-@cindex iso646.h
+@cindex @file{iso646.h}
 
 In C++, there are eleven keywords which are simply alternate spellings
 of operators normally written with punctuation.  These keywords are
@@ -3440,6 +3580,8 @@ This manual documents the pragmas which are meaningful to the
 preprocessor itself.  Other pragmas are meaningful to the C or C++
 compilers.  They are documented in the GCC manual.
 
+GCC plugins may provide their own pragmas.
+
 @ftable @code
 @item #pragma GCC dependency
 @code{#pragma GCC dependency} allows you to check the relative dates of
@@ -3507,8 +3649,6 @@ the object file.  On other systems, the directive is ignored.  The
 These directives are not part of the C standard, but they are not
 official GNU extensions either.  What historical information we have
 been able to find, suggests they originated with System V@.
-
-Both @samp{#ident} and @samp{#sccs} are deprecated extensions.
 
 @cindex null directive
 The @dfn{null directive} consists of a @samp{#} followed by a newline,
@@ -3941,7 +4081,7 @@ The preprocessor and compiler interpret character constants in the
 same way; i.e.@: escape sequences such as @samp{\a} are given the
 values they would have on the target machine.
 
-The compiler values a multi-character character constant a character
+The compiler evaluates a multi-character character constant a character
 at a time, shifting the previous value left by the number of bits per
 target character, and then or-ing in the bit-pattern of the new
 character truncated to the width of a target character.  The final
@@ -4060,9 +4200,10 @@ program will run on.  Assertions are usually predefined, but you can
 define them with preprocessing directives or command-line options.
 
 Assertions were intended to provide a more systematic way to describe
-the compiler's target system.  However, in practice they are just as
-unpredictable as the system-specific predefined macros.  In addition, they
-are not part of any standard, and only a few compilers support them.
+the compiler's target system and we added them for compatibility with
+existing compilers.  In practice they are just as unpredictable as the
+system-specific predefined macros.  In addition, they are not part of
+any standard, and only a few compilers support them.
 Therefore, the use of assertions is @strong{less} portable than the use
 of system-specific predefined macros.  We recommend you do not use them at
 all.

@@ -1,6 +1,7 @@
 /* Definitions of target machine for GCC, for ELF on NetBSD/sparc
    and NetBSD/sparc64.
-   Copyright (C) 2002, 2003, 2004, 2005, 2007 Free Software Foundation, Inc.
+   Copyright (C) 2002, 2003, 2004, 2005, 2007, 2010, 2011
+   Free Software Foundation, Inc.
    Contributed by Matthew Green (mrg@eterna.com.au).
 
 This file is part of GCC.
@@ -35,10 +36,6 @@ along with GCC; see the file COPYING3.  If not see
     }							\
   while (0)
 
-/* Make sure these are undefined.  */
-#undef MD_EXEC_PREFIX
-#undef MD_STARTFILE_PREFIX
-
 /* CPP defines used by all NetBSD targets.  */
 #undef CPP_SUBTARGET_SPEC
 #define CPP_SUBTARGET_SPEC "%(netbsd_cpp_spec)"
@@ -71,7 +68,7 @@ along with GCC; see the file COPYING3.  If not see
 #define USER_LABEL_PREFIX ""
 
 #undef ASM_SPEC
-#define ASM_SPEC "%{fpic|fPIC|fpie|fPIE:-K PIC} %{V} %{v:%{!V:-V}} \
+#define ASM_SPEC "%{fpic|fPIC|fpie|fPIE:-K PIC} \
 %{mlittle-endian:-EL} \
 %(asm_cpu) %(asm_arch) %(asm_relax)"
 
@@ -118,40 +115,20 @@ along with GCC; see the file COPYING3.  If not see
 
 /* CC1_SPEC for NetBSD/sparc.  */
 #define CC1_SPEC32 \
- "%{sun4:} %{target:} \
-  %{mcypress:-mcpu=cypress} \
-  %{msparclite:-mcpu=sparclite} %{mf930:-mcpu=f930} %{mf934:-mcpu=f934} \
-  %{mv8:-mcpu=v8} %{msupersparc:-mcpu=supersparc} \
-  %{m32:%{m64:%emay not use both -m32 and -m64}} \
+ "%{m32:%{m64:%emay not use both -m32 and -m64}} \
   %{m64: \
     -mptr64 -mstack-bias -mno-v8plus -mlong-double-128 \
-    %{!mcpu*: \
-      %{!mcypress: \
-        %{!msparclite: \
-	  %{!mf930: \
-	    %{!mf934: \
-	      %{!mv8*: \
-	        %{!msupersparc:-mcpu=ultrasparc}}}}}}} \
+    %{!mcpu*:%{!mv8plus:-mcpu=ultrasparc}} \
     %{!mno-vis:%{!mcpu=v9:-mvis}} \
     %{p:-mcmodel=medlow} \
     %{pg:-mcmodel=medlow}}"
 
 #define CC1_SPEC64 \
- "%{sun4:} %{target:} \
-  %{mcypress:-mcpu=cypress} \
-  %{msparclite:-mcpu=sparclite} %{mf930:-mcpu=f930} %{mf934:-mcpu=f934} \
-  %{mv8:-mcpu=v8} %{msupersparc:-mcpu=supersparc} \
-  %{m32:%{m64:%emay not use both -m32 and -m64}} \
+ "%{m32:%{m64:%emay not use both -m32 and -m64}} \
   %{m32: \
     -mptr32 -mno-stack-bias \
     %{!mlong-double-128:-mlong-double-64} \
-    %{!mcpu*: \
-      %{!mcypress: \
-	%{!msparclite: \
-	  %{!mf930: \
-	    %{!mf934: \
-	      %{!mv8*: \
-		%{!msupersparc:-mcpu=cypress}}}}}}}} \
+    %{!mcpu*:%{!mv8plus:-mcpu=cypress}}} \
   %{!m32: \
     %{p:-mcmodel=medlow} \
     %{pg:-mcmodel=medlow}}"

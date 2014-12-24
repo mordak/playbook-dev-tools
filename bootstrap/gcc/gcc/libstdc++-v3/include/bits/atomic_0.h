@@ -1,6 +1,6 @@
 // -*- C++ -*- header.
 
-// Copyright (C) 2008, 2009
+// Copyright (C) 2008, 2009, 2010, 2011
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -25,7 +25,7 @@
 
 /** @file bits/atomic_0.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{atomic}
  */
 
 #ifndef _GLIBCXX_ATOMIC_0_H
@@ -33,191 +33,109 @@
 
 #pragma GCC system_header
 
-// _GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
-  // 0 == __atomic0 == Never lock-free
+// 0 == __atomic0 == Never lock-free
 namespace __atomic0
 {
-  struct atomic_flag;
+  _GLIBCXX_BEGIN_EXTERN_C
+
+  void
+  atomic_flag_clear_explicit(__atomic_flag_base*, memory_order)
+  _GLIBCXX_NOTHROW;
+
+  void
+  __atomic_flag_wait_explicit(__atomic_flag_base*, memory_order)
+  _GLIBCXX_NOTHROW;
+
+  _GLIBCXX_CONST __atomic_flag_base*
+  __atomic_flag_for_address(const volatile void* __z) _GLIBCXX_NOTHROW;
+
+  _GLIBCXX_END_EXTERN_C
+
+  // Implementation specific defines.
+#define _ATOMIC_MEMBER_ _M_i
 
   // Implementation specific defines.
 #define _ATOMIC_LOAD_(__a, __x)						   \
-  ({ volatile __typeof__ _ATOMIC_MEMBER_* __p = &_ATOMIC_MEMBER_;	   \
-    volatile __atomic_flag_base* __g = __atomic_flag_for_address(__p);     \
+  ({typedef __typeof__(_ATOMIC_MEMBER_) __i_type;                          \
+    __i_type* __p = &_ATOMIC_MEMBER_;	   				   \
+    __atomic_flag_base* __g = __atomic_flag_for_address(__p);	  	   \
     __atomic_flag_wait_explicit(__g, __x);				   \
-    __typeof__ _ATOMIC_MEMBER_ __r = *__p;				   \
+    __i_type __r = *__p;						   \
     atomic_flag_clear_explicit(__g, __x);		       		   \
     __r; })
 
-#define _ATOMIC_STORE_(__a, __m, __x)					   \
-  ({ volatile __typeof__ _ATOMIC_MEMBER_* __p = &_ATOMIC_MEMBER_;	   \
-    __typeof__(__m) __v = (__m);			       		   \
-    volatile __atomic_flag_base* __g = __atomic_flag_for_address(__p);     \
+#define _ATOMIC_STORE_(__a, __n, __x)					   \
+  ({typedef __typeof__(_ATOMIC_MEMBER_) __i_type;                          \
+    __i_type* __p = &_ATOMIC_MEMBER_;	   				   \
+    __typeof__(__n) __w = (__n);			       		   \
+    __atomic_flag_base* __g = __atomic_flag_for_address(__p);	  	   \
     __atomic_flag_wait_explicit(__g, __x);				   \
-    *__p = __v;								   \
+    *__p = __w;								   \
     atomic_flag_clear_explicit(__g, __x);		       		   \
-    __v; })
+    __w; })
 
-#define _ATOMIC_MODIFY_(__a, __o, __m, __x)				   \
-  ({ volatile __typeof__ _ATOMIC_MEMBER_* __p = &_ATOMIC_MEMBER_;	   \
-    __typeof__(__m) __v = (__m);			       		   \
-    volatile __atomic_flag_base* __g = __atomic_flag_for_address(__p);     \
+#define _ATOMIC_MODIFY_(__a, __o, __n, __x)				   \
+  ({typedef __typeof__(_ATOMIC_MEMBER_) __i_type;                          \
+    __i_type* __p = &_ATOMIC_MEMBER_;	   				   \
+    __typeof__(__n) __w = (__n);			       		   \
+    __atomic_flag_base* __g = __atomic_flag_for_address(__p);	  	   \
     __atomic_flag_wait_explicit(__g, __x);				   \
-    __typeof__ _ATOMIC_MEMBER_ __r = *__p;				   \
-    *__p __o __v;					       		   \
+    __i_type __r = *__p;		       				   \
+    *__p __o __w;					       		   \
     atomic_flag_clear_explicit(__g, __x);		       		   \
     __r; })
 
-#define _ATOMIC_CMPEXCHNG_(__a, __e, __m, __x)				   \
-  ({ volatile __typeof__ _ATOMIC_MEMBER_* __p = &_ATOMIC_MEMBER_;	   \
+#define _ATOMIC_CMPEXCHNG_(__a, __e, __n, __x)				   \
+  ({typedef __typeof__(_ATOMIC_MEMBER_) __i_type;                          \
+    __i_type* __p = &_ATOMIC_MEMBER_;	   				   \
     __typeof__(__e) __q = (__e);			       		   \
-    __typeof__(__m) __v = (__m);			       		   \
+    __typeof__(__n) __w = (__n);			       		   \
     bool __r;						       		   \
-    volatile __atomic_flag_base* __g = __atomic_flag_for_address(__p);     \
+    __atomic_flag_base* __g = __atomic_flag_for_address(__p);	   	   \
     __atomic_flag_wait_explicit(__g, __x);				   \
-    __typeof__ _ATOMIC_MEMBER_ __t__ = *__p;		       		   \
-    if (__t__ == *__q) { *__p = __v; __r = true; }			   \
-    else { *__q = __t__; __r = false; }		       			   \
+    __i_type __t = *__p;		       				   \
+    if (*__q == __t) 							   \
+      {									   \
+	*__p = (__i_type)__w;						   \
+	__r = true;							   \
+      }									   \
+    else { *__q = __t; __r = false; }		       			   \
     atomic_flag_clear_explicit(__g, __x);		       		   \
     __r; })
+
 
   /// atomic_flag
-  struct atomic_flag : private __atomic_flag_base
+  struct atomic_flag : public __atomic_flag_base
   {
     atomic_flag() = default;
     ~atomic_flag() = default;
     atomic_flag(const atomic_flag&) = delete;
     atomic_flag& operator=(const atomic_flag&) = delete;
+    atomic_flag& operator=(const atomic_flag&) volatile = delete;
 
-    atomic_flag(bool __i) { _M_i = __i; } // XXX deleted copy ctor != agg
+    // Conversion to ATOMIC_FLAG_INIT.
+    atomic_flag(bool __i): __atomic_flag_base({ __i }) { }
+
+    bool
+    test_and_set(memory_order __m = memory_order_seq_cst);
 
     bool
     test_and_set(memory_order __m = memory_order_seq_cst) volatile;
 
     void
+    clear(memory_order __m = memory_order_seq_cst);
+
+    void
     clear(memory_order __m = memory_order_seq_cst) volatile;
   };
 
-  /// 29.4.2, address types
-  struct atomic_address
-  {
-  private:
-    void* _M_i;
 
-  public:
-    atomic_address() = default;
-    ~atomic_address() = default;
-    atomic_address(const atomic_address&) = delete;
-    atomic_address& operator=(const atomic_address&) = delete;
-
-    atomic_address(void* __v) { _M_i = __v; }
-
-    bool
-    is_lock_free() const volatile
-    { return false; }
-
-    void
-    store(void* __v, memory_order __m = memory_order_seq_cst) volatile
-    {
-      __glibcxx_assert(__m != memory_order_acquire);
-      __glibcxx_assert(__m != memory_order_acq_rel);
-      __glibcxx_assert(__m != memory_order_consume);
-      _ATOMIC_STORE_(this, __v, __m);
-    }
-
-    void*
-    load(memory_order __m = memory_order_seq_cst) const volatile
-    {
-      __glibcxx_assert(__m != memory_order_release);
-      __glibcxx_assert(__m != memory_order_acq_rel);
-      return _ATOMIC_LOAD_(this, __m);
-    }
-
-    void*
-    exchange(void* __v, memory_order __m = memory_order_seq_cst) volatile
-    { return _ATOMIC_MODIFY_(this, =, __v, __m); }
-
-    bool
-    compare_exchange_weak(void*& __v1, void* __v2, memory_order __m1,
-			  memory_order __m2) volatile
-    {
-      __glibcxx_assert(__m2 != memory_order_release);
-      __glibcxx_assert(__m2 != memory_order_acq_rel);
-      __glibcxx_assert(__m2 <= __m1);
-      return _ATOMIC_CMPEXCHNG_(this, &__v1, __v2, __m1);
-    }
-
-    bool
-    compare_exchange_weak(void*& __v1, void* __v2,
-			  memory_order __m = memory_order_seq_cst) volatile
-    {
-      return compare_exchange_weak(__v1, __v2, __m,
-				   __calculate_memory_order(__m));
-    }
-
-    bool
-    compare_exchange_strong(void*& __v1, void* __v2, memory_order __m1,
-			    memory_order __m2) volatile
-    {
-      __glibcxx_assert(__m2 != memory_order_release);
-      __glibcxx_assert(__m2 != memory_order_acq_rel);
-      __glibcxx_assert(__m2 <= __m1);
-      return _ATOMIC_CMPEXCHNG_(this, &__v1, __v2, __m1);
-    }
-
-    bool
-    compare_exchange_strong(void*& __v1, void* __v2,
-			  memory_order __m = memory_order_seq_cst) volatile
-    {
-      return compare_exchange_strong(__v1, __v2, __m,
-				     __calculate_memory_order(__m));
-    }
-
-    void*
-    fetch_add(ptrdiff_t __d, memory_order __m = memory_order_seq_cst) volatile
-    {
-      void* volatile* __p = &(_M_i);
-      volatile __atomic_flag_base* __g = __atomic_flag_for_address(__p);
-      __atomic_flag_wait_explicit(__g, __m);
-      void* __r = *__p;
-      *__p = (void*)((char*)(*__p) + __d);
-      atomic_flag_clear_explicit(__g, __m);
-      return __r;
-    }
-
-    void*
-    fetch_sub(ptrdiff_t __d, memory_order __m = memory_order_seq_cst) volatile
-    {
-      void* volatile* __p = &(_M_i);
-      volatile __atomic_flag_base* __g = __atomic_flag_for_address(__p);
-      __atomic_flag_wait_explicit(__g, __m);
-      void* __r = *__p;
-      *__p = (void*)((char*)(*__p) - __d);
-      atomic_flag_clear_explicit(__g, __m);
-      return __r;
-    }
-
-    operator void*() const volatile
-    { return load(); }
-
-    void*
-    operator=(void* __v) // XXX volatile
-    {
-      store(__v);
-      return __v;
-    }
-
-    void*
-    operator+=(ptrdiff_t __d) volatile
-    { return fetch_add(__d) + __d; }
-
-    void*
-    operator-=(ptrdiff_t __d) volatile
-    { return fetch_sub(__d) - __d; }
-  };
-
-
-  // 29.3.1 atomic integral types
+  /// Base class for atomic integrals.
+  //
   // For each of the integral types, define atomic_[integral type] struct
   //
   // atomic_bool     bool
@@ -243,72 +161,122 @@ namespace __atomic0
     struct __atomic_base
     {
     private:
-      typedef _ITp 	__integral_type;
+      typedef _ITp 	__int_type;
 
-      __integral_type 	_M_i;
+      __int_type 	_M_i;
 
     public:
       __atomic_base() = default;
       ~__atomic_base() = default;
       __atomic_base(const __atomic_base&) = delete;
       __atomic_base& operator=(const __atomic_base&) = delete;
+      __atomic_base& operator=(const __atomic_base&) volatile = delete;
 
-      // Requires __integral_type convertible to _M_base._M_i.
-      __atomic_base(__integral_type __i) { _M_i = __i; }
+      // Requires __int_type convertible to _M_base._M_i.
+      constexpr __atomic_base(__int_type __i): _M_i (__i) { }
 
-      operator __integral_type() const volatile
+      operator __int_type() const
       { return load(); }
 
-      __integral_type
-      operator=(__integral_type __i) // XXX volatile
+      operator __int_type() const volatile
+      { return load(); }
+
+      __int_type
+      operator=(__int_type __i)
       {
 	store(__i);
 	return __i;
       }
 
-      __integral_type
+      __int_type
+      operator=(__int_type __i) volatile
+      {
+	store(__i);
+	return __i;
+      }
+
+      __int_type
+      operator++(int)
+      { return fetch_add(1); }
+
+      __int_type
       operator++(int) volatile
       { return fetch_add(1); }
 
-      __integral_type
+      __int_type
+      operator--(int)
+      { return fetch_sub(1); }
+
+      __int_type
       operator--(int) volatile
       { return fetch_sub(1); }
 
-      __integral_type
+      __int_type
+      operator++()
+      { return fetch_add(1) + 1; }
+
+      __int_type
       operator++() volatile
       { return fetch_add(1) + 1; }
 
-      __integral_type
+      __int_type
+      operator--()
+      { return fetch_sub(1) - 1; }
+
+      __int_type
       operator--() volatile
       { return fetch_sub(1) - 1; }
 
-      __integral_type
-      operator+=(__integral_type __i) volatile
+      __int_type
+      operator+=(__int_type __i)
       { return fetch_add(__i) + __i; }
 
-      __integral_type
-      operator-=(__integral_type __i) volatile
+      __int_type
+      operator+=(__int_type __i) volatile
+      { return fetch_add(__i) + __i; }
+
+      __int_type
+      operator-=(__int_type __i)
       { return fetch_sub(__i) - __i; }
 
-      __integral_type
-      operator&=(__integral_type __i) volatile
+      __int_type
+      operator-=(__int_type __i) volatile
+      { return fetch_sub(__i) - __i; }
+
+      __int_type
+      operator&=(__int_type __i)
       { return fetch_and(__i) & __i; }
 
-      __integral_type
-      operator|=(__integral_type __i) volatile
+      __int_type
+      operator&=(__int_type __i) volatile
+      { return fetch_and(__i) & __i; }
+
+      __int_type
+      operator|=(__int_type __i)
       { return fetch_or(__i) | __i; }
 
-      __integral_type
-      operator^=(__integral_type __i) volatile
+      __int_type
+      operator|=(__int_type __i) volatile
+      { return fetch_or(__i) | __i; }
+
+      __int_type
+      operator^=(__int_type __i)
       { return fetch_xor(__i) ^ __i; }
+
+      __int_type
+      operator^=(__int_type __i) volatile
+      { return fetch_xor(__i) ^ __i; }
+
+      bool
+      is_lock_free() const
+      { return false; }
 
       bool
       is_lock_free() const volatile
       { return false; }
 
       void
-      store(__integral_type __i,
-	    memory_order __m = memory_order_seq_cst) volatile
+      store(__int_type __i, memory_order __m = memory_order_seq_cst)
       {
 	__glibcxx_assert(__m != memory_order_acquire);
 	__glibcxx_assert(__m != memory_order_acq_rel);
@@ -316,7 +284,24 @@ namespace __atomic0
 	_ATOMIC_STORE_(this, __i, __m);
       }
 
-      __integral_type
+      void
+      store(__int_type __i, memory_order __m = memory_order_seq_cst) volatile
+      {
+	__glibcxx_assert(__m != memory_order_acquire);
+	__glibcxx_assert(__m != memory_order_acq_rel);
+	__glibcxx_assert(__m != memory_order_consume);
+	_ATOMIC_STORE_(this, __i, __m);
+      }
+
+      __int_type
+      load(memory_order __m = memory_order_seq_cst) const
+      {
+	__glibcxx_assert(__m != memory_order_release);
+	__glibcxx_assert(__m != memory_order_acq_rel);
+	return _ATOMIC_LOAD_(this, __m);
+      }
+
+      __int_type
       load(memory_order __m = memory_order_seq_cst) const volatile
       {
 	__glibcxx_assert(__m != memory_order_release);
@@ -324,13 +309,26 @@ namespace __atomic0
 	return _ATOMIC_LOAD_(this, __m);
       }
 
-      __integral_type
-      exchange(__integral_type __i,
-	       memory_order __m = memory_order_seq_cst) volatile
+      __int_type
+      exchange(__int_type __i, memory_order __m = memory_order_seq_cst)
+      { return _ATOMIC_MODIFY_(this, =, __i, __m); }
+
+      __int_type
+      exchange(__int_type __i, memory_order __m = memory_order_seq_cst) volatile
       { return _ATOMIC_MODIFY_(this, =, __i, __m); }
 
       bool
-      compare_exchange_weak(__integral_type& __i1, __integral_type __i2,
+      compare_exchange_weak(__int_type& __i1, __int_type __i2,
+			    memory_order __m1, memory_order __m2)
+      {
+	__glibcxx_assert(__m2 != memory_order_release);
+	__glibcxx_assert(__m2 != memory_order_acq_rel);
+	__glibcxx_assert(__m2 <= __m1);
+	return _ATOMIC_CMPEXCHNG_(this, &__i1, __i2, __m1);
+      }
+
+      bool
+      compare_exchange_weak(__int_type& __i1, __int_type __i2,
 			    memory_order __m1, memory_order __m2) volatile
       {
 	__glibcxx_assert(__m2 != memory_order_release);
@@ -340,7 +338,15 @@ namespace __atomic0
       }
 
       bool
-      compare_exchange_weak(__integral_type& __i1, __integral_type __i2,
+      compare_exchange_weak(__int_type& __i1, __int_type __i2,
+			    memory_order __m = memory_order_seq_cst)
+      {
+	return compare_exchange_weak(__i1, __i2, __m,
+				     __calculate_memory_order(__m));
+      }
+
+      bool
+      compare_exchange_weak(__int_type& __i1, __int_type __i2,
 			    memory_order __m = memory_order_seq_cst) volatile
       {
 	return compare_exchange_weak(__i1, __i2, __m,
@@ -348,7 +354,17 @@ namespace __atomic0
       }
 
       bool
-      compare_exchange_strong(__integral_type& __i1, __integral_type __i2,
+      compare_exchange_strong(__int_type& __i1, __int_type __i2,
+			      memory_order __m1, memory_order __m2)
+      {
+	__glibcxx_assert(__m2 != memory_order_release);
+	__glibcxx_assert(__m2 != memory_order_acq_rel);
+	__glibcxx_assert(__m2 <= __m1);
+	return _ATOMIC_CMPEXCHNG_(this, &__i1, __i2, __m1);
+      }
+
+      bool
+      compare_exchange_strong(__int_type& __i1, __int_type __i2,
 			      memory_order __m1, memory_order __m2) volatile
       {
 	__glibcxx_assert(__m2 != memory_order_release);
@@ -358,99 +374,279 @@ namespace __atomic0
       }
 
       bool
-      compare_exchange_strong(__integral_type& __i1, __integral_type __i2,
+      compare_exchange_strong(__int_type& __i1, __int_type __i2,
+			      memory_order __m = memory_order_seq_cst)
+      {
+	return compare_exchange_strong(__i1, __i2, __m,
+				       __calculate_memory_order(__m));
+      }
+
+      bool
+      compare_exchange_strong(__int_type& __i1, __int_type __i2,
 			      memory_order __m = memory_order_seq_cst) volatile
       {
 	return compare_exchange_strong(__i1, __i2, __m,
 				       __calculate_memory_order(__m));
       }
 
-      __integral_type
-      fetch_add(__integral_type __i,
+      __int_type
+      fetch_add(__int_type __i, memory_order __m = memory_order_seq_cst)
+      { return _ATOMIC_MODIFY_(this, +=, __i, __m); }
+
+      __int_type
+      fetch_add(__int_type __i,
 		memory_order __m = memory_order_seq_cst) volatile
       { return _ATOMIC_MODIFY_(this, +=, __i, __m); }
 
-      __integral_type
-      fetch_sub(__integral_type __i,
+      __int_type
+      fetch_sub(__int_type __i, memory_order __m = memory_order_seq_cst)
+      { return _ATOMIC_MODIFY_(this, -=, __i, __m); }
+
+      __int_type
+      fetch_sub(__int_type __i,
 		memory_order __m = memory_order_seq_cst) volatile
       { return _ATOMIC_MODIFY_(this, -=, __i, __m); }
 
-      __integral_type
-      fetch_and(__integral_type __i,
+      __int_type
+      fetch_and(__int_type __i, memory_order __m = memory_order_seq_cst)
+      { return _ATOMIC_MODIFY_(this, &=, __i, __m); }
+
+      __int_type
+      fetch_and(__int_type __i,
 		memory_order __m = memory_order_seq_cst) volatile
       { return _ATOMIC_MODIFY_(this, &=, __i, __m); }
 
-      __integral_type
-      fetch_or(__integral_type __i,
-	       memory_order __m = memory_order_seq_cst) volatile
+      __int_type
+      fetch_or(__int_type __i, memory_order __m = memory_order_seq_cst)
       { return _ATOMIC_MODIFY_(this, |=, __i, __m); }
 
-      __integral_type
-      fetch_xor(__integral_type __i,
+      __int_type
+      fetch_or(__int_type __i, memory_order __m = memory_order_seq_cst) volatile
+      { return _ATOMIC_MODIFY_(this, |=, __i, __m); }
+
+      __int_type
+      fetch_xor(__int_type __i, memory_order __m = memory_order_seq_cst)
+      { return _ATOMIC_MODIFY_(this, ^=, __i, __m); }
+
+      __int_type
+      fetch_xor(__int_type __i,
 		memory_order __m = memory_order_seq_cst) volatile
       { return _ATOMIC_MODIFY_(this, ^=, __i, __m); }
     };
 
 
-  /// atomic_bool
-  // NB: No operators or fetch-operations for this type.
-  struct atomic_bool
-  {
-  private:
-    __atomic_base<bool>	_M_base;
+  /// Partial specialization for pointer types.
+  template<typename _PTp>
+    struct __atomic_base<_PTp*>
+    {
+    private:
+      typedef _PTp* 	__return_pointer_type;
+      typedef void* 	__pointer_type;
+      __pointer_type 	_M_i;
 
-  public:
-    atomic_bool() = default;
-    ~atomic_bool() = default;
-    atomic_bool(const atomic_bool&) = delete;
-    atomic_bool& operator=(const atomic_bool&) = delete;
+    public:
+      __atomic_base() = default;
+      ~__atomic_base() = default;
+      __atomic_base(const __atomic_base&) = delete;
+      __atomic_base& operator=(const __atomic_base&) = delete;
+      __atomic_base& operator=(const __atomic_base&) volatile = delete;
 
-    atomic_bool(bool __i) : _M_base(__i) { }
+      // Requires __pointer_type convertible to _M_i.
+      constexpr __atomic_base(__return_pointer_type __p): _M_i (__p) { }
 
-    bool
-    operator=(bool __i) // XXX volatile
-    { return _M_base.operator=(__i); }
+      operator __return_pointer_type() const
+      { return reinterpret_cast<__return_pointer_type>(load()); }
 
-    operator bool() const volatile
-    { return _M_base.load(); }
+      operator __return_pointer_type() const volatile
+      { return reinterpret_cast<__return_pointer_type>(load()); }
 
-    bool
-    is_lock_free() const volatile
-    { return _M_base.is_lock_free(); }
+      __return_pointer_type
+      operator=(__pointer_type __p)
+      {
+	store(__p);
+	return reinterpret_cast<__return_pointer_type>(__p);
+      }
 
-    void
-    store(bool __i, memory_order __m = memory_order_seq_cst) volatile
-    { _M_base.store(__i, __m); }
+      __return_pointer_type
+      operator=(__pointer_type __p) volatile
+      {
+	store(__p);
+	return reinterpret_cast<__return_pointer_type>(__p);
+      }
 
-    bool
-    load(memory_order __m = memory_order_seq_cst) const volatile
-    { return _M_base.load(__m); }
+      __return_pointer_type
+      operator++(int)
+      { return reinterpret_cast<__return_pointer_type>(fetch_add(1)); }
 
-    bool
-    exchange(bool __i, memory_order __m = memory_order_seq_cst) volatile
-    { return _M_base.exchange(__i, __m); }
+      __return_pointer_type
+      operator++(int) volatile
+      { return reinterpret_cast<__return_pointer_type>(fetch_add(1)); }
 
-    bool
-    compare_exchange_weak(bool& __i1, bool __i2, memory_order __m1,
-			  memory_order __m2) volatile
-    { return _M_base.compare_exchange_weak(__i1, __i2, __m1, __m2); }
+      __return_pointer_type
+      operator--(int)
+      { return reinterpret_cast<__return_pointer_type>(fetch_sub(1)); }
 
-    bool
-    compare_exchange_weak(bool& __i1, bool __i2,
-			  memory_order __m = memory_order_seq_cst) volatile
-    { return _M_base.compare_exchange_weak(__i1, __i2, __m); }
+      __return_pointer_type
+      operator--(int) volatile
+      { return reinterpret_cast<__return_pointer_type>(fetch_sub(1)); }
 
-    bool
-    compare_exchange_strong(bool& __i1, bool __i2, memory_order __m1,
-			    memory_order __m2) volatile
-    { return _M_base.compare_exchange_strong(__i1, __i2, __m1, __m2); }
+      __return_pointer_type
+      operator++()
+      { return reinterpret_cast<__return_pointer_type>(fetch_add(1) + 1); }
 
+      __return_pointer_type
+      operator++() volatile
+      { return reinterpret_cast<__return_pointer_type>(fetch_add(1) + 1); }
 
-    bool
-    compare_exchange_strong(bool& __i1, bool __i2,
-			    memory_order __m = memory_order_seq_cst) volatile
-    { return _M_base.compare_exchange_strong(__i1, __i2, __m); }
-  };
+      __return_pointer_type
+      operator--()
+      { return reinterpret_cast<__return_pointer_type>(fetch_sub(1) - 1); }
+
+      __return_pointer_type
+      operator--() volatile
+      { return reinterpret_cast<__return_pointer_type>(fetch_sub(1) - 1); }
+
+      __return_pointer_type
+      operator+=(ptrdiff_t __d)
+      { return reinterpret_cast<__return_pointer_type>(fetch_add(__d) + __d); }
+
+      __return_pointer_type
+      operator+=(ptrdiff_t __d) volatile
+      { return reinterpret_cast<__return_pointer_type>(fetch_add(__d) + __d); }
+
+      __return_pointer_type
+      operator-=(ptrdiff_t __d)
+      { return reinterpret_cast<__return_pointer_type>(fetch_sub(__d) - __d); }
+
+      __return_pointer_type
+      operator-=(ptrdiff_t __d) volatile
+      { return reinterpret_cast<__return_pointer_type>(fetch_sub(__d) - __d); }
+
+      bool
+      is_lock_free() const
+      { return true; }
+
+      bool
+      is_lock_free() const volatile
+      { return true; }
+
+      void
+      store(__pointer_type __p, memory_order __m = memory_order_seq_cst)
+      {
+	__glibcxx_assert(__m != memory_order_acquire);
+	__glibcxx_assert(__m != memory_order_acq_rel);
+	__glibcxx_assert(__m != memory_order_consume);
+	_ATOMIC_STORE_(this, __p, __m);
+      }
+
+      void
+      store(__pointer_type __p,
+	    memory_order __m = memory_order_seq_cst) volatile
+      {
+	__glibcxx_assert(__m != memory_order_acquire);
+	__glibcxx_assert(__m != memory_order_acq_rel);
+	__glibcxx_assert(__m != memory_order_consume);
+	volatile __pointer_type* __p2 = &_M_i;
+	__typeof__(__p) __w = (__p);
+	__atomic_flag_base* __g = __atomic_flag_for_address(__p2);
+	__atomic_flag_wait_explicit(__g, __m);
+	*__p2 = reinterpret_cast<__pointer_type>(__w);
+	atomic_flag_clear_explicit(__g, __m);
+	__w;
+      }
+
+      __return_pointer_type
+      load(memory_order __m = memory_order_seq_cst) const
+      {
+	__glibcxx_assert(__m != memory_order_release);
+	__glibcxx_assert(__m != memory_order_acq_rel);
+	void* __v = _ATOMIC_LOAD_(this, __m);
+	return reinterpret_cast<__return_pointer_type>(__v);
+      }
+
+      __return_pointer_type
+      load(memory_order __m = memory_order_seq_cst) const volatile
+      {
+	__glibcxx_assert(__m != memory_order_release);
+	__glibcxx_assert(__m != memory_order_acq_rel);
+	void* __v = _ATOMIC_LOAD_(this, __m);
+	return reinterpret_cast<__return_pointer_type>(__v);
+      }
+
+      __return_pointer_type
+      exchange(__pointer_type __p, memory_order __m = memory_order_seq_cst)
+      {
+	void* __v = _ATOMIC_MODIFY_(this, =, __p, __m);
+	return reinterpret_cast<__return_pointer_type>(__v);
+      }
+
+      __return_pointer_type
+      exchange(__pointer_type __p,
+	       memory_order __m = memory_order_seq_cst) volatile
+      {
+	volatile __pointer_type* __p2 = &_M_i;
+	__typeof__(__p) __w = (__p);
+	__atomic_flag_base* __g = __atomic_flag_for_address(__p2);
+	__atomic_flag_wait_explicit(__g, __m);
+	__pointer_type __r = *__p2;
+	*__p2 = __w;
+	atomic_flag_clear_explicit(__g, __m);
+	__r;
+	return reinterpret_cast<__return_pointer_type>(_M_i);
+      }
+
+      bool
+      compare_exchange_strong(__return_pointer_type& __rp1, __pointer_type __p2,
+			      memory_order __m1, memory_order __m2)
+      {
+	__glibcxx_assert(__m2 != memory_order_release);
+	__glibcxx_assert(__m2 != memory_order_acq_rel);
+	__glibcxx_assert(__m2 <= __m1);
+	__pointer_type& __p1 = reinterpret_cast<void*&>(__rp1);
+	return _ATOMIC_CMPEXCHNG_(this, &__p1, __p2, __m1);
+      }
+
+      bool
+      compare_exchange_strong(__return_pointer_type& __rp1, __pointer_type __p2,
+			      memory_order __m1, memory_order __m2) volatile
+      {
+	__glibcxx_assert(__m2 != memory_order_release);
+	__glibcxx_assert(__m2 != memory_order_acq_rel);
+	__glibcxx_assert(__m2 <= __m1);
+	__pointer_type& __p1 = reinterpret_cast<void*&>(__rp1);
+	return _ATOMIC_CMPEXCHNG_(this, &__p1, __p2, __m1);
+      }
+
+      __return_pointer_type
+      fetch_add(ptrdiff_t __d, memory_order __m = memory_order_seq_cst)
+      {
+	void* __v = _ATOMIC_MODIFY_(this, +=, __d, __m);
+	return reinterpret_cast<__return_pointer_type>(__v);
+      }
+
+      __return_pointer_type
+      fetch_add(ptrdiff_t __d,
+		memory_order __m = memory_order_seq_cst) volatile
+      {
+	void* __v = _ATOMIC_MODIFY_(this, +=, __d, __m);
+	return reinterpret_cast<__return_pointer_type>(__v);
+      }
+
+      __return_pointer_type
+      fetch_sub(ptrdiff_t __d, memory_order __m = memory_order_seq_cst)
+      {
+	void* __v = _ATOMIC_MODIFY_(this, -=, __d, __m);
+	return reinterpret_cast<__return_pointer_type>(__v);
+      }
+
+      __return_pointer_type
+      fetch_sub(ptrdiff_t __d,
+		memory_order __m = memory_order_seq_cst) volatile
+      {
+	void* __v = _ATOMIC_MODIFY_(this, -=, __d, __m);
+	return reinterpret_cast<__return_pointer_type>(__v);
+      }
+    };
 
 #undef _ATOMIC_LOAD_
 #undef _ATOMIC_STORE_
@@ -458,6 +654,7 @@ namespace __atomic0
 #undef _ATOMIC_CMPEXCHNG_
 } // namespace __atomic0
 
-// _GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace std
 
 #endif

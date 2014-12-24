@@ -1,5 +1,5 @@
 /* Implementation of the EXPONENT intrinsic
-   Copyright 2003, 2007, 2009 Free Software Foundation, Inc.
+   Copyright 2003, 2007, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Richard Henderson <rth@redhat.com>.
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -26,7 +26,14 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #include "libgfortran.h"
 
 
-#if defined (HAVE_GFC_REAL_16) && defined (HAVE_FREXPL)
+
+#if defined(GFC_REAL_16_IS_FLOAT128)
+#define MATHFUNC(funcname) funcname ## q
+#else
+#define MATHFUNC(funcname) funcname ## l
+#endif
+
+#if defined (HAVE_GFC_REAL_16) && (defined(GFC_REAL_16_IS_FLOAT128) || defined(HAVE_FREXPL))
 
 extern GFC_INTEGER_4 exponent_r16 (GFC_REAL_16 s);
 export_proto(exponent_r16);
@@ -35,7 +42,7 @@ GFC_INTEGER_4
 exponent_r16 (GFC_REAL_16 s)
 {
   int ret;
-  frexpl (s, &ret);
+  MATHFUNC(frexp) (s, &ret);
   return ret;
 }
 

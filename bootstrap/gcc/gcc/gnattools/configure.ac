@@ -19,7 +19,7 @@ sinclude(../config/acx.m4)
 sinclude(../config/override.m4)
 
 AC_INIT
-AC_PREREQ([2.59])
+AC_PREREQ([2.64])
 
 AC_CONFIG_SRCDIR([Makefile.in])
 
@@ -143,7 +143,7 @@ case "${target}" in
     indepsw.adb<indepsw-mingw.adb"
     EXTRA_GNATTOOLS='../../gnatdll$(exeext)'
     ;;
-  powerpc-*-darwin* | *86-*-darwin*)
+  *-*-darwin*)
     TOOLS_TARGET_PAIRS="mlib-tgt-specific.adb<mlib-tgt-specific-darwin.adb"
     ;;
   *-*-lynxos)

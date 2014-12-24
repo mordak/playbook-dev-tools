@@ -1,6 +1,6 @@
 /* frags.h - Header file for the frag concept.
    Copyright 1987, 1992, 1993, 1994, 1995, 1997, 1998, 1999, 2000, 2001,
-   2002, 2003, 2004, 2005, 2006, 2007 Free Software Foundation, Inc.
+   2002, 2003, 2004, 2005, 2006, 2007, 2010 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -68,6 +68,10 @@ struct frag {
   struct list_info_struct *line;
 #endif
 
+  /* A serial number for a sequence of frags having at most one alignment
+     or org frag, and that at the tail of the sequence.  */
+  unsigned int region:16;
+
   /* Flipped each relax pass so we can easily determine whether
      fr_address has been adjusted.  */
   unsigned int relax_marker:1;
@@ -114,8 +118,7 @@ extern addressT frag_now_fix_octets (void);
 
 /* For foreign-segment symbol fixups.  */
 COMMON fragS zero_address_frag;
-/* For local common (N_BSS segment) fixups.  */
-COMMON fragS bss_address_frag;
+COMMON fragS predefined_address_frag;
 
 extern void frag_append_1_char (int);
 #define FRAG_APPEND_1_CHAR(X) frag_append_1_char (X)

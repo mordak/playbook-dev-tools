@@ -146,7 +146,7 @@ public class Creator
       {
         if (filename.charAt(filename.length() - 1) != '/')
           filename += '/';
-	writeFile(isDirectory, null, filename, verbose);
+        writeFile(isDirectory, null, filename, verbose);
       }
     else
       {
@@ -216,11 +216,14 @@ public class Creator
     manifest = createManifest(parameters);
     /* If no version is specified, provide the same manifest version default
      * as Sun's jar tool */
-    Attributes attr = manifest.getMainAttributes();
-    if (attr.getValue(Attributes.Name.MANIFEST_VERSION) == null)
-      attr.putValue(Attributes.Name.MANIFEST_VERSION.toString(), "1.0");
-    attr.putValue("Created-By", System.getProperty("java.version") +
-		  " (" + System.getProperty("java.vendor") + ")");
+    if (parameters.wantManifest)
+      {
+          Attributes attr = manifest.getMainAttributes();
+          if (attr.getValue(Attributes.Name.MANIFEST_VERSION) == null)
+              attr.putValue(Attributes.Name.MANIFEST_VERSION.toString(), "1.0");
+          attr.putValue("Created-By", System.getProperty("java.version") +
+                  " (" + System.getProperty("java.vendor") + ")");
+      }
     outputStream = new JarOutputStream(os, manifest);
     // FIXME: this sets the method too late for the manifest file.
     outputStream.setMethod(parameters.storageMode);

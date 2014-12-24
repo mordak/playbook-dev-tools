@@ -1,6 +1,6 @@
 /* Part of CPP library.  File handling.
    Copyright (C) 1986, 1987, 1989, 1992, 1993, 1994, 1995, 1998,
-   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Written by Per Bothner, 1994.
    Based on CCCP program by Paul Rubin, June 1986
@@ -288,6 +288,12 @@ pch_open_file (cpp_reader *pfile, _cpp_file *file, bool *invalid_pch)
   if (file->name[0] == '\0' || !pfile->cb.valid_pch)
     return false;
 
+  /* If the file is not included as first include from either the toplevel
+     file or the command-line it is not a valid use of PCH.  */
+  if (pfile->all_files
+      && pfile->all_files->next_file)
+    return false;
+
   flen = strlen (path);
   len = flen + sizeof (extension);
   pchname = XNEWVEC (char, len);
@@ -381,8 +387,8 @@ find_file_in_dir (cpp_reader *pfile, _cpp_file *file, bool *invalid_pch)
       /* We copy the path name onto an obstack partly so that we don't
 	 leak the memory, but mostly so that we don't fragment the
 	 heap.  */
-      copy = obstack_copy0 (&pfile->nonexistent_file_ob, path,
-			    strlen (path));
+      copy = (char *) obstack_copy0 (&pfile->nonexistent_file_ob, path,
+				     strlen (path));
       free (path);
       pp = htab_find_slot_with_hash (pfile->nonexistent_file_hash,
 				     copy, hv, INSERT);
@@ -488,7 +494,6 @@ _cpp_find_file (cpp_reader *pfile, const char *fname, cpp_dir *start_dir, bool f
 	      return file;
 	    }
 
-	  open_file_failed (pfile, file, angle_brackets);
 	  if (invalid_pch)
 	    {
 	      cpp_error (pfile, CPP_DL_ERROR,
@@ -497,6 +502,7 @@ _cpp_find_file (cpp_reader *pfile, const char *fname, cpp_dir *start_dir, bool f
 		cpp_error (pfile, CPP_DL_ERROR,
 			   "use -Winvalid-pch for more information");
 	    }
+	  open_file_failed (pfile, file, angle_brackets);
 	  break;
 	}
 
@@ -912,13 +918,14 @@ _cpp_stack_include (cpp_reader *pfile, const char *fname, int angle_brackets,
 
   file = _cpp_find_file (pfile, fname, dir, false, angle_brackets);
 
-  /* Compensate for the increment in linemap_add.  In the case of a
-     normal #include, we're currently at the start of the line
-     *following* the #include.  A separate source_location for this
-     location makes no sense (until we do the LC_LEAVE), and
-     complicates LAST_SOURCE_LINE_LOCATION.  This does not apply if we
-     found a PCH file (in which case linemap_add is not called) or we
-     were included from the command-line.  */
+  /* Compensate for the increment in linemap_add that occurs in
+     _cpp_stack_file.  In the case of a normal #include, we're
+     currently at the start of the line *following* the #include.  A
+     separate source_location for this location makes no sense (until
+     we do the LC_LEAVE), and complicates LAST_SOURCE_LINE_LOCATION.
+     This does not apply if we found a PCH file (in which case
+     linemap_add is not called) or we were included from the
+     command-line.  */
   if (file->pchname == NULL && file->err_no == 0 && type != IT_CMDLINE)
     pfile->line_table->highest_location--;
 
@@ -934,15 +941,28 @@ open_file_failed (cpp_reader *pfile, _cpp_file *file, int angle_brackets)
 
   errno = file->err_no;
   if (print_dep && CPP_OPTION (pfile, deps.missing_files) && errno == ENOENT)
-    deps_add_dep (pfile->deps, file->name);
+    {
+      deps_add_dep (pfile->deps, file->name);
+      /* If the preprocessor output (other than dependency information) is
+         being used, we must also flag an error.  */
+      if (CPP_OPTION (pfile, deps.need_preprocessor_output))
+	cpp_errno (pfile, CPP_DL_FATAL, file->path);
+    }
   else
     {
-      /* If we are outputting dependencies but not for this file then
-	 don't error because we can still produce correct output.  */
-      if (CPP_OPTION (pfile, deps.style) && ! print_dep)
-	cpp_errno (pfile, CPP_DL_WARNING, file->path);
+      /* If we are not outputting dependencies, or if we are and dependencies
+         were requested for this file, or if preprocessor output is needed
+         in addition to dependency information, this is an error.
+
+         Otherwise (outputting dependencies but not for this file, and not
+         using the preprocessor output), we can still produce correct output
+         so it's only a warning.  */
+      if (CPP_OPTION (pfile, deps.style) == DEPS_NONE
+          || print_dep
+          || CPP_OPTION (pfile, deps.need_preprocessor_output))
+	cpp_errno (pfile, CPP_DL_FATAL, file->path);
       else
-	cpp_errno (pfile, CPP_DL_ERROR, file->path);
+	cpp_errno (pfile, CPP_DL_WARNING, file->path);
     }
 }
 
@@ -1143,7 +1163,7 @@ file_hash_eq (const void *p, const void *q)
 static int
 nonexistent_file_hash_eq (const void *p, const void *q)
 {
-  return strcmp (p, q) == 0;
+  return strcmp ((const char *) p, (const char *) q) == 0;
 }
 
 /* Initialize everything in this source file.  */
@@ -1241,7 +1261,8 @@ report_missing_guard (void **slot, void *d)
       _cpp_file *file = entry->u.file;
 
       /* We don't want MI guard advice for the main file.  */
-      if (file->cmacro == NULL && file->stack_count == 1 && !file->main_file)
+      if (!file->once_only && file->cmacro == NULL
+	  && file->stack_count == 1 && !file->main_file)
 	{
 	  if (data->paths == NULL)
 	    {

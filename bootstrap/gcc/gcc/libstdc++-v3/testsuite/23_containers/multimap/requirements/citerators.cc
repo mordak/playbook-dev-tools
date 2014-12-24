@@ -19,28 +19,12 @@
 // with this library; see the file COPYING3.  If not see
 // <http://www.gnu.org/licenses/>.
 
-
 #include <map>
-#include <testsuite_hooks.h>
-
-void
-test01()
-{
-  bool test __attribute__((unused)) = true;
-
-  typedef std::multimap<int, int> mm_type;
-  mm_type mm;
-  mm.insert(mm_type::value_type(1, 1));
-  VERIFY( mm.cbegin() == mm.begin() );
-  VERIFY( mm.cend() == mm.end() );
-  VERIFY( mm.crbegin() == mm.rbegin() );
-  VERIFY( mm.crend() == mm.rend() );
-  VERIFY( mm.cbegin() != mm.cend() );
-  VERIFY( mm.crbegin() != mm.crend() );  
-}
+#include <testsuite_containers.h>
 
 int main()
 {
-  test01();
+  typedef std::multimap<int, int> test_type;
+  __gnu_test::citerator<test_type> test;
   return 0;
 }

@@ -25,7 +25,9 @@
 #include <bits/c++config.h>
 #include <ext/atomicity.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   template<int _Inst>
     struct _Atomicity_lock
@@ -43,7 +45,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 
   int
   __attribute__ ((__unused__))
-  __exchange_and_add(volatile _Atomic_word* __mem, int __val)
+  __exchange_and_add(volatile _Atomic_word* __mem, int __val) throw ()
   {
     _Atomic_word result;
     int tmp;
@@ -68,7 +70,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
   
   void
   __attribute__ ((__unused__))
-  __atomic_add(volatile _Atomic_word* __mem, int __val)
+  __atomic_add(volatile _Atomic_word* __mem, int __val) throw ()
   {
     int tmp;
     volatile int& lock = _Atomicity_lock<0>::_S_atomicity_lock;
@@ -88,4 +90,5 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 			  : : "r" (&lock), "r" (tmp) : "memory");
   }
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace

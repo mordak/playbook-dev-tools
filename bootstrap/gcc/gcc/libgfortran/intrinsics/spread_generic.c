@@ -1,5 +1,5 @@
 /* Generic implementation of the SPREAD intrinsic
-   Copyright 2002, 2005, 2006, 2007, 2009 Free Software Foundation, Inc.
+   Copyright 2002, 2005, 2006, 2007, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -30,8 +30,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 static void
 spread_internal (gfc_array_char *ret, const gfc_array_char *source,
-		 const index_type *along, const index_type *pncopies,
-		 index_type size)
+		 const index_type *along, const index_type *pncopies)
 {
   /* r.* indicates the return array.  */
   index_type rstride[GFC_MAX_DIMENSIONS];
@@ -52,6 +51,9 @@ spread_internal (gfc_array_char *ret, const gfc_array_char *source,
   index_type n;
   index_type dim;
   index_type ncopies;
+  index_type size;
+
+  size = GFC_DESCRIPTOR_SIZE(source);
 
   srank = GFC_DESCRIPTOR_RANK(source);
 
@@ -68,31 +70,34 @@ spread_internal (gfc_array_char *ret, const gfc_array_char *source,
     {
       /* The front end has signalled that we need to populate the
 	 return array descriptor.  */
+
+      size_t ub, stride;
+
       ret->dtype = (source->dtype & ~GFC_DTYPE_RANK_MASK) | rrank;
       dim = 0;
       rs = 1;
       for (n = 0; n < rrank; n++)
 	{
-	  ret->dim[n].stride = rs;
-	  ret->dim[n].lbound = 0;
+	  stride = rs;
 	  if (n == *along - 1)
 	    {
-	      ret->dim[n].ubound = ncopies - 1;
+	      ub = ncopies - 1;
 	      rdelta = rs * size;
 	      rs *= ncopies;
 	    }
 	  else
 	    {
 	      count[dim] = 0;
-	      extent[dim] = source->dim[dim].ubound + 1
-		- source->dim[dim].lbound;
-	      sstride[dim] = source->dim[dim].stride * size;
+	      extent[dim] = GFC_DESCRIPTOR_EXTENT(source,dim);
+	      sstride[dim] = GFC_DESCRIPTOR_STRIDE_BYTES(source,dim);
 	      rstride[dim] = rs * size;
 
-	      ret->dim[n].ubound = extent[dim]-1;
+	      ub = extent[dim]-1;
 	      rs *= extent[dim];
 	      dim++;
 	    }
+
+	  GFC_DIMENSION_SET(ret->dim[n], 0, ub, stride);
 	}
       ret->offset = 0;
       if (rs > 0)
@@ -119,10 +124,10 @@ spread_internal (gfc_array_char *ret, const gfc_array_char *source,
 	    {
 	      index_type ret_extent;
 
-	      ret_extent = ret->dim[n].ubound + 1 - ret->dim[n].lbound;
+	      ret_extent = GFC_DESCRIPTOR_EXTENT(ret,n);
 	      if (n == *along - 1)
 		{
-		  rdelta = ret->dim[n].stride * size;
+		  rdelta = GFC_DESCRIPTOR_STRIDE_BYTES(ret,n);
 
 		  if (ret_extent != ncopies)
 		    runtime_error("Incorrect extent in return value of SPREAD"
@@ -133,8 +138,7 @@ spread_internal (gfc_array_char *ret, const gfc_array_char *source,
 	      else
 		{
 		  count[dim] = 0;
-		  extent[dim] = source->dim[dim].ubound + 1
-		    - source->dim[dim].lbound;
+		  extent[dim] = GFC_DESCRIPTOR_EXTENT(source,dim);
 		  if (ret_extent != extent[dim])
 		    runtime_error("Incorrect extent in return value of SPREAD"
 				  " intrinsic in dimension %ld: is %ld,"
@@ -144,8 +148,8 @@ spread_internal (gfc_array_char *ret, const gfc_array_char *source,
 		    
 		  if (extent[dim] <= 0)
 		    zero_sized = 1;
-		  sstride[dim] = source->dim[dim].stride * size;
-		  rstride[dim] = ret->dim[n].stride * size;
+		  sstride[dim] = GFC_DESCRIPTOR_STRIDE_BYTES(source,dim);
+		  rstride[dim] = GFC_DESCRIPTOR_STRIDE_BYTES(ret,n);
 		  dim++;
 		}
 	    }
@@ -156,17 +160,16 @@ spread_internal (gfc_array_char *ret, const gfc_array_char *source,
 	    {
 	      if (n == *along - 1)
 		{
-		  rdelta = ret->dim[n].stride * size;
+		  rdelta = GFC_DESCRIPTOR_STRIDE_BYTES(ret,n);
 		}
 	      else
 		{
 		  count[dim] = 0;
-		  extent[dim] = source->dim[dim].ubound + 1
-		    - source->dim[dim].lbound;
+		  extent[dim] = GFC_DESCRIPTOR_EXTENT(source,dim);
 		  if (extent[dim] <= 0)
 		    zero_sized = 1;
-		  sstride[dim] = source->dim[dim].stride * size;
-		  rstride[dim] = ret->dim[n].stride * size;
+		  sstride[dim] = GFC_DESCRIPTOR_STRIDE_BYTES(source,dim);
+		  rstride[dim] = GFC_DESCRIPTOR_STRIDE_BYTES(ret,n);
 		  dim++;
 		}
 	    }
@@ -228,12 +231,14 @@ spread_internal (gfc_array_char *ret, const gfc_array_char *source,
 
 static void
 spread_internal_scalar (gfc_array_char *ret, const char *source,
-			const index_type *along, const index_type *pncopies,
-			index_type size)
+			const index_type *along, const index_type *pncopies)
 {
   int n;
   int ncopies = *pncopies;
   char * dest;
+  size_t size;
+
+  size = GFC_DESCRIPTOR_SIZE(ret);
 
   if (GFC_DESCRIPTOR_RANK (ret) != 1)
     runtime_error ("incorrect destination rank in spread()");
@@ -245,20 +250,18 @@ spread_internal_scalar (gfc_array_char *ret, const char *source,
     {
       ret->data = internal_malloc_size (ncopies * size);
       ret->offset = 0;
-      ret->dim[0].stride = 1;
-      ret->dim[0].lbound = 0;
-      ret->dim[0].ubound = ncopies - 1;
+      GFC_DIMENSION_SET(ret->dim[0], 0, ncopies - 1, 1);
     }
   else
     {
-      if (ncopies - 1 > (ret->dim[0].ubound - ret->dim[0].lbound)
-			   / ret->dim[0].stride)
+      if (ncopies - 1 > (GFC_DESCRIPTOR_EXTENT(ret,0)  - 1)
+			   / GFC_DESCRIPTOR_STRIDE(ret,0))
 	runtime_error ("dim too large in spread()");
     }
 
   for (n = 0; n < ncopies; n++)
     {
-      dest = (char*)(ret->data + n*size*ret->dim[0].stride);
+      dest = (char*)(ret->data + n * GFC_DESCRIPTOR_STRIDE_BYTES(ret,0));
       memcpy (dest , source, size);
     }
 }
@@ -319,18 +322,26 @@ spread (gfc_array_char *ret, const gfc_array_char *source,
 		 *along, *pncopies);
       return;
 
-#ifdef GFC_HAVE_REAL_10
+/* FIXME: This here is a hack, which will have to be removed when
+   the array descriptor is reworked.  Currently, we don't store the
+   kind value for the type, but only the size.  Because on targets with
+   __float128, we have sizeof(logn double) == sizeof(__float128),
+   we cannot discriminate here and have to fall back to the generic
+   handling (which is suboptimal).  */
+#if !defined(GFC_REAL_16_IS_FLOAT128)
+# ifdef GFC_HAVE_REAL_10
     case GFC_DTYPE_REAL_10:
       spread_r10 ((gfc_array_r10 *) ret, (gfc_array_r10 *) source,
 		 *along, *pncopies);
       return;
-#endif
+# endif
 
-#ifdef GFC_HAVE_REAL_16
+# ifdef GFC_HAVE_REAL_16
     case GFC_DTYPE_REAL_16:
       spread_r16 ((gfc_array_r16 *) ret, (gfc_array_r16 *) source,
 		 *along, *pncopies);
       return;
+# endif
 #endif
 
     case GFC_DTYPE_COMPLEX_4:
@@ -343,18 +354,26 @@ spread (gfc_array_char *ret, const gfc_array_char *source,
 		 *along, *pncopies);
       return;
 
-#ifdef GFC_HAVE_COMPLEX_10
+/* FIXME: This here is a hack, which will have to be removed when
+   the array descriptor is reworked.  Currently, we don't store the
+   kind value for the type, but only the size.  Because on targets with
+   __float128, we have sizeof(logn double) == sizeof(__float128),
+   we cannot discriminate here and have to fall back to the generic
+   handling (which is suboptimal).  */
+#if !defined(GFC_REAL_16_IS_FLOAT128)
+# ifdef GFC_HAVE_COMPLEX_10
     case GFC_DTYPE_COMPLEX_10:
       spread_c10 ((gfc_array_c10 *) ret, (gfc_array_c10 *) source,
 		 *along, *pncopies);
       return;
-#endif
+# endif
 
-#ifdef GFC_HAVE_COMPLEX_16
+# ifdef GFC_HAVE_COMPLEX_16
     case GFC_DTYPE_COMPLEX_16:
       spread_c16 ((gfc_array_c16 *) ret, (gfc_array_c16 *) source,
 		 *along, *pncopies);
       return;
+# endif
 #endif
 
     case GFC_DTYPE_DERIVED_2:
@@ -400,7 +419,7 @@ spread (gfc_array_char *ret, const gfc_array_char *source,
 #endif
     }
 
-  spread_internal (ret, source, along, pncopies, GFC_DESCRIPTOR_SIZE (source));
+  spread_internal (ret, source, along, pncopies);
 }
 
 
@@ -413,9 +432,10 @@ void
 spread_char (gfc_array_char *ret,
 	     GFC_INTEGER_4 ret_length __attribute__((unused)),
 	     const gfc_array_char *source, const index_type *along,
-	     const index_type *pncopies, GFC_INTEGER_4 source_length)
+	     const index_type *pncopies,
+	     GFC_INTEGER_4 source_length __attribute__((unused)))
 {
-  spread_internal (ret, source, along, pncopies, source_length);
+  spread_internal (ret, source, along, pncopies);
 }
 
 
@@ -428,10 +448,10 @@ void
 spread_char4 (gfc_array_char *ret,
 	      GFC_INTEGER_4 ret_length __attribute__((unused)),
 	      const gfc_array_char *source, const index_type *along,
-	      const index_type *pncopies, GFC_INTEGER_4 source_length)
+	      const index_type *pncopies,
+	      GFC_INTEGER_4 source_length __attribute__((unused)))
 {
-  spread_internal (ret, source, along, pncopies,
-		   source_length * sizeof (gfc_char4_t));
+  spread_internal (ret, source, along, pncopies);
 }
 
 
@@ -497,18 +517,26 @@ spread_scalar (gfc_array_char *ret, const char *source,
 			*along, *pncopies);
       return;
 
-#ifdef HAVE_GFC_REAL_10
+/* FIXME: This here is a hack, which will have to be removed when
+   the array descriptor is reworked.  Currently, we don't store the
+   kind value for the type, but only the size.  Because on targets with
+   __float128, we have sizeof(logn double) == sizeof(__float128),
+   we cannot discriminate here and have to fall back to the generic
+   handling (which is suboptimal).  */
+#if !defined(GFC_REAL_16_IS_FLOAT128)
+# ifdef HAVE_GFC_REAL_10
     case GFC_DTYPE_REAL_10:
       spread_scalar_r10 ((gfc_array_r10 *) ret, (GFC_REAL_10 *) source,
 			*along, *pncopies);
       return;
-#endif
+# endif
 
-#ifdef HAVE_GFC_REAL_16
+# ifdef HAVE_GFC_REAL_16
     case GFC_DTYPE_REAL_16:
       spread_scalar_r16 ((gfc_array_r16 *) ret, (GFC_REAL_16 *) source,
 			*along, *pncopies);
       return;
+# endif
 #endif
 
     case GFC_DTYPE_COMPLEX_4:
@@ -521,18 +549,26 @@ spread_scalar (gfc_array_char *ret, const char *source,
 			*along, *pncopies);
       return;
 
-#ifdef HAVE_GFC_COMPLEX_10
+/* FIXME: This here is a hack, which will have to be removed when
+   the array descriptor is reworked.  Currently, we don't store the
+   kind value for the type, but only the size.  Because on targets with
+   __float128, we have sizeof(logn double) == sizeof(__float128),
+   we cannot discriminate here and have to fall back to the generic
+   handling (which is suboptimal).  */
+#if !defined(GFC_REAL_16_IS_FLOAT128)
+# ifdef HAVE_GFC_COMPLEX_10
     case GFC_DTYPE_COMPLEX_10:
       spread_scalar_c10 ((gfc_array_c10 *) ret, (GFC_COMPLEX_10 *) source,
 			*along, *pncopies);
       return;
-#endif
+# endif
 
-#ifdef HAVE_GFC_COMPLEX_16
+# ifdef HAVE_GFC_COMPLEX_16
     case GFC_DTYPE_COMPLEX_16:
       spread_scalar_c16 ((gfc_array_c16 *) ret, (GFC_COMPLEX_16 *) source,
 			*along, *pncopies);
       return;
+# endif
 #endif
 
     case GFC_DTYPE_DERIVED_2:
@@ -577,7 +613,7 @@ spread_scalar (gfc_array_char *ret, const char *source,
 #endif
     }
 
-  spread_internal_scalar (ret, source, along, pncopies, GFC_DESCRIPTOR_SIZE (ret));
+  spread_internal_scalar (ret, source, along, pncopies);
 }
 
 
@@ -590,11 +626,12 @@ void
 spread_char_scalar (gfc_array_char *ret,
 		    GFC_INTEGER_4 ret_length __attribute__((unused)),
 		    const char *source, const index_type *along,
-		    const index_type *pncopies, GFC_INTEGER_4 source_length)
+		    const index_type *pncopies,
+		    GFC_INTEGER_4 source_length __attribute__((unused)))
 {
   if (!ret->dtype)
     runtime_error ("return array missing descriptor in spread()");
-  spread_internal_scalar (ret, source, along, pncopies, source_length);
+  spread_internal_scalar (ret, source, along, pncopies);
 }
 
 
@@ -607,11 +644,12 @@ void
 spread_char4_scalar (gfc_array_char *ret,
 		     GFC_INTEGER_4 ret_length __attribute__((unused)),
 		     const char *source, const index_type *along,
-		     const index_type *pncopies, GFC_INTEGER_4 source_length)
+		     const index_type *pncopies,
+		     GFC_INTEGER_4 source_length __attribute__((unused)))
 {
   if (!ret->dtype)
     runtime_error ("return array missing descriptor in spread()");
-  spread_internal_scalar (ret, source, along, pncopies,
-			  source_length * sizeof (gfc_char4_t));
+  spread_internal_scalar (ret, source, along, pncopies);
+
 }
 

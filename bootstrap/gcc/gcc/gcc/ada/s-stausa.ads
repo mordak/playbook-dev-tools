@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---         Copyright (C) 2004-2009, Free Software Foundation, Inc.          --
+--         Copyright (C) 2004-2010, Free Software Foundation, Inc.          --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -45,6 +45,26 @@ package System.Stack_Usage is
    function To_Stack_Address
      (Value : System.Address) return Stack_Address
       renames System.Storage_Elements.To_Integer;
+
+   Task_Name_Length : constant := 32;
+   --  The maximum length of task name displayed.
+   --  ??? Consider merging this variable with Max_Task_Image_Length.
+
+   type Task_Result is record
+      Task_Name : String (1 .. Task_Name_Length);
+
+      Value : Natural;
+      --  Amount of stack used. The value is calculated on the basis of the
+      --  mechanism used by GNAT to allocate it, and it is NOT a precise value.
+
+      Variation : Natural;
+      --  Possible variation in the amount of used stack. The real stack usage
+      --  may vary in the range Value +/- Variation
+
+      Max_Size : Natural;
+   end record;
+
+   type Result_Array_Type is array (Positive range <>) of Task_Result;
 
    type Stack_Analyzer is private;
    --  Type of the stack analyzer tool. It is used to fill a portion of the
@@ -198,17 +218,19 @@ package System.Stack_Usage is
    --  |  of Fill_Stack         |                                     |
    --  |  (deallocated at       |                                     |
    --  |  the end of the call)  |                                     |
-   --  ^                        |                                     |
-   --  Analyzer.Bottom_Of_Stack ^                                     |
-   --                    Analyzer.Bottom_Pattern_Mark                 ^
-   --                                            Analyzer.Top_Pattern_Mark
+   --  ^                        |                                     ^
+   --  Analyzer.Bottom_Of_Stack |                  Analyzer.Top_Pattern_Mark
+   --                           ^
+   --                    Analyzer.Bottom_Pattern_Mark
+   --
 
    procedure Initialize_Analyzer
      (Analyzer         : in out Stack_Analyzer;
       Task_Name        : String;
-      Stack_Size       : Natural;
+      My_Stack_Size    : Natural;
       Max_Pattern_Size : Natural;
       Bottom           : Stack_Address;
+      Top              : Stack_Address;
       Pattern          : Interfaces.Unsigned_32 := 16#DEAD_BEEF#);
    --  Should be called before any use of a Stack_Analyzer, to initialize it.
    --  Max_Pattern_Size is the size of the pattern zone, might be smaller than
@@ -255,10 +277,6 @@ package System.Stack_Usage is
    pragma Export (C, Output_Results, "__gnat_stack_usage_output_results");
 
 private
-
-   Task_Name_Length : constant := 32;
-   --  The maximum length of task name displayed.
-   --  ??? Consider merging this variable with Max_Task_Image_Length.
 
    package Unsigned_32_Addr is
      new System.Address_To_Access_Conversions (Interfaces.Unsigned_32);
@@ -308,20 +326,6 @@ private
 
    Compute_Environment_Task  : Boolean;
 
-   type Task_Result is record
-      Task_Name : String (1 .. Task_Name_Length);
-
-      Min_Measure : Natural;
-      --  Minimum value for the measure
-
-      Max_Measure : Natural;
-      --  Maximum value for the measure, taking into account the actual size
-      --  of the pattern filled.
-
-      Max_Size : Natural;
-   end record;
-
-   type Result_Array_Type is array (Positive range <>) of Task_Result;
    type Result_Array_Ptr is access all Result_Array_Type;
 
    Result_Array : Result_Array_Ptr;

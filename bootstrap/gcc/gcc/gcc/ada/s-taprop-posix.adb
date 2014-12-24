@@ -71,9 +71,6 @@ package body System.Task_Primitives.Operations is
    use System.Parameters;
    use System.OS_Primitives;
 
-   Use_Alternate_Stack : constant Boolean := Alternate_Stack_Size /= 0;
-   --  Whether to use an alternate signal stack for stack overflows
-
    ----------------
    -- Local Data --
    ----------------
@@ -116,6 +113,12 @@ package body System.Task_Primitives.Operations is
 
    Foreign_Task_Elaborated : aliased Boolean := True;
    --  Used to identified fake tasks (i.e., non-Ada Threads)
+
+   Use_Alternate_Stack : constant Boolean := Alternate_Stack_Size /= 0;
+   --  Whether to use an alternate signal stack for stack overflows
+
+   Abort_Handler_Installed : Boolean := False;
+   --  True if a handler for the abort signal is installed
 
    --------------------
    -- Local Packages --
@@ -198,8 +201,10 @@ package body System.Task_Primitives.Operations is
       pragma Warnings (Off, Result);
 
    begin
-      --  It is not safe to raise an exception when using ZCX and the GCC
-      --  exception handling mechanism.
+      --  It's not safe to raise an exception when using GCC ZCX mechanism.
+      --  Note that we still need to install a signal handler, since in some
+      --  cases (e.g. shutdown of the Server_Task in System.Interrupts) we
+      --  need to send the Abort signal to a task.
 
       if ZCX_By_Default and then GCC_ZCX_Support then
          return;
@@ -239,12 +244,9 @@ package body System.Task_Primitives.Operations is
          Guard_Page_Address :=
            Stack_Base - (Stack_Base mod Get_Page_Size) + Get_Page_Size;
 
-         if On then
-            Res := mprotect (Guard_Page_Address, Get_Page_Size, PROT_ON);
-         else
-            Res := mprotect (Guard_Page_Address, Get_Page_Size, PROT_OFF);
-         end if;
-
+         Res :=
+           mprotect (Guard_Page_Address, Get_Page_Size,
+                     prot => (if On then PROT_ON else PROT_OFF));
          pragma Assert (Res = 0);
       end if;
    end Stack_Guard;
@@ -486,15 +488,12 @@ package body System.Task_Primitives.Operations is
       Result : Interfaces.C.int;
 
    begin
-      if Single_Lock then
-         Result :=
-           pthread_cond_wait
-             (Self_ID.Common.LL.CV'Access, Single_RTS_Lock'Access);
-      else
-         Result :=
-           pthread_cond_wait
-             (Self_ID.Common.LL.CV'Access, Self_ID.Common.LL.L'Access);
-      end if;
+      Result :=
+        pthread_cond_wait
+          (cond  => Self_ID.Common.LL.CV'Access,
+           mutex => (if Single_Lock
+                     then Single_RTS_Lock'Access
+                     else Self_ID.Common.LL.L'Access));
 
       --  EINTR is not considered a failure
 
@@ -546,27 +545,19 @@ package body System.Task_Primitives.Operations is
       end if;
 
       if Abs_Time > Check_Time then
-         if Relative_Timed_Wait then
-            Request := To_Timespec (Rel_Time);
-         else
-            Request := To_Timespec (Abs_Time);
-         end if;
+         Request :=
+           To_Timespec (if Relative_Timed_Wait then Rel_Time else Abs_Time);
 
          loop
             exit when Self_ID.Pending_ATC_Level < Self_ID.ATC_Nesting_Level;
 
-            if Single_Lock then
-               Result :=
-                 pthread_cond_timedwait
-                   (Self_ID.Common.LL.CV'Access, Single_RTS_Lock'Access,
-                    Request'Access);
-
-            else
-               Result :=
-                 pthread_cond_timedwait
-                   (Self_ID.Common.LL.CV'Access, Self_ID.Common.LL.L'Access,
-                    Request'Access);
-            end if;
+            Result :=
+              pthread_cond_timedwait
+                (cond    => Self_ID.Common.LL.CV'Access,
+                 mutex   => (if Single_Lock
+                             then Single_RTS_Lock'Access
+                             else Self_ID.Common.LL.L'Access),
+                 abstime => Request'Access);
 
             Check_Time := Monotonic_Clock;
             exit when Abs_Time <= Check_Time or else Check_Time < Base_Time;
@@ -628,28 +619,20 @@ package body System.Task_Primitives.Operations is
       end if;
 
       if Abs_Time > Check_Time then
-         if Relative_Timed_Wait then
-            Request := To_Timespec (Rel_Time);
-         else
-            Request := To_Timespec (Abs_Time);
-         end if;
-
+         Request :=
+           To_Timespec (if Relative_Timed_Wait then Rel_Time else Abs_Time);
          Self_ID.Common.State := Delay_Sleep;
 
          loop
             exit when Self_ID.Pending_ATC_Level < Self_ID.ATC_Nesting_Level;
 
-            if Single_Lock then
-               Result := pthread_cond_timedwait
-                           (Self_ID.Common.LL.CV'Access,
-                            Single_RTS_Lock'Access,
-                            Request'Access);
-            else
-               Result := pthread_cond_timedwait
-                           (Self_ID.Common.LL.CV'Access,
-                            Self_ID.Common.LL.L'Access,
-                            Request'Access);
-            end if;
+            Result :=
+              pthread_cond_timedwait
+                (cond    => Self_ID.Common.LL.CV'Access,
+                 mutex   => (if Single_Lock
+                             then Single_RTS_Lock'Access
+                             else Self_ID.Common.LL.L'Access),
+                 abstime => Request'Access);
 
             Check_Time := Monotonic_Clock;
             exit when Abs_Time <= Check_Time or else Check_Time < Base_Time;
@@ -787,18 +770,6 @@ package body System.Task_Primitives.Operations is
       Self_ID.Common.LL.LWP := lwp_self;
 
       Specific.Set (Self_ID);
-
-      Lock_RTS;
-
-      for J in Known_Tasks'Range loop
-         if Known_Tasks (J) = null then
-            Known_Tasks (J) := Self_ID;
-            Self_ID.Known_Tasks_Index := J;
-            exit;
-         end if;
-      end loop;
-
-      Unlock_RTS;
 
       if Use_Alternate_Stack then
          declare
@@ -938,6 +909,7 @@ package body System.Task_Primitives.Operations is
    is
       Attributes          : aliased pthread_attr_t;
       Adjusted_Stack_Size : Interfaces.C.size_t;
+      Page_Size           : constant Interfaces.C.size_t := Get_Page_Size;
       Result              : Interfaces.C.int;
 
       function Thread_Body_Access is new
@@ -958,8 +930,14 @@ package body System.Task_Primitives.Operations is
          --  to be sure the effective stack size is greater than what
          --  has been asked.
 
-         Adjusted_Stack_Size := Adjusted_Stack_Size + 2 * Get_Page_Size;
+         Adjusted_Stack_Size := Adjusted_Stack_Size + 2 * Page_Size;
       end if;
+
+      --  Round stack size as this is required by some OSes (Darwin)
+
+      Adjusted_Stack_Size := Adjusted_Stack_Size + Page_Size - 1;
+      Adjusted_Stack_Size :=
+        Adjusted_Stack_Size - Adjusted_Stack_Size mod Page_Size;
 
       Result := pthread_attr_init (Attributes'Access);
       pragma Assert (Result = 0 or else Result = ENOMEM);
@@ -1071,11 +1049,13 @@ package body System.Task_Primitives.Operations is
    procedure Abort_Task (T : Task_Id) is
       Result : Interfaces.C.int;
    begin
-      Result :=
-        pthread_kill
-          (T.Common.LL.Thread,
-           Signal (System.Interrupt_Management.Abort_Task_Interrupt));
-      pragma Assert (Result = 0);
+      if Abort_Handler_Installed then
+         Result :=
+           pthread_kill
+             (T.Common.LL.Thread,
+              Signal (System.Interrupt_Management.Abort_Task_Interrupt));
+         pragma Assert (Result = 0);
+      end if;
    end Abort_Task;
 
    ----------------
@@ -1269,7 +1249,16 @@ package body System.Task_Primitives.Operations is
             S.State := False;
          else
             S.Waiting := True;
-            Result := pthread_cond_wait (S.CV'Access, S.L'Access);
+
+            loop
+               --  Loop in case pthread_cond_wait returns earlier than expected
+               --  (e.g. in case of EINTR caused by a signal).
+
+               Result := pthread_cond_wait (S.CV'Access, S.L'Access);
+               pragma Assert (Result = 0 or else Result = EINTR);
+
+               exit when not S.Waiting;
+            end loop;
          end if;
 
          Result := pthread_mutex_unlock (S.L'Access);
@@ -1435,9 +1424,13 @@ package body System.Task_Primitives.Operations is
            Alternate_Stack'Address;
       end if;
 
-      Enter_Task (Environment_Task);
+      --  Make environment task known here because it doesn't go through
+      --  Activate_Tasks, which does it for all other tasks.
 
-      --  Install the abort-signal handler
+      Known_Tasks (Known_Tasks'First) := Environment_Task;
+      Environment_Task.Known_Tasks_Index := Known_Tasks'First;
+
+      Enter_Task (Environment_Task);
 
       if State
           (System.Interrupt_Management.Abort_Task_Interrupt) /= Default
@@ -1455,6 +1448,7 @@ package body System.Task_Primitives.Operations is
               act'Unchecked_Access,
               old_act'Unchecked_Access);
          pragma Assert (Result = 0);
+         Abort_Handler_Installed := True;
       end if;
    end Initialize;
 

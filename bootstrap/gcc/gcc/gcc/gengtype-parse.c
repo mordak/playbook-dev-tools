@@ -1,21 +1,21 @@
 /* Process source files and output type information.
-   Copyright (C) 2006, 2007 Free Software Foundation, Inc.
+   Copyright (C) 2006, 2007, 2010 Free Software Foundation, Inc.
 
-This file is part of GCC.
+   This file is part of GCC.
 
-GCC is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free
-Software Foundation; either version 3, or (at your option) any later
-version.
+   GCC is free software; you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free
+   Software Foundation; either version 3, or (at your option) any later
+   version.
 
-GCC is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or
-FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
-for more details.
+   GCC is distributed in the hope that it will be useful, but WITHOUT ANY
+   WARRANTY; without even the implied warranty of MERCHANTABILITY or
+   FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+   for more details.
 
-You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING3.  If not see
-<http://www.gnu.org/licenses/>.  */
+   You should have received a copy of the GNU General Public License
+   along with GCC; see the file COPYING3.  If not see
+   <http://www.gnu.org/licenses/>.  */
 
 #include "bconfig.h"
 #include "system.h"
@@ -113,7 +113,7 @@ print_token (int code, const char *value)
   else if (code < FIRST_TOKEN_WITH_VALUE)
     return xasprintf ("'%s'", token_names[code - CHAR_TOKEN_OFFSET]);
   else if (!value)
-    return token_names[code - CHAR_TOKEN_OFFSET]; /* don't quote these */
+    return token_names[code - CHAR_TOKEN_OFFSET];	/* don't quote these */
   else
     return xasprintf (token_value_format[code - FIRST_TOKEN_WITH_VALUE],
 		      value);
@@ -135,11 +135,14 @@ parse_error (const char *msg, ...)
 {
   va_list ap;
 
-  fprintf (stderr, "%s:%d: parse error: ", lexer_line.file, lexer_line.line);
+  fprintf (stderr, "%s:%d: parse error: ", 
+	   get_input_file_name (lexer_line.file), lexer_line.line);
 
   va_start (ap, msg);
   vfprintf (stderr, msg, ap);
   va_end (ap);
+
+  fputc ('\n', stderr);
 
   hit_error = true;
 }
@@ -197,7 +200,7 @@ string_seq (void)
 
       l1 = strlen (s1);
       l2 = strlen (s2);
-      buf = XRESIZEVEC (char, CONST_CAST(char *, s1), l1 + l2 + 1);
+      buf = XRESIZEVEC (char, CONST_CAST (char *, s1), l1 + l2 + 1);
       memcpy (buf + l1, s2, l2 + 1);
       XDELETE (CONST_CAST (char *, s2));
       s1 = buf;
@@ -220,7 +223,7 @@ typedef_name (void)
       require (',');
       c2 = require (ID);
       require (')');
-      r = concat ("VEC_", c1, "_", c2, (char *)0);
+      r = concat ("VEC_", c1, "_", c2, (char *) 0);
       free (CONST_CAST (char *, c1));
       free (CONST_CAST (char *, c2));
       return r;
@@ -237,10 +240,18 @@ consume_balanced (int opener, int closer)
   for (;;)
     switch (token ())
       {
-      default: advance (); break;
-      case '(': consume_balanced ('(',')'); break;
-      case '[': consume_balanced ('[',']'); break;
-      case '{': consume_balanced ('{','}'); break;
+      default:
+	advance ();
+	break;
+      case '(':
+	consume_balanced ('(', ')');
+	break;
+      case '[':
+	consume_balanced ('[', ']');
+	break;
+      case '{':
+	consume_balanced ('{', '}');
+	break;
 
       case '}':
       case ']':
@@ -248,8 +259,8 @@ consume_balanced (int opener, int closer)
 	if (token () != closer)
 	  parse_error ("unbalanced delimiters - expected '%c', have '%c'",
 		       closer, token ());
-	advance ();
-	return;
+      advance ();
+      return;
 
       case EOF_TOKEN:
 	parse_error ("unexpected end of file within %c%c-delimited construct",
@@ -270,18 +281,28 @@ consume_until_semi (bool immediate)
   for (;;)
     switch (token ())
       {
-      case ';':	advance (); return;
-      default:	advance (); break;
+      case ';':
+	advance ();
+	return;
+      default:
+	advance ();
+	break;
 
-      case '(':	consume_balanced ('(',')'); break;
-      case '[': consume_balanced ('[',']'); break;
-      case '{':	consume_balanced ('{','}'); break;
+      case '(':
+	consume_balanced ('(', ')');
+	break;
+      case '[':
+	consume_balanced ('[', ']');
+	break;
+      case '{':
+	consume_balanced ('{', '}');
+	break;
 
       case '}':
       case ']':
       case ')':
 	parse_error ("unmatched '%c' while scanning for ';'", token ());
-	return;
+      return;
 
       case EOF_TOKEN:
 	parse_error ("unexpected end of file while scanning for ';'");
@@ -302,28 +323,40 @@ consume_until_comma_or_semi (bool immediate)
   for (;;)
     switch (token ())
       {
-      case ',':	advance (); return true;
-      case ';':	advance (); return false;
-      default:	advance (); break;
+      case ',':
+	advance ();
+	return true;
+      case ';':
+	advance ();
+	return false;
+      default:
+	advance ();
+	break;
 
-      case '(':	consume_balanced ('(',')'); break;
-      case '[': consume_balanced ('[',']'); break;
-      case '{':	consume_balanced ('{','}'); break;
+      case '(':
+	consume_balanced ('(', ')');
+	break;
+      case '[':
+	consume_balanced ('[', ']');
+	break;
+      case '{':
+	consume_balanced ('{', '}');
+	break;
 
       case '}':
       case ']':
       case ')':
 	parse_error ("unmatched '%s' while scanning for ',' or ';'",
 		     print_cur_token ());
-	return false;
+      return false;
 
       case EOF_TOKEN:
 	parse_error ("unexpected end of file while scanning for ',' or ';'");
 	return false;
       }
 }
-
 
+
 /* GTY(()) option handling.  */
 static type_p type (options_p *optsp, bool nested);
 
@@ -339,7 +372,7 @@ str_optvalue_opt (options_p prev)
       value = string_seq ();
       require (')');
     }
-  return create_option (prev, name, value);
+  return create_string_option (prev, name, value);
 }
 
 /* absdecl: type '*'*
@@ -377,7 +410,7 @@ type_optvalue (options_p prev, const char *name)
   require ('(');
   ty = absdecl ();
   require (')');
-  return create_option (prev, name, ty);
+  return create_type_option (prev, name, ty);
 }
 
 /* Nested pointer data: '(' type '*'* ',' string_seq ',' string_seq ')' */
@@ -399,11 +432,11 @@ nestedptr_optvalue (options_p prev)
 }
 
 /* One GTY(()) option:
-         ID str_optvalue_opt
-       | PTR_ALIAS type_optvalue
-       | PARAM_IS type_optvalue
-       | NESTED_PTR nestedptr_optvalue
- */
+   ID str_optvalue_opt
+   | PTR_ALIAS type_optvalue
+   | PARAM_IS type_optvalue
+   | NESTED_PTR nestedptr_optvalue
+*/
 static options_p
 option (options_p prev)
 {
@@ -424,10 +457,9 @@ option (options_p prev)
       return nestedptr_optvalue (prev);
 
     default:
-      parse_error ("expected an option keyword, have %s",
-		   print_cur_token ());
+      parse_error ("expected an option keyword, have %s", print_cur_token ());
       advance ();
-      return create_option (prev, "", "");
+      return create_string_option (prev, "", "");
     }
 }
 
@@ -477,9 +509,9 @@ gtymarker_opt (void)
    we don't have to do it.  */
 
 /* array_and_function_declarators_opt:
-      \epsilon
-      array_and_function_declarators_opt ARRAY
-      array_and_function_declarators_opt '(' ... ')'
+   \epsilon
+   array_and_function_declarators_opt ARRAY
+   array_and_function_declarators_opt '(' ... ')'
 
    where '...' indicates stuff we ignore except insofar as grouping
    symbols ()[]{} must balance.
@@ -508,8 +540,8 @@ array_and_function_declarators_opt (type_p ty)
 static type_p inner_declarator (type_p, const char **, options_p *);
 
 /* direct_declarator:
-      '(' inner_declarator ')'
-      gtymarker_opt ID array_and_function_declarators_opt
+   '(' inner_declarator ')'
+   gtymarker_opt ID array_and_function_declarators_opt
 
    Subroutine of declarator, mutually recursive with inner_declarator;
    do not use elsewhere.  */
@@ -548,7 +580,7 @@ direct_declarator (type_p ty, const char **namep, options_p *optsp)
 /* The difference between inner_declarator and declarator is in the
    handling of stars.  Consider this declaration:
 
-      char * (*pfc) (void)
+   char * (*pfc) (void)
 
    It declares a pointer to a function that takes no arguments and
    returns a char*.  To construct the correct type for this
@@ -560,8 +592,8 @@ direct_declarator (type_p ty, const char **namep, options_p *optsp)
    creating pointers.  */
 
 /* inner_declarator:
-     '*' inner_declarator
-     direct_declarator
+   '*' inner_declarator
+   direct_declarator
 
    Mutually recursive subroutine of direct_declarator; do not use
    elsewhere.  */
@@ -607,13 +639,13 @@ declarator (type_p ty, const char **namep, options_p *optsp)
 
 /* Structure field(s) declaration:
    (
-       type bitfield ';'
-     | type declarator bitfield? ( ',' declarator bitfield? )+ ';'
+   type bitfield ';'
+   | type declarator bitfield? ( ',' declarator bitfield? )+ ';'
    )+
 
    Knows that such declarations must end with a close brace (or,
    erroneously, at EOF).
- */
+*/
 static pair_p
 struct_field_seq (void)
 {
@@ -664,7 +696,7 @@ struct_field_seq (void)
 /* This is called type(), but what it parses (sort of) is what C calls
    declaration-specifiers and specifier-qualifier-list:
 
-     SCALAR
+   SCALAR
    | ID     // typedef
    | (STRUCT|UNION) ID? gtymarker? ( '{' gtymarker? struct_field_seq '}' )?
    | ENUM ID ( '{' ... '}' )?
@@ -672,12 +704,11 @@ struct_field_seq (void)
    Returns a partial type; under some conditions (notably
    "struct foo GTY((...)) thing;") it may write an options
    structure to *OPTSP.
- */
+*/
 static type_p
 type (options_p *optsp, bool nested)
 {
   const char *s;
-  bool is_union;
   *optsp = 0;
   switch (token ())
     {
@@ -694,14 +725,17 @@ type (options_p *optsp, bool nested)
     case UNION:
       {
 	options_p opts = 0;
-
-	is_union = (token() == UNION);
+	/* GTY annotations follow attribute syntax
+	   GTY_BEFORE_ID is for union/struct declarations
+	   GTY_AFTER_ID is for variable declarations.  */
+	enum
+	{
+	  NO_GTY,
+	  GTY_BEFORE_ID,
+	  GTY_AFTER_ID
+	} is_gty = NO_GTY;
+	bool is_union = (token () == UNION);
 	advance ();
-
-	if (token () == ID)
-	  s = advance ();
-	else
-	  s = xasprintf ("anonymous:%s:%d", lexer_line.file, lexer_line.line);
 
 	/* Top-level structures that are not explicitly tagged GTY(())
 	   are treated as mere forward declarations.  This is because
@@ -710,10 +744,34 @@ type (options_p *optsp, bool nested)
 	   that we can't handle.  */
 	if (nested || token () == GTY_TOKEN)
 	  {
+	    is_gty = GTY_BEFORE_ID;
 	    opts = gtymarker_opt ();
+	  }
+
+	if (token () == ID)
+	  s = advance ();
+	else
+	  s = xasprintf ("anonymous:%s:%d",
+			 get_input_file_name (lexer_line.file),
+			 lexer_line.line);
+
+	/* Unfortunately above GTY_TOKEN check does not capture the
+	   typedef struct_type GTY case.  */
+	if (token () == GTY_TOKEN)
+	  {
+	    is_gty = GTY_AFTER_ID;
+	    opts = gtymarker_opt ();
+	  }
+
+	if (is_gty)
+	  {
 	    if (token () == '{')
 	      {
 		pair_p fields;
+
+		if (is_gty == GTY_AFTER_ID)
+		  parse_error ("GTY must be specified before identifier");
+
 		advance ();
 		fields = struct_field_seq ();
 		require ('}');
@@ -729,13 +787,15 @@ type (options_p *optsp, bool nested)
 
     case ENUM:
       advance ();
-	if (token () == ID)
-	  s = advance ();
-	else
-	  s = xasprintf ("anonymous:%s:%d", lexer_line.file, lexer_line.line);
+      if (token () == ID)
+	s = advance ();
+      else
+	s = xasprintf ("anonymous:%s:%d",
+		       get_input_file_name (lexer_line.file),
+		       lexer_line.line);
 
       if (token () == '{')
-	consume_balanced ('{','}');
+	consume_balanced ('{', '}');
       return create_scalar_type (s);
 
     default:
@@ -796,7 +856,7 @@ struct_or_union (void)
 }
 
 /* GC root declaration:
-     (extern|static) gtymarker? type ID array_declarators_opt (';'|'=')
+   (extern|static) gtymarker? type ID array_declarators_opt (';'|'=')
    If the gtymarker is not present, we ignore the rest of the declaration.  */
 static void
 extern_or_static (void)
@@ -813,8 +873,8 @@ extern_or_static (void)
     }
 
   opts = gtymarker ();
-  ty   = type (&opts2, true);  /* if we get here, it's got a GTY(()) */
-  dty  = declarator (ty, &name, &dopts);
+  ty = type (&opts2, true);	/* if we get here, it's got a GTY(()) */
+  dty = declarator (ty, &name, &dopts);
 
   if ((opts && dopts) || (opts && opts2) || (opts2 && dopts))
     parse_error ("GTY((...)) specified more than once for %s", name);
@@ -839,7 +899,7 @@ extern_or_static (void)
 static void
 def_vec (void)
 {
-  bool is_scalar = (token() == DEFVEC_I);
+  bool is_scalar = (token () == DEFVEC_I);
   const char *type;
 
   require2 (DEFVEC_OP, DEFVEC_I);

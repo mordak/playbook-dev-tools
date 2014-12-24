@@ -1,6 +1,7 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2007, 2008, 2009, 2010
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -79,7 +80,7 @@ PB_DS_CLASS_C_DEC::
 resize_imp(size_type new_size)
 {
 #ifdef PB_DS_REGRESSION
-  typename Allocator::group_throw_prob_adjustor adjust(m_num_e);
+  typename Allocator::group_adjustor adjust(m_num_e);
 #endif 
 
   if (new_size == m_num_e)
@@ -87,7 +88,7 @@ resize_imp(size_type new_size)
 
   _GLIBCXX_DEBUG_ONLY(assert_valid();)
   const size_type old_size = m_num_e;
-  entry_array a_entries_resized = NULL;
+  entry_array a_entries_resized = 0;
 
   // Following line might throw an exception.
   a_entries_resized = s_entry_allocator.allocate(new_size);

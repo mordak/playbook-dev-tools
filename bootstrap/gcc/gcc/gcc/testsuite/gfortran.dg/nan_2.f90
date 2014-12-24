@@ -1,6 +1,6 @@
 ! { dg-do run }
 ! { dg-options "-fno-range-check -pedantic" }
-! { dg-options "-fno-range-check -pedantic -mieee" { target alpha*-*-* sh*-*-* } }
+! { dg-add-options ieee }
 ! { dg-skip-if "NaN not supported" { spu-*-* } { "*" } { "" } }
 !
 ! PR fortran/34333
@@ -105,3 +105,4 @@ program test
   if (isinf(max(-large, -inf, nan))) call abort
 
 end program test
+! { dg-final { cleanup-modules "aux2" } }

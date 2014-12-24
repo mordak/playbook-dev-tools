@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -32,6 +32,7 @@
 pragma Style_Checks (All_Checks);
 --  Subprograms not all in alpha order
 
+with Atree;    use Atree;
 with Debug;    use Debug;
 with Opt;      use Opt;
 with Output;   use Output;
@@ -226,8 +227,7 @@ package body Sinput is
          Get_Name_String_And_Append
            (Reference_Name (Get_Source_File_Index (Ptr)));
          Add_Char_To_Name_Buffer (':');
-         Add_Nat_To_Name_Buffer
-           (Nat (Get_Logical_Line_Number (Ptr)));
+         Add_Nat_To_Name_Buffer (Nat (Get_Logical_Line_Number (Ptr)));
 
          Ptr := Instantiation_Location (Ptr);
          exit when Ptr = No_Location;
@@ -236,6 +236,13 @@ package body Sinput is
 
       Name_Buffer (Name_Len + 1) := NUL;
       return;
+   end Build_Location_String;
+
+   function Build_Location_String (Loc : Source_Ptr) return String is
+   begin
+      Name_Len := 0;
+      Build_Location_String (Loc);
+      return Name_Buffer (1 .. Name_Len);
    end Build_Location_String;
 
    -----------------------
@@ -283,8 +290,7 @@ package body Sinput is
    -----------------------------
 
    function Get_Logical_Line_Number
-     (P    : Source_Ptr)
-      return Logical_Line_Number
+     (P : Source_Ptr) return Logical_Line_Number
    is
       SFR : Source_File_Record
               renames Source_File.Table (Get_Source_File_Index (P));
@@ -299,13 +305,25 @@ package body Sinput is
       end if;
    end Get_Logical_Line_Number;
 
+   ---------------------------------
+   -- Get_Logical_Line_Number_Img --
+   ---------------------------------
+
+   function Get_Logical_Line_Number_Img
+     (P : Source_Ptr) return String
+   is
+   begin
+      Name_Len := 0;
+      Add_Nat_To_Name_Buffer (Nat (Get_Logical_Line_Number (P)));
+      return Name_Buffer (1 .. Name_Len);
+   end Get_Logical_Line_Number_Img;
+
    ------------------------------
    -- Get_Physical_Line_Number --
    ------------------------------
 
    function Get_Physical_Line_Number
-     (P    : Source_Ptr)
-      return Physical_Line_Number
+     (P : Source_Ptr) return Physical_Line_Number
    is
       Sfile : Source_File_Index;
       Table : Lines_Table_Ptr;
@@ -469,7 +487,6 @@ package body Sinput is
 
    begin
       S := P;
-
       while S > Sfirst
         and then Src (S - 1) /= CR
         and then Src (S - 1) /= LF
@@ -481,9 +498,8 @@ package body Sinput is
    end Line_Start;
 
    function Line_Start
-     (L    : Physical_Line_Number;
-      S    : Source_File_Index)
-      return Source_Ptr
+     (L : Physical_Line_Number;
+      S : Source_File_Index) return Source_Ptr
    is
    begin
       return Source_File.Table (S).Lines_Table (L);
@@ -552,8 +568,7 @@ package body Sinput is
 
    function Physical_To_Logical
      (Line : Physical_Line_Number;
-      S    : Source_File_Index)
-      return Logical_Line_Number
+      S    : Source_File_Index) return Logical_Line_Number
    is
       SFR : Source_File_Record renames Source_File.Table (S);
 
@@ -655,11 +670,7 @@ package body Sinput is
          end if;
 
       elsif Chr = LF then
-         if Source (P + 1) = CR then
-            P := P + 2;
-         else
-            P := P + 1;
-         end if;
+         P := P + 1;
 
       elsif Chr = FF or else Chr = VT then
          P := P + 1;
@@ -697,6 +708,44 @@ package body Sinput is
       end;
    end Skip_Line_Terminators;
 
+   ----------------
+   -- Sloc_Range --
+   ----------------
+
+   procedure Sloc_Range (N : Node_Id; Min, Max : out Source_Ptr) is
+
+      function Process (N : Node_Id) return Traverse_Result;
+      --  Process function for traversing the node tree
+
+      procedure Traverse is new Traverse_Proc (Process);
+
+      -------------
+      -- Process --
+      -------------
+
+      function Process (N : Node_Id) return Traverse_Result is
+      begin
+         if Sloc (N) < Min then
+            if Sloc (N) > No_Location then
+               Min := Sloc (N);
+            end if;
+         elsif Sloc (N) > Max then
+            if Sloc (N) > No_Location then
+               Max := Sloc (N);
+            end if;
+         end if;
+
+         return OK;
+      end Process;
+
+   --  Start of processing for Sloc_Range
+
+   begin
+      Min := Sloc (N);
+      Max := Sloc (N);
+      Traverse (N);
+   end Sloc_Range;
+
    -------------------
    -- Source_Offset --
    -------------------
@@ -705,7 +754,6 @@ package body Sinput is
       Sindex : constant Source_File_Index := Get_Source_File_Index (S);
       Sfirst : constant Source_Ptr :=
                  Source_File.Table (Sindex).Source_First;
-
    begin
       return Nat (S - Sfirst);
    end Source_Offset;
@@ -763,8 +811,7 @@ package body Sinput is
                else
                   --  Free the buffer, we use Free here, because we used malloc
                   --  or realloc directly to allocate the tables. That is
-                  --  because we were playing the big array trick. We need to
-                  --  suppress the warning for freeing from an empty pool!
+                  --  because we were playing the big array trick.
 
                   --  We have to recreate a proper pointer to the actual array
                   --  from the zero origin pointer stored in the source table.
@@ -772,9 +819,7 @@ package body Sinput is
                   Tmp1 :=
                     To_Source_Buffer_Ptr
                       (S.Source_Text (S.Source_First)'Address);
-                  pragma Warnings (Off);
                   Free_Ptr (Tmp1);
-                  pragma Warnings (On);
 
                   if S.Lines_Table /= null then
                      Memory.Free (To_Address (S.Lines_Table));
@@ -1130,7 +1175,6 @@ package body Sinput is
       else
          return Source_File.Table (S).Source_Last;
       end if;
-
    end Source_Last;
 
    function Source_Text (S : SFI) return Source_Buffer_Ptr is
@@ -1140,7 +1184,6 @@ package body Sinput is
       else
          return Source_File.Table (S).Source_Text;
       end if;
-
    end Source_Text;
 
    function Template (S : SFI) return SFI is

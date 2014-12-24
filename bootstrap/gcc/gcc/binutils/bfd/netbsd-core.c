@@ -44,6 +44,7 @@
 #define SPARC64_WCOOKIE_OFFSET	832
 
 #define netbsd_core_file_matches_executable_p generic_core_file_matches_executable_p
+#define netbsd_core_file_pid _bfd_nocore_core_file_pid
 
 struct netbsd_core_struct
 {
@@ -280,6 +281,7 @@ const bfd_target netbsd_core_vec =
     0,				/* Symbol prefix.  */
     ' ',			/* ar_pad_char.  */
     16,				/* ar_max_namelen.  */
+    0,				/* Match priority.  */
     NO_GET64, NO_GETS64, NO_PUT64,	/* 64 bit data.  */
     NO_GET, NO_GETS, NO_PUT,		/* 32 bit data.  */
     NO_GET, NO_GETS, NO_PUT,		/* 16 bit data.  */

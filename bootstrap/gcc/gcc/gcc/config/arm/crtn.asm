@@ -1,4 +1,4 @@
-#   Copyright (C) 2001, 2004, 2008, 2009 Free Software Foundation, Inc.
+#   Copyright (C) 2001, 2004, 2008, 2009, 2010 Free Software Foundation, Inc.
 #   Written By Nick Clifton
 # 
 # This file is free software; you can redistribute it and/or modify it
@@ -25,6 +25,16 @@
 .section .note.GNU-stack,"",%progbits
 .previous
 #endif
+
+#ifdef __ARM_EABI__
+/* Some attributes that are common to all routines in this file.  */
+	/* Tag_ABI_align_needed: This code does not require 8-byte
+	   alignment from the caller.  */
+	/* .eabi_attribute 24, 0  -- default setting.  */
+	/* Tag_ABI_align_preserved: This code preserves 8-byte
+	   alignment in any callee.  */
+	.eabi_attribute 25, 1
+#endif /* __ARM_EABI__ */
 
 # This file just makes sure that the .fini and .init sections do in
 # fact return.  Users may put any desired instructions in those sections.

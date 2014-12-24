@@ -1,6 +1,6 @@
 /* Hooks for cfg representation specific functions.
-   Copyright (C) 2003, 2004, 2005, 2007, 2008 Free Software Foundation,
-   Inc.
+   Copyright (C) 2003, 2004, 2005, 2007, 2008, 2010
+   Free Software Foundation, Inc.
    Contributed by Sebastian Pop <s.pop@laposte.net>
 
 This file is part of GCC.
@@ -28,7 +28,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "basic-block.h"
 #include "tree-flow.h"
 #include "timevar.h"
-#include "toplev.h"
+#include "diagnostic-core.h"
 #include "cfgloop.h"
 
 /* A pointer to one of the hooks containers.  */
@@ -88,7 +88,7 @@ current_ir_type (void)
    Currently it does following: checks edge and basic block list correctness
    and calls into IL dependent checking then.  */
 
-void
+DEBUG_FUNCTION void
 verify_flow_info (void)
 {
   size_t *edge_checksum;
@@ -437,6 +437,7 @@ split_block (basic_block bb, void *i)
   new_bb->count = bb->count;
   new_bb->frequency = bb->frequency;
   new_bb->loop_depth = bb->loop_depth;
+  new_bb->discriminator = bb->discriminator;
 
   if (dom_info_available_p (CDI_DOMINATORS))
     {
@@ -769,7 +770,7 @@ make_forwarder_block (basic_block bb, bool (*redirect_edge_p) (edge),
               && dummy->loop_father->header == dummy
               && dummy->loop_father->latch == e_src)
             dummy->loop_father->latch = jump;
-          
+
           if (new_bb_cbk != NULL)
             new_bb_cbk (jump);
         }
@@ -829,7 +830,7 @@ tidy_fallthru_edge (edge e)
 /* Fix up edges that now fall through, or rather should now fall through
    but previously required a jump around now deleted blocks.  Simplify
    the search by only examining blocks numerically adjacent, since this
-   is how find_basic_blocks created them.  */
+   is how they were created.  */
 
 void
 tidy_fallthru_edges (void)
@@ -852,9 +853,9 @@ tidy_fallthru_edges (void)
 	 a single successor.
 
 	 If we had a conditional branch to the next instruction when
-	 find_basic_blocks was called, then there will only be one
-	 out edge for the block which ended with the conditional
-	 branch (since we do not create duplicate edges).
+	 CFG was built, then there will only be one out edge for the
+	 block which ended with the conditional branch (since we do
+	 not create duplicate edges).
 
 	 Furthermore, the edge will be marked as a fallthru because we
 	 merge the flags for the duplicate edges.  So we do not want to
@@ -905,9 +906,7 @@ duplicate_block (basic_block bb, edge e, basic_block after)
   if (bb->count < new_count)
     new_count = bb->count;
 
-#ifdef ENABLE_CHECKING
-  gcc_assert (can_duplicate_block_p (bb));
-#endif
+  gcc_checking_assert (can_duplicate_block_p (bb));
 
   new_bb = cfg_hooks->duplicate_block (bb);
   if (after)

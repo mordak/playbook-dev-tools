@@ -18,7 +18,6 @@ Section Headers:
  +\[[ 0-9]+\] \.tdata +PROGBITS .* 0+38 0+ WAT +0 +0 +8
  +\[[ 0-9]+\] \.tbss +NOBITS .* 0+38 0+ WAT +0 +0 +8
  +\[[ 0-9]+\] \.dynamic .*
- +\[[ 0-9]+\] \.branch_lt .*
  +\[[ 0-9]+\] \.got .*
  +\[[ 0-9]+\] \.plt .*
  +\[[ 0-9]+\] \.shstrtab .*
@@ -63,40 +62,39 @@ Relocation section '\.rela\.plt' at offset .* contains 1 entries:
 [0-9a-f ]+R_PPC64_JMP_SLOT +0+ __tls_get_addr \+ 0
 
 Symbol table '\.dynsym' contains [0-9]+ entries:
- +Num: +Value +Size Type +Bind +Vis +Ndx Name
+ +Num: +Value +Size +Type +Bind +Vis +Ndx +Name
 .* NOTYPE +LOCAL +DEFAULT +UND 
-.* SECTION LOCAL +DEFAULT +6 
-.* SECTION LOCAL +DEFAULT +7 
-.* TLS +GLOBAL DEFAULT +UND gd
-.* TLS +GLOBAL DEFAULT +8 le0
-.* NOTYPE +GLOBAL DEFAULT +UND __tls_get_addr
-.* TLS +GLOBAL DEFAULT +8 ld0
-.* TLS +GLOBAL DEFAULT +8 le1
-.* TLS +GLOBAL DEFAULT +UND ld
-.* NOTYPE +GLOBAL DEFAULT +6 _start
-.* TLS +GLOBAL DEFAULT +8 ld2
-.* TLS +GLOBAL DEFAULT +8 ld1
-.* NOTYPE +GLOBAL DEFAULT +ABS __bss_start
-.* NOTYPE +GLOBAL DEFAULT +ABS _edata
-.* NOTYPE +GLOBAL DEFAULT +ABS _end
-.* TLS +GLOBAL DEFAULT +8 gd0
-.* TLS +GLOBAL DEFAULT +8 ie0
+.* SECTION +LOCAL +DEFAULT +6 
+.* SECTION +LOCAL +DEFAULT +7 
+.* TLS +GLOBAL +DEFAULT +UND gd
+.* TLS +GLOBAL +DEFAULT +8 le0
+.* NOTYPE +GLOBAL +DEFAULT +UND __tls_get_addr
+.* TLS +GLOBAL +DEFAULT +8 ld0
+.* TLS +GLOBAL +DEFAULT +8 le1
+.* TLS +GLOBAL +DEFAULT +UND ld
+.* NOTYPE +GLOBAL +DEFAULT +6 _start
+.* TLS +GLOBAL +DEFAULT +8 ld2
+.* TLS +GLOBAL +DEFAULT +8 ld1
+.* NOTYPE +GLOBAL +DEFAULT +ABS __bss_start
+.* NOTYPE +GLOBAL +DEFAULT +ABS _edata
+.* NOTYPE +GLOBAL +DEFAULT +ABS _end
+.* TLS +GLOBAL +DEFAULT +8 gd0
+.* TLS +GLOBAL +DEFAULT +8 ie0
 
 Symbol table '\.symtab' contains [0-9]+ entries:
- +Num: +Value +Size Type +Bind +Vis +Ndx Name
+ +Num: +Value +Size +Type +Bind +Vis +Ndx +Name
 .* NOTYPE +LOCAL +DEFAULT +UND 
-.* SECTION LOCAL +DEFAULT +1 
-.* SECTION LOCAL +DEFAULT +2 
-.* SECTION LOCAL +DEFAULT +3 
-.* SECTION LOCAL +DEFAULT +4 
-.* SECTION LOCAL +DEFAULT +5 
-.* SECTION LOCAL +DEFAULT +6 
-.* SECTION LOCAL +DEFAULT +7 
-.* SECTION LOCAL +DEFAULT +8 
-.* SECTION LOCAL +DEFAULT +9 
-.* SECTION LOCAL +DEFAULT +10 
-.* SECTION LOCAL +DEFAULT +11 
-.* SECTION LOCAL +DEFAULT +12 
+.* SECTION +LOCAL +DEFAULT +1 
+.* SECTION +LOCAL +DEFAULT +2 
+.* SECTION +LOCAL +DEFAULT +3 
+.* SECTION +LOCAL +DEFAULT +4 
+.* SECTION +LOCAL +DEFAULT +5 
+.* SECTION +LOCAL +DEFAULT +6 
+.* SECTION +LOCAL +DEFAULT +7 
+.* SECTION +LOCAL +DEFAULT +8 
+.* SECTION +LOCAL +DEFAULT +9 
+.* SECTION +LOCAL +DEFAULT +10 
+.* SECTION +LOCAL +DEFAULT +11 
 .* TLS +LOCAL +DEFAULT +7 gd4
 .* TLS +LOCAL +DEFAULT +7 ld4
 .* TLS +LOCAL +DEFAULT +7 ld5
@@ -104,20 +102,22 @@ Symbol table '\.symtab' contains [0-9]+ entries:
 .* TLS +LOCAL +DEFAULT +7 ie4
 .* TLS +LOCAL +DEFAULT +7 le4
 .* TLS +LOCAL +DEFAULT +7 le5
-.* NOTYPE +LOCAL +DEFAULT +11 \.Lie0
-.* OBJECT +LOCAL +HIDDEN +ABS _DYNAMIC
-.* NOTYPE +LOCAL +DEFAULT +6 \.__tls_get_addr
-.* TLS +GLOBAL DEFAULT +UND gd
-.* TLS +GLOBAL DEFAULT +8 le0
-.* NOTYPE +GLOBAL DEFAULT +UND __tls_get_addr
-.* TLS +GLOBAL DEFAULT +8 ld0
-.* TLS +GLOBAL DEFAULT +8 le1
-.* TLS +GLOBAL DEFAULT +UND ld
-.* NOTYPE +GLOBAL DEFAULT +6 _start
-.* TLS +GLOBAL DEFAULT +8 ld2
-.* TLS +GLOBAL DEFAULT +8 ld1
-.* NOTYPE +GLOBAL DEFAULT +ABS __bss_start
-.* NOTYPE +GLOBAL DEFAULT +ABS _edata
-.* NOTYPE +GLOBAL DEFAULT +ABS _end
-.* TLS +GLOBAL DEFAULT +8 gd0
-.* TLS +GLOBAL DEFAULT +8 ie0
+.* NOTYPE +LOCAL +DEFAULT +10 \.Lie0
+.* OBJECT +LOCAL +DEFAULT +ABS _DYNAMIC
+.* NOTYPE +LOCAL +DEFAULT +6 00000010\.plt_call\.__tls_get_addr\+0
+.* NOTYPE +LOCAL +DEFAULT +6 __glink_PLTresolve
+.* NOTYPE +LOCAL +DEFAULT +UND \.__tls_get_addr
+.* TLS +GLOBAL +DEFAULT +UND gd
+.* TLS +GLOBAL +DEFAULT +8 le0
+.* NOTYPE +GLOBAL +DEFAULT +UND __tls_get_addr
+.* TLS +GLOBAL +DEFAULT +8 ld0
+.* TLS +GLOBAL +DEFAULT +8 le1
+.* TLS +GLOBAL +DEFAULT +UND ld
+.* NOTYPE +GLOBAL +DEFAULT +6 _start
+.* TLS +GLOBAL +DEFAULT +8 ld2
+.* TLS +GLOBAL +DEFAULT +8 ld1
+.* NOTYPE +GLOBAL +DEFAULT +ABS __bss_start
+.* NOTYPE +GLOBAL +DEFAULT +ABS _edata
+.* NOTYPE +GLOBAL +DEFAULT +ABS _end
+.* TLS +GLOBAL +DEFAULT +8 gd0
+.* TLS +GLOBAL +DEFAULT +8 ie0

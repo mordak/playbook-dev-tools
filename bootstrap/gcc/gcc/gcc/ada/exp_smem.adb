@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1998-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1998-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -25,12 +25,14 @@
 
 with Atree;    use Atree;
 with Einfo;    use Einfo;
+with Exp_Ch9;  use Exp_Ch9;
 with Exp_Util; use Exp_Util;
 with Nmake;    use Nmake;
 with Namet;    use Namet;
 with Nlists;   use Nlists;
 with Rtsfind;  use Rtsfind;
 with Sem;      use Sem;
+with Sem_Aux;  use Sem_Aux;
 with Sem_Util; use Sem_Util;
 with Sinfo;    use Sinfo;
 with Snames;   use Snames;
@@ -91,7 +93,7 @@ package body Exp_Smem is
         Name => Make_Selected_Component (Loc,
           Prefix        =>
             New_Occurrence_Of (Shared_Var_Procs_Instance (E), Loc),
-          Selector_Name => Make_Identifier (Loc, Chars => N)));
+          Selector_Name => Make_Identifier (Loc, N)));
    end Build_Shared_Var_Proc_Call;
 
    ---------------------
@@ -268,10 +270,7 @@ package body Exp_Smem is
          return False;
 
       else
-         if Ekind (Formal) = E_Out_Parameter
-              or else
-            Ekind (Formal) = E_In_Out_Parameter
-         then
+         if Ekind_In (Formal, E_Out_Parameter, E_In_Out_Parameter) then
             Insert_Node := Call;
             return True;
          else
@@ -285,10 +284,12 @@ package body Exp_Smem is
    ---------------------------
 
    function Make_Shared_Var_Procs (N : Node_Id) return Node_Id is
-      Loc : constant Source_Ptr := Sloc (N);
-      Ent : constant Entity_Id  := Defining_Identifier (N);
-      Typ : constant Entity_Id  := Etype (Ent);
-      Vnm : String_Id;
+      Loc     : constant Source_Ptr := Sloc (N);
+      Ent     : constant Entity_Id  := Defining_Identifier (N);
+      Typ     : constant Entity_Id  := Etype (Ent);
+      Vnm     : String_Id;
+      Obj     : Node_Id;
+      Obj_Typ : Entity_Id;
 
       After : constant Node_Id := Next (N);
       --  Node located right after N originally (after insertion of the SV
@@ -315,7 +316,14 @@ package body Exp_Smem is
 
       --  Construct generic package instantiation
 
-      --  package varG is new Shared_Var_Procs (Typ, var, "pkg.var");
+      --  package varG is new Shared_Var_Procs (typ, var, "pkg.var");
+
+      Obj     := New_Occurrence_Of (Ent, Loc);
+      Obj_Typ := Typ;
+      if Is_Concurrent_Type (Typ) then
+         Obj     := Convert_Concurrent (N => Obj, Typ => Typ);
+         Obj_Typ := Corresponding_Record_Type (Typ);
+      end if;
 
       Instantiation :=
         Make_Package_Instantiation (Loc,
@@ -323,12 +331,14 @@ package body Exp_Smem is
           Name                 =>
             New_Occurrence_Of (RTE (RE_Shared_Var_Procs), Loc),
           Generic_Associations => New_List (
-            Make_Generic_Association (Loc, Explicit_Generic_Actual_Parameter =>
-              New_Occurrence_Of (Typ, Loc)),
-            Make_Generic_Association (Loc, Explicit_Generic_Actual_Parameter =>
-              New_Occurrence_Of (Ent, Loc)),
-            Make_Generic_Association (Loc, Explicit_Generic_Actual_Parameter =>
-              Make_String_Literal (Loc, Vnm))));
+            Make_Generic_Association (Loc,
+              Explicit_Generic_Actual_Parameter =>
+                New_Occurrence_Of (Obj_Typ, Loc)),
+            Make_Generic_Association (Loc,
+              Explicit_Generic_Actual_Parameter => Obj),
+            Make_Generic_Association (Loc,
+              Explicit_Generic_Actual_Parameter =>
+                Make_String_Literal (Loc, Vnm))));
 
       Insert_After_And_Analyze (N, Instantiation);
 

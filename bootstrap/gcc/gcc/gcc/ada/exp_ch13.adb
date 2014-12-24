@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -34,6 +34,7 @@ with Exp_Util; use Exp_Util;
 with Namet;    use Namet;
 with Nlists;   use Nlists;
 with Nmake;    use Nmake;
+with Opt;      use Opt;
 with Rtsfind;  use Rtsfind;
 with Sem;      use Sem;
 with Sem_Ch7;  use Sem_Ch7;
@@ -45,6 +46,7 @@ with Snames;   use Snames;
 with Stand;    use Stand;
 with Tbuild;   use Tbuild;
 with Uintp;    use Uintp;
+with Validsw;  use Validsw;
 
 package body Exp_Ch13 is
 
@@ -91,9 +93,18 @@ package body Exp_Ch13 is
             --  call to the init proc, and must be respected. Note that for
             --  packed types we do not build equivalent aggregates.
 
+            --  Also, if Init_Or_Norm_Scalars applies, then we need to retain
+            --  any default initialization for objects of scalar types and
+            --  types with scalar components. Normally a composite type will
+            --  have an init_proc in the presence of Init_Or_Norm_Scalars,
+            --  so when that flag is set we have just have to do a test for
+            --  scalar and string types (the predefined string types such as
+            --  String and Wide_String don't have an init_proc).
+
             declare
                Decl : constant Node_Id := Declaration_Node (Ent);
                Typ  : constant Entity_Id := Etype (Ent);
+
             begin
                if Nkind (Decl) = N_Object_Declaration
                   and then Present (Expression (Decl))
@@ -106,9 +117,26 @@ package body Exp_Ch13 is
                       Present (Static_Initialization (Base_Init_Proc (Typ)))
                   then
                      null;
+
+                  elsif Init_Or_Norm_Scalars
+                    and then
+                      (Is_Scalar_Type (Typ) or else Is_String_Type (Typ))
+                  then
+                     null;
+
                   else
                      Set_Expression (Decl, Empty);
                   end if;
+
+               --  An object declaration to which an address clause applies
+               --  has a delayed freeze, but the address expression itself
+               --  must be elaborated at the point it appears. If the object
+               --  is controlled, additional checks apply elsewhere.
+
+               elsif Nkind (Decl) = N_Object_Declaration
+                 and then not Needs_Constant_Address (Decl, Typ)
+               then
+                  Remove_Side_Effects (Exp);
                end if;
             end;
 
@@ -192,6 +220,31 @@ package body Exp_Ch13 is
       Delete         : Boolean := False;
 
    begin
+      --  If there are delayed aspect specifications, we insert them just
+      --  before the freeze node. They are already analyzed so we don't need
+      --  to reanalyze them (they were analyzed before the type was frozen),
+      --  but we want them in the tree for the back end, and so that the
+      --  listing from sprint is clearer on where these occur logically.
+
+      if Has_Delayed_Aspects (E) then
+         declare
+            Aitem : Node_Id;
+            Ritem : Node_Id;
+
+         begin
+            Ritem := First_Rep_Item (E);
+            while Present (Ritem) loop
+               if Nkind (Ritem) = N_Aspect_Specification then
+                  Aitem := Aspect_Rep_Item (Ritem);
+                  pragma Assert (Is_Delayed_Aspect (Aitem));
+                  Insert_Before (N, Aitem);
+               end if;
+
+               Next_Rep_Item (Ritem);
+            end loop;
+         end;
+      end if;
+
       --  Processing for objects with address clauses
 
       if Is_Object (E) and then Present (Address_Clause (E)) then
@@ -329,6 +382,23 @@ package body Exp_Ch13 is
                Analyze (Decl, Suppress => All_Checks);
                Pop_Scope;
 
+            --  We treat generated equality specially, if validity checks are
+            --  enabled, in order to detect components default-initialized
+            --  with invalid values.
+
+            elsif Nkind (Decl) = N_Subprogram_Body
+              and then Chars (Defining_Entity (Decl)) = Name_Op_Eq
+              and then Validity_Checks_On
+              and then Initialize_Scalars
+            then
+               declare
+                  Save_Force : constant Boolean := Force_Validity_Checks;
+               begin
+                  Force_Validity_Checks := True;
+                  Analyze (Decl);
+                  Force_Validity_Checks := Save_Force;
+               end;
+
             else
                Analyze (Decl, Suppress => All_Checks);
             end if;
@@ -343,6 +413,8 @@ package body Exp_Ch13 is
       if Delete then
          Rewrite (N, Make_Null_Statement (Sloc (N)));
       end if;
+
+      --  Pop scope if we installed one for the analysis
 
       if In_Other_Scope then
          if Ekind (Current_Scope) = E_Package then
@@ -379,7 +451,7 @@ package body Exp_Ch13 is
       AtM_Nod : Node_Id;
 
    begin
-      if Present (Mod_Clause (N)) then
+      if Present (Mod_Clause (N)) and then not Ignore_Rep_Clauses then
          Mod_Val := Expr_Value (Expression (Mod_Clause (N)));
          Citems  := Pragmas_Before (Mod_Clause (N));
 

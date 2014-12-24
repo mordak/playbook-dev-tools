@@ -1,8 +1,8 @@
 `/* Implementation of the MAXVAL intrinsic
-   Copyright 2002, 2007, 2009 Free Software Foundation, Inc.
+   Copyright 2002, 2007, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
-This file is part of the GNU Fortran 95 runtime library (libgfortran).
+This file is part of the GNU Fortran runtime library (libgfortran).
 
 Libgfortran is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public
@@ -33,14 +33,55 @@ include(ifunction.m4)dnl
 `#if defined (HAVE_'atype_name`) && defined (HAVE_'rtype_name`)'
 
 ARRAY_FUNCTION(atype_min,
-`  result = atype_min;',
-`  if (*src > result)
-    result = *src;')
+`#if defined ('atype_inf`)
+	result = -atype_inf;
+#else
+	result = atype_min;
+#endif',
+`#if defined ('atype_nan`)
+		if (*src >= result)
+		  break;
+	      }
+	    if (unlikely (n >= len))
+	      result = atype_nan;
+	    else for (; n < len; n++, src += delta)
+	      {
+#endif
+		if (*src > result)
+		  result = *src;', `')
 
 MASKED_ARRAY_FUNCTION(atype_min,
-`  result = atype_min;',
-`  if (*msrc && *src > result)
-    result = *src;')
+`#if defined ('atype_inf`)
+	result = -atype_inf;
+#else
+	result = atype_min;
+#endif
+#if defined ('atype_nan`)
+	int non_empty_p = 0;
+#endif',
+`#if defined ('atype_inf`) || defined ('atype_nan`)
+		if (*msrc)
+		  {
+#if defined ('atype_nan`)
+		    non_empty_p = 1;
+		    if (*src >= result)
+#endif
+		      break;
+		  }
+	      }
+	    if (unlikely (n >= len))
+	      {
+#if defined ('atype_nan`)
+		result = non_empty_p ? atype_nan : atype_min;
+#else
+		result = atype_min;
+#endif
+	      }
+	    else for (; n < len; n++, src += delta, msrc += mdelta)
+	      {
+#endif
+		if (*msrc && *src > result)
+		  result = *src;')
 
 SCALAR_ARRAY_FUNCTION(atype_min)
 

@@ -4,7 +4,7 @@
 
 /* BFD COFF object file private structure.
    Copyright 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
-   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008
+   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
    Free Software Foundation, Inc.
    Written by Cygnus Support.
 
@@ -30,7 +30,6 @@
 /* Object file tdata; access macros.  */
 
 #define coff_data(bfd)		      ((bfd)->tdata.coff_obj_data)
-#define exec_hdr(bfd)		      (coff_data (bfd)->hdr)
 #define obj_pe(bfd)                   (coff_data (bfd)->pe)
 #define obj_symbols(bfd)	      (coff_data (bfd)->symbols)
 #define	obj_sym_filepos(bfd)	      (coff_data (bfd)->sym_filepos)
@@ -110,6 +109,9 @@ typedef struct coff_tdata
      used by ARM code.  */
   flagword flags;
 
+  /* coff-stgo32 EXE stub header after BFD tdata has been allocated.  Its data
+     is kept in internal_filehdr.go32stub beforehand.  */
+  char *go32stub;
 } coff_data_type;
 
 /* Tdata for pe image files.  */
@@ -119,10 +121,9 @@ typedef struct pe_tdata
   struct internal_extra_pe_aouthdr pe_opthdr;
   int dll;
   int has_reloc_section;
+  int dont_strip_reloc;
   bfd_boolean (*in_reloc_p) (bfd *, reloc_howto_type *);
   flagword real_flags;
-  int target_subsystem;
-  bfd_boolean force_minimum_alignment;
 } pe_data_type;
 
 #define pe_data(bfd)		((bfd)->tdata.pe_obj_data)
@@ -169,7 +170,8 @@ struct xcoff_tdata
 
   /* Used by the XCOFF backend linker.  */
   asection **csects;
-  unsigned long *debug_indices;
+  long *debug_indices;
+  unsigned int *lineno_counts;
   unsigned int import_file_id;
 };
 
@@ -219,8 +221,7 @@ struct xcoff_section_tdata
   /* The lineno_count field for the enclosing section, because we are
      going to clobber it there.  */
   unsigned int lineno_count;
-  /* The first and one past the last symbol indices for symbols used
-     by this csect.  */
+  /* The first and last symbol indices for symbols used by this csect.  */
   unsigned long first_symndx;
   unsigned long last_symndx;
 };
@@ -257,7 +258,7 @@ struct coff_link_hash_entry
   unsigned short type;
 
   /* Symbol class.  */
-  unsigned char class;
+  unsigned char symbol_class;
 
   /* Number of auxiliary entries.  */
   char numaux;
@@ -397,7 +398,7 @@ struct coff_debug_merge_type
   struct coff_debug_merge_type *next;
 
   /* Class of type.  */
-  int class;
+  int type_class;
 
   /* Symbol index where this type is defined.  */
   long indx;
@@ -549,6 +550,8 @@ extern struct bfd_link_hash_table *_bfd_coff_link_hash_table_create
   (bfd *);
 extern const char *_bfd_coff_internal_syment_name
   (bfd *, const struct internal_syment *, char *);
+extern bfd_boolean _bfd_coff_section_already_linked
+  (bfd *, asection *, struct bfd_link_info *);
 extern bfd_boolean _bfd_coff_link_add_symbols
   (bfd *, struct bfd_link_info *);
 extern bfd_boolean _bfd_coff_final_link
@@ -562,7 +565,7 @@ extern bfd_boolean _bfd_coff_generic_relocate_section
 extern struct bfd_hash_entry *_bfd_coff_debug_merge_hash_newfunc
   (struct bfd_hash_entry *, struct bfd_hash_table *, const char *);
 extern bfd_boolean _bfd_coff_write_global_sym
-  (struct coff_link_hash_entry *, void *);
+  (struct bfd_hash_entry *, void *);
 extern bfd_boolean _bfd_coff_write_task_globals
   (struct coff_link_hash_entry *, void *);
 extern bfd_boolean _bfd_coff_link_input_bfd
@@ -593,18 +596,19 @@ extern bfd_boolean _bfd_xcoff_bfd_link_add_symbols
   (bfd *, struct bfd_link_info *);
 extern bfd_boolean _bfd_xcoff_bfd_final_link
   (bfd *, struct bfd_link_info *);
+extern bfd_boolean _bfd_xcoff_define_common_symbol
+  (bfd *, struct bfd_link_info *, struct bfd_link_hash_entry *);
 extern bfd_boolean _bfd_ppc_xcoff_relocate_section
   (bfd *, struct bfd_link_info *, bfd *, asection *, bfd_byte *,
    struct internal_reloc *, struct internal_syment *, asection **);
 
-/* Functions in coff-ppc.c.  FIXME: These are called be pe.em in the
+/* Functions in coff-ppc.c.  FIXME: These are called by pe.em in the
    linker, and so should start with bfd and be declared in bfd.h.  */
 
 extern bfd_boolean ppc_allocate_toc_section
   (struct bfd_link_info *);
 extern bfd_boolean ppc_process_before_allocation
   (bfd *, struct bfd_link_info *);
-
 /* Extracted from coffcode.h.  */
 typedef struct coff_ptr_struct
 {
@@ -715,7 +719,11 @@ typedef struct
   unsigned int _bfd_linesz;
   unsigned int _bfd_filnmlen;
   bfd_boolean _bfd_coff_long_filenames;
+
   bfd_boolean _bfd_coff_long_section_names;
+  bfd_boolean (*_bfd_coff_set_long_section_names)
+    (bfd *, int);
+  
   unsigned int _bfd_coff_default_section_alignment_power;
   bfd_boolean _bfd_coff_force_symnames_in_strings;
   unsigned int _bfd_coff_debug_string_prefix_length;
@@ -852,6 +860,8 @@ typedef struct
   (coff_backend_info (abfd)->_bfd_coff_long_filenames)
 #define bfd_coff_long_section_names(abfd) \
   (coff_backend_info (abfd)->_bfd_coff_long_section_names)
+#define bfd_coff_set_long_section_names(abfd, enable) \
+  ((coff_backend_info (abfd)->_bfd_coff_set_long_section_names) (abfd, enable))
 #define bfd_coff_default_section_alignment_power(abfd) \
   (coff_backend_info (abfd)->_bfd_coff_default_section_alignment_power)
 #define bfd_coff_swap_filehdr_in(abfd, i,o) \
@@ -942,3 +952,7 @@ typedef struct
 #define bfd_coff_print_pdata(a,p) \
   ((coff_backend_info (a)->_bfd_coff_print_pdata) (a, p))
 
+/* Macro: Returns true if the bfd is a PE executable as opposed to a
+   PE object file.  */
+#define bfd_pei_p(abfd) \
+  (CONST_STRNEQ ((abfd)->xvec->name, "pei-"))

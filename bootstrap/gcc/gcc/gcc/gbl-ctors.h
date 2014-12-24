@@ -35,6 +35,9 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 	Note that this file should only be compiled with GCC.
 */
 
+#ifndef GCC_GBL_CTORS_H
+#define GCC_GBL_CTORS_H
+
 /*  Declare a pointer to void function type.  */
 
 typedef void (*func_ptr) (void);
@@ -72,12 +75,13 @@ extern void __do_global_dtors (void);
 #ifndef DO_GLOBAL_CTORS_BODY
 #define DO_GLOBAL_CTORS_BODY						\
 do {									\
-  unsigned long nptrs = (unsigned long) __CTOR_LIST__[0];		\
+  __SIZE_TYPE__ nptrs = (__SIZE_TYPE__) __CTOR_LIST__[0];		\
   unsigned i;								\
-  if (nptrs == (unsigned long)-1)				        \
+  if (nptrs == (__SIZE_TYPE__)-1)				        \
     for (nptrs = 0; __CTOR_LIST__[nptrs + 1] != 0; nptrs++);		\
   for (i = nptrs; i >= 1; i--)						\
     __CTOR_LIST__[i] ();						\
 } while (0)
 #endif
 
+#endif /* GCC_GBL_CTORS_H */

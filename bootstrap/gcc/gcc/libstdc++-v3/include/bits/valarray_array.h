@@ -1,7 +1,7 @@
 // The template and inlines for the -*- C++ -*- internal _Array helper class.
 
 // Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-// 2006, 2007, 2009
+// 2006, 2007, 2008, 2009, 2010, 2011
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -24,9 +24,9 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file valarray_array.h
+/** @file bits/valarray_array.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{valarray}
  */
 
 // Written by Gabriel Dos Reis <Gabriel.Dos-Reis@DPTMaths.ENS-Cachan.Fr>
@@ -41,7 +41,9 @@
 #include <cstdlib>
 #include <new>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   //
   // Helper functions on raw pointers
@@ -73,7 +75,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       // Please note that this isn't exception safe.  But
       // valarrays aren't required to be exception safe.
       inline static void
-      _S_do_it(_Tp* __restrict__ __b, _Tp* __restrict__ __e)
+      _S_do_it(_Tp* __b, _Tp* __e)
       {
 	while (__b != __e)
 	  new(__b++) _Tp();
@@ -85,13 +87,13 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     {
       // For fundamental types, it suffices to say 'memset()'
       inline static void
-      _S_do_it(_Tp* __restrict__ __b, _Tp* __restrict__ __e)
+      _S_do_it(_Tp* __b, _Tp* __e)
       { __builtin_memset(__b, 0, (__e - __b) * sizeof(_Tp)); }
     };
 
   template<typename _Tp>
     inline void
-    __valarray_default_construct(_Tp* __restrict__ __b, _Tp* __restrict__ __e)
+    __valarray_default_construct(_Tp* __b, _Tp* __e)
     {
       _Array_default_ctor<_Tp, __is_scalar<_Tp>::__value>::_S_do_it(__b, __e);
     }
@@ -105,7 +107,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       // Please note that this isn't exception safe.  But
       // valarrays aren't required to be exception safe.
       inline static void
-      _S_do_it(_Tp* __restrict__ __b, _Tp* __restrict__ __e, const _Tp __t)
+      _S_do_it(_Tp* __b, _Tp* __e, const _Tp __t)
       {
 	while (__b != __e)
 	  new(__b++) _Tp(__t);
@@ -116,7 +118,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     struct _Array_init_ctor<_Tp, true>
     {
       inline static void
-      _S_do_it(_Tp* __restrict__ __b, _Tp* __restrict__ __e,  const _Tp __t)
+      _S_do_it(_Tp* __b, _Tp* __e, const _Tp __t)
       {
 	while (__b != __e)
 	  *__b++ = __t;
@@ -125,10 +127,9 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
   template<typename _Tp>
     inline void
-    __valarray_fill_construct(_Tp* __restrict__ __b, _Tp* __restrict__ __e,
-			      const _Tp __t)
+    __valarray_fill_construct(_Tp* __b, _Tp* __e, const _Tp __t)
     {
-      _Array_init_ctor<_Tp, __is_pod(_Tp)>::_S_do_it(__b, __e, __t);
+      _Array_init_ctor<_Tp, __is_trivial(_Tp)>::_S_do_it(__b, __e, __t);
     }
 
   //
@@ -141,8 +142,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       // Please note that this isn't exception safe.  But
       // valarrays aren't required to be exception safe.
       inline static void
-      _S_do_it(const _Tp* __restrict__ __b, const _Tp* __restrict__ __e,
-	       _Tp* __restrict__ __o)
+      _S_do_it(const _Tp* __b, const _Tp* __e, _Tp* __restrict__ __o)
       {
 	while (__b != __e)
 	  new(__o++) _Tp(*__b++);
@@ -153,18 +153,16 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     struct _Array_copy_ctor<_Tp, true>
     {
       inline static void
-      _S_do_it(const _Tp* __restrict__ __b, const _Tp* __restrict__ __e,
-	       _Tp* __restrict__ __o)
+      _S_do_it(const _Tp* __b, const _Tp* __e, _Tp* __restrict__ __o)
       { __builtin_memcpy(__o, __b, (__e - __b) * sizeof(_Tp)); }
     };
 
   template<typename _Tp>
     inline void
-    __valarray_copy_construct(const _Tp* __restrict__ __b,
-			      const _Tp* __restrict__ __e,
+    __valarray_copy_construct(const _Tp* __b, const _Tp* __e,
 			      _Tp* __restrict__ __o)
     {
-      _Array_copy_ctor<_Tp, __is_pod(_Tp)>::_S_do_it(__b, __e, __o);
+      _Array_copy_ctor<_Tp, __is_trivial(_Tp)>::_S_do_it(__b, __e, __o);
     }
 
   // copy-construct raw array [__o, *) from strided array __a[<__n : __s>]
@@ -173,7 +171,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     __valarray_copy_construct (const _Tp* __restrict__ __a, size_t __n,
 			       size_t __s, _Tp* __restrict__ __o)
     {
-      if (__is_pod(_Tp))
+      if (__is_trivial(_Tp))
 	while (__n--)
 	  {
 	    *__o++ = *__a;
@@ -194,7 +192,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 			       const size_t* __restrict__ __i,
 			       _Tp* __restrict__ __o, size_t __n)
     {
-      if (__is_pod(_Tp))
+      if (__is_trivial(_Tp))
 	while (__n--)
 	  *__o++ = __a[*__i++];
       else
@@ -205,9 +203,9 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   // Do the necessary cleanup when we're done with arrays.
   template<typename _Tp>
     inline void
-    __valarray_destroy_elements(_Tp* __restrict__ __b, _Tp* __restrict__ __e)
+    __valarray_destroy_elements(_Tp* __b, _Tp* __e)
     {
-      if (!__is_pod(_Tp))
+      if (!__is_trivial(_Tp))
 	while (__b != __e)
 	  {
 	    __b->~_Tp();
@@ -271,7 +269,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     __valarray_copy(const _Tp* __restrict__ __a, size_t __n,
 		    _Tp* __restrict__ __b)
     {
-      _Array_copier<_Tp, __is_pod(_Tp)>::_S_do_it(__a, __n, __b);
+      _Array_copier<_Tp, __is_trivial(_Tp)>::_S_do_it(__a, __n, __b);
     }
 
   // Copy strided array __a[<__n : __s>] in plain __b[<__n>]
@@ -347,7 +345,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   //
   template<typename _Tp>
     inline _Tp
-    __valarray_sum(const _Tp* __restrict__ __f, const _Tp* __restrict__ __l)
+    __valarray_sum(const _Tp* __f, const _Tp* __l)
     {
       _Tp __r = _Tp();
       while (__f != __l)
@@ -358,8 +356,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   // Compute the product of all elements in range [__f, __l)
   template<typename _Tp>
     inline _Tp
-    __valarray_product(const _Tp* __restrict__ __f,
-		       const _Tp* __restrict__ __l)
+    __valarray_product(const _Tp* __f, const _Tp* __l)
     {
       _Tp __r = _Tp(1);
       while (__f != __l)
@@ -690,10 +687,9 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
 #undef _DEFINE_ARRAY_FUNCTION
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
-#ifndef _GLIBCXX_EXPORT_TEMPLATE
 # include <bits/valarray_array.tcc>
-#endif
 
 #endif /* _ARRAY_H */

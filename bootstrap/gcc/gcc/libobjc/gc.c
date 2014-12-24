@@ -1,5 +1,6 @@
 /* Basic data types for Objective C.
-   Copyright (C) 1998, 2002, 2004, 2005, 2006, 2009 Free Software Foundation, Inc.
+   Copyright (C) 1998, 2002, 2004, 2005, 2006, 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Ovidiu Predescu.
 
 This file is part of GCC.
@@ -23,15 +24,16 @@ a copy of the GCC Runtime Library Exception along with this program;
 see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 <http://www.gnu.org/licenses/>.  */
 
-#include "tconfig.h"
+#include "objc-private/common.h"
 #include "objc/objc.h"
-#include "objc/encoding.h"
 
+#if OBJC_WITH_GC
+
+#include "tconfig.h"
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
-
-#if OBJC_WITH_GC
+#include "objc/encoding.h"
 
 #include <gc.h>
 #include <limits.h>
@@ -420,11 +422,15 @@ class_ivar_set_gcinvisible (Class class, const char *ivarname,
 
 	  /* The variable is gc visible so we make it gc_invisible.  */
 	  new_type = objc_malloc (strlen(ivar->ivar_type) + 2);
+
+	  /* Copy the variable name.  */
 	  len = (type - ivar->ivar_type);
 	  memcpy (new_type, ivar->ivar_type, len);
-	  new_type[len] = 0;
-	  strcat (new_type, "!");
-	  strcat (new_type, type);
+	  /* Add '!'.  */
+	  new_type[len++] = _C_GCINVISIBLE;
+	  /* Copy the original types.  */
+	  strcpy (new_type + len, type);
+
 	  ivar->ivar_type = new_type;
 	}
 

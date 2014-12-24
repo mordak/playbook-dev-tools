@@ -1,6 +1,6 @@
 /* Definitions of target machine for GNU compiler.
    MIPS SDE version.
-   Copyright (C) 2003, 2004, 2007, 2008, 2009
+   Copyright (C) 2003, 2004, 2007, 2008, 2009, 2010, 2011
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -42,13 +42,6 @@ along with GCC; see the file COPYING3.  If not see
      things like LINK_SPEC easier to write.  */				\
   "%{!EB:%{!EL:%(endian_spec)}}",					\
 									\
-  /* -mcode-xonly is a traditional alias for -mcode-readable=pcrel and	\
-     -mno-data-in-code is a traditional alias for -mcode-readable=no.	\
-     The latter trumps the former.  */					\
-  "%{mno-data-in-code: -mcode-readable=no}",				\
-  "%{!mcode-readable=no: %{mcode-xonly: -mcode-readable=pcrel}}",	\
-  "%<mno-data-in-code %<mcode-xonly",					\
-									\
   /* Configuration-independent MIPS rules.  */				\
   BASE_DRIVER_SELF_SPECS				
 
@@ -66,8 +59,7 @@ along with GCC; see the file COPYING3.  If not see
 #define LINK_SPEC "\
 %(endian_spec) \
 %{G*} %{mips1} %{mips2} %{mips3} %{mips4} %{mips32*} %{mips64*} \
-%{bestGnum} \
-%{shared} %{non_shared} %{call_shared} \
+%{shared} \
 %{mabi=n32:-melf32%{EB:b}%{EL:l}tsmipn32} \
 %{mabi=64:-melf64%{EB:b}%{EL:l}tsmip} \
 %{mabi=32:-melf32%{EB:b}%{EL:l}tsmip}"
@@ -90,7 +82,8 @@ along with GCC; see the file COPYING3.  If not see
 
 /* Use $5 as a temporary for both MIPS16 and non-MIPS16.  */
 #undef MIPS_EPILOGUE_TEMP_REGNUM
-#define MIPS_EPILOGUE_TEMP_REGNUM (GP_REG_FIRST + 5)
+#define MIPS_EPILOGUE_TEMP_REGNUM \
+  (cfun->machine->interrupt_handler_p ? K0_REG_NUM : GP_REG_FIRST + 5)
 
 /* Using long will always be right for size_t and ptrdiff_t, since
    sizeof(long) must equal sizeof(void *), following from the setting
@@ -99,9 +92,6 @@ along with GCC; see the file COPYING3.  If not see
 #define SIZE_TYPE "long unsigned int"
 #undef PTRDIFF_TYPE
 #define PTRDIFF_TYPE "long int"
-
-/* Enable parsing of #pragma pack(push,<n>) and #pragma pack(pop).  */
-#define HANDLE_PRAGMA_PACK_PUSH_POP 1
 
 /* Use standard ELF-style local labels (not '$' as on early Irix).  */
 #undef LOCAL_LABEL_PREFIX

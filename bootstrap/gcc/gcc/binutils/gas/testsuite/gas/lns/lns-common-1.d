@@ -1,6 +1,6 @@
 #readelf: -wl
 #name: lns-common-1
-Raw dump of debug contents of section \.debug_line:
+Raw dump of debug contents of section \.z?debug_line:
 #...
   Initial value of 'is_stmt':  1
 #...
@@ -21,6 +21,8 @@ Raw dump of debug contents of section \.debug_line:
   Special opcode .*: advance Address by .* to .* and Line by 1 to 6
   Set is_stmt to 1
   Special opcode .*: advance Address by .* to .* and Line by 1 to 7
+  Extended opcode 4: set Discriminator to 1
+  Special opcode .*: advance Address by .* to .* and Line by 0 to 7
   Advance PC by .* to .*
   Extended opcode 1: End of Sequence
 #...

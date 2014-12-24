@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2001-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 2001-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -186,7 +186,7 @@ procedure Gnatname is
       Excluded_Pattern_Expected : Boolean;
 
       procedure Check_Regular_Expression (S : String);
-      --  Compile string S into a Regexp. Fail if any error.
+      --  Compile string S into a Regexp, fail if any error
 
       -----------------------------
       -- Check_Regular_Expression--
@@ -199,7 +199,7 @@ procedure Gnatname is
          Dummy := Compile (S, Glob => True);
       exception
          when Error_In_Regexp =>
-            Fail ("invalid regular expression """, S, """");
+            Fail ("invalid regular expression """ & S & """");
       end Check_Regular_Expression;
 
    --  Start of processing for Scan_Args
@@ -306,7 +306,20 @@ procedure Gnatname is
 
                   --  Add and initialize another component to Arguments table
 
-                  Arguments.Increment_Last;
+                  declare
+                     New_Arguments : Argument_Data;
+                     pragma Warnings (Off, New_Arguments);
+                     --  Declaring this defaulted initialized object ensures
+                     --  that the new allocated component of table Arguments
+                     --  is correctly initialized.
+
+                     --  This is VERY ugly, Table should never be used with
+                     --  data requiring default initialization. We should
+                     --  find a way to avoid violating this rule ???
+
+                  begin
+                     Arguments.Append (New_Arguments);
+                  end;
 
                   Patterns.Init
                     (Arguments.Table (Arguments.Last).Directories);
@@ -385,6 +398,7 @@ procedure Gnatname is
 
                elsif Arg = "-eL" then
                   Opt.Follow_Links_For_Files := True;
+                  Opt.Follow_Links_For_Dirs  := True;
 
                --  -f
 
@@ -524,8 +538,6 @@ procedure Gnatname is
 --  Start of processing for Gnatname
 
 begin
-   Prj.Set_Mode (Prj.Ada_Only);
-
    --  Add the directory where gnatname is invoked in front of the
    --  path, if gnatname is invoked with directory information.
    --  Only do this if the platform is not VMS, where the notion of path
@@ -622,7 +634,8 @@ begin
         (File_Path         => File_Path.all,
          Project_File      => Create_Project,
          Preproc_Switches  => Prep_Switches,
-         Very_Verbose      => Very_Verbose);
+         Very_Verbose      => Very_Verbose,
+         Flags             => Gnatmake_Flags);
    end;
 
    --  Process each section successively

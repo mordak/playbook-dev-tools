@@ -1,9 +1,7 @@
 /* { dg-do compile } */
-/* { dg-options "-O -fstrict-aliasing -fno-tree-sra --param max-aliased-vops=0 --param max-fields-for-field-sensitive=0 -fdump-tree-fre-details" } */
+/* { dg-options "-O -fstrict-aliasing -fno-tree-sra -fdump-tree-fre-details" } */
 
-/* Should be optimized, propagating &a into (*p)[i] with parameters
-     --param max-aliased-vops=0 --param max-fields-for-field-sensitive=0
-   which means max 1 VOP per stmt and no SFTs.  */
+/* Should be optimized, propagating &a into (*p)[i].  */
 
 /* For this testcase we need TBAA to work.  */
 
@@ -25,6 +23,5 @@ void foo(double (*q)[4], struct Foo *tmp1)
     }
 }
 
-/* { dg-final { scan-tree-dump "Inserted .* &a" "fre" } } */
-/* { dg-final { scan-tree-dump "Replaced tmp1_.\\\(D\\\)->data" "fre" } } */
+/* { dg-final { scan-tree-dump "Replaced tmp1_.\\\(D\\\)->data with &a" "fre" } } */
 /* { dg-final { cleanup-tree-dump "fre" } } */

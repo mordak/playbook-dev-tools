@@ -1,6 +1,6 @@
 // The  -*- C++ -*- type traits classes for internal use in libstdc++
 
-// Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2009
+// Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -23,9 +23,9 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file cpp_type_traits.h
+/** @file bits/cpp_type_traits.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{ext/type_traits}
  */
 
 // Written by Gabriel Dos Reis <dosreis@cmla.ens-cachan.fr>
@@ -66,14 +66,19 @@
 //
 
 // Forward declaration hack, should really include this from somewhere.
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   template<typename _Iterator, typename _Container>
     class __normal_iterator;
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   struct __true_type { };
   struct __false_type { };
@@ -136,8 +141,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     };
 
   // Thirteen specializations (yes there are eleven standard integer
-  // types; 'long long' and 'unsigned long long' are supported as
-  // extensions)
+  // types; <em>long long</em> and <em>unsigned long long</em> are
+  // supported as extensions)
   template<>
     struct __is_integer<bool>
     {
@@ -414,6 +419,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     };
 #endif
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif //_CPP_TYPE_TRAITS_H

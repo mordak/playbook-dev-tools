@@ -1,6 +1,6 @@
 /* Loop manipulation code for GNU compiler.
-   Copyright (C) 2002, 2003, 2004, 2005, 2007, 2008, 2009 Free Software
-   Foundation, Inc.
+   Copyright (C) 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010, 2011
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -32,7 +32,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "output.h"
 #include "tree-flow.h"
 
-static void duplicate_subloops (struct loop *, struct loop *);
 static void copy_loops_to (struct loop **, int,
 			   struct loop *);
 static void loop_redirect_edge (edge, basic_block);
@@ -131,7 +130,7 @@ fix_loop_placement (struct loop *loop)
   struct loop *father = current_loops->tree_root, *act;
   bool ret = false;
 
-  for (i = 0; VEC_iterate (edge, exits, i, e); i++)
+  FOR_EACH_VEC_ELT (edge, exits, i, e)
     {
       act = find_common_loop (loop, e->dest->loop_father);
       if (flow_loop_nested_p (father, act))
@@ -147,7 +146,7 @@ fix_loop_placement (struct loop *loop)
 
       /* The exit edges of LOOP no longer exits its original immediate
 	 superloops; remove them from the appropriate exit lists.  */
-      for (i = 0; VEC_iterate (edge, exits, i, e); i++)
+      FOR_EACH_VEC_ELT (edge, exits, i, e)
 	rescan_loop_exit (e, false, false);
 
       ret = true;
@@ -165,7 +164,7 @@ fix_loop_placement (struct loop *loop)
    placement of subloops of FROM->loop_father, that might also be altered due
    to this change; the condition for them is similar, except that instead of
    successors we consider edges coming out of the loops.
- 
+
    If the changes may invalidate the information about irreducible regions,
    IRRED_INVALIDATED is set to true.  */
 
@@ -175,7 +174,7 @@ fix_bb_placements (basic_block from,
 {
   sbitmap in_queue;
   basic_block *queue, *qtop, *qbeg, *qend;
-  struct loop *base_loop;
+  struct loop *base_loop, *target_loop;
   edge e;
 
   /* We pass through blocks back-reachable from FROM, testing whether some
@@ -186,7 +185,11 @@ fix_bb_placements (basic_block from,
      fix_loop_placement.  */
 
   base_loop = from->loop_father;
-  if (base_loop == current_loops->tree_root)
+  /* If we are already in the outermost loop, the basic blocks cannot be moved
+     outside of it.  If FROM is the header of the base loop, it cannot be moved
+     outside of it, either.  In both cases, we can end now.  */
+  if (base_loop == current_loops->tree_root
+      || from == base_loop->header)
     return;
 
   in_queue = sbitmap_alloc (last_basic_block);
@@ -215,12 +218,14 @@ fix_bb_placements (basic_block from,
 	  /* Subloop header, maybe move the loop upward.  */
 	  if (!fix_loop_placement (from->loop_father))
 	    continue;
+	  target_loop = loop_outer (from->loop_father);
 	}
       else
 	{
 	  /* Ordinary basic block.  */
 	  if (!fix_bb_placement (from))
 	    continue;
+	  target_loop = from->loop_father;
 	}
 
       FOR_EACH_EDGE (e, ei, from->succs)
@@ -249,9 +254,12 @@ fix_bb_placements (basic_block from,
 	      && (nca == base_loop
 		  || nca != pred->loop_father))
 	    pred = pred->loop_father->header;
-	  else if (!flow_loop_nested_p (from->loop_father, pred->loop_father))
+	  else if (!flow_loop_nested_p (target_loop, pred->loop_father))
 	    {
-	      /* No point in processing it.  */
+	      /* If PRED is already higher in the loop hierarchy than the
+		 TARGET_LOOP to that we moved FROM, the change of the position
+		 of FROM does not affect the position of PRED, so there is no
+		 point in processing it.  */
 	      continue;
 	    }
 
@@ -279,10 +287,9 @@ remove_path (edge e)
   edge ae;
   basic_block *rem_bbs, *bord_bbs, from, bb;
   VEC (basic_block, heap) *dom_bbs;
-  int i, nrem, n_bord_bbs, nreml;
+  int i, nrem, n_bord_bbs;
   sbitmap seen;
   bool irred_invalidated = false;
-  struct loop **deleted_loop;
 
   if (!can_remove_branch_p (e))
     return false;
@@ -331,7 +338,7 @@ remove_path (edge e)
 	  {
 	    SET_BIT (seen, ae->dest->index);
 	    bord_bbs[n_bord_bbs++] = ae->dest;
-	  
+
 	    if (ae->flags & EDGE_IRREDUCIBLE_LOOP)
 	      irred_invalidated = true;
 	  }
@@ -343,15 +350,9 @@ remove_path (edge e)
   dom_bbs = NULL;
 
   /* Cancel loops contained in the path.  */
-  deleted_loop = XNEWVEC (struct loop *, nrem);
-  nreml = 0;
   for (i = 0; i < nrem; i++)
     if (rem_bbs[i]->loop_father->header == rem_bbs[i])
-      deleted_loop[nreml++] = rem_bbs[i]->loop_father;
-
-  for (i = 0; i < nreml; i++)
-    cancel_loop_tree (deleted_loop[i]);
-  free (deleted_loop);
+      cancel_loop_tree (rem_bbs[i]->loop_father);
 
   remove_bbs (rem_bbs, nrem);
   free (rem_bbs);
@@ -505,7 +506,7 @@ update_dominators_in_loop (struct loop *loop)
 }
 
 /* Creates an if region as shown above. CONDITION is used to create
-   the test for the if. 
+   the test for the if.
 
    |
    |     -------------                 -------------
@@ -542,15 +543,14 @@ edge
 create_empty_if_region_on_edge (edge entry_edge, tree condition)
 {
 
-  basic_block succ_bb, cond_bb, true_bb, false_bb, join_bb;
+  basic_block cond_bb, true_bb, false_bb, join_bb;
   edge e_true, e_false, exit_edge;
   gimple cond_stmt;
   tree simple_cond;
   gimple_stmt_iterator gsi;
 
-  succ_bb = entry_edge->dest;
   cond_bb = split_edge (entry_edge);
-  
+
   /* Insert condition in cond_bb.  */
   gsi = gsi_last_bb (cond_bb);
   simple_cond =
@@ -559,7 +559,7 @@ create_empty_if_region_on_edge (edge entry_edge, tree condition)
   cond_stmt = gimple_build_cond_from_tree (simple_cond, NULL_TREE, NULL_TREE);
   gsi = gsi_last_bb (cond_bb);
   gsi_insert_after (&gsi, cond_stmt, GSI_NEW_STMT);
-  
+
   join_bb = split_edge (single_succ_edge (cond_bb));
 
   e_true = single_succ_edge (cond_bb);
@@ -588,53 +588,54 @@ create_empty_if_region_on_edge (edge entry_edge, tree condition)
 
 /* create_empty_loop_on_edge
    |
-   |     -------------                 ------------------------
-   |     |  pred_bb  |                 |  pred_bb              |
-   |     -------------                 |  IV_0 = INITIAL_VALUE |
-   |           |                       ------------------------
-   |           |                       ______    | ENTRY_EDGE
-   |           | ENTRY_EDGE           /      V   V
-   |           |             ====>   |     -----------------------------
-   |           |                     |     | IV_BEFORE = phi (IV_0, IV) |
-   |           |                     |     | loop_header                |
-   |           V                     |     | IV_BEFORE <= UPPER_BOUND   |
-   |     -------------               |     -----------------------\-----
-   |     |  succ_bb  |               |         |                   \
-   |     -------------               |         |                    \ exit_e
-   |                                 |         V                     V---------
-   |                                 |      --------------           | succ_bb |
-   |                                 |      | loop_latch  |          ----------
-   |                                 |      |IV = IV_BEFORE + STRIDE
-   |                                 |      --------------
-   |                                  \       /
-   |                                   \ ___ /
+   |    - pred_bb -                   ------ pred_bb ------
+   |   |           |                 | iv0 = initial_value |
+   |    -----|-----                   ---------|-----------
+   |         |                       ______    | entry_edge
+   |         | entry_edge           /      |   |
+   |         |             ====>   |      -V---V- loop_header -------------
+   |         V                     |     | iv_before = phi (iv0, iv_after) |
+   |    - succ_bb -                |      ---|-----------------------------
+   |   |           |               |         |
+   |    -----------                |      ---V--- loop_body ---------------
+   |                               |     | iv_after = iv_before + stride   |
+   |                               |     | if (iv_before < upper_bound)    |
+   |                               |      ---|--------------\--------------
+   |                               |         |               \ exit_e
+   |                               |         V                \
+   |                               |       - loop_latch -      V- succ_bb -
+   |                               |      |              |     |           |
+   |                               |       /-------------       -----------
+   |                                \ ___ /
 
    Creates an empty loop as shown above, the IV_BEFORE is the SSA_NAME
-   that is used before the increment of IV. IV_BEFORE should be used for 
+   that is used before the increment of IV. IV_BEFORE should be used for
    adding code to the body that uses the IV.  OUTER is the outer loop in
-   which the new loop should be inserted.  */
+   which the new loop should be inserted.
+
+   Both INITIAL_VALUE and UPPER_BOUND expressions are gimplified and
+   inserted on the loop entry edge.  This implies that this function
+   should be used only when the UPPER_BOUND expression is a loop
+   invariant.  */
 
 struct loop *
-create_empty_loop_on_edge (edge entry_edge, 
+create_empty_loop_on_edge (edge entry_edge,
 			   tree initial_value,
 			   tree stride, tree upper_bound,
 			   tree iv,
 			   tree *iv_before,
+			   tree *iv_after,
 			   struct loop *outer)
 {
   basic_block loop_header, loop_latch, succ_bb, pred_bb;
   struct loop *loop;
-  int freq;
-  gcov_type cnt;
   gimple_stmt_iterator gsi;
-  bool insert_after;
   gimple_seq stmts;
   gimple cond_expr;
   tree exit_test;
   edge exit_e;
   int prob;
-  tree upper_bound_gimplified;
-  
+
   gcc_assert (entry_edge && initial_value && stride && upper_bound && iv);
 
   /* Create header, latch and wire up the loop.  */
@@ -657,15 +658,17 @@ create_empty_loop_on_edge (edge entry_edge,
   add_loop (loop, outer);
 
   /* TODO: Fix frequencies and counts.  */
-  freq = EDGE_FREQUENCY (entry_edge);
-  cnt = entry_edge->count;
-
   prob = REG_BR_PROB_BASE / 2;
 
   scale_loop_frequencies (loop, REG_BR_PROB_BASE - prob, REG_BR_PROB_BASE);
 
   /* Update dominators.  */
   update_dominators_in_loop (loop);
+
+  /* Modify edge flags.  */
+  exit_e = single_exit (loop);
+  exit_e->flags = EDGE_LOOP_EXIT | EDGE_FALSE_VALUE;
+  single_pred_edge (loop_latch)->flags = EDGE_TRUE_VALUE;
 
   /* Construct IV code in loop.  */
   initial_value = force_gimple_operand (initial_value, &stmts, true, iv);
@@ -675,24 +678,20 @@ create_empty_loop_on_edge (edge entry_edge,
       gsi_commit_edge_inserts ();
     }
 
-  standard_iv_increment_position (loop, &gsi, &insert_after);
-  create_iv (initial_value, stride, iv, loop, &gsi, insert_after,
-	     iv_before, NULL);
+  upper_bound = force_gimple_operand (upper_bound, &stmts, true, NULL);
+  if (stmts)
+    {
+      gsi_insert_seq_on_edge (loop_preheader_edge (loop), stmts);
+      gsi_commit_edge_inserts ();
+    }
 
-  /* Modify edge flags.  */
-  exit_e = single_exit (loop);
-  exit_e->flags = EDGE_LOOP_EXIT | EDGE_FALSE_VALUE;
-  single_pred_edge (loop_latch)->flags = EDGE_TRUE_VALUE;
+  gsi = gsi_last_bb (loop_header);
+  create_iv (initial_value, stride, iv, loop, &gsi, false,
+	     iv_before, iv_after);
 
-  gsi = gsi_last_bb (exit_e->src);
-
-  upper_bound_gimplified = 
-    force_gimple_operand_gsi (&gsi, upper_bound, true, NULL,
-			      false, GSI_NEW_STMT);
-  gsi = gsi_last_bb (exit_e->src);
-  
-  cond_expr = gimple_build_cond 
-    (LE_EXPR, *iv_before, upper_bound_gimplified, NULL_TREE, NULL_TREE);
+  /* Insert loop exit condition.  */
+  cond_expr = gimple_build_cond
+    (LT_EXPR, *iv_before, upper_bound, NULL_TREE, NULL_TREE);
 
   exit_test = gimple_cond_lhs (cond_expr);
   exit_test = force_gimple_operand_gsi (&gsi, exit_test, true, NULL,
@@ -700,6 +699,8 @@ create_empty_loop_on_edge (edge entry_edge,
   gimple_cond_set_lhs (cond_expr, exit_test);
   gsi = gsi_last_bb (exit_e->src);
   gsi_insert_after (&gsi, cond_expr, GSI_NEW_STMT);
+
+  split_block_after_labels (loop_header);
 
   return loop;
 }
@@ -834,7 +835,7 @@ unloop (struct loop *loop, bool *irred_invalidated)
    condition stated in description of fix_loop_placement holds for them.
    It is used in case when we removed some edges coming out of LOOP, which
    may cause the right placement of LOOP inside loop tree to change.
- 
+
    IRRED_INVALIDATED is set to true if a change in the loop structures might
    invalidate the information about irreducible regions.  */
 
@@ -880,7 +881,7 @@ duplicate_loop (struct loop *loop, struct loop *target)
 
 /* Copies structure of subloops of LOOP into TARGET loop, placing
    newly created loops into loop tree.  */
-static void
+void
 duplicate_subloops (struct loop *loop, struct loop *target)
 {
   struct loop *aloop, *cloop;
@@ -1279,7 +1280,7 @@ duplicate_loop_to_header_edge (struct loop *loop, edge e,
       bb->aux = 0;
 
       dom_bbs = get_dominated_by (CDI_DOMINATORS, bb);
-      for (j = 0; VEC_iterate (basic_block, dom_bbs, j, dominated); j++)
+      FOR_EACH_VEC_ELT (basic_block, dom_bbs, j, dominated)
 	{
 	  if (flow_bb_inside_loop_p (loop, dominated))
 	    continue;
@@ -1315,7 +1316,7 @@ has_preds_from_loop (basic_block block, struct loop *loop)
 {
   edge e;
   edge_iterator ei;
-  
+
   FOR_EACH_EDGE (e, ei, block->preds)
     if (e->src->loop_father == loop)
       return true;
@@ -1326,7 +1327,7 @@ has_preds_from_loop (basic_block block, struct loop *loop)
    CP_SIMPLE_PREHEADERS is set in FLAGS, we only force LOOP to have single
    entry; otherwise we also force preheader block to have only one successor.
    When CP_FALLTHRU_PREHEADERS is set in FLAGS, we force the preheader block
-   to be a fallthru predecessor to the loop header and to have only 
+   to be a fallthru predecessor to the loop header and to have only
    predecessors from outside of the loop.
    The function also updates dominators.  */
 
@@ -1355,7 +1356,7 @@ create_preheader (struct loop *loop, int flags)
   if (nentry == 1)
     {
       bool need_forwarder_block = false;
-      
+
       /* We do not allow entry block to be the loop preheader, since we
 	     cannot emit code there.  */
       if (single_entry->src == ENTRY_BLOCK_PTR)
@@ -1411,7 +1412,7 @@ create_preheader (struct loop *loop, int flags)
   if (dump_file)
     fprintf (dump_file, "Created preheader block for loop %i\n",
 	     loop->num);
-  
+
   if (flags & CP_FALLTHRU_PREHEADERS)
     gcc_assert ((single_succ_edge (dummy)->flags & EDGE_FALLTHRU)
                 && !JUMP_P (BB_END (dummy)));
@@ -1519,7 +1520,7 @@ lv_adjust_loop_entry_edge (basic_block first_head, basic_block second_head,
    is the ratio by that the frequencies in the original loop should
    be scaled.  ELSE_SCALE is the ratio by that the frequencies in the
    new loop should be scaled.
-   
+
    If PLACE_AFTER is true, we place the new loop after LOOP in the
    instruction stream, otherwise it is placed before LOOP.  */
 
@@ -1546,7 +1547,10 @@ loop_version (struct loop *loop,
   /* Duplicate loop.  */
   if (!cfg_hook_duplicate_loop_to_header_edge (loop, entry, 1,
 					       NULL, NULL, NULL, 0))
-    return NULL;
+    {
+      entry->flags |= irred_flag;
+      return NULL;
+    }
 
   /* After duplication entry edge now points to new loop head block.
      Note down new head as second_head.  */

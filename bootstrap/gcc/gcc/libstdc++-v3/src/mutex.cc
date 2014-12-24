@@ -1,6 +1,6 @@
 // mutex -*- C++ -*-
 
-// Copyright (C) 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2008, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -37,15 +37,9 @@ namespace
 }
 #endif
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
-  const defer_lock_t defer_lock = defer_lock_t();
-  const try_to_lock_t try_to_lock = try_to_lock_t();
-  const adopt_lock_t adopt_lock = adopt_lock_t();
-
-  const char*
-  lock_error::what() const throw()
-  { return "std::lock_error"; }
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
 #ifdef _GLIBCXX_HAVE_TLS
   __thread void* __once_callable;
@@ -96,6 +90,32 @@ namespace std
       __once_call();
     }
   }
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
+
+// XXX GLIBCXX_ABI Deprecated
+// gcc-4.6.0
+// <mutex> export changes
+#if defined(_GLIBCXX_SYMVER_GNU) && defined(PIC) \
+    && defined(_GLIBCXX_HAVE_AS_SYMVER_DIRECTIVE) \
+    && defined(_GLIBCXX_HAVE_SYMVER_SYMBOL_RENAMING_RUNTIME_SUPPORT)
+
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
+{
+  std::defer_lock_t defer_lock;
+  std::try_to_lock_t try_to_lock;
+  std::adopt_lock_t adopt_lock;
 }
+
+#define _GLIBCXX_ASM_SYMVER(cur, old, version) \
+   asm (".symver " #cur "," #old "@@" #version);
+
+_GLIBCXX_ASM_SYMVER(_ZN9__gnu_cxx10adopt_lockE, _ZSt10adopt_lock, GLIBCXX_3.4.11)
+_GLIBCXX_ASM_SYMVER(_ZN9__gnu_cxx10defer_lockE, _ZSt10defer_lock, GLIBCXX_3.4.11)
+_GLIBCXX_ASM_SYMVER(_ZN9__gnu_cxx11try_to_lockE, _ZSt11try_to_lock, GLIBCXX_3.4.11)
+
+
+#endif
 
 #endif // _GLIBCXX_HAS_GTHREADS && _GLIBCXX_USE_C99_STDINT_TR1

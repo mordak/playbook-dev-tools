@@ -2,7 +2,7 @@
    using ELF objects with special linker post-processing to produce FLAT
    executables.
 
-   Copyright (C) 2003, 2007 Free Software Foundation, Inc.
+   Copyright (C) 2003, 2007, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -35,7 +35,7 @@ along with GCC; see the file COPYING3.  If not see
    profiling, or libg.a.  */
 #undef LIB_SPEC
 #define LIB_SPEC \
-"%{mid-shared-library:%{!static-libc:-R libc.gdb%s}} -lc"
+"%{mid-shared-library:%{!static-libc:-R libc.gdb%s}} %{pthread:-lpthread} -lc"
 
 /* Default to using -elf2flt with no options.  */
 #undef LINK_SPEC

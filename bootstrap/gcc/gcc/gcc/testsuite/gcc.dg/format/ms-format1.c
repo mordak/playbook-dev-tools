@@ -8,10 +8,16 @@
 #define USE_SYSTEM_FORMATS
 #include "format.h"
 
+enum en1 { A=0, B=1 };
+typedef enum { _A=0, _B=1 } en2;
+
 void
-foo (int i, long long ll, size_t z)
+foo (int i, long l, long long ll, size_t z, enum en1 e1, en2 e2)
 {
   printf ("%I32d", i);
+  printf ("%I32d", l);
+  printf ("%I32d", e1);
+  printf ("%I32d", e2);
   printf ("%I64x", ll);
   printf ("%Ix", z);
 }

@@ -1,6 +1,6 @@
 /* { dg-do compile } */
 /* { dg-options "-O3 -fipa-cp -fipa-cp-clone -fdump-ipa-cp -fno-early-inlining"  } */
-/* { dg-skip-if "PR 25442" { "*-*-*" } { "-fpic" "-fPIC" } { "" } } */
+/* { dg-add-options bind_pic_locally } */
 
 #include <stdio.h>
 void send_addr (int *);
@@ -13,14 +13,16 @@ int f (int a)
   if (a > 0)
     g (a, 3);
   else
-    g (a, 5); 	
-   
+    g (a, 5);
+
   send_addr (&a);
 }
 int main ()
 {
-  f (7);
-  return 0;	
+  int i;
+  for (i = 0; i < 100; i++)
+    f (7);
+  return 0;
 }
 
 

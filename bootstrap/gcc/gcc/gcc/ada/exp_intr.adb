@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -39,6 +39,7 @@ with Freeze;   use Freeze;
 with Namet;    use Namet;
 with Nmake;    use Nmake;
 with Nlists;   use Nlists;
+with Opt;      use Opt;
 with Restrict; use Restrict;
 with Rident;   use Rident;
 with Rtsfind;  use Rtsfind;
@@ -52,7 +53,6 @@ with Sinput;   use Sinput;
 with Snames;   use Snames;
 with Stand;    use Stand;
 with Stringt;  use Stringt;
-with Targparm; use Targparm;
 with Tbuild;   use Tbuild;
 with Uintp;    use Uintp;
 with Urealp;   use Urealp;
@@ -62,6 +62,10 @@ package body Exp_Intr is
    -----------------------
    -- Local Subprograms --
    -----------------------
+
+   procedure Expand_Binary_Operator_Call (N : Node_Id);
+   --  Expand a call to an intrinsic arithmetic operator when the operand
+   --  types or sizes are not identical.
 
    procedure Expand_Is_Negative (N : Node_Id);
    --  Expand a call to the intrinsic Is_Negative function
@@ -107,6 +111,67 @@ package body Exp_Intr is
    --    Name_Line             - expand integer line number
    --    Name_Source_Location  - expand string of form file:line
    --    Name_Enclosing_Entity - expand string  with name of enclosing entity
+
+   ---------------------------------
+   -- Expand_Binary_Operator_Call --
+   ---------------------------------
+
+   procedure Expand_Binary_Operator_Call (N : Node_Id) is
+      T1  : constant Entity_Id := Underlying_Type (Etype (Left_Opnd  (N)));
+      T2  : constant Entity_Id := Underlying_Type (Etype (Right_Opnd (N)));
+      TR  : constant Entity_Id := Etype (N);
+      T3  : Entity_Id;
+      Res : Node_Id;
+
+      Siz : constant Uint := UI_Max (Esize (T1), Esize (T2));
+      --  Maximum of operand sizes
+
+   begin
+      --  Nothing to do if the operands have the same modular type
+
+      if Base_Type (T1) = Base_Type (T2)
+        and then Is_Modular_Integer_Type (T1)
+      then
+         return;
+      end if;
+
+      --  Use Unsigned_32 for sizes of 32 or below, else Unsigned_64
+
+      if Siz > 32 then
+         T3 := RTE (RE_Unsigned_64);
+      else
+         T3 := RTE (RE_Unsigned_32);
+      end if;
+
+      --  Copy operator node, and reset type and entity fields, for
+      --  subsequent reanalysis.
+
+      Res := New_Copy (N);
+      Set_Etype (Res, T3);
+
+      case Nkind (N) is
+         when N_Op_And =>
+            Set_Entity (Res, Standard_Op_And);
+         when N_Op_Or =>
+            Set_Entity (Res, Standard_Op_Or);
+         when N_Op_Xor =>
+            Set_Entity (Res, Standard_Op_Xor);
+         when others =>
+            raise Program_Error;
+      end case;
+
+      --  Convert operands to large enough intermediate type
+
+      Set_Left_Opnd (Res,
+        Unchecked_Convert_To (T3, Relocate_Node (Left_Opnd (N))));
+      Set_Right_Opnd (Res,
+        Unchecked_Convert_To (T3, Relocate_Node (Right_Opnd (N))));
+
+      --  Analyze and resolve result formed by conversion to target type
+
+      Rewrite (N, Unchecked_Convert_To (TR, Res));
+      Analyze_And_Resolve (N, TR);
+   end Expand_Binary_Operator_Call;
 
    -----------------------------------------
    -- Expand_Dispatching_Constructor_Call --
@@ -171,11 +236,10 @@ package body Exp_Intr is
 
             Iface_Tag :=
               Make_Object_Declaration (Loc,
-                Defining_Identifier =>
-                  Make_Defining_Identifier (Loc, New_Internal_Name ('V')),
-                Object_Definition =>
+                Defining_Identifier => Make_Temporary (Loc, 'V'),
+                Object_Definition   =>
                   New_Reference_To (RTE (RE_Tag), Loc),
-                Expression =>
+                Expression          =>
                   Make_Function_Call (Loc,
                     Name => New_Reference_To (RTE (RE_Secondary_Tag), Loc),
                     Parameter_Associations => New_List (
@@ -219,7 +283,7 @@ package body Exp_Intr is
       --  checks are suppressed for the result type or VM_Target /= No_VM
 
       if Tag_Checks_Suppressed (Etype (Result_Typ))
-        or else VM_Target /= No_VM
+        or else not Tagged_Type_Expansion
       then
          null;
 
@@ -234,19 +298,28 @@ package body Exp_Intr is
       --  the tag in the table of ancestor tags.
 
       elsif not Is_Interface (Result_Typ) then
-         Insert_Action (N,
-           Make_Implicit_If_Statement (N,
-             Condition =>
-               Make_Op_Not (Loc,
-                 Build_CW_Membership (Loc,
-                   Obj_Tag_Node => Duplicate_Subexpr (Tag_Arg),
-                   Typ_Tag_Node =>
-                     New_Reference_To (
-                        Node (First_Elmt (Access_Disp_Table (
-                                            Root_Type (Result_Typ)))), Loc))),
-             Then_Statements =>
-               New_List (Make_Raise_Statement (Loc,
-                           New_Occurrence_Of (RTE (RE_Tag_Error), Loc)))));
+         declare
+            Obj_Tag_Node : Node_Id := Duplicate_Subexpr (Tag_Arg);
+            CW_Test_Node : Node_Id;
+
+         begin
+            Build_CW_Membership (Loc,
+              Obj_Tag_Node => Obj_Tag_Node,
+              Typ_Tag_Node =>
+                New_Reference_To (
+                   Node (First_Elmt (Access_Disp_Table (
+                                       Root_Type (Result_Typ)))), Loc),
+              Related_Nod => N,
+              New_Node    => CW_Test_Node);
+
+            Insert_Action (N,
+              Make_Implicit_If_Statement (N,
+                Condition =>
+                  Make_Op_Not (Loc, CW_Test_Node),
+                Then_Statements =>
+                  New_List (Make_Raise_Statement (Loc,
+                              New_Occurrence_Of (RTE (RE_Tag_Error), Loc)))));
+         end;
 
       --  Call IW_Membership test if the Result_Type is an abstract interface
       --  to look for the tag in the table of interface tags.
@@ -316,7 +389,7 @@ package body Exp_Intr is
             --  be referencing it by normal visibility methods.
 
             if No (Choice_Parameter (P)) then
-               E := Make_Defining_Identifier (Loc, New_Internal_Name ('E'));
+               E := Make_Temporary (Loc, 'E');
                Set_Choice_Parameter (P, E);
                Set_Ekind (E, E_Variable);
                Set_Etype (E, RTE (RE_Exception_Occurrence));
@@ -353,11 +426,9 @@ package body Exp_Intr is
       Loc : constant Source_Ptr := Sloc (N);
       Ent : constant Entity_Id  := Entity (Name (N));
       Str : constant Node_Id    := First_Actual (N);
-      Dum : Entity_Id;
+      Dum : constant Entity_Id  := Make_Temporary (Loc, 'D');
 
    begin
-      Dum := Make_Defining_Identifier (Loc, New_Internal_Name ('D'));
-
       Insert_Actions (N, New_List (
         Make_Object_Declaration (Loc,
           Defining_Identifier => Dum,
@@ -394,6 +465,13 @@ package body Exp_Intr is
       Nam : Name_Id;
 
    begin
+      --  If an external name is specified for the intrinsic, it is handled
+      --  by the back-end: leave the call node unchanged for now.
+
+      if Present (Interface_Name (E)) then
+         return;
+      end if;
+
       --  If the intrinsic subprogram is generic, gets its original name
 
       if Present (Parent (E))
@@ -473,6 +551,9 @@ package body Exp_Intr is
 
       elsif Present (Alias (E)) then
          Expand_Intrinsic_Call (N,  Alias (E));
+
+      elsif Nkind (N) in N_Binary_Op then
+         Expand_Binary_Operator_Call (N);
 
          --  The only other case is where an external name was specified,
          --  since this is the only way that an otherwise unrecognized
@@ -788,7 +869,7 @@ package body Exp_Intr is
       Rtyp  : constant Entity_Id  := Underlying_Type (Root_Type (Typ));
       Pool  : constant Entity_Id  := Associated_Storage_Pool (Rtyp);
 
-      Desig_T   : constant Entity_Id  := Designated_Type (Typ);
+      Desig_T   : constant Entity_Id := Designated_Type (Typ);
       Gen_Code  : Node_Id;
       Free_Node : Node_Id;
       Deref     : Node_Id;
@@ -803,10 +884,6 @@ package body Exp_Intr is
       --  them to the tree, and that can disturb current value settings.
 
    begin
-      if No_Pool_Assigned (Rtyp) then
-         Error_Msg_N ("?deallocation from empty storage pool!", N);
-      end if;
-
       --  Nothing to do if we know the argument is null
 
       if Known_Null (N) then
@@ -951,6 +1028,10 @@ package body Exp_Intr is
       Append_To (Stmts, Free_Node);
       Set_Storage_Pool (Free_Node, Pool);
 
+      --  Attach to tree before analysis of generated subtypes below.
+
+      Set_Parent (Stmts, Parent (N));
+
       --  Deal with storage pool
 
       if Present (Pool) then
@@ -1009,15 +1090,18 @@ package body Exp_Intr is
                   D_Type := Entity (D_Subtyp);
 
                else
-                  D_Type := Make_Defining_Identifier (Loc,
-                              New_Internal_Name ('A'));
-                  Insert_Action (N,
+                  D_Type := Make_Temporary (Loc, 'A');
+                  Insert_Action (Deref,
                     Make_Subtype_Declaration (Loc,
                       Defining_Identifier => D_Type,
                       Subtype_Indication  => D_Subtyp));
-                  Freeze_Itype (D_Type, N);
-
                end if;
+
+               --  Force freezing at the point of the dereference. For the
+               --  class wide case, this avoids having the subtype frozen
+               --  before the equivalent type.
+
+               Freeze_Itype (D_Type, Deref);
 
                Set_Actual_Designated_Subtype (Free_Node, D_Type);
             end;
@@ -1034,7 +1118,7 @@ package body Exp_Intr is
       --    free (Base_Address (Obj_Ptr))
 
       if Is_Interface (Directly_Designated_Type (Typ))
-        and then VM_Target = No_VM
+        and then Tagged_Type_Expansion
       then
          Set_Expression (Free_Node,
            Unchecked_Convert_To (Typ,

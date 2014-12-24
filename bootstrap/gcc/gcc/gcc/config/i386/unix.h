@@ -1,5 +1,5 @@
 /* Definitions for Unix assembler syntax for the Intel 80386.
-   Copyright (C) 1988, 1994, 1999, 2000, 2001, 2002, 2007, 2009
+   Copyright (C) 1988, 1994, 1999, 2000, 2001, 2002, 2007, 2009, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -35,9 +35,14 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 /* Define the syntax of pseudo-ops, labels and comments.  */
 
-/* String containing the assembler's comment-starter.  */
+/* String containing the assembler's comment-starter.
+   Note the trailing space is necessary in case the character
+   that immediately follows the comment is '*'.  If this happens
+   and the space is not there the assembler will interpret this
+   as the start of a C-like slash-star comment and complain when
+   there is no terminator.  */
 
-#define ASM_COMMENT_START "/"
+#define ASM_COMMENT_START "/ "
 
 /* Output to assembler file text saying following lines
    may contain character constants, extra white space, comments, etc.  */
@@ -62,7 +67,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #define BSS_SECTION_ASM_OP "\t.bss"
 
 /* Globalizing directive for a label.  */
-#define GLOBAL_ASM_OP ".globl "
+#define GLOBAL_ASM_OP "\t.globl\t"
 
 /* By default, target has a 80387, uses IEEE compatible arithmetic,
    and returns float values in the 387.  */

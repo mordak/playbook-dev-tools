@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -49,6 +49,7 @@ with Rident;   use Rident;
 with Rtsfind;  use Rtsfind;
 with Sinfo;    use Sinfo;
 with Sem;      use Sem;
+with Sem_Aux;  use Sem_Aux;
 with Sem_Ch3;  use Sem_Ch3;
 with Sem_Ch7;  use Sem_Ch7;
 with Sem_Ch8;  use Sem_Ch8;
@@ -86,11 +87,11 @@ package body Exp_Ch7 is
    --      (See Wrap_Transient_Expression for details)
 
    --   3. In a expression of an object_declaration. No wrapping is possible
-   --      here, so the finalization actions, if any are done right after the
+   --      here, so the finalization actions, if any, are done right after the
    --      declaration and the secondary stack deallocation is done in the
    --      proper enclosing scope (see Wrap_Transient_Declaration for details)
 
-   --  Note about functions returning tagged types: It has been decided to
+   --  Note about functions returning tagged types: it has been decided to
    --  always allocate their result in the secondary stack, even though is not
    --  absolutely mandatory when the tagged type is constrained because the
    --  caller knows the size of the returned object and thus could allocate the
@@ -123,10 +124,9 @@ package body Exp_Ch7 is
    --------------------------------------------------
 
    function Find_Node_To_Be_Wrapped (N : Node_Id) return Node_Id;
-   --  N is a node which may generate a transient scope. Loop over the
-   --  parent pointers of N until it find the appropriate node to
-   --  wrap. It it returns Empty, it means that no transient scope is
-   --  needed in this context.
+   --  N is a node which may generate a transient scope. Loop over the parent
+   --  pointers of N until it find the appropriate node to wrap. If it returns
+   --  Empty, it means that no transient scope is needed in this context.
 
    function Make_Clean
      (N                          : Node_Id;
@@ -157,14 +157,14 @@ package body Exp_Ch7 is
 
    procedure Insert_Actions_In_Scope_Around (N : Node_Id);
    --  Insert the before-actions kept in the scope stack before N, and the
-   --  after after-actions, after N which must be a member of a list.
+   --  after-actions after N, which must be a member of a list.
 
    function Make_Transient_Block
      (Loc    : Source_Ptr;
       Action : Node_Id) return Node_Id;
-   --  Create a transient block whose name is Scope, which is also a
-   --  controlled block if Flist is not empty and whose only code is
-   --  Action (either a single statement or single declaration).
+   --  Create a transient block whose name is Scope, which is also a controlled
+   --  block if Flist is not empty and whose only code is Action (either a
+   --  single statement or single declaration).
 
    type Final_Primitives is (Initialize_Case, Adjust_Case, Finalize_Case);
    --  This enumeration type is defined in order to ease sharing code for
@@ -192,26 +192,24 @@ package body Exp_Ch7 is
      (Prim  : Final_Primitives;
       Typ   : Entity_Id;
       Stmts : List_Id) return Node_Id;
-   --  This function generates the tree for Deep_Initialize, Deep_Adjust
-   --  or Deep_Finalize procedures according to the first parameter,
-   --  these procedures operate on the type Typ. The Stmts parameter
-   --  gives the body of the procedure.
+   --  This function generates the tree for Deep_Initialize, Deep_Adjust or
+   --  Deep_Finalize procedures according to the first parameter, these
+   --  procedures operate on the type Typ. The Stmts parameter gives the body
+   --  of the procedure.
 
    function Make_Deep_Array_Body
      (Prim : Final_Primitives;
       Typ  : Entity_Id) return List_Id;
    --  This function generates the list of statements for implementing
-   --  Deep_Initialize, Deep_Adjust or Deep_Finalize procedures
-   --  according to the first parameter, these procedures operate on the
-   --  array type Typ.
+   --  Deep_Initialize, Deep_Adjust or Deep_Finalize procedures according to
+   --  the first parameter, these procedures operate on the array type Typ.
 
    function Make_Deep_Record_Body
      (Prim : Final_Primitives;
       Typ  : Entity_Id) return List_Id;
    --  This function generates the list of statements for implementing
-   --  Deep_Initialize, Deep_Adjust or Deep_Finalize procedures
-   --  according to the first parameter, these procedures operate on the
-   --  record type Typ.
+   --  Deep_Initialize, Deep_Adjust or Deep_Finalize procedures according to
+   --  the first parameter, these procedures operate on the record type Typ.
 
    procedure Check_Visibly_Controlled
      (Prim : Final_Primitives;
@@ -394,7 +392,7 @@ package body Exp_Ch7 is
           Typ   => Typ,
           Stmts => Make_Deep_Array_Body (Initialize_Case, Typ)));
 
-      if not Is_Inherently_Limited_Type (Typ) then
+      if not Is_Immutably_Limited_Type (Typ) then
          Set_TSS (Typ,
            Make_Deep_Proc (
              Prim  => Adjust_Case,
@@ -444,17 +442,32 @@ package body Exp_Ch7 is
             New_Reference_To
               (RTE (RE_List_Controller), Loc));
 
+      --  If the type is declared in a package declaration and designates a
+      --  Taft amendment type that requires finalization, place declaration
+      --  of finalization list in the body, because no client of the package
+      --  can create objects of the type and thus make use of this list. This
+      --  ensures the tree for the spec is identical whenever it is compiled.
+
+      if Has_Completion_In_Body (Directly_Designated_Type (Typ))
+        and then In_Package_Body (Current_Scope)
+        and then Nkind (Unit (Cunit (Current_Sem_Unit))) = N_Package_Body
+        and then
+          Nkind (Parent (Declaration_Node (Typ))) = N_Package_Specification
+      then
+         Insert_Action (Parent (Designated_Type (Typ)), Decl);
+
       --  The type may have been frozen already, and this is a late freezing
       --  action, in which case the declaration must be elaborated at once.
       --  If the call is for an allocator, the chain must also be created now,
       --  because the freezing of the type does not build one. Otherwise, the
       --  declaration is one of the freezing actions for a user-defined type.
 
-      if Is_Frozen (Typ)
+      elsif Is_Frozen (Typ)
         or else (Nkind (N) = N_Allocator
                   and then Ekind (Etype (N)) = E_Anonymous_Access_Type)
       then
          Insert_Action (N, Decl);
+
       else
          Append_Freeze_Action (Typ, Decl);
       end if;
@@ -489,7 +502,7 @@ package body Exp_Ch7 is
           Typ   => Typ,
           Stmts => Make_Deep_Record_Body (Initialize_Case, Typ)));
 
-      if not Is_Inherently_Limited_Type (Typ) then
+      if not Is_Immutably_Limited_Type (Typ) then
          Set_TSS (Typ,
            Make_Deep_Proc (
              Prim  => Adjust_Case,
@@ -572,9 +585,7 @@ package body Exp_Ch7 is
          --  Here we generate the required loop
 
          else
-            Index :=
-              Make_Defining_Identifier (Loc, New_Internal_Name ('J'));
-
+            Index := Make_Temporary (Loc, 'J');
             Append (New_Reference_To (Index, Loc), Index_List);
 
             return New_List (
@@ -821,7 +832,7 @@ package body Exp_Ch7 is
    begin
       if Is_Derived_Type (Typ)
         and then Comes_From_Source (E)
-        and then not Is_Overriding_Operation (E)
+        and then not Present (Overridden_Operation (E))
       then
          --  We know that the explicit operation on the type does not override
          --  the inherited operation of the parent, and that the derivation
@@ -1087,7 +1098,7 @@ package body Exp_Ch7 is
       --  releasing or some finalizations are needed or in the context
       --  of tasking
 
-      if Uses_Sec_Stack  (Current_Scope)
+      if Uses_Sec_Stack (Current_Scope)
         and then not Sec_Stack_Needed_For_Return (Current_Scope)
       then
          null;
@@ -1148,7 +1159,7 @@ package body Exp_Ch7 is
         and then not Sec_Stack_Needed_For_Return (Current_Scope)
         and then VM_Target = No_VM
       then
-         Mark := Make_Defining_Identifier (Loc, New_Internal_Name ('M'));
+         Mark := Make_Temporary (Loc, 'M');
          Append_To (New_Decls,
            Make_Object_Declaration (Loc,
              Defining_Identifier => Mark,
@@ -1370,47 +1381,38 @@ package body Exp_Ch7 is
       end if;
 
       --  Resolution is now finished, make sure we don't start analysis again
-      --  because of the duplication
+      --  because of the duplication.
 
       Set_Analyzed (N);
       Ref := Duplicate_Subexpr_No_Checks (N);
 
-      --  Now we can generate the Attach Call, note that this value is
-      --  always in the (secondary) stack and thus is attached to a singly
-      --  linked final list:
+      --  Now we can generate the Attach Call. Note that this value is always
+      --  on the (secondary) stack and thus is attached to a singly linked
+      --  final list:
 
       --    Resx := F (X)'reference;
       --    Attach_To_Final_List (_Lx, Resx.all, 1);
 
-      --  or when there are controlled components
+      --  or when there are controlled components:
 
       --    Attach_To_Final_List (_Lx, Resx._controller, 1);
 
-      --  or when it is both is_controlled and has_controlled_components
+      --  or when it is both Is_Controlled and Has_Controlled_Components:
 
       --    Attach_To_Final_List (_Lx, Resx._controller, 1);
       --    Attach_To_Final_List (_Lx, Resx, 1);
 
-      --  or if it is an array with is_controlled (and has_controlled)
+      --  or if it is an array with Is_Controlled (and Has_Controlled)
 
       --    Attach_To_Final_List (_Lx, Resx (Resx'last), 3);
-      --    An attach level of 3 means that a whole array is to be
-      --    attached to the finalization list (including the controlled
-      --    components)
 
-      --  or if it is an array with has_controlled components but not
-      --  is_controlled
+      --    An attach level of 3 means that a whole array is to be attached to
+      --    the finalization list (including the controlled components).
+
+      --  or if it is an array with Has_Controlled_Components but not
+      --  Is_Controlled:
 
       --    Attach_To_Final_List (_Lx, Resx (Resx'last)._controller, 3);
-
-      --  If the context is an aggregate, the call will be expanded into an
-      --  assignment, and the attachment will be done when the aggregate
-      --  expansion is complete. See body of Exp_Aggr for the treatment of
-      --  other controlled components.
-
-      if Nkind (Parent (N)) = N_Aggregate then
-         return;
-      end if;
 
       --  Case where type has controlled components
 
@@ -1423,10 +1425,10 @@ package body Exp_Ch7 is
             if Is_Array_Type (T2) then
                Len_Ref :=
                  Make_Attribute_Reference (Loc,
-                 Prefix =>
-                   Duplicate_Subexpr_Move_Checks
-                     (Unchecked_Convert_To (T2, Ref)),
-                 Attribute_Name => Name_Length);
+                   Prefix =>
+                     Duplicate_Subexpr_Move_Checks
+                       (Unchecked_Convert_To (T2, Ref)),
+                   Attribute_Name => Name_Length);
             end if;
 
             while Is_Array_Type (T2) loop
@@ -1460,8 +1462,8 @@ package body Exp_Ch7 is
             end if;
          end;
 
-         --  Here we know that 'Ref' has a controller so we may as well
-         --  attach it directly
+         --  Here we know that 'Ref' has a controller so we may as well attach
+         --  it directly.
 
          Action :=
            Make_Attach_Call (
@@ -1479,12 +1481,12 @@ package body Exp_Ch7 is
                 With_Attach  => Make_Integer_Literal (Loc, Attach_Level));
          end if;
 
-      --  Here, we have a controlled type that does not seem to have
-      --  controlled components but it could be a class wide type whose
-      --  further derivations have controlled components. So we don't know
-      --  if the object itself needs to be attached or if it has a record
-      --  controller. We need to call a runtime function (Deep_Tag_Attach)
-      --  which knows what to do thanks to the RC_Offset in the dispatch table.
+      --  Here, we have a controlled type that does not seem to have controlled
+      --  components but it could be a class wide type whose further
+      --  derivations have controlled components. So we don't know if the
+      --  object itself needs to be attached or if it has a record controller.
+      --  We need to call a runtime function (Deep_Tag_Attach) which knows what
+      --  to do thanks to the RC_Offset in the dispatch table.
 
       else
          Action :=
@@ -1699,7 +1701,7 @@ package body Exp_Ch7 is
 
          return
            Make_Selected_Component (Loc,
-             Prefix =>
+             Prefix        =>
                Make_Selected_Component (Loc,
                  Prefix        => R,
                  Selector_Name => Make_Identifier (Loc, Name_uController)),
@@ -1737,15 +1739,11 @@ package body Exp_Ch7 is
          end if;
 
       else
-         if Is_Dynamic_Scope (E) then
-            S := E;
-         else
-            S := Enclosing_Dynamic_Scope (E);
-         end if;
+         S := Nearest_Dynamic_Scope (E);
 
-         --  When the finalization chain entity is 'Error', it means that
-         --  there should not be any chain at that level and that the
-         --  enclosing one should be used
+         --  When the finalization chain entity is 'Error', it means that there
+         --  should not be any chain at that level and that the enclosing one
+         --  should be used.
 
          --  This is a nasty kludge, see ??? note in exp_ch11
 
@@ -1757,9 +1755,32 @@ package body Exp_Ch7 is
             return New_Reference_To (RTE (RE_Global_Final_List), Sloc (E));
          else
             if No (Finalization_Chain_Entity (S)) then
-               Id :=
-                 Make_Defining_Identifier (Sloc (S),
-                   Chars => New_Internal_Name ('F'));
+
+               --  In the case where the scope is a subprogram, retrieve the
+               --  Sloc of subprogram's body for association with the chain,
+               --  since using the Sloc of the spec would be confusing during
+               --  source-line stepping within the debugger.
+
+               declare
+                  Flist_Loc : Source_Ptr := Sloc (S);
+                  Subp_Body : Node_Id;
+
+               begin
+                  if Ekind (S) in Subprogram_Kind then
+                     Subp_Body := Unit_Declaration_Node (S);
+
+                     if Nkind (Subp_Body) /= N_Subprogram_Body then
+                        Subp_Body := Corresponding_Body (Subp_Body);
+                     end if;
+
+                     if Present (Subp_Body) then
+                        Flist_Loc := Sloc (Subp_Body);
+                     end if;
+                  end if;
+
+                  Id := Make_Temporary (Flist_Loc, 'F');
+               end;
+
                Set_Finalization_Chain_Entity (S, Id);
 
                --  Set momentarily some semantics attributes to allow normal
@@ -2287,10 +2308,10 @@ package body Exp_Ch7 is
                 Name => Name,
                 Parameter_Associations => New_List (
                   Make_Attribute_Reference (Loc,
-                    Prefix =>
+                    Prefix         =>
                       Make_Selected_Component (Loc,
-                        Prefix => New_Reference_To (
-                          Defining_Identifier (Param), Loc),
+                        Prefix        =>
+                          New_Reference_To (Defining_Identifier (Param), Loc),
                         Selector_Name =>
                           Make_Identifier (Loc, Name_uObject)),
                     Attribute_Name => Name_Unchecked_Access))));
@@ -2516,7 +2537,7 @@ package body Exp_Ch7 is
 
       function One_Component return List_Id;
       --  Create one statement to initialize/adjust/finalize one array
-      --  component, designated by a full set of indices.
+      --  component, designated by a full set of indexes.
 
       function One_Dimension (N : Int) return List_Id;
       --  Create loop to deal with one dimension of the array. The single
@@ -2584,9 +2605,9 @@ package body Exp_Ch7 is
                         Defining_Identifier => Index,
                         Discrete_Subtype_Definition =>
                           Make_Attribute_Reference (Loc,
-                            Prefix => Make_Identifier (Loc, Name_V),
+                            Prefix          => Make_Identifier (Loc, Name_V),
                             Attribute_Name  => Name_Range,
-                            Expressions => New_List (
+                            Expressions     => New_List (
                               Make_Integer_Literal (Loc, N))),
                         Reverse_Present => Prim = Finalize_Case)),
                 Statements => One_Dimension (N + 1)));
@@ -2682,7 +2703,7 @@ package body Exp_Ch7 is
    ---------------------------
 
    --  The Deep procedures call the appropriate Controlling proc on the
-   --  the controller component. In the init case, it also attach the
+   --  controller component. In the init case, it also attach the
    --  controller to the current finalization list.
 
    function Make_Deep_Record_Body
@@ -2700,7 +2721,7 @@ package body Exp_Ch7 is
       Res            : constant List_Id := New_List;
 
    begin
-      if Is_Inherently_Limited_Type (Typ) then
+      if Is_Immutably_Limited_Type (Typ) then
          Controller_Typ := RTE (RE_Limited_Record_Controller);
       else
          Controller_Typ := RTE (RE_Record_Controller);
@@ -2726,17 +2747,19 @@ package body Exp_Ch7 is
                    Parameter_Associations =>
                      New_List (New_Copy_Tree (Obj_Ref))));
 
-               Append_To (Res, Make_Attach_Call (
-                 Obj_Ref      => New_Copy_Tree (Obj_Ref),
-                 Flist_Ref    => Make_Identifier (Loc, Name_L),
-                 With_Attach => Make_Identifier (Loc, Name_B)));
+               Append_To (Res,
+                 Make_Attach_Call
+                   (Obj_Ref     => New_Copy_Tree (Obj_Ref),
+                    Flist_Ref   => Make_Identifier (Loc, Name_L),
+                    With_Attach => Make_Identifier (Loc, Name_B)));
             end if;
 
          when Adjust_Case =>
             Append_List_To (Res,
-              Make_Adjust_Call (Controller_Ref, Controller_Typ,
-                Make_Identifier (Loc, Name_L),
-                Make_Identifier (Loc, Name_B)));
+              Make_Adjust_Call
+                (Controller_Ref, Controller_Typ,
+                 Make_Identifier (Loc, Name_L),
+                 Make_Identifier (Loc, Name_B)));
 
             --  When the type is also a controlled type by itself,
             --  adjust it and attach it to the finalization chain.
@@ -2749,17 +2772,18 @@ package body Exp_Ch7 is
                    Parameter_Associations =>
                      New_List (New_Copy_Tree (Obj_Ref))));
 
-               Append_To (Res, Make_Attach_Call (
-                 Obj_Ref      => New_Copy_Tree (Obj_Ref),
-                 Flist_Ref    => Make_Identifier (Loc, Name_L),
-                 With_Attach => Make_Identifier (Loc, Name_B)));
+               Append_To (Res,
+                 Make_Attach_Call
+                   (Obj_Ref     => New_Copy_Tree (Obj_Ref),
+                    Flist_Ref   => Make_Identifier (Loc, Name_L),
+                    With_Attach => Make_Identifier (Loc, Name_B)));
             end if;
 
          when Finalize_Case =>
             if Is_Controlled (Typ) then
                Append_To (Res,
                  Make_Implicit_If_Statement (Obj_Ref,
-                   Condition => Make_Identifier (Loc, Name_B),
+                   Condition       => Make_Identifier (Loc, Name_B),
                    Then_Statements => New_List (
                      Make_Procedure_Call_Statement (Loc,
                        Name => New_Reference_To (RTE (RE_Finalize_One), Loc),
@@ -2776,9 +2800,11 @@ package body Exp_Ch7 is
             end if;
 
             Append_List_To (Res,
-              Make_Final_Call (Controller_Ref, Controller_Typ,
-                Make_Identifier (Loc, Name_B)));
+              Make_Final_Call
+                (Controller_Ref, Controller_Typ,
+                 Make_Identifier (Loc, Name_B)));
       end case;
+
       return Res;
    end Make_Deep_Record_Body;
 
@@ -3257,16 +3283,29 @@ package body Exp_Ch7 is
    --  Start of processing for Needs_Finalization
 
    begin
-      --  Class-wide types must be treated as controlled because they may
-      --  contain an extension that has controlled components
+      return
 
-      --  We can skip this if finalization is not available
+        --  Class-wide types must be treated as controlled and therefore
+        --  requiring finalization (because they may be extended with an
+        --  extension that has controlled components.
 
-      return (Is_Class_Wide_Type (T)
-                and then not In_Finalization_Root (T)
-                and then not Restriction_Active (No_Finalization))
+        (Is_Class_Wide_Type (T)
+
+          --  However, avoid treating class-wide types as controlled if
+          --  finalization is not available and in particular CIL value
+          --  types never have finalization).
+
+          and then not In_Finalization_Root (T)
+          and then not Restriction_Active (No_Finalization)
+          and then not Is_Value_Type (Etype (T)))
+
+        --  Controlled types always need finalization
+
         or else Is_Controlled (T)
         or else Has_Some_Controlled_Component (T)
+
+        --  For concurrent types, test the corresponding record type
+
         or else (Is_Concurrent_Type (T)
                   and then Present (Corresponding_Record_Type (T))
                   and then Needs_Finalization (Corresponding_Record_Type (T)));
@@ -3366,13 +3405,14 @@ package body Exp_Ch7 is
    --    Finalize_One (_v2);
 
    procedure Wrap_Transient_Declaration (N : Node_Id) is
-      S           : Entity_Id;
-      LC          : Entity_Id := Empty;
-      Nodes       : List_Id;
-      Loc         : constant Source_Ptr := Sloc (N);
-      Enclosing_S : Entity_Id;
-      Uses_SS     : Boolean;
-      Next_N      : constant Node_Id := Next (N);
+      S              : Entity_Id;
+      LC             : Entity_Id := Empty;
+      Nodes          : List_Id;
+      Loc            : constant Source_Ptr := Sloc (N);
+      First_Decl_Loc : Source_Ptr;
+      Enclosing_S    : Entity_Id;
+      Uses_SS        : Boolean;
+      Next_N         : constant Node_Id := Next (N);
 
    begin
       S := Current_Scope;
@@ -3394,21 +3434,28 @@ package body Exp_Ch7 is
       --       Fxxx : Finalizable_Ptr renames Lxxx.F;
 
       if Present (Finalization_Chain_Entity (S)) then
-         LC := Make_Defining_Identifier (Loc, New_Internal_Name ('L'));
+         LC := Make_Temporary (Loc, 'L');
+
+         --  Use the Sloc of the first declaration of N's containing list, to
+         --  maintain monotonicity of source-line stepping during debugging.
+
+         First_Decl_Loc := Sloc (First (List_Containing (N)));
 
          Nodes := New_List (
-           Make_Object_Declaration (Loc,
+           Make_Object_Declaration (First_Decl_Loc,
              Defining_Identifier => LC,
              Object_Definition   =>
-               New_Reference_To (RTE (RE_Simple_List_Controller), Loc)),
+               New_Reference_To
+                 (RTE (RE_Simple_List_Controller), First_Decl_Loc)),
 
-           Make_Object_Renaming_Declaration (Loc,
+           Make_Object_Renaming_Declaration (First_Decl_Loc,
              Defining_Identifier => Finalization_Chain_Entity (S),
-             Subtype_Mark => New_Reference_To (RTE (RE_Finalizable_Ptr), Loc),
+             Subtype_Mark =>
+               New_Reference_To (RTE (RE_Finalizable_Ptr), First_Decl_Loc),
              Name =>
                Make_Selected_Component (Loc,
-                 Prefix        => New_Reference_To (LC, Loc),
-                 Selector_Name => Make_Identifier (Loc, Name_F))));
+                 Prefix        => New_Reference_To (LC, First_Decl_Loc),
+                 Selector_Name => Make_Identifier (First_Decl_Loc, Name_F))));
 
          --  Put the declaration at the beginning of the declaration part
          --  to make sure it will be before all other actions that have been
@@ -3514,9 +3561,9 @@ package body Exp_Ch7 is
 
    procedure Wrap_Transient_Expression (N : Node_Id) is
       Loc  : constant Source_Ptr := Sloc (N);
-      E    : constant Entity_Id :=
-               Make_Defining_Identifier (Loc, New_Internal_Name ('E'));
-      Etyp : constant Entity_Id := Etype (N);
+      E    : constant Entity_Id  := Make_Temporary (Loc, 'E', N);
+      Etyp : constant Entity_Id  := Etype (N);
+      Expr : constant Node_Id    := Relocate_Node (N);
 
    begin
       Insert_Actions (N, New_List (
@@ -3528,7 +3575,7 @@ package body Exp_Ch7 is
           Action =>
             Make_Assignment_Statement (Loc,
               Name       => New_Reference_To (E, Loc),
-              Expression => Relocate_Node (N)))));
+              Expression => Expr))));
 
       Rewrite (N, New_Reference_To (E, Loc));
       Analyze_And_Resolve (N, Etyp);

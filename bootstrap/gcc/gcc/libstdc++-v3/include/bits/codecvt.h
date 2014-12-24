@@ -1,7 +1,7 @@
 // Locale support (codecvt) -*- C++ -*-
 
 // Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
-// 2009  Free Software Foundation, Inc.
+// 2009, 2010, 2011  Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -25,7 +25,7 @@
 
 /** @file bits/codecvt.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{locale}
  */
 
 //
@@ -39,7 +39,9 @@
 
 #pragma GCC system_header
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   /// Empty base class for codecvt facet [22.2.1.5].
   class codecvt_base
@@ -262,9 +264,16 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       do_max_length() const throw() = 0;
     };
 
-  /// @brief class codecvt [22.2.1.5].
-  /// NB: Generic, mostly useless implementation.
-  template<typename _InternT, typename _ExternT, typename _StateT>
+
+
+  /**
+   *  @brief  Primary class template codecvt.
+   *  @ingroup locales
+   *
+   *  NB: Generic, mostly useless implementation.
+   *
+  */
+   template<typename _InternT, typename _ExternT, typename _StateT>
     class codecvt
     : public __codecvt_abstract_base<_InternT, _ExternT, _StateT>
     {
@@ -467,7 +476,6 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
   // Inhibit implicit instantiations for required instantiations,
   // which are defined via explicit instantiations elsewhere.
-  // NB: This syntax is a GNU extension.
 #if _GLIBCXX_EXTERN_TEMPLATE
   extern template class codecvt_byname<char, char, mbstate_t>;
 
@@ -492,6 +500,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 #endif
 #endif
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace std
 
 #endif // _CODECVT_H

@@ -1,4 +1,4 @@
-! { dg-do "compile" }
+! { dg-do compile }
 
 ! Abstract Types.
 ! Check for parser errors.
@@ -11,3 +11,4 @@ MODULE m
   END TYPE error_t ! { dg-error "END MODULE" }
 
 END MODULE m
+! { dg-final { cleanup-modules "m" } }

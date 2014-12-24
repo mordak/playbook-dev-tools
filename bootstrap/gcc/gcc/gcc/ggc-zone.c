@@ -1,6 +1,6 @@
 /* "Bag-of-pages" zone garbage collector for the GNU compiler.
-   Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008
-   Free Software Foundation, Inc.
+   Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008,
+   2010 Free Software Foundation, Inc.
 
    Contributed by Richard Henderson (rth@redhat.com) and Daniel Berlin
    (dberlin@dberlin.org).  Rewritten by Daniel Jacobowitz
@@ -29,34 +29,23 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree.h"
 #include "rtl.h"
 #include "tm_p.h"
-#include "toplev.h"
-#include "varray.h"
+#include "diagnostic-core.h"
 #include "flags.h"
 #include "ggc.h"
+#include "ggc-internal.h"
 #include "timevar.h"
 #include "params.h"
 #include "bitmap.h"
+#include "plugin.h"
 
 /* Prefer MAP_ANON(YMOUS) to /dev/zero, since we don't need to keep a
    file open.  Prefer either to valloc.  */
 #ifdef HAVE_MMAP_ANON
 # undef HAVE_MMAP_DEV_ZERO
-
-# include <sys/mman.h>
-# ifndef MAP_FAILED
-#  define MAP_FAILED -1
-# endif
-# if !defined (MAP_ANONYMOUS) && defined (MAP_ANON)
-#  define MAP_ANONYMOUS MAP_ANON
-# endif
 # define USING_MMAP
 #endif
 
 #ifdef HAVE_MMAP_DEV_ZERO
-# include <sys/mman.h>
-# ifndef MAP_FAILED
-#  define MAP_FAILED -1
-# endif
 # define USING_MMAP
 #endif
 
@@ -417,21 +406,21 @@ struct alloc_zone
 #ifdef GATHER_STATISTICS
   struct
   {
-    /* Total memory allocated with ggc_alloc.  */
+    /* Total GC-allocated memory.  */
     unsigned long long total_allocated;
-    /* Total overhead for memory to be allocated with ggc_alloc.  */
+    /* Total overhead for GC-allocated memory.  */
     unsigned long long total_overhead;
 
     /* Total allocations and overhead for sizes less than 32, 64 and 128.
        These sizes are interesting because they are typical cache line
        sizes.  */
-   
+
     unsigned long long total_allocated_under32;
     unsigned long long total_overhead_under32;
-  
+
     unsigned long long total_allocated_under64;
     unsigned long long total_overhead_under64;
-  
+
     unsigned long long total_allocated_under128;
     unsigned long long total_overhead_under128;
   } stats;
@@ -800,9 +789,7 @@ zone_allocate_marks (void)
 	  n++;
 #endif
 	}
-#ifdef ENABLE_CHECKING
-      gcc_assert (n == zone->n_small_pages);
-#endif
+      gcc_checking_assert (n == zone->n_small_pages);
     }
 
   /* We don't collect the PCH zone, but we do have to mark it
@@ -860,7 +847,7 @@ alloc_anon (char *pref ATTRIBUTE_UNUSED, size_t size, struct alloc_zone *zone)
   zone->bytes_mapped += size;
 
   /* Pretend we don't have access to the allocated pages.  We'll enable
-     access to smaller pieces of the area in ggc_alloc.  Discard the
+     access to smaller pieces of the area in ggc_internal_alloc.  Discard the
      handle to avoid handle leak.  */
   VALGRIND_DISCARD (VALGRIND_MAKE_MEM_NOACCESS (page, size));
 
@@ -1089,8 +1076,8 @@ free_chunk (char *ptr, size_t size, struct alloc_zone *zone)
 /* Allocate a chunk of memory of at least ORIG_SIZE bytes, in ZONE.  */
 
 void *
-ggc_alloc_zone_stat (size_t orig_size, struct alloc_zone *zone
-		     MEM_STAT_DECL)
+ggc_internal_alloc_zone_stat (size_t orig_size, struct alloc_zone *zone
+			      MEM_STAT_DECL)
 {
   size_t bin;
   size_t csize;
@@ -1314,7 +1301,7 @@ ggc_alloc_zone_stat (size_t orig_size, struct alloc_zone *zone
   /* Keep track of how many bytes are being allocated.  This
      information is used in deciding when to collect.  */
   zone->allocated += size;
-  
+
   timevar_ggc_mem_total += size;
 
 #ifdef GATHER_STATISTICS
@@ -1352,6 +1339,19 @@ ggc_alloc_zone_stat (size_t orig_size, struct alloc_zone *zone
   return result;
 }
 
+#define ggc_internal_alloc_zone_pass_stat(s,z)          \
+    ggc_internal_alloc_zone_stat (s,z PASS_MEM_STAT)
+
+void *
+ggc_internal_cleared_alloc_zone_stat (size_t orig_size,
+				      struct alloc_zone *zone MEM_STAT_DECL)
+{
+  void * result = ggc_internal_alloc_zone_pass_stat (orig_size, zone);
+  memset (result, 0, orig_size);
+  return result;
+}
+
+
 /* Allocate a SIZE of chunk memory of GTE type, into an appropriate zone
    for that type.  */
 
@@ -1362,31 +1362,35 @@ ggc_alloc_typed_stat (enum gt_types_enum gte, size_t size
   switch (gte)
     {
     case gt_ggc_e_14lang_tree_node:
-      return ggc_alloc_zone_pass_stat (size, &tree_zone);
+      return ggc_internal_alloc_zone_pass_stat (size, &tree_zone);
 
     case gt_ggc_e_7rtx_def:
-      return ggc_alloc_zone_pass_stat (size, &rtl_zone);
+      return ggc_internal_alloc_zone_pass_stat (size, &rtl_zone);
 
     case gt_ggc_e_9rtvec_def:
-      return ggc_alloc_zone_pass_stat (size, &rtl_zone);
+      return ggc_internal_alloc_zone_pass_stat (size, &rtl_zone);
 
     default:
-      return ggc_alloc_zone_pass_stat (size, &main_zone);
+      return ggc_internal_alloc_zone_pass_stat (size, &main_zone);
     }
 }
 
-/* Normal ggc_alloc simply allocates into the main zone.  */
+/* Normal GC allocation simply allocates into the main zone.  */
 
 void *
-ggc_alloc_stat (size_t size MEM_STAT_DECL)
+ggc_internal_alloc_stat (size_t size MEM_STAT_DECL)
 {
-  return ggc_alloc_zone_pass_stat (size, &main_zone);
+  return ggc_internal_alloc_zone_pass_stat (size, &main_zone);
 }
 
 /* Poison the chunk.  */
 #ifdef ENABLE_GC_CHECKING
-#define poison_region(PTR, SIZE) \
-  memset ((PTR), 0xa5, (SIZE))
+#define poison_region(PTR, SIZE)				      \
+  do {								      \
+    VALGRIND_DISCARD (VALGRIND_MAKE_MEM_UNDEFINED ((PTR), (SIZE)));   \
+    memset ((PTR), 0xa5, (SIZE));				      \
+    VALGRIND_DISCARD (VALGRIND_MAKE_MEM_NOACCESS ((PTR), (SIZE)));    \
+  } while (0)
 #else
 #define poison_region(PTR, SIZE)
 #endif
@@ -1520,7 +1524,7 @@ ggc_set_mark (const void *p)
       offset = (ptr - pch_zone.page) / BYTES_PER_MARK_BIT;
       mark_word = offset / (8 * sizeof (mark_type));
       mark_bit = offset % (8 * sizeof (mark_type));
-      
+
       if (pch_zone.mark_bits[mark_word] & (1 << mark_bit))
 	return 1;
       pch_zone.mark_bits[mark_word] |= (1 << mark_bit);
@@ -1570,7 +1574,7 @@ ggc_marked_p (const void *p)
       offset = (ptr - pch_zone.page) / BYTES_PER_MARK_BIT;
       mark_word = offset / (8 * sizeof (mark_type));
       mark_bit = offset % (8 * sizeof (mark_type));
-      
+
       return (pch_zone.mark_bits[mark_word] & (1 << mark_bit)) != 0;
     }
 
@@ -1709,31 +1713,6 @@ new_ggc_zone_1 (struct alloc_zone *new_zone, const char * name)
   new_zone->name = name;
   new_zone->next_zone = G.zones->next_zone;
   G.zones->next_zone = new_zone;
-}
-
-struct alloc_zone *
-new_ggc_zone (const char * name)
-{
-  struct alloc_zone *new_zone = XCNEW (struct alloc_zone);
-  new_ggc_zone_1 (new_zone, name);
-  return new_zone;
-}
-
-/* Destroy a GGC zone.  */
-void
-destroy_ggc_zone (struct alloc_zone * dead_zone)
-{
-  struct alloc_zone *z;
-
-  for (z = G.zones; z && z->next_zone != dead_zone; z = z->next_zone)
-    /* Just find that zone.  */
-    continue;
-
-  /* We should have found the zone in the list.  Anything else is fatal.  */
-  gcc_assert (z);
-
-  /* z is dead, baby. z is dead.  */
-  z->dead = true;
 }
 
 /* Free all empty pages and objects within a page for a given zone  */
@@ -1962,7 +1941,7 @@ ggc_collect_1 (struct alloc_zone *zone, bool need_marking)
       ggc_prune_overhead_list ();
 #endif
     }
-  
+
   sweep_pages (zone);
   zone->was_collected = true;
   zone->allocated_last_gc = zone->allocated;
@@ -2029,6 +2008,8 @@ ggc_collect (void)
 	}
     }
 
+  invoke_plugin_callbacks (PLUGIN_GGC_START, NULL);
+
   /* Start by possibly collecting the main zone.  */
   main_zone.was_collected = false;
   marked |= ggc_collect_1 (&main_zone, true);
@@ -2092,6 +2073,8 @@ ggc_collect (void)
 	  free (dead_zone);
 	}
     }
+
+  invoke_plugin_callbacks (PLUGIN_GGC_END, NULL);
 
   timevar_pop (TV_GC);
 }
@@ -2173,7 +2156,7 @@ ggc_print_statistics (void)
 	      chunk = chunk->next_free;
 	    }
 	}
-      
+
       fprintf (stderr, "%20s %10lu%c %10lu%c %10lu%c\n",
 	       zone->name,
 	       SCALE (allocated), LABEL (allocated),
@@ -2216,7 +2199,7 @@ ggc_print_statistics (void)
 	   SCALE (total_allocated), LABEL(total_allocated),
 	   SCALE (total_overhead), LABEL (total_overhead));
 
-#ifdef GATHER_STATISTICS  
+#ifdef GATHER_STATISTICS
   {
     unsigned long long all_overhead = 0, all_allocated = 0;
     unsigned long long all_overhead_under32 = 0, all_allocated_under32 = 0;
@@ -2235,7 +2218,7 @@ ggc_print_statistics (void)
 
 	all_allocated_under64 += zone->stats.total_allocated_under64;
 	all_overhead_under64 += zone->stats.total_overhead_under64;
-	
+
 	all_allocated_under128 += zone->stats.total_allocated_under128;
 	all_overhead_under128 += zone->stats.total_overhead_under128;
 
@@ -2345,7 +2328,7 @@ ggc_pch_count_object (struct ggc_pch_data *d, void *x ATTRIBUTE_UNUSED,
 size_t
 ggc_pch_total_size (struct ggc_pch_data *d)
 {
-  enum gt_types_enum i;
+  int i;
   size_t alloc_size, total_size;
 
   total_size = 0;
@@ -2431,10 +2414,10 @@ ggc_pch_write_object (struct ggc_pch_data *d,
 		      size_t size, bool is_string ATTRIBUTE_UNUSED)
 {
   if (fseek (f, (size_t) newx - d->orig_base + d->start_offset, SEEK_SET) != 0)
-    fatal_error ("can't seek PCH file: %m");
+    fatal_error ("can%'t seek PCH file: %m");
 
   if (fwrite (x, size, 1, f) != 1)
-    fatal_error ("can't write PCH file: %m");
+    fatal_error ("can%'t write PCH file: %m");
 }
 
 void
@@ -2442,14 +2425,14 @@ ggc_pch_finish (struct ggc_pch_data *d, FILE *f)
 {
   /* Write out the allocation bitmap.  */
   if (fseek (f, d->start_offset + d->d.total, SEEK_SET) != 0)
-    fatal_error ("can't seek PCH file: %m");
+    fatal_error ("can%'t seek PCH file: %m");
 
   if (fwrite (d->alloc_bits, d->alloc_size, 1, f) != 1)
-    fatal_error ("can't write PCH file: %m");
+    fatal_error ("can%'t write PCH file: %m");
 
   /* Done with the PCH, so write out our footer.  */
   if (fwrite (&d->d, sizeof (d->d), 1, f) != 1)
-    fatal_error ("can't write PCH file: %m");
+    fatal_error ("can%'t write PCH file: %m");
 
   free (d->alloc_bits);
   free (d);
@@ -2468,7 +2451,7 @@ ggc_pch_read (FILE *f, void *addr)
   char *p;
 
   if (fread (&d, sizeof (d), 1, f) != 1)
-    fatal_error ("can't read PCH file: %m");
+    fatal_error ("can%'t read PCH file: %m");
 
   alloc_size = CEIL (d.total, BYTES_PER_ALLOC_BIT * 8);
   alloc_size = ROUND_UP (alloc_size, MAX_ALIGNMENT);
@@ -2480,6 +2463,12 @@ ggc_pch_read (FILE *f, void *addr)
 
   /* We've just read in a PCH file.  So, every object that used to be
      allocated is now free.  */
+#ifdef GATHER_STATISTICS
+  zone_allocate_marks ();
+  ggc_prune_overhead_list ();
+  zone_free_marks ();
+#endif
+
   for (zone = G.zones; zone; zone = zone->next_zone)
     {
       struct small_page_entry *page, *next_page;

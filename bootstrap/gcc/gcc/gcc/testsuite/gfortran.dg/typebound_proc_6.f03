@@ -1,8 +1,5 @@
 ! { dg-do compile }
 
-! FIXME: Remove -w after polymorphic entities are supported.
-! { dg-options "-w" }
-
 ! Type-bound procedures
 ! Test for the check if overriding methods "match" the overridden ones by their
 ! characteristics.
@@ -62,7 +59,7 @@ MODULE testmod
     PROCEDURE, NOPASS :: pure2 => proc_sub ! { dg-error "must also be PURE" }
     PROCEDURE, NOPASS :: nonpure => proc_pure ! Ok, overridden not pure.
     PROCEDURE, NOPASS :: elemental1 => proc_elemental ! Ok, both elemental.
-    PROCEDURE, NOPASS :: elemental2 => proc_nonelem ! { dg-error "must also be ELEMENTAL" }
+    PROCEDURE, NOPASS :: elemental2 => proc_nonelem ! { dg-error "must also be" }
     PROCEDURE, NOPASS :: nonelem1 => proc_nonelem ! Ok, non elemental.
     PROCEDURE, NOPASS :: nonelem2 => proc_elemental ! { dg-error "must not be ELEMENTAL" }
 
@@ -134,47 +131,47 @@ CONTAINS
 
   SUBROUTINE proc_stme1 (me, a)
     IMPLICIT NONE
-    TYPE(supert) :: me
+    CLASS(supert) :: me
     INTEGER :: a
   END SUBROUTINE proc_stme1
 
   SUBROUTINE proc_tme1 (me, a)
     IMPLICIT NONE
-    TYPE(t) :: me
+    CLASS(t) :: me
     INTEGER :: a
   END SUBROUTINE proc_tme1
 
   SUBROUTINE proc_stmeme (me1, me2)
     IMPLICIT NONE
-    TYPE(supert) :: me1, me2
+    CLASS(supert) :: me1, me2
   END SUBROUTINE proc_stmeme
 
   SUBROUTINE proc_tmeme (me1, me2)
     IMPLICIT NONE
-    TYPE(t) :: me1, me2
+    CLASS(t) :: me1, me2
   END SUBROUTINE proc_tmeme
 
   SUBROUTINE proc_stmeint (me, a)
     IMPLICIT NONE
-    TYPE(supert) :: me
+    CLASS(supert) :: me
     INTEGER :: a
   END SUBROUTINE proc_stmeint
 
   SUBROUTINE proc_tmeint (me, a)
     IMPLICIT NONE
-    TYPE(t) :: me
+    CLASS(t) :: me
     INTEGER :: a
   END SUBROUTINE proc_tmeint
 
   SUBROUTINE proc_tmeintx (me, x)
     IMPLICIT NONE
-    TYPE(t) :: me
+    CLASS(t) :: me
     INTEGER :: x
   END SUBROUTINE proc_tmeintx
 
   SUBROUTINE proc_tmereal (me, a)
     IMPLICIT NONE
-    TYPE(t) :: me
+    CLASS(t) :: me
     REAL :: a
   END SUBROUTINE proc_tmereal
 

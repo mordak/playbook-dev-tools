@@ -37,7 +37,7 @@ package body Ada.Finalization is
    -- "=" --
    ---------
 
-   function "=" (A, B : Controlled) return Boolean is
+   overriding function "=" (A, B : Controlled) return Boolean is
    begin
       return Empty_Root_Controlled (A) = Empty_Root_Controlled (B);
    end "=";

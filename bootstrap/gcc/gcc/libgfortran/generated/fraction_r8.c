@@ -1,5 +1,5 @@
 /* Implementation of the FRACTION intrinsic
-   Copyright 2003, 2007, 2009 Free Software Foundation, Inc.
+   Copyright 2003, 2007, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Richard Henderson <rth@redhat.com>.
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -26,6 +26,9 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #include "libgfortran.h"
 
 
+
+#define MATHFUNC(funcname) funcname
+
 #if defined (HAVE_GFC_REAL_8) && defined (HAVE_FREXP)
 
 extern GFC_REAL_8 fraction_r8 (GFC_REAL_8 s);
@@ -35,7 +38,7 @@ GFC_REAL_8
 fraction_r8 (GFC_REAL_8 s)
 {
   int dummy_exp;
-  return frexp (s, &dummy_exp);
+  return MATHFUNC(frexp) (s, &dummy_exp);
 }
 
 #endif

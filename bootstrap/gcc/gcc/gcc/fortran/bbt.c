@@ -1,5 +1,5 @@
 /* Balanced binary trees using treaps.
-   Copyright (C) 2000, 2002, 2003, 2007, 2008
+   Copyright (C) 2000, 2002, 2003, 2007, 2008, 2010
    Free Software Foundation, Inc.
    Contributed by Andy Vaught
 
@@ -37,6 +37,7 @@ along with GCC; see the file COPYING3.  If not see
    July 1997 Doctor Dobb's Journal, "Treaps in Java".  */
 
 #include "config.h"
+#include "system.h"
 #include "gfortran.h"
 
 typedef struct gfc_treap

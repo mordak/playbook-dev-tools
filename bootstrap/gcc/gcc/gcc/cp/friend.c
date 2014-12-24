@@ -1,6 +1,6 @@
 /* Help friends in C++.
    Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-   2007, 2008  Free Software Foundation, Inc.
+   2007, 2008, 2010  Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -23,12 +23,9 @@ along with GCC; see the file COPYING3.  If not see
 #include "coretypes.h"
 #include "tm.h"
 #include "tree.h"
-#include "rtl.h"
-#include "expr.h"
 #include "cp-tree.h"
 #include "flags.h"
 #include "output.h"
-#include "toplev.h"
 
 /* Friend data structures are described in cp-tree.h.  */
 

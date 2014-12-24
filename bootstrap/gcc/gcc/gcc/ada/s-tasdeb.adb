@@ -246,6 +246,18 @@ package body System.Tasking.Debug is
       STPO.Self.User_State := Value;
    end Set_User_State;
 
+   ------------------------
+   -- Signal_Debug_Event --
+   ------------------------
+
+   procedure Signal_Debug_Event
+     (Event_Kind : Event_Kind_Type;
+      Task_Value : Task_Id)
+   is
+   begin
+      null;
+   end Signal_Debug_Event;
+
    --------------------
    -- Stop_All_Tasks --
    --------------------
@@ -350,10 +362,11 @@ package body System.Tasking.Debug is
    -----------
 
    procedure Write (Fd : Integer; S : String; Count : Integer) is
-      Discard : Integer;
+      Discard : System.CRTL.ssize_t;
       pragma Unreferenced (Discard);
    begin
-      Discard := System.CRTL.write (Fd, S (S'First)'Address, Count);
+      Discard := System.CRTL.write (Fd, S (S'First)'Address,
+                                    System.CRTL.size_t (Count));
       --  Is it really right to ignore write errors here ???
    end Write;
 

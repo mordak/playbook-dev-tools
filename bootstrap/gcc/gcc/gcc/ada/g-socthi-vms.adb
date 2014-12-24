@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---                     Copyright (C) 2001-2008, AdaCore                     --
+--                     Copyright (C) 2001-2009, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -31,7 +31,7 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
---  Temporary version for Alpha/VMS
+--  This is the version for OpenVMS
 
 with GNAT.OS_Lib; use GNAT.OS_Lib;
 with GNAT.Task_Lock;
@@ -40,21 +40,24 @@ with Interfaces.C; use Interfaces.C;
 
 package body GNAT.Sockets.Thin is
 
-   Non_Blocking_Sockets : constant Fd_Set_Access :=
-                            New_Socket_Set (No_Fd_Set_Access);
-   --  When this package is initialized with Process_Blocking_IO set
-   --  to True, sockets are set in non-blocking mode to avoid blocking
-   --  the whole process when a thread wants to perform a blocking IO
-   --  operation. But the user can also set a socket in non-blocking
-   --  mode by purpose. In order to make a difference between these
-   --  two situations, we track the origin of non-blocking mode in
-   --  Non_Blocking_Sockets. If S is in Non_Blocking_Sockets, it has
-   --  been set in non-blocking mode by the user.
+   type VMS_Msghdr is new Msghdr;
+   pragma Pack (VMS_Msghdr);
+   --  On VMS (unlike other platforms), struct msghdr is packed, so a specific
+   --  derived type is required.
+
+   Non_Blocking_Sockets : aliased Fd_Set;
+   --  When this package is initialized with Process_Blocking_IO set to True,
+   --  sockets are set in non-blocking mode to avoid blocking the whole process
+   --  when a thread wants to perform a blocking IO operation. But the user can
+   --  also set a socket in non-blocking mode by purpose. In order to make a
+   --  difference between these two situations, we track the origin of
+   --  non-blocking mode in Non_Blocking_Sockets. Note that if S is in
+   --  Non_Blocking_Sockets, it has been set in non-blocking mode by the user.
 
    Quantum : constant Duration := 0.2;
-   --  When SOSC.Thread_Blocking_IO is False, we set sockets in
-   --  non-blocking mode and we spend a period of time Quantum between
-   --  two attempts on a blocking operation.
+   --  When SOSC.Thread_Blocking_IO is False, we set sockets to non-blocking
+   --  mode and we spend a period of time Quantum between two attempts on a
+   --  blocking operation.
 
    Unknown_System_Error : constant C.Strings.chars_ptr :=
                             C.Strings.New_String ("Unknown system error");
@@ -71,12 +74,6 @@ package body GNAT.Sockets.Thin is
       Namelen : C.int) return C.int;
    pragma Import (C, Syscall_Connect, "connect");
 
-   function Syscall_Ioctl
-     (S    : C.int;
-      Req  : C.int;
-      Arg  : Int_Access) return C.int;
-   pragma Import (C, Syscall_Ioctl, "ioctl");
-
    function Syscall_Recv
      (S     : C.int;
       Msg   : System.Address;
@@ -89,23 +86,28 @@ package body GNAT.Sockets.Thin is
       Msg     : System.Address;
       Len     : C.int;
       Flags   : C.int;
-      From    : Sockaddr_In_Access;
+      From    : System.Address;
       Fromlen : not null access C.int) return C.int;
    pragma Import (C, Syscall_Recvfrom, "recvfrom");
 
-   function Syscall_Send
+   function Syscall_Recvmsg
      (S     : C.int;
       Msg   : System.Address;
-      Len   : C.int;
       Flags : C.int) return C.int;
-   pragma Import (C, Syscall_Send, "send");
+   pragma Import (C, Syscall_Recvmsg, "recvmsg");
+
+   function Syscall_Sendmsg
+     (S     : C.int;
+      Msg   : System.Address;
+      Flags : C.int) return C.int;
+   pragma Import (C, Syscall_Sendmsg, "sendmsg");
 
    function Syscall_Sendto
      (S     : C.int;
       Msg   : System.Address;
       Len   : C.int;
       Flags : C.int;
-      To    : Sockaddr_In_Access;
+      To    : System.Address;
       Tolen : C.int) return C.int;
    pragma Import (C, Syscall_Sendto, "sendto");
 
@@ -113,7 +115,7 @@ package body GNAT.Sockets.Thin is
      (Domain, Typ, Protocol : C.int) return C.int;
    pragma Import (C, Syscall_Socket, "socket");
 
-   function  Non_Blocking_Socket (S : C.int) return Boolean;
+   function Non_Blocking_Socket (S : C.int) return Boolean;
    procedure Set_Non_Blocking_Socket (S : C.int; V : Boolean);
 
    --------------
@@ -145,11 +147,11 @@ package body GNAT.Sockets.Thin is
         and then R /= Failure
       then
          --  A socket inherits the properties of its server, especially
-         --  the FIONBIO flag. Do not use C_Ioctl as this subprogram
+         --  the FIONBIO flag. Do not use Socket_Ioctl as this subprogram
          --  tracks sockets set in non-blocking mode by user.
 
          Set_Non_Blocking_Socket (R, Non_Blocking_Socket (S));
-         Discard := Syscall_Ioctl (R, SOSC.FIONBIO, Val'Unchecked_Access);
+         Discard := C_Ioctl (R, SOSC.FIONBIO, Val'Access);
       end if;
 
       return R;
@@ -178,64 +180,58 @@ package body GNAT.Sockets.Thin is
       end if;
 
       declare
-         WSet : Fd_Set_Access;
+         WSet : aliased Fd_Set;
          Now  : aliased Timeval;
 
       begin
-         WSet := New_Socket_Set (No_Fd_Set_Access);
+         Reset_Socket_Set (WSet'Access);
          loop
-            Insert_Socket_In_Set (WSet, S);
+            Insert_Socket_In_Set (WSet'Access, S);
             Now := Immediat;
             Res := C_Select
               (S + 1,
                No_Fd_Set_Access,
-               WSet,
+               WSet'Access,
                No_Fd_Set_Access,
                Now'Unchecked_Access);
 
             exit when Res > 0;
 
             if Res = Failure then
-               Free_Socket_Set (WSet);
                return Res;
             end if;
 
             delay Quantum;
          end loop;
-
-         Free_Socket_Set (WSet);
       end;
 
       Res := Syscall_Connect (S, Name, Namelen);
 
       if Res = Failure and then Errno = SOSC.EISCONN then
          return Thin_Common.Success;
-
       else
          return Res;
       end if;
    end C_Connect;
 
-   -------------
-   -- C_Ioctl --
-   -------------
+   ------------------
+   -- Socket_Ioctl --
+   ------------------
 
-   function C_Ioctl
+   function Socket_Ioctl
      (S   : C.int;
       Req : C.int;
-      Arg : Int_Access) return C.int
+      Arg : access C.int) return C.int
    is
    begin
-      if not SOSC.Thread_Blocking_IO
-        and then Req = SOSC.FIONBIO
-      then
+      if not SOSC.Thread_Blocking_IO and then Req = SOSC.FIONBIO then
          if Arg.all /= 0 then
             Set_Non_Blocking_Socket (S, True);
          end if;
       end if;
 
-      return Syscall_Ioctl (S, Req, Arg);
-   end C_Ioctl;
+      return C_Ioctl (S, Req, Arg);
+   end Socket_Ioctl;
 
    ------------
    -- C_Recv --
@@ -271,7 +267,7 @@ package body GNAT.Sockets.Thin is
       Msg     : System.Address;
       Len     : C.int;
       Flags   : C.int;
-      From    : Sockaddr_In_Access;
+      From    : System.Address;
       Fromlen : not null access C.int) return C.int
    is
       Res : C.int;
@@ -289,21 +285,26 @@ package body GNAT.Sockets.Thin is
       return Res;
    end C_Recvfrom;
 
-   ------------
-   -- C_Send --
-   ------------
+   ---------------
+   -- C_Recvmsg --
+   ---------------
 
-   function C_Send
+   function C_Recvmsg
      (S     : C.int;
       Msg   : System.Address;
-      Len   : C.int;
-      Flags : C.int) return C.int
+      Flags : C.int) return System.CRTL.ssize_t
    is
       Res : C.int;
 
+      GNAT_Msg : Msghdr;
+      for GNAT_Msg'Address use Msg;
+      pragma Import (Ada, GNAT_Msg);
+
+      VMS_Msg : aliased VMS_Msghdr := VMS_Msghdr (GNAT_Msg);
+
    begin
       loop
-         Res := Syscall_Send (S, Msg, Len, Flags);
+         Res := Syscall_Recvmsg (S, VMS_Msg'Address, Flags);
          exit when SOSC.Thread_Blocking_IO
            or else Res /= Failure
            or else Non_Blocking_Socket (S)
@@ -311,8 +312,42 @@ package body GNAT.Sockets.Thin is
          delay Quantum;
       end loop;
 
-      return Res;
-   end C_Send;
+      GNAT_Msg := Msghdr (VMS_Msg);
+
+      return System.CRTL.ssize_t (Res);
+   end C_Recvmsg;
+
+   ---------------
+   -- C_Sendmsg --
+   ---------------
+
+   function C_Sendmsg
+     (S     : C.int;
+      Msg   : System.Address;
+      Flags : C.int) return System.CRTL.ssize_t
+   is
+      Res : C.int;
+
+      GNAT_Msg : Msghdr;
+      for GNAT_Msg'Address use Msg;
+      pragma Import (Ada, GNAT_Msg);
+
+      VMS_Msg : aliased VMS_Msghdr := VMS_Msghdr (GNAT_Msg);
+
+   begin
+      loop
+         Res := Syscall_Sendmsg (S, VMS_Msg'Address, Flags);
+         exit when SOSC.Thread_Blocking_IO
+           or else Res /= Failure
+           or else Non_Blocking_Socket (S)
+           or else Errno /= SOSC.EWOULDBLOCK;
+         delay Quantum;
+      end loop;
+
+      GNAT_Msg := Msghdr (VMS_Msg);
+
+      return System.CRTL.ssize_t (Res);
+   end C_Sendmsg;
 
    --------------
    -- C_Sendto --
@@ -323,7 +358,7 @@ package body GNAT.Sockets.Thin is
       Msg   : System.Address;
       Len   : C.int;
       Flags : C.int;
-      To    : Sockaddr_In_Access;
+      To    : System.Address;
       Tolen : C.int) return C.int
    is
       Res : C.int;
@@ -362,10 +397,10 @@ package body GNAT.Sockets.Thin is
       if not SOSC.Thread_Blocking_IO
         and then R /= Failure
       then
-         --  Do not use C_Ioctl as this subprogram tracks sockets set
+         --  Do not use Socket_Ioctl as this subprogram tracks sockets set
          --  in non-blocking mode by user.
 
-         Discard := Syscall_Ioctl (R, SOSC.FIONBIO, Val'Unchecked_Access);
+         Discard := C_Ioctl (R, SOSC.FIONBIO, Val'Access);
          Set_Non_Blocking_Socket (R, False);
       end if;
 
@@ -393,7 +428,7 @@ package body GNAT.Sockets.Thin is
 
    procedure Initialize is
    begin
-      null;
+      Reset_Socket_Set (Non_Blocking_Sockets'Access);
    end Initialize;
 
    -------------------------
@@ -404,7 +439,7 @@ package body GNAT.Sockets.Thin is
       R : Boolean;
    begin
       Task_Lock.Lock;
-      R := (Is_Socket_In_Set (Non_Blocking_Sockets, S) /= 0);
+      R := (Is_Socket_In_Set (Non_Blocking_Sockets'Access, S) /= 0);
       Task_Lock.Unlock;
       return R;
    end Non_Blocking_Socket;
@@ -418,9 +453,9 @@ package body GNAT.Sockets.Thin is
       Task_Lock.Lock;
 
       if V then
-         Insert_Socket_In_Set (Non_Blocking_Sockets, S);
+         Insert_Socket_In_Set (Non_Blocking_Sockets'Access, S);
       else
-         Remove_Socket_From_Set (Non_Blocking_Sockets, S);
+         Remove_Socket_From_Set (Non_Blocking_Sockets'Access, S);
       end if;
 
       Task_Lock.Unlock;
@@ -438,85 +473,6 @@ package body GNAT.Sockets.Thin is
 
    function Socket_Error_Message
      (Errno : Integer) return C.Strings.chars_ptr
-   is
-      use type Interfaces.C.Strings.chars_ptr;
-
-      C_Msg : C.Strings.chars_ptr;
-
-   begin
-      C_Msg := C_Strerror (C.int (Errno));
-
-      if C_Msg = C.Strings.Null_Ptr then
-         return Unknown_System_Error;
-      else
-         return C_Msg;
-      end if;
-   end Socket_Error_Message;
-
-   -------------
-   -- C_Readv --
-   -------------
-
-   function C_Readv
-     (Fd     : C.int;
-      Iov    : System.Address;
-      Iovcnt : C.int) return C.int
-   is
-      Res : C.int;
-      Count : C.int := 0;
-
-      Iovec : array (0 .. Iovcnt - 1) of Vector_Element;
-      for Iovec'Address use Iov;
-      pragma Import (Ada, Iovec);
-
-   begin
-      for J in Iovec'Range loop
-         Res := C_Recv
-           (Fd,
-            Iovec (J).Base.all'Address,
-            Interfaces.C.int (Iovec (J).Length),
-            0);
-
-         if Res < 0 then
-            return Res;
-         else
-            Count := Count + Res;
-         end if;
-      end loop;
-      return Count;
-   end C_Readv;
-
-   --------------
-   -- C_Writev --
-   --------------
-
-   function C_Writev
-     (Fd     : C.int;
-      Iov    : System.Address;
-      Iovcnt : C.int) return C.int
-   is
-      Res : C.int;
-      Count : C.int := 0;
-
-      Iovec : array (0 .. Iovcnt - 1) of Vector_Element;
-      for Iovec'Address use Iov;
-      pragma Import (Ada, Iovec);
-
-   begin
-      for J in Iovec'Range loop
-         Res := C_Send
-           (Fd,
-            Iovec (J).Base.all'Address,
-            Interfaces.C.int (Iovec (J).Length),
-            SOSC.MSG_Forced_Flags);
-
-         if Res < 0 then
-            return Res;
-         else
-            Count := Count + Res;
-         end if;
-      end loop;
-      return Count;
-   end C_Writev;
+   is separate;
 
 end GNAT.Sockets.Thin;

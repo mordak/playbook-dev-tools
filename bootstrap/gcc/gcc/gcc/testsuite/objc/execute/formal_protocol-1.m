@@ -1,6 +1,7 @@
 /* Contributed by Nicola Pero - Fri Mar  9 21:35:47 CET 2001 */
-#include <objc/objc.h>
-#include <objc/Object.h>
+
+#include <stdlib.h>
+#import "../../objc-obj-c++-shared/Object1.h"
 
 /* Tests defining a protocol and a class adopting it */
 
@@ -41,4 +42,4 @@ int main (void)
 
   return 0;
 }
-
+#include "../../objc-obj-c++-shared/Object1-implementation.h"

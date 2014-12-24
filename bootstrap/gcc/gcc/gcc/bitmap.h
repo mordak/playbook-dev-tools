@@ -1,6 +1,6 @@
 /* Functions to support general ended bitmaps.
    Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-   2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+   2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -42,8 +42,7 @@ typedef unsigned long BITMAP_WORD;
 #define BITMAP_ELEMENT_ALL_BITS (BITMAP_ELEMENT_WORDS * BITMAP_WORD_BITS)
 
 /* Obstack for allocating bitmaps and elements from.  */
-typedef struct bitmap_obstack GTY (())
-{
+typedef struct GTY (()) bitmap_obstack {
   struct bitmap_element_def *elements;
   struct bitmap_head_def *heads;
   struct obstack GTY ((skip)) obstack;
@@ -61,8 +60,7 @@ typedef struct bitmap_obstack GTY (())
    bitmap_elt_clear_from to be implemented in unit time rather than
    linear in the number of elements to be freed.  */
 
-typedef struct bitmap_element_def GTY(())
-{
+typedef struct GTY(()) bitmap_element_def {
   struct bitmap_element_def *next;		/* Next element.  */
   struct bitmap_element_def *prev;		/* Previous element.  */
   unsigned int indx;			/* regno/BITMAP_ELEMENT_ALL_BITS.  */
@@ -74,12 +72,12 @@ struct bitmap_descriptor;
    statistics we need to add a bitmap descriptor pointer.  As it is
    not collected, we can just GTY((skip)) it.   */
 
-typedef struct bitmap_head_def GTY(()) {
+typedef struct GTY(()) bitmap_head_def {
   bitmap_element *first;	/* First element in linked list.  */
   bitmap_element *current;	/* Last element looked at.  */
   unsigned int indx;		/* Index of last element looked at.  */
   bitmap_obstack *obstack;	/* Obstack to allocate elements from.
-				   If NULL, then use ggc_alloc.  */
+				   If NULL, then use GGC allocation.  */
 #ifdef GATHER_STATISTICS
   struct bitmap_descriptor GTY((skip)) *desc;
 #endif
@@ -131,6 +129,8 @@ extern bool bitmap_ior_into (bitmap, const_bitmap);
 extern void bitmap_xor (bitmap, const_bitmap, const_bitmap);
 extern void bitmap_xor_into (bitmap, const_bitmap);
 
+/* DST = A | (B & C).  Return true if DST changes.  */
+extern bool bitmap_ior_and_into (bitmap DST, const_bitmap B, const_bitmap C);
 /* DST = A | (B & ~C).  Return true if DST changes.  */
 extern bool bitmap_ior_and_compl (bitmap DST, const_bitmap A, const_bitmap B, const_bitmap C);
 /* A |= (B & ~C).  Return true if A changes.  */
@@ -183,6 +183,7 @@ extern void bitmap_obstack_free (bitmap);
 #define dump_bitmap(file, bitmap) bitmap_print (file, bitmap, "", "\n")
 #define bitmap_zero(a) bitmap_clear (a)
 extern unsigned bitmap_first_set_bit (const_bitmap);
+extern unsigned bitmap_last_set_bit (const_bitmap);
 
 /* Compute bitmap hash (for purposes of hashing etc.)  */
 extern hashval_t bitmap_hash(const_bitmap);
@@ -384,6 +385,27 @@ bmp_iter_next (bitmap_iterator *bi, unsigned *bit_no)
   *bit_no += 1;
 }
 
+/* Advance to first set bit in BI.  */
+
+static inline void
+bmp_iter_next_bit (bitmap_iterator * bi, unsigned *bit_no)
+{
+#if (GCC_VERSION >= 3004)
+  {
+    unsigned int n = __builtin_ctzl (bi->bits);
+    gcc_assert (sizeof (unsigned long) == sizeof (BITMAP_WORD));
+    bi->bits >>= n;
+    *bit_no += n;
+  }
+#else
+  while (!(bi->bits & 1))
+    {
+      bi->bits >>= 1;
+      *bit_no += 1;
+    }
+#endif
+}
+
 /* Advance to the next nonzero bit of a single bitmap, we will have
    already advanced past the just iterated bit.  Return true if there
    is a bit to iterate.  */
@@ -395,11 +417,7 @@ bmp_iter_set (bitmap_iterator *bi, unsigned *bit_no)
   if (bi->bits)
     {
     next_bit:
-      while (!(bi->bits & 1))
-	{
-	  bi->bits >>= 1;
-	  *bit_no += 1;
-	}
+      bmp_iter_next_bit (bi, bit_no);
       return true;
     }
 
@@ -442,11 +460,7 @@ bmp_iter_and (bitmap_iterator *bi, unsigned *bit_no)
   if (bi->bits)
     {
     next_bit:
-      while (!(bi->bits & 1))
-	{
-	  bi->bits >>= 1;
-	  *bit_no += 1;
-	}
+      bmp_iter_next_bit (bi, bit_no);
       return true;
     }
 
@@ -509,11 +523,7 @@ bmp_iter_and_compl (bitmap_iterator *bi, unsigned *bit_no)
   if (bi->bits)
     {
     next_bit:
-      while (!(bi->bits & 1))
-	{
-	  bi->bits >>= 1;
-	  *bit_no += 1;
-	}
+      bmp_iter_next_bit (bi, bit_no);
       return true;
     }
 

@@ -1,5 +1,6 @@
 /* Mudflap: narrow-pointer bounds-checking by tree rewriting.
-   Copyright (C) 2001, 2002, 2003, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2001, 2002, 2003, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Frank Ch. Eigler <fche@redhat.com>
 
 This file is part of GCC.
@@ -25,18 +26,14 @@ along with GCC; see the file COPYING3.  If not see
 #include "tm.h"
 #include "tree.h"
 #include "tree-inline.h"
-#include "c-tree.h"
-#include "c-common.h"
 #include "gimple.h"
-#include "diagnostic.h"
 #include "hashtab.h"
 #include "output.h"
-#include "varray.h"
 #include "langhooks.h"
 #include "tree-mudflap.h"
 #include "tree-pass.h"
 #include "ggc.h"
-#include "toplev.h"
+#include "diagnostic-core.h"
 
 
 
@@ -90,7 +87,7 @@ gate_mudflap (void)
   return flag_mudflap != 0;
 }
 
-struct gimple_opt_pass pass_mudflap_1 = 
+struct gimple_opt_pass pass_mudflap_1 =
 {
  {
   GIMPLE_PASS,
@@ -100,7 +97,7 @@ struct gimple_opt_pass pass_mudflap_1 =
   NULL,					/* sub */
   NULL,					/* next */
   0,					/* static_pass_number */
-  0,					/* tv_id */
+  TV_NONE,				/* tv_id */
   0,					/* properties_required */
   0,					/* properties_provided */
   0,					/* properties_destroyed */
@@ -109,7 +106,7 @@ struct gimple_opt_pass pass_mudflap_1 =
  }
 };
 
-struct gimple_opt_pass pass_mudflap_2 = 
+struct gimple_opt_pass pass_mudflap_2 =
 {
  {
   GIMPLE_PASS,
@@ -119,7 +116,7 @@ struct gimple_opt_pass pass_mudflap_2 =
   NULL,					/* sub */
   NULL,					/* next */
   0,					/* static_pass_number */
-  0,					/* tv_id */
+  TV_NONE,				/* tv_id */
   0,					/* properties_required */
   0,					/* properties_provided */
   0,					/* properties_destroyed */
@@ -133,6 +130,6 @@ struct gimple_opt_pass pass_mudflap_2 =
 We prepare a little dummy struct here.
 */
 
-const struct ggc_root_tab gt_ggc_r_gt_tree_mudflap_h[] = {
+EXPORTED_CONST struct ggc_root_tab gt_ggc_r_gt_tree_mudflap_h[] = {
   LAST_GGC_ROOT_TAB
 };

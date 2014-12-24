@@ -1,5 +1,6 @@
 /* Instruction scheduling pass.  Selective scheduler and pipeliner.
-   Copyright (C) 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+   Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -21,8 +22,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "system.h"
 #include "coretypes.h"
 #include "tm.h"
-#include "toplev.h"
-#include "rtl.h"
+#include "rtl-error.h"
 #include "tm_p.h"
 #include "hard-reg-set.h"
 #include "regs.h"
@@ -31,7 +31,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "insn-config.h"
 #include "insn-attr.h"
 #include "except.h"
-#include "toplev.h"
 #include "recog.h"
 #include "params.h"
 #include "target.h"
@@ -45,6 +44,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "langhooks.h"
 #include "rtlhooks-def.h"
 #include "output.h"
+#include "emit-rtl.h"
 
 #ifdef INSN_SCHEDULING
 #include "sel-sched-ir.h"
@@ -56,7 +56,7 @@ along with GCC; see the file COPYING3.  If not see
    The below implementation follows the original approach with the following
    changes:
 
-   o the scheduler works after register allocation (but can be also tuned 
+   o the scheduler works after register allocation (but can be also tuned
    to work before RA);
    o some instructions are not copied or register renamed;
    o conditional jumps are not moved with code duplication;
@@ -69,67 +69,67 @@ along with GCC; see the file COPYING3.  If not see
    Terminology
    ===========
 
-   A vinsn, or virtual insn, is an insn with additional data characterizing 
-   insn pattern, such as LHS, RHS, register sets used/set/clobbered, etc.  
-   Vinsns also act as smart pointers to save memory by reusing them in 
+   A vinsn, or virtual insn, is an insn with additional data characterizing
+   insn pattern, such as LHS, RHS, register sets used/set/clobbered, etc.
+   Vinsns also act as smart pointers to save memory by reusing them in
    different expressions.  A vinsn is described by vinsn_t type.
 
    An expression is a vinsn with additional data characterizing its properties
-   at some point in the control flow graph.  The data may be its usefulness, 
+   at some point in the control flow graph.  The data may be its usefulness,
    priority, speculative status, whether it was renamed/subsituted, etc.
    An expression is described by expr_t type.
 
-   Availability set (av_set) is a set of expressions at a given control flow 
+   Availability set (av_set) is a set of expressions at a given control flow
    point. It is represented as av_set_t.  The expressions in av sets are kept
-   sorted in the terms of expr_greater_p function.  It allows to truncate 
+   sorted in the terms of expr_greater_p function.  It allows to truncate
    the set while leaving the best expressions.
-   
+
    A fence is a point through which code motion is prohibited.  On each step,
    we gather a parallel group of insns at a fence.  It is possible to have
    multiple fences. A fence is represented via fence_t.
 
    A boundary is the border between the fence group and the rest of the code.
    Currently, we never have more than one boundary per fence, as we finalize
-   the fence group when a jump is scheduled. A boundary is represented 
+   the fence group when a jump is scheduled. A boundary is represented
    via bnd_t.
 
    High-level overview
    ===================
 
    The scheduler finds regions to schedule, schedules each one, and finalizes.
-   The regions are formed starting from innermost loops, so that when the inner 
+   The regions are formed starting from innermost loops, so that when the inner
    loop is pipelined, its prologue can be scheduled together with yet unprocessed
-   outer loop. The rest of acyclic regions are found using extend_rgns: 
+   outer loop. The rest of acyclic regions are found using extend_rgns:
    the blocks that are not yet allocated to any regions are traversed in top-down
-   order, and a block is added to a region to which all its predecessors belong; 
+   order, and a block is added to a region to which all its predecessors belong;
    otherwise, the block starts its own region.
 
    The main scheduling loop (sel_sched_region_2) consists of just
    scheduling on each fence and updating fences.  For each fence,
    we fill a parallel group of insns (fill_insns) until some insns can be added.
-   First, we compute available exprs (av-set) at the boundary of the current 
-   group.  Second, we choose the best expression from it.  If the stall is 
+   First, we compute available exprs (av-set) at the boundary of the current
+   group.  Second, we choose the best expression from it.  If the stall is
    required to schedule any of the expressions, we advance the current cycle
-   appropriately.  So, the final group does not exactly correspond to a VLIW 
+   appropriately.  So, the final group does not exactly correspond to a VLIW
    word.  Third, we move the chosen expression to the boundary (move_op)
    and update the intermediate av sets and liveness sets.  We quit fill_insns
    when either no insns left for scheduling or we have scheduled enough insns
-   so we feel like advancing a scheduling point.  
+   so we feel like advancing a scheduling point.
 
    Computing available expressions
    ===============================
 
    The computation (compute_av_set) is a bottom-up traversal.  At each insn,
-   we're moving the union of its successors' sets through it via 
-   moveup_expr_set.  The dependent expressions are removed.  Local 
-   transformations (substitution, speculation) are applied to move more 
+   we're moving the union of its successors' sets through it via
+   moveup_expr_set.  The dependent expressions are removed.  Local
+   transformations (substitution, speculation) are applied to move more
    exprs.  Then the expr corresponding to the current insn is added.
    The result is saved on each basic block header.
 
    When traversing the CFG, we're moving down for no more than max_ws insns.
    Also, we do not move down to ineligible successors (is_ineligible_successor),
    which include moving along a back-edge, moving to already scheduled code,
-   and moving to another fence.  The first two restrictions are lifted during 
+   and moving to another fence.  The first two restrictions are lifted during
    pipelining, which allows us to move insns along a back-edge.  We always have
    an acyclic region for scheduling because we forbid motion through fences.
 
@@ -138,11 +138,11 @@ along with GCC; see the file COPYING3.  If not see
 
    We sort the final availability set via sel_rank_for_schedule, then we remove
    expressions which are not yet ready (tick_check_p) or which dest registers
-   cannot be used.  For some of them, we choose another register via 
-   find_best_reg.  To do this, we run find_used_regs to calculate the set of 
+   cannot be used.  For some of them, we choose another register via
+   find_best_reg.  To do this, we run find_used_regs to calculate the set of
    registers which cannot be used.  The find_used_regs function performs
    a traversal of code motion paths for an expr.  We consider for renaming
-   only registers which are from the same regclass as the original one and 
+   only registers which are from the same regclass as the original one and
    using which does not interfere with any live ranges.  Finally, we convert
    the resulting set to the ready list format and use max_issue and reorder*
    hooks similarly to the Haifa scheduler.
@@ -150,22 +150,22 @@ along with GCC; see the file COPYING3.  If not see
    Scheduling the best expression
    ==============================
 
-   We run the move_op routine to perform the same type of code motion paths 
+   We run the move_op routine to perform the same type of code motion paths
    traversal as in find_used_regs.  (These are working via the same driver,
    code_motion_path_driver.)  When moving down the CFG, we look for original
-   instruction that gave birth to a chosen expression.  We undo 
+   instruction that gave birth to a chosen expression.  We undo
    the transformations performed on an expression via the history saved in it.
-   When found, we remove the instruction or leave a reg-reg copy/speculation 
-   check if needed.  On a way up, we insert bookkeeping copies at each join 
-   point.  If a copy is not needed, it will be removed later during this 
+   When found, we remove the instruction or leave a reg-reg copy/speculation
+   check if needed.  On a way up, we insert bookkeeping copies at each join
+   point.  If a copy is not needed, it will be removed later during this
    traversal.  We update the saved av sets and liveness sets on the way up, too.
 
    Finalizing the schedule
    =======================
 
-   When pipelining, we reschedule the blocks from which insns were pipelined 
-   to get a tighter schedule.  On Itanium, we also perform bundling via 
-   the same routine from ia64.c.  
+   When pipelining, we reschedule the blocks from which insns were pipelined
+   to get a tighter schedule.  On Itanium, we also perform bundling via
+   the same routine from ia64.c.
 
    Dependence analysis changes
    ===========================
@@ -173,30 +173,30 @@ along with GCC; see the file COPYING3.  If not see
    We augmented the sched-deps.c with hooks that get called when a particular
    dependence is found in a particular part of an insn.  Using these hooks, we
    can do several actions such as: determine whether an insn can be moved through
-   another (has_dependence_p, moveup_expr); find out whether an insn can be 
-   scheduled on the current cycle (tick_check_p); find out registers that 
-   are set/used/clobbered by an insn and find out all the strange stuff that 
-   restrict its movement, like SCHED_GROUP_P or CANT_MOVE (done in 
+   another (has_dependence_p, moveup_expr); find out whether an insn can be
+   scheduled on the current cycle (tick_check_p); find out registers that
+   are set/used/clobbered by an insn and find out all the strange stuff that
+   restrict its movement, like SCHED_GROUP_P or CANT_MOVE (done in
    init_global_and_expr_for_insn).
 
    Initialization changes
    ======================
 
-   There are parts of haifa-sched.c, sched-deps.c, and sched-rgn.c that are 
+   There are parts of haifa-sched.c, sched-deps.c, and sched-rgn.c that are
    reused in all of the schedulers.  We have split up the initialization of data
-   of such parts into different functions prefixed with scheduler type and 
+   of such parts into different functions prefixed with scheduler type and
    postfixed with the type of data initialized: {,sel_,haifa_}sched_{init,finish},
    sched_rgn_init/finish, sched_deps_init/finish, sched_init_{luids/bbs}, etc.
-   The same splitting is done with current_sched_info structure: 
-   dependence-related parts are in sched_deps_info, common part is in 
+   The same splitting is done with current_sched_info structure:
+   dependence-related parts are in sched_deps_info, common part is in
    common_sched_info, and haifa/sel/etc part is in current_sched_info.
-   
+
    Target contexts
    ===============
 
    As we now have multiple-point scheduling, this would not work with backends
-   which save some of the scheduler state to use it in the target hooks.  
-   For this purpose, we introduce a concept of target contexts, which 
+   which save some of the scheduler state to use it in the target hooks.
+   For this purpose, we introduce a concept of target contexts, which
    encapsulate such information.  The backend should implement simple routines
    of allocating/freeing/setting such a context.  The scheduler calls these
    as target hooks and handles the target context as an opaque pointer (similar
@@ -206,29 +206,29 @@ along with GCC; see the file COPYING3.  If not see
    ================
 
    As the correct data dependence graph is not supported during scheduling (which
-   is to be changed in mid-term), we cache as much of the dependence analysis 
-   results as possible to avoid reanalyzing.  This includes: bitmap caches on 
-   each insn in stream of the region saying yes/no for a query with a pair of 
+   is to be changed in mid-term), we cache as much of the dependence analysis
+   results as possible to avoid reanalyzing.  This includes: bitmap caches on
+   each insn in stream of the region saying yes/no for a query with a pair of
    UIDs; hashtables with the previously done transformations on each insn in
    stream; a vector keeping a history of transformations on each expr.
 
    Also, we try to minimize the dependence context used on each fence to check
    whether the given expression is ready for scheduling by removing from it
-   insns that are definitely completed the execution.  The results of 
+   insns that are definitely completed the execution.  The results of
    tick_check_p checks are also cached in a vector on each fence.
 
-   We keep a valid liveness set on each insn in a region to avoid the high 
+   We keep a valid liveness set on each insn in a region to avoid the high
    cost of recomputation on large basic blocks.
 
    Finally, we try to minimize the number of needed updates to the availability
-   sets.  The updates happen in two cases: when fill_insns terminates, 
+   sets.  The updates happen in two cases: when fill_insns terminates,
    we advance all fences and increase the stage number to show that the region
    has changed and the sets are to be recomputed; and when the next iteration
    of a loop in fill_insns happens (but this one reuses the saved av sets
    on bb headers.)  Thus, we try to break the fill_insns loop only when
    "significant" number of insns from the current scheduling window was
    scheduled.  This should be made a target param.
-   
+
 
    TODO: correctly support the data dependence graph at all stages and get rid
    of all caches.  This should speed up the scheduler.
@@ -238,17 +238,17 @@ along with GCC; see the file COPYING3.  If not see
 
    References:
    S.-M. Moon and K. Ebcioglu. Parallelizing nonnumerical code with
-   selective scheduling and software pipelining. 
-   ACM TOPLAS, Vol 19, No. 6, pages 853--898, Nov. 1997.  
+   selective scheduling and software pipelining.
+   ACM TOPLAS, Vol 19, No. 6, pages 853--898, Nov. 1997.
 
-   Andrey Belevantsev, Maxim Kuvyrkov, Vladimir Makarov, Dmitry Melnik, 
-   and Dmitry Zhurikhin.  An interblock VLIW-targeted instruction scheduler 
+   Andrey Belevantsev, Maxim Kuvyrkov, Vladimir Makarov, Dmitry Melnik,
+   and Dmitry Zhurikhin.  An interblock VLIW-targeted instruction scheduler
    for GCC. In Proceedings of GCC Developers' Summit 2006.
 
-   Arutyun Avetisyan, Andrey Belevantsev, and Dmitry Melnik.  GCC Instruction 
+   Arutyun Avetisyan, Andrey Belevantsev, and Dmitry Melnik.  GCC Instruction
    Scheduler and Software Pipeliner on the Itanium Platform.   EPIC-7 Workshop.
    http://rogue.colorado.edu/EPIC7/.
-   
+
 */
 
 /* True when pipelining is enabled.  */
@@ -264,19 +264,19 @@ int max_insns_to_rename;
 /* Definitions of local types and macros.  */
 
 /* Represents possible outcomes of moving an expression through an insn.  */
-enum MOVEUP_EXPR_CODE 
-  { 
+enum MOVEUP_EXPR_CODE
+  {
     /* The expression is not changed.  */
-    MOVEUP_EXPR_SAME, 
+    MOVEUP_EXPR_SAME,
 
     /* Not changed, but requires a new destination register.  */
-    MOVEUP_EXPR_AS_RHS, 
+    MOVEUP_EXPR_AS_RHS,
 
     /* Cannot be moved.  */
-    MOVEUP_EXPR_NULL, 
+    MOVEUP_EXPR_NULL,
 
     /* Changed (substituted or speculated).  */
-    MOVEUP_EXPR_CHANGED 
+    MOVEUP_EXPR_CHANGED
   };
 
 /* The container to be passed into rtx search & replace functions.  */
@@ -291,11 +291,11 @@ struct rtx_search_arg
 
 typedef struct rtx_search_arg *rtx_search_arg_p;
 
-/* This struct contains precomputed hard reg sets that are needed when 
+/* This struct contains precomputed hard reg sets that are needed when
    computing registers available for renaming.  */
-struct hard_regs_data 
+struct hard_regs_data
 {
-  /* For every mode, this stores registers available for use with 
+  /* For every mode, this stores registers available for use with
      that mode.  */
   HARD_REG_SET regs_for_mode[NUM_MACHINE_MODES];
 
@@ -307,7 +307,7 @@ struct hard_regs_data
      that the whole set is not computed yet.  */
   HARD_REG_SET regs_for_rename[FIRST_PSEUDO_REGISTER];
 
-  /* For every mode, this stores registers not available due to 
+  /* For every mode, this stores registers not available due to
      call clobbering.  */
   HARD_REG_SET regs_for_call_clobbered[NUM_MACHINE_MODES];
 
@@ -334,16 +334,16 @@ struct reg_rename
   bool crosses_call;
 };
 
-/* A global structure that contains the needed information about harg 
+/* A global structure that contains the needed information about harg
    regs.  */
 static struct hard_regs_data sel_hrd;
 
 
-/* This structure holds local data used in code_motion_path_driver hooks on 
-   the same or adjacent levels of recursion.  Here we keep those parameters 
-   that are not used in code_motion_path_driver routine itself, but only in 
-   its hooks.  Moreover, all parameters that can be modified in hooks are 
-   in this structure, so all other parameters passed explicitly to hooks are 
+/* This structure holds local data used in code_motion_path_driver hooks on
+   the same or adjacent levels of recursion.  Here we keep those parameters
+   that are not used in code_motion_path_driver routine itself, but only in
+   its hooks.  Moreover, all parameters that can be modified in hooks are
+   in this structure, so all other parameters passed explicitly to hooks are
    read-only.  */
 struct cmpd_local_params
 {
@@ -361,7 +361,7 @@ struct cmpd_local_params
   def_list_t old_original_insns;
 
   /* Local params used in move_op_* functions.  */
-  /* True when we have removed last insn in the block which was 
+  /* True when we have removed last insn in the block which was
      also a boundary.  Do not update anything or create bookkeeping copies.  */
   BOOL_BITFIELD removed_last_insn : 1;
 };
@@ -430,11 +430,11 @@ struct code_motion_path_driver_info_def
      Used only with move_op_*.  */
   void (*ascend) (insn_t, void *);
 
-  /* Called on the ascending pass, before returning from the current basic 
+  /* Called on the ascending pass, before returning from the current basic
      block or from the whole traversal.  */
   void (*at_first_insn) (insn_t, cmpd_local_params_p, void *);
 
-  /* When processing successors in move_op we need only descend into 
+  /* When processing successors in move_op we need only descend into
      SUCCS_NORMAL successors, while in find_used_regs we need SUCCS_ALL.  */
   int succ_flags;
 
@@ -448,10 +448,10 @@ struct code_motion_path_driver_info_def *code_motion_path_driver_info;
 
 /* Set of hooks for performing move_op and find_used_regs routines with
    code_motion_path_driver.  */
-struct code_motion_path_driver_info_def move_op_hooks, fur_hooks;
+extern struct code_motion_path_driver_info_def move_op_hooks, fur_hooks;
 
-/* True if/when we want to emulate Haifa scheduler in the common code.  
-   This is used in sched_rgn_local_init and in various places in 
+/* True if/when we want to emulate Haifa scheduler in the common code.
+   This is used in sched_rgn_local_init and in various places in
    sched-deps.c.  */
 int sched_emulate_haifa_p;
 
@@ -469,9 +469,9 @@ static bool enable_schedule_as_rhs_p;
 
 /* Used in verify_target_availability to assert that target reg is reported
    unavailabile by both TARGET_UNAVAILABLE and find_used_regs only if
-   we haven't scheduled anything on the previous fence.  
+   we haven't scheduled anything on the previous fence.
    if scheduled_something_on_previous_fence is true, TARGET_UNAVAILABLE can
-   have more conservative value than the one returned by the 
+   have more conservative value than the one returned by the
    find_used_regs, thus we shouldn't assert that these values are equal.  */
 static bool scheduled_something_on_previous_fence;
 
@@ -518,7 +518,7 @@ typedef VEC(vinsn_t, heap) *vinsn_vec_t;
    for the detailed explanations.  */
 static vinsn_vec_t vec_bookkeeping_blocked_vinsns = NULL;
 
-/* This vector has vinsns which are scheduled with renaming on the first fence 
+/* This vector has vinsns which are scheduled with renaming on the first fence
    and then seen on the second.  For expressions with such vinsns, target
    availability information may be wrong.  */
 static vinsn_vec_t vec_target_unavailable_vinsns = NULL;
@@ -529,8 +529,8 @@ DEF_VEC_P(insn_t);
 DEF_VEC_ALLOC_P(insn_t,heap);
 static VEC(insn_t, heap) *vec_temp_moveop_nops = NULL;
 
-/* These bitmaps record original instructions scheduled on the current 
-   iteration and bookkeeping copies created by them.  */ 
+/* These bitmaps record original instructions scheduled on the current
+   iteration and bookkeeping copies created by them.  */
 static bitmap current_originators = NULL;
 static bitmap current_copies = NULL;
 
@@ -557,10 +557,11 @@ static int stat_substitutions_total;
 static bool rtx_ok_for_substitution_p (rtx, rtx);
 static int sel_rank_for_schedule (const void *, const void *);
 static av_set_t find_sequential_best_exprs (bnd_t, expr_t, bool);
+static basic_block find_block_for_bookkeeping (edge e1, edge e2, bool lax);
 
 static rtx get_dest_from_orig_ops (av_set_t);
 static basic_block generate_bookkeeping_insn (expr_t, edge, edge);
-static bool find_used_regs (insn_t, av_set_t, regset, struct reg_rename *, 
+static bool find_used_regs (insn_t, av_set_t, regset, struct reg_rename *,
                             def_list_t *);
 static bool move_op (insn_t, av_set_t, expr_t, rtx, expr_t, bool*);
 static int code_motion_path_driver (insn_t, av_set_t, ilist_t,
@@ -581,12 +582,13 @@ advance_one_cycle (fence_t fence)
   unsigned i;
   int cycle;
   rtx insn;
-  
+
   advance_state (FENCE_STATE (fence));
   cycle = ++FENCE_CYCLE (fence);
   FENCE_ISSUED_INSNS (fence) = 0;
   FENCE_STARTS_CYCLE_P (fence) = 1;
   can_issue_more = issue_rate;
+  FENCE_ISSUE_MORE (fence) = can_issue_more;
 
   for (i = 0; VEC_iterate (rtx, FENCE_EXECUTING_INSNS (fence), i, insn); )
     {
@@ -611,12 +613,14 @@ static bool
 in_fallthru_bb_p (rtx insn, rtx succ)
 {
   basic_block bb = BLOCK_FOR_INSN (insn);
+  edge e;
 
   if (bb == BLOCK_FOR_INSN (succ))
     return true;
 
-  if (find_fallthru_edge (bb))
-    bb = find_fallthru_edge (bb)->dest;
+  e = find_fallthru_edge_from (bb);
+  if (e)
+    bb = e->dest;
   else
     return false;
 
@@ -626,7 +630,7 @@ in_fallthru_bb_p (rtx insn, rtx succ)
   return bb == BLOCK_FOR_INSN (succ);
 }
 
-/* Construct successor fences from OLD_FENCEs and put them in NEW_FENCES. 
+/* Construct successor fences from OLD_FENCEs and put them in NEW_FENCES.
    When a successor will continue a ebb, transfer all parameters of a fence
    to the new fence.  ORIG_MAX_SEQNO is the maximal seqno before this round
    of scheduling helping to distinguish between the old and the new code.  */
@@ -650,20 +654,20 @@ extract_new_fences_from (flist_t old_fences, flist_tail_t new_fences,
     }
   gcc_assert (was_here_p && insn != NULL_RTX);
 
-  /* When in the "middle" of the block, just move this fence 
+  /* When in the "middle" of the block, just move this fence
      to the new list.  */
   bb = BLOCK_FOR_INSN (insn);
   if (! sel_bb_end_p (insn)
-      || (single_succ_p (bb) 
+      || (single_succ_p (bb)
           && single_pred_p (single_succ (bb))))
     {
       insn_t succ;
 
-      succ = (sel_bb_end_p (insn) 
+      succ = (sel_bb_end_p (insn)
               ? sel_bb_head (single_succ (bb))
               : NEXT_INSN (insn));
 
-      if (INSN_SEQNO (succ) > 0 
+      if (INSN_SEQNO (succ) > 0
           && INSN_SEQNO (succ) <= orig_max_seqno
           && INSN_SCHED_TIMES (succ) <= 0)
         {
@@ -671,7 +675,7 @@ extract_new_fences_from (flist_t old_fences, flist_tail_t new_fences,
           move_fence_to_fences (old_fences, new_fences);
 
           if (sched_verbose >= 1)
-            sel_print ("Fence %d continues as %d[%d] (state continue)\n", 
+            sel_print ("Fence %d continues as %d[%d] (state continue)\n",
                        INSN_UID (insn), INSN_UID (succ), BLOCK_NUM (succ));
         }
       return;
@@ -686,11 +690,11 @@ extract_new_fences_from (flist_t old_fences, flist_tail_t new_fences,
           && (pipelining_p || INSN_SCHED_TIMES (succ) <= 0))
         {
           bool b = (in_same_ebb_p (insn, succ)
-                    || in_fallthru_bb_p (insn, succ)); 
+                    || in_fallthru_bb_p (insn, succ));
 
           if (sched_verbose >= 1)
-            sel_print ("Fence %d continues as %d[%d] (state %s)\n", 
-                       INSN_UID (insn), INSN_UID (succ), 
+            sel_print ("Fence %d continues as %d[%d] (state %s)\n",
+                       INSN_UID (insn), INSN_UID (succ),
                        BLOCK_NUM (succ), b ? "continue" : "reset");
 
           if (b)
@@ -708,8 +712,8 @@ extract_new_fences_from (flist_t old_fences, flist_tail_t new_fences,
 
 /* Functions to support substitution.  */
 
-/* Returns whether INSN with dependence status DS is eligible for 
-   substitution, i.e. it's a copy operation x := y, and RHS that is 
+/* Returns whether INSN with dependence status DS is eligible for
+   substitution, i.e. it's a copy operation x := y, and RHS that is
    moved up through this insn should be substituted.  */
 static bool
 can_substitute_through_p (insn_t insn, ds_t ds)
@@ -721,19 +725,19 @@ can_substitute_through_p (insn_t insn, ds_t ds)
       || ! INSN_LHS (insn))
     return false;
 
-  /* Now we just need to make sure the INSN_RHS consists of only one 
+  /* Now we just need to make sure the INSN_RHS consists of only one
      simple REG rtx.  */
-  if (REG_P (INSN_LHS (insn)) 
+  if (REG_P (INSN_LHS (insn))
       && REG_P (INSN_RHS (insn)))
-    return true;             
+    return true;
   return false;
 }
 
-/* Substitute all occurences of INSN's destination in EXPR' vinsn with INSN's 
+/* Substitute all occurences of INSN's destination in EXPR' vinsn with INSN's
    source (if INSN is eligible for substitution).  Returns TRUE if
    substitution was actually performed, FALSE otherwise.  Substitution might
    be not performed because it's either EXPR' vinsn doesn't contain INSN's
-   destination or the resulting insn is invalid for the target machine.  
+   destination or the resulting insn is invalid for the target machine.
    When UNDO is true, perform unsubstitution instead (the difference is in
    the part of rtx on which validate_replace_rtx is called).  */
 static bool
@@ -746,9 +750,9 @@ substitute_reg_in_expr (expr_t expr, insn_t insn, bool undo)
   rtx old, new_rtx;
 
   /* Do not try to replace in SET_DEST.  Although we'll choose new
-     register for the RHS, we don't want to change RHS' original reg.  
+     register for the RHS, we don't want to change RHS' original reg.
      If the insn is not SET, we may still be able to substitute something
-     in it, and if we're here (don't have deps), it doesn't write INSN's 
+     in it, and if we're here (don't have deps), it doesn't write INSN's
      dest.  */
   where = (has_rhs
 	   ? &VINSN_RHS (*vi)
@@ -765,32 +769,32 @@ substitute_reg_in_expr (expr_t expr, insn_t insn, bool undo)
       new_rtx = copy_rtx (undo ? INSN_LHS (insn) : INSN_RHS (insn));
       new_insn = create_copy_of_insn_rtx (VINSN_INSN_RTX (*vi));
 
-      /* Where we'll replace.  
+      /* Where we'll replace.
          WHERE_REPLACE should point inside NEW_INSN, so INSN_RHS couldn't be
 	 used instead of SET_SRC.  */
       where_replace = (has_rhs
 		       ? &SET_SRC (PATTERN (new_insn))
 		       : &PATTERN (new_insn));
 
-      new_insn_valid 
-        = validate_replace_rtx_part_nosimplify (old, new_rtx, where_replace, 
+      new_insn_valid
+        = validate_replace_rtx_part_nosimplify (old, new_rtx, where_replace,
                                                 new_insn);
 
       /* ??? Actually, constrain_operands result depends upon choice of
          destination register.  E.g. if we allow single register to be an rhs,
-	 and if we try to move dx=ax(as rhs) through ax=dx, we'll result 
+	 and if we try to move dx=ax(as rhs) through ax=dx, we'll result
 	 in invalid insn dx=dx, so we'll loose this rhs here.
 	 Just can't come up with significant testcase for this, so just
 	 leaving it for now.  */
       if (new_insn_valid)
 	{
-	  change_vinsn_in_expr (expr, 
+	  change_vinsn_in_expr (expr,
 				create_vinsn_from_insn_rtx (new_insn, false));
 
-	  /* Do not allow clobbering the address register of speculative 
+	  /* Do not allow clobbering the address register of speculative
              insns.  */
 	  if ((EXPR_SPEC_DONE_DS (expr) & SPECULATIVE)
-              && bitmap_bit_p (VINSN_REG_USES (EXPR_VINSN (expr)), 
+              && bitmap_bit_p (VINSN_REG_USES (EXPR_VINSN (expr)),
 			       expr_dest_regno (expr)))
 	    EXPR_TARGET_AVAILABLE (expr) = false;
 
@@ -804,7 +808,7 @@ substitute_reg_in_expr (expr_t expr, insn_t insn, bool undo)
 }
 
 /* Helper function for count_occurences_equiv.  */
-static int 
+static int
 count_occurrences_1 (rtx *cur_rtx, void *arg)
 {
   rtx_search_arg_p p = (rtx_search_arg_p) arg;
@@ -834,10 +838,11 @@ count_occurrences_1 (rtx *cur_rtx, void *arg)
 
   if (GET_CODE (*cur_rtx) == SUBREG
       && REG_P (p->x)
-      && REGNO (SUBREG_REG (*cur_rtx)) == REGNO (p->x))
+      && (!REG_P (SUBREG_REG (*cur_rtx))
+	  || REGNO (SUBREG_REG (*cur_rtx)) == REGNO (p->x)))
     {
       /* ??? Do not support substituting regs inside subregs.  In that case,
-         simplify_subreg will be called by validate_replace_rtx, and 
+         simplify_subreg will be called by validate_replace_rtx, and
          unsubstitution will fail later.  */
       p->n = 0;
       return 1;
@@ -847,9 +852,9 @@ count_occurrences_1 (rtx *cur_rtx, void *arg)
   return 0;
 }
 
-/* Return the number of places WHAT appears within WHERE.  
+/* Return the number of places WHAT appears within WHERE.
    Bail out when we found a reference occupying several hard registers.  */
-static int 
+static int
 count_occurrences_equiv (rtx what, rtx where)
 {
   struct rtx_search_arg arg;
@@ -889,10 +894,10 @@ create_insn_rtx_with_rhs (vinsn_t vi, rtx rhs_rtx)
   return insn_rtx;
 }
 
-/* Returns whether INSN's src can be replaced with register number 
+/* Returns whether INSN's src can be replaced with register number
    NEW_SRC_REG. E.g. the following insn is valid for i386:
 
-    (insn:HI 2205 6585 2207 727 ../../gcc/libiberty/regex.c:3337 
+    (insn:HI 2205 6585 2207 727 ../../gcc/libiberty/regex.c:3337
       (set (mem/s:QI (plus:SI (plus:SI (reg/f:SI 7 sp)
 			(reg:SI 0 ax [orig:770 c1 ] [770]))
 		    (const_int 288 [0x120])) [0 str S1 A8])
@@ -900,14 +905,14 @@ create_insn_rtx_with_rhs (vinsn_t vi, rtx rhs_rtx)
 	(nil))
 
   But if we change (const_int 0 [0x0]) to (reg:QI 4 si), it will be invalid
-  because of operand constraints: 
+  because of operand constraints:
 
     (define_insn "*movqi_1"
       [(set (match_operand:QI 0 "nonimmediate_operand" "=q,q ,q ,r,r ,?r,m")
 	    (match_operand:QI 1 "general_operand"      " q,qn,qm,q,rn,qm,qn")
 	    )]
-    
-  So do constrain_operands here, before choosing NEW_SRC_REG as best 
+
+  So do constrain_operands here, before choosing NEW_SRC_REG as best
   reg for rhs.  */
 
 static bool
@@ -970,7 +975,7 @@ create_insn_rtx_with_lhs (vinsn_t vi, rtx lhs_rtx)
   return insn_rtx;
 }
 
-/* Substitute lhs in the given expression EXPR for the register with number 
+/* Substitute lhs in the given expression EXPR for the register with number
    NEW_REGNO.  SET_DEST may be arbitrary rtx, not only register.  */
 static void
 replace_dest_with_reg_in_expr (expr_t expr, rtx new_reg)
@@ -989,7 +994,7 @@ replace_dest_with_reg_in_expr (expr_t expr, rtx new_reg)
 /* Returns whether VI writes either one of the USED_REGS registers or,
    if a register is a hard one, one of the UNAVAILABLE_HARD_REGS registers.  */
 static bool
-vinsn_writes_one_of_regs_p (vinsn_t vi, regset used_regs, 
+vinsn_writes_one_of_regs_p (vinsn_t vi, regset used_regs,
                             HARD_REG_SET unavailable_hard_regs)
 {
   unsigned regno;
@@ -1016,10 +1021,10 @@ vinsn_writes_one_of_regs_p (vinsn_t vi, regset used_regs,
   return false;
 }
 
-/* Returns register class of the output register in INSN.  
+/* Returns register class of the output register in INSN.
    Returns NO_REGS for call insns because some targets have constraints on
    destination register of a call insn.
-   
+
    Code adopted from regrename.c::build_def_use.  */
 static enum reg_class
 get_reg_class (rtx insn)
@@ -1062,7 +1067,7 @@ get_reg_class (rtx insn)
        {
 	 int opn = i < n_ops ? i : recog_data.dup_num[i - n_ops];
 	 enum reg_class cl = recog_op_alt[opn][alt].cl;
-  
+
 	 if (recog_data.operand_type[opn] == OP_OUT ||
 	     recog_data.operand_type[opn] == OP_INOUT)
 	   return cl;
@@ -1097,7 +1102,7 @@ init_hard_regno_rename (int regno)
 }
 #endif
 
-/* A wrapper around HARD_REGNO_RENAME_OK that will look into the hard regs 
+/* A wrapper around HARD_REGNO_RENAME_OK that will look into the hard regs
    data first.  */
 static inline bool
 sel_hard_regno_rename_ok (int from ATTRIBUTE_UNUSED, int to ATTRIBUTE_UNUSED)
@@ -1120,7 +1125,7 @@ static void
 init_regs_for_mode (enum machine_mode mode)
 {
   int cur_reg;
-  
+
   CLEAR_HARD_REG_SET (sel_hrd.regs_for_mode[mode]);
   CLEAR_HARD_REG_SET (sel_hrd.regs_for_call_clobbered[mode]);
 
@@ -1128,13 +1133,16 @@ init_regs_for_mode (enum machine_mode mode)
     {
       int nregs = hard_regno_nregs[cur_reg][mode];
       int i;
-      
+
       for (i = nregs - 1; i >= 0; --i)
         if (fixed_regs[cur_reg + i]
                 || global_regs[cur_reg + i]
-            /* Can't use regs which aren't saved by 
+            /* Can't use regs which aren't saved by
                the prologue.  */
             || !TEST_HARD_REG_BIT (sel_hrd.regs_ever_used, cur_reg + i)
+	    /* Can't use regs with non-null REG_BASE_VALUE, because adjusting
+	       it affects aliasing globally and invalidates all AV sets.  */
+	    || get_reg_base_value (cur_reg + i)
 #ifdef LEAF_REGISTERS
             /* We can't use a non-leaf register if we're in a
                leaf function.  */
@@ -1143,20 +1151,20 @@ init_regs_for_mode (enum machine_mode mode)
 #endif
             )
           break;
-      
-      if (i >= 0) 
+
+      if (i >= 0)
         continue;
-      
+
       /* See whether it accepts all modes that occur in
          original insns.  */
       if (! HARD_REGNO_MODE_OK (cur_reg, mode))
         continue;
-      
+
       if (HARD_REGNO_CALL_PART_CLOBBERED (cur_reg, mode))
-        SET_HARD_REG_BIT (sel_hrd.regs_for_call_clobbered[mode], 
+        SET_HARD_REG_BIT (sel_hrd.regs_for_call_clobbered[mode],
                           cur_reg);
-      
-      /* If the CUR_REG passed all the checks above, 
+
+      /* If the CUR_REG passed all the checks above,
          then it's ok.  */
       SET_HARD_REG_BIT (sel_hrd.regs_for_mode[mode], cur_reg);
     }
@@ -1169,18 +1177,18 @@ static void
 init_hard_regs_data (void)
 {
   int cur_reg = 0;
-  enum machine_mode cur_mode = 0;
+  int cur_mode = 0;
 
   CLEAR_HARD_REG_SET (sel_hrd.regs_ever_used);
   for (cur_reg = 0; cur_reg < FIRST_PSEUDO_REGISTER; cur_reg++)
     if (df_regs_ever_live_p (cur_reg) || call_used_regs[cur_reg])
       SET_HARD_REG_BIT (sel_hrd.regs_ever_used, cur_reg);
-  
-  /* Initialize registers that are valid based on mode when this is 
+
+  /* Initialize registers that are valid based on mode when this is
      really needed.  */
   for (cur_mode = 0; cur_mode < NUM_MACHINE_MODES; cur_mode++)
     sel_hrd.regs_for_mode_ok[cur_mode] = false;
-  
+
   /* Mark that all HARD_REGNO_RENAME_OK is not calculated.  */
   for (cur_reg = 0; cur_reg < FIRST_PSEUDO_REGISTER; cur_reg++)
     CLEAR_HARD_REG_SET (sel_hrd.regs_for_rename[cur_reg]);
@@ -1191,9 +1199,9 @@ init_hard_regs_data (void)
   for (cur_reg = FIRST_STACK_REG; cur_reg <= LAST_STACK_REG; cur_reg++)
     SET_HARD_REG_BIT (sel_hrd.stack_regs, cur_reg);
 #endif
-} 
+}
 
-/* Mark hardware regs in REG_RENAME_P that are not suitable 
+/* Mark hardware regs in REG_RENAME_P that are not suitable
    for renaming rhs in INSN due to hardware restrictions (register class,
    modes compatibility etc).  This doesn't affect original insn's dest reg,
    if it isn't in USED_REGS.  DEF is a definition insn of rhs for which the
@@ -1215,7 +1223,7 @@ mark_unavailable_hard_regs (def_t def, struct reg_rename *reg_rename_p,
   gcc_assert (reg_rename_p);
 
   orig_dest = SET_DEST (PATTERN (def->orig_insn));
-  
+
   /* We have decided not to rename 'mem = something;' insns, as 'something'
      is usually a register.  */
   if (!REG_P (orig_dest))
@@ -1227,19 +1235,19 @@ mark_unavailable_hard_regs (def_t def, struct reg_rename *reg_rename_p,
   if (!reload_completed && !HARD_REGISTER_NUM_P (regno))
     return;
 
-  mode = GET_MODE (orig_dest);
+  if (reload_completed)
+    cl = get_reg_class (def->orig_insn);
 
-  /* Stop when mode is not supported for renaming.  Also can't proceed 
-     if the original register is one of the fixed_regs, global_regs or 
-     frame pointer.  */
-  if (fixed_regs[regno] 
+  /* Stop if the original register is one of the fixed_regs, global_regs or
+     frame pointer, or we could not discover its class.  */
+  if (fixed_regs[regno]
       || global_regs[regno]
-#if FRAME_POINTER_REGNUM != HARD_FRAME_POINTER_REGNUM
-	|| (frame_pointer_needed && regno == HARD_FRAME_POINTER_REGNUM)
+#if !HARD_FRAME_POINTER_IS_FRAME_POINTER
+      || (frame_pointer_needed && regno == HARD_FRAME_POINTER_REGNUM)
 #else
-	|| (frame_pointer_needed && regno == FRAME_POINTER_REGNUM)
+      || (frame_pointer_needed && regno == FRAME_POINTER_REGNUM)
 #endif
-      )
+      || (reload_completed && cl == NO_REGS))
     {
       SET_HARD_REG_SET (reg_rename_p->unavailable_hard_regs);
 
@@ -1251,19 +1259,19 @@ mark_unavailable_hard_regs (def_t def, struct reg_rename *reg_rename_p,
     }
 
   /* If something allocated on stack in this function, mark frame pointer
-     register unavailable, considering also modes.  
+     register unavailable, considering also modes.
      FIXME: it is enough to do this once per all original defs.  */
   if (frame_pointer_needed)
     {
       int i;
 
       for (i = hard_regno_nregs[FRAME_POINTER_REGNUM][Pmode]; i--;)
-	SET_HARD_REG_BIT (reg_rename_p->unavailable_hard_regs, 
+	SET_HARD_REG_BIT (reg_rename_p->unavailable_hard_regs,
                           FRAME_POINTER_REGNUM + i);
 
-#if FRAME_POINTER_REGNUM != HARD_FRAME_POINTER_REGNUM
+#if !HARD_FRAME_POINTER_IS_FRAME_POINTER
       for (i = hard_regno_nregs[HARD_FRAME_POINTER_REGNUM][Pmode]; i--;)
-	SET_HARD_REG_BIT (reg_rename_p->unavailable_hard_regs, 
+	SET_HARD_REG_BIT (reg_rename_p->unavailable_hard_regs,
                           HARD_FRAME_POINTER_REGNUM + i);
 #endif
     }
@@ -1272,43 +1280,43 @@ mark_unavailable_hard_regs (def_t def, struct reg_rename *reg_rename_p,
   /* For the stack registers the presence of FIRST_STACK_REG in USED_REGS
      is equivalent to as if all stack regs were in this set.
      I.e. no stack register can be renamed, and even if it's an original
-     register here we make sure it won't be lifted over it's previous def 
-     (it's previous def will appear as if it's a FIRST_STACK_REG def.  
+     register here we make sure it won't be lifted over it's previous def
+     (it's previous def will appear as if it's a FIRST_STACK_REG def.
      The HARD_REGNO_RENAME_OK covers other cases in condition below.  */
   if (IN_RANGE (REGNO (orig_dest), FIRST_STACK_REG, LAST_STACK_REG)
-      && REGNO_REG_SET_P (used_regs, FIRST_STACK_REG)) 
-    IOR_HARD_REG_SET (reg_rename_p->unavailable_hard_regs, 
+      && REGNO_REG_SET_P (used_regs, FIRST_STACK_REG))
+    IOR_HARD_REG_SET (reg_rename_p->unavailable_hard_regs,
                       sel_hrd.stack_regs);
-#endif    
+#endif
 
-  /* If there's a call on this path, make regs from call_used_reg_set 
+  /* If there's a call on this path, make regs from call_used_reg_set
      unavailable.  */
   if (def->crosses_call)
-    IOR_HARD_REG_SET (reg_rename_p->unavailable_hard_regs, 
+    IOR_HARD_REG_SET (reg_rename_p->unavailable_hard_regs,
                       call_used_reg_set);
 
-  /* Stop here before reload: we need FRAME_REGS, STACK_REGS, and crosses_call, 
+  /* Stop here before reload: we need FRAME_REGS, STACK_REGS, and crosses_call,
      but not register classes.  */
   if (!reload_completed)
     return;
 
-  /* Leave regs as 'available' only from the current 
+  /* Leave regs as 'available' only from the current
      register class.  */
-  cl = get_reg_class (def->orig_insn);
-  gcc_assert (cl != NO_REGS);
   COPY_HARD_REG_SET (reg_rename_p->available_for_renaming,
                      reg_class_contents[cl]);
+
+  mode = GET_MODE (orig_dest);
 
   /* Leave only registers available for this mode.  */
   if (!sel_hrd.regs_for_mode_ok[mode])
     init_regs_for_mode (mode);
-  AND_HARD_REG_SET (reg_rename_p->available_for_renaming, 
+  AND_HARD_REG_SET (reg_rename_p->available_for_renaming,
                     sel_hrd.regs_for_mode[mode]);
 
   /* Exclude registers that are partially call clobbered.  */
   if (def->crosses_call
       && ! HARD_REGNO_CALL_PART_CLOBBERED (regno, mode))
-    AND_COMPL_HARD_REG_SET (reg_rename_p->available_for_renaming, 
+    AND_COMPL_HARD_REG_SET (reg_rename_p->available_for_renaming,
                             sel_hrd.regs_for_call_clobbered[mode]);
 
   /* Leave only those that are ok to rename.  */
@@ -1325,12 +1333,12 @@ mark_unavailable_hard_regs (def_t def, struct reg_rename *reg_rename_p,
         if (! sel_hard_regno_rename_ok (regno + i, cur_reg + i))
           break;
 
-      if (i >= 0) 
-        CLEAR_HARD_REG_BIT (reg_rename_p->available_for_renaming, 
+      if (i >= 0)
+        CLEAR_HARD_REG_BIT (reg_rename_p->available_for_renaming,
                             cur_reg);
     }
 
-  AND_COMPL_HARD_REG_SET (reg_rename_p->available_for_renaming, 
+  AND_COMPL_HARD_REG_SET (reg_rename_p->available_for_renaming,
                           reg_rename_p->unavailable_hard_regs);
 
   /* Regno is always ok from the renaming part of view, but it really
@@ -1346,24 +1354,24 @@ static int reg_rename_tick[FIRST_PSEUDO_REGISTER];
 /* Indicates the number of times renaming happened before the current one.  */
 static int reg_rename_this_tick;
 
-/* Choose the register among free, that is suitable for storing 
+/* Choose the register among free, that is suitable for storing
    the rhs value.
 
    ORIGINAL_INSNS is the list of insns where the operation (rhs)
-   originally appears.  There could be multiple original operations 
-   for single rhs since we moving it up and merging along different 
+   originally appears.  There could be multiple original operations
+   for single rhs since we moving it up and merging along different
    paths.
 
    Some code is adapted from regrename.c (regrename_optimize).
    If original register is available, function returns it.
    Otherwise it performs the checks, so the new register should
    comply with the following:
-    - it should not violate any live ranges (such registers are in 
+    - it should not violate any live ranges (such registers are in
       REG_RENAME_P->available_for_renaming set);
     - it should not be in the HARD_REGS_USED regset;
     - it should be in the class compatible with original uses;
     - it should not be clobbered through reference with different mode;
-    - if we're in the leaf function, then the new register should 
+    - if we're in the leaf function, then the new register should
       not be in the LEAF_REGISTERS;
     - etc.
 
@@ -1374,8 +1382,8 @@ static int reg_rename_this_tick;
 
    If no register satisfies the above conditions, NULL_RTX is returned.  */
 static rtx
-choose_best_reg_1 (HARD_REG_SET hard_regs_used, 
-                   struct reg_rename *reg_rename_p, 
+choose_best_reg_1 (HARD_REG_SET hard_regs_used,
+                   struct reg_rename *reg_rename_p,
                    def_list_t original_insns, bool *is_orig_reg_p_ptr)
 {
   int best_new_reg;
@@ -1395,9 +1403,9 @@ choose_best_reg_1 (HARD_REG_SET hard_regs_used,
 
       gcc_assert (REG_P (orig_dest));
 
-      /* Check that all original operations have the same mode.  
+      /* Check that all original operations have the same mode.
          This is done for the next loop; if we'd return from this
-         loop, we'd check only part of them, but in this case 
+         loop, we'd check only part of them, but in this case
          it doesn't matter.  */
       if (mode == VOIDmode)
         mode = GET_MODE (orig_dest);
@@ -1412,27 +1420,37 @@ choose_best_reg_1 (HARD_REG_SET hard_regs_used,
       if (i == n)
         {
           gcc_assert (mode != VOIDmode);
-          
+
           /* Hard registers should not be shared.  */
           return gen_rtx_REG (mode, regno);
         }
     }
-  
+
   *is_orig_reg_p_ptr = false;
   best_new_reg = -1;
-  
-  /* Among all available regs choose the register that was 
+
+  /* Among all available regs choose the register that was
      allocated earliest.  */
   EXECUTE_IF_SET_IN_HARD_REG_SET (reg_rename_p->available_for_renaming,
                                   0, cur_reg, hrsi)
     if (! TEST_HARD_REG_BIT (hard_regs_used, cur_reg))
       {
+	/* Check that all hard regs for mode are available.  */
+	for (i = 1, n = hard_regno_nregs[cur_reg][mode]; i < n; i++)
+	  if (TEST_HARD_REG_BIT (hard_regs_used, cur_reg + i)
+	      || !TEST_HARD_REG_BIT (reg_rename_p->available_for_renaming,
+				     cur_reg + i))
+	    break;
+
+	if (i < n)
+	  continue;
+
         /* All hard registers are available.  */
         if (best_new_reg < 0
             || reg_rename_tick[cur_reg] < reg_rename_tick[best_new_reg])
           {
             best_new_reg = cur_reg;
-            
+
             /* Return immediately when we know there's no better reg.  */
             if (! reg_rename_tick[best_new_reg])
               break;
@@ -1452,37 +1470,38 @@ choose_best_reg_1 (HARD_REG_SET hard_regs_used,
 /* A wrapper around choose_best_reg_1 () to verify that we make correct
    assumptions about available registers in the function.  */
 static rtx
-choose_best_reg (HARD_REG_SET hard_regs_used, struct reg_rename *reg_rename_p, 
+choose_best_reg (HARD_REG_SET hard_regs_used, struct reg_rename *reg_rename_p,
                  def_list_t original_insns, bool *is_orig_reg_p_ptr)
 {
-  rtx best_reg = choose_best_reg_1 (hard_regs_used, reg_rename_p, 
+  rtx best_reg = choose_best_reg_1 (hard_regs_used, reg_rename_p,
                                     original_insns, is_orig_reg_p_ptr);
 
+  /* FIXME loop over hard_regno_nregs here.  */
   gcc_assert (best_reg == NULL_RTX
 	      || TEST_HARD_REG_BIT (sel_hrd.regs_ever_used, REGNO (best_reg)));
 
   return best_reg;
 }
 
-/* Choose the pseudo register for storing rhs value.  As this is supposed 
+/* Choose the pseudo register for storing rhs value.  As this is supposed
    to work before reload, we return either the original register or make
-   the new one.  The parameters are the same that in choose_nest_reg_1 
-   functions, except that USED_REGS may contain pseudos.  
+   the new one.  The parameters are the same that in choose_nest_reg_1
+   functions, except that USED_REGS may contain pseudos.
    If we work with hard regs, check also REG_RENAME_P->UNAVAILABLE_HARD_REGS.
 
-   TODO: take into account register pressure while doing this.  Up to this 
-   moment, this function would never return NULL for pseudos, but we should 
+   TODO: take into account register pressure while doing this.  Up to this
+   moment, this function would never return NULL for pseudos, but we should
    not rely on this.  */
 static rtx
-choose_best_pseudo_reg (regset used_regs, 
-                        struct reg_rename *reg_rename_p, 
+choose_best_pseudo_reg (regset used_regs,
+                        struct reg_rename *reg_rename_p,
                         def_list_t original_insns, bool *is_orig_reg_p_ptr)
 {
   def_list_iterator i;
   def_t def;
   enum machine_mode mode = VOIDmode;
   bool bad_hard_regs = false;
-  
+
   /* We should not use this after reload.  */
   gcc_assert (!reload_completed);
 
@@ -1493,35 +1512,35 @@ choose_best_pseudo_reg (regset used_regs,
     {
       rtx dest = SET_DEST (PATTERN (def->orig_insn));
       int orig_regno;
-      
+
       gcc_assert (REG_P (dest));
-      
+
       /* Check that all original operations have the same mode.  */
       if (mode == VOIDmode)
         mode = GET_MODE (dest);
       else
         gcc_assert (mode == GET_MODE (dest));
       orig_regno = REGNO (dest);
-      
+
       if (!REGNO_REG_SET_P (used_regs, orig_regno))
         {
           if (orig_regno < FIRST_PSEUDO_REGISTER)
             {
               gcc_assert (df_regs_ever_live_p (orig_regno));
-              
-              /* For hard registers, we have to check hardware imposed 
+
+              /* For hard registers, we have to check hardware imposed
                  limitations (frame/stack registers, calls crossed).  */
-              if (!TEST_HARD_REG_BIT (reg_rename_p->unavailable_hard_regs, 
+              if (!TEST_HARD_REG_BIT (reg_rename_p->unavailable_hard_regs,
                                       orig_regno))
 		{
-		  /* Don't let register cross a call if it doesn't already 
-		     cross one.  This condition is written in accordance with 
+		  /* Don't let register cross a call if it doesn't already
+		     cross one.  This condition is written in accordance with
 		     that in sched-deps.c sched_analyze_reg().  */
-		  if (!reg_rename_p->crosses_call 
+		  if (!reg_rename_p->crosses_call
 		      || REG_N_CALLS_CROSSED (orig_regno) > 0)
-		    return gen_rtx_REG (mode, orig_regno);		    
+		    return gen_rtx_REG (mode, orig_regno);
 		}
-              
+
               bad_hard_regs = true;
             }
           else
@@ -1530,13 +1549,13 @@ choose_best_pseudo_reg (regset used_regs,
      }
 
   *is_orig_reg_p_ptr = false;
- 
+
   /* We had some original hard registers that couldn't be used.
      Those were likely special.  Don't try to create a pseudo.  */
   if (bad_hard_regs)
     return NULL_RTX;
-  
-  /* We haven't found a register from original operations.  Get a new one.  
+
+  /* We haven't found a register from original operations.  Get a new one.
      FIXME: control register pressure somehow.  */
   {
     rtx new_reg = gen_reg_rtx (mode);
@@ -1554,7 +1573,7 @@ choose_best_pseudo_reg (regset used_regs,
 /* True when target of EXPR is available due to EXPR_TARGET_AVAILABLE,
    USED_REGS and REG_RENAME_P->UNAVAILABLE_HARD_REGS.  */
 static void
-verify_target_availability (expr_t expr, regset used_regs, 
+verify_target_availability (expr_t expr, regset used_regs,
 			    struct reg_rename *reg_rename_p)
 {
   unsigned n, i, regno;
@@ -1563,7 +1582,7 @@ verify_target_availability (expr_t expr, regset used_regs,
 
   if (!REG_P (EXPR_LHS (expr)) || EXPR_TARGET_AVAILABLE (expr) < 0)
     return;
-  
+
   regno = expr_dest_regno (expr);
   mode = GET_MODE (EXPR_LHS (expr));
   target_available = EXPR_TARGET_AVAILABLE (expr) == 1;
@@ -1578,31 +1597,31 @@ verify_target_availability (expr_t expr, regset used_regs,
         hard_available = false;
     }
 
-  /* When target is not available, it may be due to hard register 
+  /* When target is not available, it may be due to hard register
      restrictions, e.g. crosses calls, so we check hard_available too.  */
   if (target_available)
     gcc_assert (live_available);
   else
-    /* Check only if we haven't scheduled something on the previous fence, 
+    /* Check only if we haven't scheduled something on the previous fence,
        cause due to MAX_SOFTWARE_LOOKAHEAD_WINDOW_SIZE issues
        and having more than one fence, we may end having targ_un in a block
-       in which successors target register is actually available.  
+       in which successors target register is actually available.
 
        The last condition handles the case when a dependence from a call insn
-       was created in sched-deps.c for insns with destination registers that 
-       never crossed a call before, but do cross one after our code motion.  
+       was created in sched-deps.c for insns with destination registers that
+       never crossed a call before, but do cross one after our code motion.
 
-       FIXME: in the latter case, we just uselessly called find_used_regs, 
-       because we can't move this expression with any other register 
+       FIXME: in the latter case, we just uselessly called find_used_regs,
+       because we can't move this expression with any other register
        as well.  */
-    gcc_assert (scheduled_something_on_previous_fence || !live_available 
-		|| !hard_available 
-		|| (!reload_completed && reg_rename_p->crosses_call 
+    gcc_assert (scheduled_something_on_previous_fence || !live_available
+		|| !hard_available
+		|| (!reload_completed && reg_rename_p->crosses_call
 		    && REG_N_CALLS_CROSSED (regno) == 0));
 }
 
-/* Collect unavailable registers due to liveness for EXPR from BNDS 
-   into USED_REGS.  Save additional information about available 
+/* Collect unavailable registers due to liveness for EXPR from BNDS
+   into USED_REGS.  Save additional information about available
    registers and unavailable due to hardware restriction registers
    into REG_RENAME_P structure.  Save original insns into ORIGINAL_INSNS
    list.  */
@@ -1641,14 +1660,6 @@ collect_unavailable_regs_from_bnds (expr_t expr, blist_t bnds, regset used_regs,
 static bool
 try_replace_dest_reg (ilist_t orig_insns, rtx best_reg, expr_t expr)
 {
-  if (expr_dest_regno (expr) == REGNO (best_reg))
-    {
-      EXPR_TARGET_AVAILABLE (expr) = 1;
-      return true;
-    }
-
-  gcc_assert (orig_insns);
-
   /* Try whether we'll be able to generate the insn
      'dest := best_reg' at the place of the original operation.  */
   for (; orig_insns; orig_insns = ILIST_NEXT (orig_insns))
@@ -1657,19 +1668,24 @@ try_replace_dest_reg (ilist_t orig_insns, rtx best_reg, expr_t expr)
 
       gcc_assert (EXPR_SEPARABLE_P (INSN_EXPR (orig_insn)));
 
-      if (!replace_src_with_reg_ok_p (orig_insn, best_reg)
-	  || !replace_dest_with_reg_ok_p (orig_insn, best_reg))
+      if (REGNO (best_reg) != REGNO (INSN_LHS (orig_insn))
+	  && (! replace_src_with_reg_ok_p (orig_insn, best_reg)
+	      || ! replace_dest_with_reg_ok_p (orig_insn, best_reg)))
 	return false;
     }
 
   /* Make sure that EXPR has the right destination
      register.  */
-  replace_dest_with_reg_in_expr (expr, best_reg);
+  if (expr_dest_regno (expr) != REGNO (best_reg))
+    replace_dest_with_reg_in_expr (expr, best_reg);
+  else
+    EXPR_TARGET_AVAILABLE (expr) = 1;
+
   return true;
 }
 
-/* Select and assign best register to EXPR searching from BNDS.  
-   Set *IS_ORIG_REG_P to TRUE if original register was selected.  
+/* Select and assign best register to EXPR searching from BNDS.
+   Set *IS_ORIG_REG_P to TRUE if original register was selected.
    Return FALSE if no register can be chosen, which could happen when:
    * EXPR_SEPARABLE_P is true but we were unable to find suitable register;
    * EXPR_SEPARABLE_P is false but the insn sets/clobbers one of the registers
@@ -1698,11 +1714,11 @@ find_best_reg_for_expr (expr_t expr, blist_t bnds, bool *is_orig_reg_p)
 
 #ifdef ENABLE_CHECKING
   /* If after reload, make sure we're working with hard regs here.  */
-  if (reload_completed) 
+  if (reload_completed)
     {
       reg_set_iterator rsi;
       unsigned i;
-      
+
       EXECUTE_IF_SET_IN_REG_SET (used_regs, FIRST_PSEUDO_REGISTER, i, rsi)
         gcc_unreachable ();
     }
@@ -1856,14 +1872,13 @@ create_speculation_check (expr_t c_expr, ds_t check_ds, insn_t orig_insn)
   if (recovery_block != NULL)
     {
       rtx twin_rtx;
-      insn_t twin;
 
       twin_rtx = copy_rtx (PATTERN (EXPR_INSN_RTX (c_expr)));
       twin_rtx = create_insn_rtx_from_pattern (twin_rtx, NULL_RTX);
-      twin = sel_gen_recovery_insn_from_rtx_after (twin_rtx,
-						   INSN_EXPR (orig_insn),
-						   INSN_SEQNO (insn),
-						   bb_note (recovery_block));
+      sel_gen_recovery_insn_from_rtx_after (twin_rtx,
+					    INSN_EXPR (orig_insn),
+					    INSN_SEQNO (insn),
+					    bb_note (recovery_block));
     }
 
   /* If we've generated a data speculation check, make sure
@@ -1875,7 +1890,7 @@ create_speculation_check (expr_t c_expr, ds_t check_ds, insn_t orig_insn)
      thrown by the non-control-speculative load.  */
   check_ds = ds_get_max_dep_weak (check_ds);
   speculate_expr (c_expr, check_ds);
-    
+
   return insn;
 }
 
@@ -1901,7 +1916,7 @@ identical_copy_p (rtx insn)
   return REGNO (lhs) == REGNO (rhs);
 }
 
-/* Undo all transformations on *AV_PTR that were done when 
+/* Undo all transformations on *AV_PTR that were done when
    moving through INSN.  */
 static void
 undo_transformations (av_set_t *av_ptr, rtx insn)
@@ -1910,19 +1925,19 @@ undo_transformations (av_set_t *av_ptr, rtx insn)
   expr_t expr;
   av_set_t new_set = NULL;
 
-  /* First, kill any EXPR that uses registers set by an insn.  This is 
+  /* First, kill any EXPR that uses registers set by an insn.  This is
      required for correctness.  */
   FOR_EACH_EXPR_1 (expr, av_iter, av_ptr)
     if (!sched_insns_conditions_mutex_p (insn, EXPR_INSN_RTX (expr))
-        && bitmap_intersect_p (INSN_REG_SETS (insn), 
+        && bitmap_intersect_p (INSN_REG_SETS (insn),
                                VINSN_REG_USES (EXPR_VINSN (expr)))
         /* When an insn looks like 'r1 = r1', we could substitute through
            it, but the above condition will still hold.  This happened with
-           gcc.c-torture/execute/961125-1.c.  */ 
+           gcc.c-torture/execute/961125-1.c.  */
         && !identical_copy_p (insn))
       {
         if (sched_verbose >= 6)
-          sel_print ("Expr %d removed due to use/set conflict\n", 
+          sel_print ("Expr %d removed due to use/set conflict\n",
                      INSN_UID (EXPR_INSN_RTX (expr)));
         av_set_iter_remove (&av_iter);
       }
@@ -1937,23 +1952,23 @@ undo_transformations (av_set_t *av_ptr, rtx insn)
         {
           expr_history_def *phist;
 
-          phist = VEC_index (expr_history_def, 
+          phist = VEC_index (expr_history_def,
                              EXPR_HISTORY_OF_CHANGES (expr),
                              index);
 
-          switch (phist->type) 
+          switch (phist->type)
             {
             case TRANS_SPECULATION:
               {
                 ds_t old_ds, new_ds;
-                
+
                 /* Compute the difference between old and new speculative
-                   statuses: that's what we need to check.  
+                   statuses: that's what we need to check.
                    Earlier we used to assert that the status will really
                    change.  This no longer works because only the probability
                    bits in the status may have changed during compute_av_set,
-                   and in the case of merging different probabilities of the 
-                   same speculative status along different paths we do not 
+                   and in the case of merging different probabilities of the
+                   same speculative status along different paths we do not
                    record this in the history vector.  */
                 old_ds = phist->spec_ds;
                 new_ds = EXPR_SPEC_DONE_DS (expr);
@@ -1961,7 +1976,7 @@ undo_transformations (av_set_t *av_ptr, rtx insn)
                 old_ds &= SPECULATIVE;
                 new_ds &= SPECULATIVE;
                 new_ds &= ~old_ds;
-                
+
                 EXPR_SPEC_TO_CHECK_DS (expr) |= new_ds;
                 break;
               }
@@ -1970,14 +1985,14 @@ undo_transformations (av_set_t *av_ptr, rtx insn)
                 expr_def _tmp_expr, *tmp_expr = &_tmp_expr;
                 vinsn_t new_vi;
                 bool add = true;
-                
+
                 new_vi = phist->old_expr_vinsn;
-         
-                gcc_assert (VINSN_SEPARABLE_P (new_vi) 
+
+                gcc_assert (VINSN_SEPARABLE_P (new_vi)
                             == EXPR_SEPARABLE_P (expr));
                 copy_expr (tmp_expr, expr);
 
-                if (vinsn_equal_p (phist->new_expr_vinsn, 
+                if (vinsn_equal_p (phist->new_expr_vinsn,
                                    EXPR_VINSN (tmp_expr)))
                   change_vinsn_in_expr (tmp_expr, new_vi);
                 else
@@ -1994,7 +2009,7 @@ undo_transformations (av_set_t *av_ptr, rtx insn)
               gcc_unreachable ();
             }
         }
-          
+
     }
 
   av_set_union_and_clear (av_ptr, &new_set, NULL);
@@ -2004,7 +2019,7 @@ undo_transformations (av_set_t *av_ptr, rtx insn)
 /* Moveup_* helpers for code motion and computing av sets.  */
 
 /* Propagates EXPR inside an insn group through THROUGH_INSN.
-   The difference from the below function is that only substitution is 
+   The difference from the below function is that only substitution is
    performed.  */
 static enum MOVEUP_EXPR_CODE
 moveup_expr_inside_insn_group (expr_t expr, insn_t through_insn)
@@ -2025,8 +2040,8 @@ moveup_expr_inside_insn_group (expr_t expr, insn_t through_insn)
     {
       /* Can't substitute UNIQUE VINSNs.  */
       gcc_assert (!VINSN_UNIQUE_P (vi));
-      
-      if (can_substitute_through_p (through_insn, 
+
+      if (can_substitute_through_p (through_insn,
                                     has_dep_p[DEPS_IN_RHS])
           && substitute_reg_in_expr (expr, through_insn, false))
         {
@@ -2042,7 +2057,7 @@ moveup_expr_inside_insn_group (expr_t expr, insn_t through_insn)
   /* This can catch output dependencies in COND_EXECs.  */
   if (has_dep_p[DEPS_IN_INSN])
     return MOVEUP_EXPR_NULL;
-  
+
   /* This is either an output or an anti dependence, which usually have
      a zero latency.  Allow this here, if we'd be wrong, tick_check_p
      will fix this.  */
@@ -2059,12 +2074,62 @@ moveup_expr_inside_insn_group (expr_t expr, insn_t through_insn)
 /* True when a conflict on a target register was found during moveup_expr.  */
 static bool was_target_conflict = false;
 
+/* Return true when moving a debug INSN across THROUGH_INSN will
+   create a bookkeeping block.  We don't want to create such blocks,
+   for they would cause codegen differences between compilations with
+   and without debug info.  */
+
+static bool
+moving_insn_creates_bookkeeping_block_p (insn_t insn,
+					 insn_t through_insn)
+{
+  basic_block bbi, bbt;
+  edge e1, e2;
+  edge_iterator ei1, ei2;
+
+  if (!bookkeeping_can_be_created_if_moved_through_p (through_insn))
+    {
+      if (sched_verbose >= 9)
+	sel_print ("no bookkeeping required: ");
+      return FALSE;
+    }
+
+  bbi = BLOCK_FOR_INSN (insn);
+
+  if (EDGE_COUNT (bbi->preds) == 1)
+    {
+      if (sched_verbose >= 9)
+	sel_print ("only one pred edge: ");
+      return TRUE;
+    }
+
+  bbt = BLOCK_FOR_INSN (through_insn);
+
+  FOR_EACH_EDGE (e1, ei1, bbt->succs)
+    {
+      FOR_EACH_EDGE (e2, ei2, bbi->preds)
+	{
+	  if (find_block_for_bookkeeping (e1, e2, TRUE))
+	    {
+	      if (sched_verbose >= 9)
+		sel_print ("found existing block: ");
+	      return FALSE;
+	    }
+	}
+    }
+
+  if (sched_verbose >= 9)
+    sel_print ("would create bookkeeping block: ");
+
+  return TRUE;
+}
+
 /* Modifies EXPR so it can be moved through the THROUGH_INSN,
-   performing necessary transformations.  Record the type of transformation 
-   made in PTRANS_TYPE, when it is not NULL.  When INSIDE_INSN_GROUP, 
+   performing necessary transformations.  Record the type of transformation
+   made in PTRANS_TYPE, when it is not NULL.  When INSIDE_INSN_GROUP,
    permit all dependencies except true ones, and try to remove those
-   too via forward substitution.  All cases when a non-eliminable 
-   non-zero cost dependency exists inside an insn group will be fixed 
+   too via forward substitution.  All cases when a non-eliminable
+   non-zero cost dependency exists inside an insn group will be fixed
    in tick_check_p instead.  */
 static enum MOVEUP_EXPR_CODE
 moveup_expr (expr_t expr, insn_t through_insn, bool inside_insn_group,
@@ -2076,6 +2141,15 @@ moveup_expr (expr_t expr, insn_t through_insn, bool inside_insn_group,
   bool as_rhs = false;
   ds_t *has_dep_p;
   ds_t full_ds;
+
+  /* ??? We use dependencies of non-debug insns on debug insns to
+     indicate that the debug insns need to be reset if the non-debug
+     insn is pulled ahead of it.  It's hard to figure out how to
+     introduce such a notion in sel-sched, but it already fails to
+     support debug insns in other ways, so we just go ahead and
+     let the deug insns go corrupt for now.  */
+  if (DEBUG_INSN_P (through_insn) && !DEBUG_INSN_P (insn))
+    return MOVEUP_EXPR_SAME;
 
   /* When inside_insn_group, delegate to the helper.  */
   if (inside_insn_group)
@@ -2091,7 +2165,7 @@ moveup_expr (expr_t expr, insn_t through_insn, bool inside_insn_group,
         {
           basic_block fallthru_bb;
 
-          /* Do not move checks and do not move jumps through other 
+          /* Do not move checks and do not move jumps through other
              jumps.  */
           if (control_flow_insn_p (through_insn)
               || sel_insn_is_speculation_check (insn))
@@ -2101,16 +2175,15 @@ moveup_expr (expr_t expr, insn_t through_insn, bool inside_insn_group,
           if (bookkeeping_can_be_created_if_moved_through_p (through_insn))
             return MOVEUP_EXPR_NULL;
 
-          /* The jump should have a clear fallthru block, and 
+          /* The jump should have a clear fallthru block, and
              this block should be in the current region.  */
           if ((fallthru_bb = fallthru_bb_of_jump (insn)) == NULL
               || ! in_current_region_p (fallthru_bb))
             return MOVEUP_EXPR_NULL;
-          
-          /* And it should be mutually exclusive with through_insn, or 
-             be an unconditional jump.  */
-          if (! any_uncondjump_p (insn)
-              && ! sched_insns_conditions_mutex_p (insn, through_insn))
+
+          /* And it should be mutually exclusive with through_insn.  */
+          if (! sched_insns_conditions_mutex_p (insn, through_insn)
+	      && ! DEBUG_INSN_P (through_insn))
             return MOVEUP_EXPR_NULL;
         }
 
@@ -2131,6 +2204,12 @@ moveup_expr (expr_t expr, insn_t through_insn, bool inside_insn_group,
   else
     gcc_assert (!control_flow_insn_p (insn));
 
+  /* Don't move debug insns if this would require bookkeeping.  */
+  if (DEBUG_INSN_P (insn)
+      && BLOCK_FOR_INSN (through_insn) != BLOCK_FOR_INSN (insn)
+      && moving_insn_creates_bookkeeping_block_p (insn, through_insn))
+    return MOVEUP_EXPR_NULL;
+
   /* Deal with data dependencies.  */
   was_target_conflict = false;
   full_ds = has_dependence_p (expr, through_insn, &has_dep_p);
@@ -2141,7 +2220,7 @@ moveup_expr (expr_t expr, insn_t through_insn, bool inside_insn_group,
     }
   else
     {
-      /* We can move UNIQUE insn up only as a whole and unchanged, 
+      /* We can move UNIQUE insn up only as a whole and unchanged,
          so it shouldn't have any dependencies.  */
       if (VINSN_UNIQUE_P (vi))
 	return MOVEUP_EXPR_NULL;
@@ -2170,9 +2249,9 @@ moveup_expr (expr_t expr, insn_t through_insn, bool inside_insn_group,
     return MOVEUP_EXPR_NULL;
 
   if (has_dep_p[DEPS_IN_LHS])
-    { 
+    {
       /* Only separable insns can be moved up with the new register.
-         Anyways, we should mark that the original register is 
+         Anyways, we should mark that the original register is
          unavailable.  */
       if (!enable_schedule_as_rhs_p || !EXPR_SEPARABLE_P (expr))
         return MOVEUP_EXPR_NULL;
@@ -2191,10 +2270,10 @@ moveup_expr (expr_t expr, insn_t through_insn, bool inside_insn_group,
 	y = x;				    y = x;
 	z = y*2;			    y = y*2;
 
-    In Ex.1 y*2 can be substituted for x*2 and the whole operation can be 
+    In Ex.1 y*2 can be substituted for x*2 and the whole operation can be
     moved above y=x assignment as z=x*2.
 
-    In Ex.2 y*2 also can be substituted for x*2, but only the right hand 
+    In Ex.2 y*2 also can be substituted for x*2, but only the right hand
     side can be moved because of the output dependency.  The operation was
     cropped to its rhs above.  */
   if (has_dep_p[DEPS_IN_RHS])
@@ -2207,7 +2286,7 @@ moveup_expr (expr_t expr, insn_t through_insn, bool inside_insn_group,
       if (can_speculate_dep_p (*rhs_dsp))
 	{
           int res;
-          
+
           res = speculate_expr (expr, *rhs_dsp);
           if (res >= 0)
             {
@@ -2244,24 +2323,24 @@ moveup_expr (expr_t expr, insn_t through_insn, bool inside_insn_group,
   if (CANT_MOVE_TRAPPING (expr, through_insn))
     return MOVEUP_EXPR_NULL;
 
-  return (was_changed 
-          ? MOVEUP_EXPR_CHANGED 
-          : (as_rhs 
+  return (was_changed
+          ? MOVEUP_EXPR_CHANGED
+          : (as_rhs
              ? MOVEUP_EXPR_AS_RHS
              : MOVEUP_EXPR_SAME));
 }
 
-/* Try to look at bitmap caches for EXPR and INSN pair, return true 
+/* Try to look at bitmap caches for EXPR and INSN pair, return true
    if successful.  When INSIDE_INSN_GROUP, also try ignore dependencies
    that can exist within a parallel group.  Write to RES the resulting
    code for moveup_expr.  */
-static bool 
+static bool
 try_bitmap_cache (expr_t expr, insn_t insn,
                   bool inside_insn_group,
                   enum MOVEUP_EXPR_CODE *res)
 {
   int expr_uid = INSN_UID (EXPR_INSN_RTX (expr));
-  
+
   /* First check whether we've analyzed this situation already.  */
   if (bitmap_bit_p (INSN_ANALYZED_DEPS (insn), expr_uid))
     {
@@ -2288,13 +2367,13 @@ try_bitmap_cache (expr_t expr, insn_t insn,
             sel_print ("unchanged (as RHS, cached, inside insn group)\n");
           *res = MOVEUP_EXPR_SAME;
           return true;
-          
+
         }
       else
         EXPR_TARGET_AVAILABLE (expr) = false;
 
-      /* This is the only case when propagation result can change over time, 
-         as we can dynamically switch off scheduling as RHS.  In this case, 
+      /* This is the only case when propagation result can change over time,
+         as we can dynamically switch off scheduling as RHS.  In this case,
          just check the flag to reach the correct decision.  */
       if (enable_schedule_as_rhs_p)
         {
@@ -2316,27 +2395,27 @@ try_bitmap_cache (expr_t expr, insn_t insn,
   return false;
 }
 
-/* Try to look at bitmap caches for EXPR and INSN pair, return true 
+/* Try to look at bitmap caches for EXPR and INSN pair, return true
    if successful.  Write to RES the resulting code for moveup_expr.  */
-static bool 
+static bool
 try_transformation_cache (expr_t expr, insn_t insn,
                           enum MOVEUP_EXPR_CODE *res)
 {
-  struct transformed_insns *pti 
+  struct transformed_insns *pti
     = (struct transformed_insns *)
     htab_find_with_hash (INSN_TRANSFORMED_INSNS (insn),
-                         &EXPR_VINSN (expr), 
+                         &EXPR_VINSN (expr),
                          VINSN_HASH_RTX (EXPR_VINSN (expr)));
   if (pti)
     {
-      /* This EXPR was already moved through this insn and was 
-         changed as a result.  Fetch the proper data from 
+      /* This EXPR was already moved through this insn and was
+         changed as a result.  Fetch the proper data from
          the hashtable.  */
-      insert_in_history_vect (&EXPR_HISTORY_OF_CHANGES (expr), 
-                              INSN_UID (insn), pti->type, 
-                              pti->vinsn_old, pti->vinsn_new, 
+      insert_in_history_vect (&EXPR_HISTORY_OF_CHANGES (expr),
+                              INSN_UID (insn), pti->type,
+                              pti->vinsn_old, pti->vinsn_new,
                               EXPR_SPEC_DONE_DS (expr));
-      
+
       if (INSN_IN_STREAM_P (VINSN_INSN_RTX (pti->vinsn_new)))
         pti->vinsn_new = vinsn_copy (pti->vinsn_new, true);
       change_vinsn_in_expr (expr, pti->vinsn_new);
@@ -2344,10 +2423,6 @@ try_transformation_cache (expr_t expr, insn_t insn,
         EXPR_TARGET_AVAILABLE (expr) = false;
       if (pti->type == TRANS_SPECULATION)
         {
-          ds_t ds;
-
-          ds = EXPR_SPEC_DONE_DS (expr);
-                  
           EXPR_SPEC_DONE_DS (expr) = pti->ds;
           EXPR_NEEDS_SPEC_CHECK_P (expr) |= pti->needs_check;
         }
@@ -2368,16 +2443,16 @@ try_transformation_cache (expr_t expr, insn_t insn,
 
 /* Update bitmap caches on INSN with result RES of propagating EXPR.  */
 static void
-update_bitmap_cache (expr_t expr, insn_t insn, bool inside_insn_group, 
+update_bitmap_cache (expr_t expr, insn_t insn, bool inside_insn_group,
                      enum MOVEUP_EXPR_CODE res)
 {
   int expr_uid = INSN_UID (EXPR_INSN_RTX (expr));
 
-  /* Do not cache result of propagating jumps through an insn group, 
+  /* Do not cache result of propagating jumps through an insn group,
      as it is always true, which is not useful outside the group.  */
   if (inside_insn_group)
     return;
-      
+
   if (res == MOVEUP_EXPR_NULL)
     {
       bitmap_set_bit (INSN_ANALYZED_DEPS (insn), expr_uid);
@@ -2400,16 +2475,16 @@ update_bitmap_cache (expr_t expr, insn_t insn, bool inside_insn_group,
 /* Update hashtable on INSN with changed EXPR, old EXPR_OLD_VINSN
    and transformation type TRANS_TYPE.  */
 static void
-update_transformation_cache (expr_t expr, insn_t insn, 
+update_transformation_cache (expr_t expr, insn_t insn,
                              bool inside_insn_group,
-                             enum local_trans_type trans_type, 
+                             enum local_trans_type trans_type,
                              vinsn_t expr_old_vinsn)
 {
   struct transformed_insns *pti;
 
   if (inside_insn_group)
     return;
-  
+
   pti = XNEW (struct transformed_insns);
   pti->vinsn_old = expr_old_vinsn;
   pti->vinsn_new = EXPR_VINSN (expr);
@@ -2419,13 +2494,13 @@ update_transformation_cache (expr_t expr, insn_t insn,
   pti->needs_check = EXPR_NEEDS_SPEC_CHECK_P (expr);
   vinsn_attach (pti->vinsn_old);
   vinsn_attach (pti->vinsn_new);
-  *((struct transformed_insns **) 
+  *((struct transformed_insns **)
     htab_find_slot_with_hash (INSN_TRANSFORMED_INSNS (insn),
                               pti, VINSN_HASH_RTX (expr_old_vinsn),
                               INSERT)) = pti;
 }
 
-/* Same as moveup_expr, but first looks up the result of 
+/* Same as moveup_expr, but first looks up the result of
    transformation in caches.  */
 static enum MOVEUP_EXPR_CODE
 moveup_expr_cached (expr_t expr, insn_t insn, bool inside_insn_group)
@@ -2435,12 +2510,17 @@ moveup_expr_cached (expr_t expr, insn_t insn, bool inside_insn_group)
 
   if (sched_verbose >= 6)
     {
-      sel_print ("Moving "); 
+      sel_print ("Moving ");
       dump_expr (expr);
       sel_print (" through %d: ", INSN_UID (insn));
     }
 
-  if (try_bitmap_cache (expr, insn, inside_insn_group, &res))
+  if (DEBUG_INSN_P (EXPR_INSN_RTX (expr))
+      && (sel_bb_head (BLOCK_FOR_INSN (EXPR_INSN_RTX (expr)))
+	  == EXPR_INSN_RTX (expr)))
+    /* Don't use cached information for debug insns that are heads of
+       basic blocks.  */;
+  else if (try_bitmap_cache (expr, insn, inside_insn_group, &res))
     /* When inside insn group, we do not want remove stores conflicting
        with previosly issued loads.  */
     got_answer = ! inside_insn_group || res != MOVEUP_EXPR_NULL;
@@ -2456,7 +2536,7 @@ moveup_expr_cached (expr_t expr, insn_t insn, bool inside_insn_group)
       bool unique_p = VINSN_UNIQUE_P (expr_old_vinsn);
       enum local_trans_type trans_type = TRANS_SUBSTITUTION;
 
-      /* ??? Invent something better than this.  We can't allow old_vinsn 
+      /* ??? Invent something better than this.  We can't allow old_vinsn
          to go, we need it for the history vector.  */
       vinsn_attach (expr_old_vinsn);
 
@@ -2486,9 +2566,9 @@ moveup_expr_cached (expr_t expr, insn_t insn, bool inside_insn_group)
 	case MOVEUP_EXPR_CHANGED:
           gcc_assert (INSN_UID (EXPR_INSN_RTX (expr)) != expr_uid
                       || EXPR_SPEC_DONE_DS (expr) != expr_old_spec_ds);
-          insert_in_history_vect (&EXPR_HISTORY_OF_CHANGES (expr), 
-                                  INSN_UID (insn), trans_type, 
-                                  expr_old_vinsn, EXPR_VINSN (expr), 
+          insert_in_history_vect (&EXPR_HISTORY_OF_CHANGES (expr),
+                                  INSN_UID (insn), trans_type,
+                                  expr_old_vinsn, EXPR_VINSN (expr),
                                   expr_old_spec_ds);
           update_transformation_cache (expr, insn, inside_insn_group,
                                        trans_type, expr_old_vinsn);
@@ -2509,7 +2589,7 @@ moveup_expr_cached (expr_t expr, insn_t insn, bool inside_insn_group)
   return res;
 }
 
-/* Moves an av set AVP up through INSN, performing necessary 
+/* Moves an av set AVP up through INSN, performing necessary
    transformations.  */
 static void
 moveup_set_expr (av_set_t *avp, insn_t insn, bool inside_insn_group)
@@ -2517,9 +2597,9 @@ moveup_set_expr (av_set_t *avp, insn_t insn, bool inside_insn_group)
   av_set_iterator i;
   expr_t expr;
 
-  FOR_EACH_EXPR_1 (expr, i, avp)    
-    { 
-      
+  FOR_EACH_EXPR_1 (expr, i, avp)
+    {
+
       switch (moveup_expr_cached (expr, insn, inside_insn_group))
 	{
 	case MOVEUP_EXPR_SAME:
@@ -2533,7 +2613,7 @@ moveup_set_expr (av_set_t *avp, insn_t insn, bool inside_insn_group)
 	case MOVEUP_EXPR_CHANGED:
           expr = merge_with_other_exprs (avp, &i, expr);
 	  break;
-          
+
 	default:
 	  gcc_unreachable ();
 	}
@@ -2545,13 +2625,13 @@ static void
 moveup_set_inside_insn_group (av_set_t *avp, ilist_t path)
 {
   int last_cycle;
-  
+
   if (sched_verbose >= 6)
     sel_print ("Moving expressions up in the insn group...\n");
   if (! path)
     return;
   last_cycle = INSN_SCHED_CYCLE (ILIST_INSN (path));
-  while (path 
+  while (path
          && INSN_SCHED_CYCLE (ILIST_INSN (path)) == last_cycle)
     {
       moveup_set_expr (avp, ILIST_INSN (path), true);
@@ -2569,11 +2649,11 @@ equal_after_moveup_path_p (expr_t expr, ilist_t path, expr_t expr_vliw)
 
   copy_expr_onside (tmp, expr);
   last_cycle = path ? INSN_SCHED_CYCLE (ILIST_INSN (path)) : 0;
-  while (path 
+  while (path
          && res
          && INSN_SCHED_CYCLE (ILIST_INSN (path)) == last_cycle)
     {
-      res = (moveup_expr_cached (tmp, ILIST_INSN (path), true) 
+      res = (moveup_expr_cached (tmp, ILIST_INSN (path), true)
              != MOVEUP_EXPR_NULL);
       path = ILIST_NEXT (path);
     }
@@ -2594,7 +2674,7 @@ equal_after_moveup_path_p (expr_t expr, ilist_t path, expr_t expr_vliw)
 
 /* Functions that compute av and lv sets.  */
 
-/* Returns true if INSN is not a downward continuation of the given path P in 
+/* Returns true if INSN is not a downward continuation of the given path P in
    the current stage.  */
 static bool
 is_ineligible_successor (insn_t insn, ilist_t p)
@@ -2618,8 +2698,8 @@ is_ineligible_successor (insn_t insn, ilist_t p)
       /* is already visited.  */
       || (INSN_SEQNO (insn) == INSN_SEQNO (prev_insn)
 	  && (ilist_is_in_p (p, insn)
-              /* We can reach another fence here and still seqno of insn 
-                 would be equal to seqno of prev_insn.  This is possible 
+              /* We can reach another fence here and still seqno of insn
+                 would be equal to seqno of prev_insn.  This is possible
                  when prev_insn is a previously created bookkeeping copy.
                  In that case it'd get a seqno of insn.  Thus, check here
                  whether insn is in current fence too.  */
@@ -2627,8 +2707,8 @@ is_ineligible_successor (insn_t insn, ilist_t p)
       /* Was already scheduled on this round.  */
       || (INSN_SEQNO (insn) > INSN_SEQNO (prev_insn)
 	  && IN_CURRENT_FENCE_P (insn))
-      /* An insn from another fence could also be 
-	 scheduled earlier even if this insn is not in 
+      /* An insn from another fence could also be
+	 scheduled earlier even if this insn is not in
 	 a fence list right now.  Check INSN_SCHED_CYCLE instead.  */
       || (!pipelining_p
           && INSN_SCHED_TIMES (insn) > 0))
@@ -2637,9 +2717,9 @@ is_ineligible_successor (insn_t insn, ilist_t p)
     return false;
 }
 
-/* Computes the av_set below the last bb insn INSN, doing all the 'dirty work' 
-   of handling multiple successors and properly merging its av_sets.  P is 
-   the current path traversed.  WS is the size of lookahead window.  
+/* Computes the av_set below the last bb insn INSN, doing all the 'dirty work'
+   of handling multiple successors and properly merging its av_sets.  P is
+   the current path traversed.  WS is the size of lookahead window.
    Return the av set computed.  */
 static av_set_t
 compute_av_set_at_bb_end (insn_t insn, ilist_t p, int ws)
@@ -2652,7 +2732,7 @@ compute_av_set_at_bb_end (insn_t insn, ilist_t p, int ws)
 
   gcc_assert (sel_bb_end_p (insn));
 
-  /* Find different kind of successors needed for correct computing of 
+  /* Find different kind of successors needed for correct computing of
      SPEC and TARGET_AVAILABLE attributes.  */
   sinfo = compute_succs_info (insn, SUCCS_NORMAL);
 
@@ -2669,21 +2749,20 @@ compute_av_set_at_bb_end (insn_t insn, ilist_t p, int ws)
   /* Add insn to to the tail of current path.  */
   ilist_add (&p, insn);
 
-  for (is = 0; VEC_iterate (rtx, sinfo->succs_ok, is, succ); is++)
+  FOR_EACH_VEC_ELT (rtx, sinfo->succs_ok, is, succ)
     {
       av_set_t succ_set;
 
       /* We will edit SUCC_SET and EXPR_SPEC field of its elements.  */
       succ_set = compute_av_set_inside_bb (succ, p, ws, true);
 
-      av_set_split_usefulness (succ_set, 
-                               VEC_index (int, sinfo->probs_ok, is), 
+      av_set_split_usefulness (succ_set,
+                               VEC_index (int, sinfo->probs_ok, is),
                                sinfo->all_prob);
 
-      if (sinfo->all_succs_n > 1 
-          && sinfo->all_succs_n == sinfo->succs_ok_n)
+      if (sinfo->all_succs_n > 1)
 	{
-          /* Find EXPR'es that came from *all* successors and save them 
+          /* Find EXPR'es that came from *all* successors and save them
              into expr_in_all_succ_branches.  This set will be used later
              for calculating speculation attributes of EXPR'es.  */
           if (is == 0)
@@ -2697,7 +2776,7 @@ compute_av_set_at_bb_end (insn_t insn, ilist_t p, int ws)
             {
               av_set_iterator i;
               expr_t expr;
-              
+
               FOR_EACH_EXPR_1 (expr, i, &expr_in_all_succ_branches)
                 if (!av_set_is_in_p (succ_set, EXPR_VINSN (expr)))
                   av_set_iter_remove (&i);
@@ -2712,7 +2791,7 @@ compute_av_set_at_bb_end (insn_t insn, ilist_t p, int ws)
           basic_block bb1 = BLOCK_FOR_INSN (succ);
 
           gcc_assert (BB_LV_SET_VALID_P (bb0) && BB_LV_SET_VALID_P (bb1));
-          av_set_union_and_live (&av1, &succ_set, 
+          av_set_union_and_live (&av1, &succ_set,
                                  BB_LV_SET (bb0),
                                  BB_LV_SET (bb1),
                                  insn);
@@ -2721,22 +2800,22 @@ compute_av_set_at_bb_end (insn_t insn, ilist_t p, int ws)
         av_set_union_and_clear (&av1, &succ_set, insn);
     }
 
-  /* Check liveness restrictions via hard way when there are more than 
+  /* Check liveness restrictions via hard way when there are more than
      two successors.  */
   if (sinfo->succs_ok_n > 2)
-    for (is = 0; VEC_iterate (rtx, sinfo->succs_ok, is, succ); is++)
+    FOR_EACH_VEC_ELT (rtx, sinfo->succs_ok, is, succ)
       {
         basic_block succ_bb = BLOCK_FOR_INSN (succ);
-        
+
         gcc_assert (BB_LV_SET_VALID_P (succ_bb));
-        mark_unavailable_targets (av1, BB_AV_SET (succ_bb), 
+        mark_unavailable_targets (av1, BB_AV_SET (succ_bb),
                                   BB_LV_SET (succ_bb));
       }
-  
-  /* Finally, check liveness restrictions on paths leaving the region.  */ 
+
+  /* Finally, check liveness restrictions on paths leaving the region.  */
   if (sinfo->all_succs_n > sinfo->succs_ok_n)
-    for (is = 0; VEC_iterate (rtx, sinfo->succs_other, is, succ); is++)
-      mark_unavailable_targets 
+    FOR_EACH_VEC_ELT (rtx, sinfo->succs_other, is, succ)
+      mark_unavailable_targets
         (av1, NULL, BB_LV_SET (BLOCK_FOR_INSN (succ)));
 
   if (sinfo->all_succs_n > 1)
@@ -2744,21 +2823,21 @@ compute_av_set_at_bb_end (insn_t insn, ilist_t p, int ws)
       av_set_iterator i;
       expr_t expr;
 
-      /* Increase the spec attribute of all EXPR'es that didn't come 
+      /* Increase the spec attribute of all EXPR'es that didn't come
 	 from all successors.  */
       FOR_EACH_EXPR (expr, i, av1)
 	if (!av_set_is_in_p (expr_in_all_succ_branches, EXPR_VINSN (expr)))
 	  EXPR_SPEC (expr)++;
 
       av_set_clear (&expr_in_all_succ_branches);
-      
-      /* Do not move conditional branches through other 
-	 conditional branches.  So, remove all conditional 
+
+      /* Do not move conditional branches through other
+	 conditional branches.  So, remove all conditional
 	 branches from av_set if current operator is a conditional
 	 branch.  */
       av_set_substract_cond_branches (&av1);
     }
-  
+
   ilist_remove (&p);
   free_succs_info (sinfo);
 
@@ -2772,9 +2851,9 @@ compute_av_set_at_bb_end (insn_t insn, ilist_t p, int ws)
   return av1;
 }
 
-/* This function computes av_set for the FIRST_INSN by dragging valid 
-   av_set through all basic block insns either from the end of basic block 
-   (computed using compute_av_set_at_bb_end) or from the insn on which 
+/* This function computes av_set for the FIRST_INSN by dragging valid
+   av_set through all basic block insns either from the end of basic block
+   (computed using compute_av_set_at_bb_end) or from the insn on which
    MAX_WS was exceeded.  It uses compute_av_set_at_bb_end to compute av_set
    below the basic block and handling conditional branches.
    FIRST_INSN - the basic block head, P - path consisting of the insns
@@ -2782,7 +2861,7 @@ compute_av_set_at_bb_end (insn_t insn, ilist_t p, int ws)
    and bb ends are added to the path), WS - current window size,
    NEED_COPY_P - true if we'll make a copy of av_set before returning it.  */
 static av_set_t
-compute_av_set_inside_bb (insn_t first_insn, ilist_t p, int ws, 
+compute_av_set_inside_bb (insn_t first_insn, ilist_t p, int ws,
 			  bool need_copy_p)
 {
   insn_t cur_insn;
@@ -2802,7 +2881,7 @@ compute_av_set_inside_bb (insn_t first_insn, ilist_t p, int ws,
       return NULL;
     }
 
-  /* If insn already has valid av(insn) computed, just return it.  */ 
+  /* If insn already has valid av(insn) computed, just return it.  */
   if (AV_SET_VALID_P (first_insn))
     {
       av_set_t av_set;
@@ -2825,9 +2904,9 @@ compute_av_set_inside_bb (insn_t first_insn, ilist_t p, int ws,
   ilist_add (&p, first_insn);
 
   /* As the result after this loop have completed, in LAST_INSN we'll
-     have the insn which has valid av_set to start backward computation 
-     from: it either will be NULL because on it the window size was exceeded 
-     or other valid av_set as returned by compute_av_set for the last insn 
+     have the insn which has valid av_set to start backward computation
+     from: it either will be NULL because on it the window size was exceeded
+     or other valid av_set as returned by compute_av_set for the last insn
      of the basic block.  */
   for (last_insn = first_insn; last_insn != after_bb_end;
        last_insn = NEXT_INSN (last_insn))
@@ -2844,17 +2923,20 @@ compute_av_set_inside_bb (insn_t first_insn, ilist_t p, int ws,
       /* The special case: the last insn of the BB may be an
          ineligible_successor due to its SEQ_NO that was set on
 	 it as a bookkeeping.  */
-      if (last_insn != first_insn 
+      if (last_insn != first_insn
           && is_ineligible_successor (last_insn, p))
 	{
           if (sched_verbose >= 6)
             sel_print ("Insn %d is ineligible_successor\n", INSN_UID (last_insn));
-	  break;	  
+	  break;
 	}
+
+      if (DEBUG_INSN_P (last_insn))
+	continue;
 
       if (end_ws > max_ws)
 	{
-	  /* We can reach max lookahead size at bb_header, so clean av_set 
+	  /* We can reach max lookahead size at bb_header, so clean av_set
 	     first.  */
 	  INSN_WS_LEVEL (last_insn) = global_level;
 
@@ -2874,7 +2956,7 @@ compute_av_set_inside_bb (insn_t first_insn, ilist_t p, int ws,
     {
       av = NULL;
 
-      /* This is needed only to obtain av_sets that are identical to 
+      /* This is needed only to obtain av_sets that are identical to
          those computed by the old compute_av_set version.  */
       if (last_insn == first_insn && !INSN_NOP_P (last_insn))
         av_set_add (&av, INSN_EXPR (last_insn));
@@ -2886,16 +2968,16 @@ compute_av_set_inside_bb (insn_t first_insn, ilist_t p, int ws,
   /* Compute av_set in AV starting from below the LAST_INSN up to
      location above the FIRST_INSN.  */
   for (cur_insn = PREV_INSN (last_insn); cur_insn != PREV_INSN (first_insn);
-       cur_insn = PREV_INSN (cur_insn))    
+       cur_insn = PREV_INSN (cur_insn))
     if (!INSN_NOP_P (cur_insn))
       {
         expr_t expr;
-  
+
         moveup_set_expr (&av, cur_insn, false);
-        
-        /* If the expression for CUR_INSN is already in the set, 
+
+        /* If the expression for CUR_INSN is already in the set,
            replace it by the new one.  */
-        expr = av_set_lookup (av, INSN_VINSN (cur_insn)); 
+        expr = av_set_lookup (av, INSN_VINSN (cur_insn));
         if (expr != NULL)
           {
             clear_expr (expr);
@@ -2992,16 +3074,16 @@ compute_live (insn_t insn)
   if (!ignore_first)
     {
       regset src = NULL;
-      
+
       if (sel_bb_head_p (insn) && BB_LV_SET_VALID_P (bb))
         src = BB_LV_SET (bb);
-      else 
+      else
         {
           gcc_assert (in_current_region_p (bb));
           if (INSN_LIVE_VALID_P (insn))
             src = INSN_LIVE (insn);
         }
-      
+
       if (src)
 	{
 	  lv = get_regset_from_pool ();
@@ -3012,7 +3094,7 @@ compute_live (insn_t insn)
               COPY_REG_SET (BB_LV_SET (bb), lv);
               BB_LV_SET_VALID_P (bb) = true;
             }
-          
+
 	  return_regset_to_pool (lv);
 	  return lv;
 	}
@@ -3022,8 +3104,8 @@ compute_live (insn_t insn)
   ignore_first = false;
   gcc_assert (in_current_region_p (bb));
 
-  /* Find a valid LV set in this block or below, if needed.  
-     Start searching from the next insn: either ignore_first is true, or 
+  /* Find a valid LV set in this block or below, if needed.
+     Start searching from the next insn: either ignore_first is true, or
      INSN doesn't have a correct live set.  */
   temp = NEXT_INSN (insn);
   final = NEXT_INSN (BB_END (bb));
@@ -3054,11 +3136,11 @@ compute_live (insn_t insn)
   if (sel_bb_head_p (insn))
     {
       basic_block bb = BLOCK_FOR_INSN (insn);
-      
+
       COPY_REG_SET (BB_LV_SET (bb), lv);
       BB_LV_SET_VALID_P (bb) = true;
     }
-  
+
   /* We return LV to the pool, but will not clear it there.  Thus we can
      legimatelly use LV till the next use of regset_pool_get ().  */
   return_regset_to_pool (lv);
@@ -3079,8 +3161,8 @@ compute_live_below_insn (rtx insn, regset regs)
 {
   rtx succ;
   succ_iterator si;
-  
-  FOR_EACH_SUCC_1 (succ, si, insn, SUCCS_ALL) 
+
+  FOR_EACH_SUCC_1 (succ, si, insn, SUCCS_ALL)
     IOR_REG_SET (regs, compute_live (succ));
 }
 
@@ -3123,7 +3205,7 @@ get_spec_check_type_for_insn (insn_t insn, expr_t expr)
   return to_check_ds;
 }
 
-/* Find the set of registers that are unavailable for storing expres 
+/* Find the set of registers that are unavailable for storing expres
    while moving ORIG_OPS up on the path starting from INSN due to
    liveness (USED_REGS) or hardware restrictions (REG_RENAME_P).
 
@@ -3132,32 +3214,32 @@ get_spec_check_type_for_insn (insn_t insn, expr_t expr)
 
    REG_RENAME_P denotes the set of hardware registers that
    can not be used with renaming due to the register class restrictions,
-   mode restrictions and other (the register we'll choose should be 
+   mode restrictions and other (the register we'll choose should be
    compatible class with the original uses, shouldn't be in call_used_regs,
    should be HARD_REGNO_RENAME_OK etc).
 
    Returns TRUE if we've found all original insns, FALSE otherwise.
 
    This function utilizes code_motion_path_driver (formerly find_used_regs_1)
-   to traverse the code motion paths.  This helper function finds registers 
-   that are not available for storing expres while moving ORIG_OPS up on the 
+   to traverse the code motion paths.  This helper function finds registers
+   that are not available for storing expres while moving ORIG_OPS up on the
    path starting from INSN.  A register considered as used on the moving path,
    if one of the following conditions is not satisfied:
 
-      (1) a register not set or read on any path from xi to an instance of 
-	  the original operation, 
-      (2) not among the live registers of the point immediately following the 
+      (1) a register not set or read on any path from xi to an instance of
+	  the original operation,
+      (2) not among the live registers of the point immediately following the
           first original operation on a given downward path, except for the
 	  original target register of the operation,
-      (3) not live on the other path of any conditional branch that is passed 
+      (3) not live on the other path of any conditional branch that is passed
 	  by the operation, in case original operations are not present on
 	  both paths of the conditional branch.
 
    All the original operations found during the traversal are saved in the
    ORIGINAL_INSNS list.
 
-   REG_RENAME_P->CROSSES_CALL is true, if there is a call insn on the path 
-   from INSN to original insn. In this case CALL_USED_REG_SET will be added 
+   REG_RENAME_P->CROSSES_CALL is true, if there is a call insn on the path
+   from INSN to original insn. In this case CALL_USED_REG_SET will be added
    to unavailable hard regs at the point original operation is found.  */
 
 static bool
@@ -3180,10 +3262,10 @@ find_used_regs (insn_t insn, av_set_t orig_ops, regset used_regs,
   sparams.crosses_call = false;
   sparams.original_insns = original_insns;
   sparams.used_regs = used_regs;
-  
+
   /* Set the appropriate hooks and data.  */
   code_motion_path_driver_info = &fur_hooks;
-  
+
   res = code_motion_path_driver (insn, orig_ops, NULL, &lparams, &sparams);
 
   reg_rename_p->crosses_call |= sparams.crosses_call;
@@ -3194,12 +3276,12 @@ find_used_regs (insn_t insn, av_set_t orig_ops, regset used_regs,
   /* ??? We calculate whether an expression needs a check when computing
      av sets.  This information is not as precise as it could be due to
      merging this bit in merge_expr.  We can do better in find_used_regs,
-     but we want to avoid multiple traversals of the same code motion 
+     but we want to avoid multiple traversals of the same code motion
      paths.  */
   FOR_EACH_EXPR (expr, expr_iter, orig_ops)
     needs_spec_check_p |= EXPR_NEEDS_SPEC_CHECK_P (expr);
 
-  /* Mark hardware regs in REG_RENAME_P that are not suitable 
+  /* Mark hardware regs in REG_RENAME_P that are not suitable
      for renaming expr in INSN due to hardware restrictions (register class,
      modes compatibility etc).  */
   FOR_EACH_DEF (def, i, *original_insns)
@@ -3209,7 +3291,7 @@ find_used_regs (insn_t insn, av_set_t orig_ops, regset used_regs,
       if (VINSN_SEPARABLE_P (vinsn))
 	mark_unavailable_hard_regs (def, reg_rename_p, used_regs);
 
-      /* Do not allow clobbering of ld.[sa] address in case some of the 
+      /* Do not allow clobbering of ld.[sa] address in case some of the
          original operations need a check.  */
       if (needs_spec_check_p)
 	IOR_REG_SET (used_regs, VINSN_REG_USES (vinsn));
@@ -3238,16 +3320,16 @@ sel_target_adjust_priority (expr_t expr)
 
   gcc_assert (EXPR_PRIORITY_ADJ (expr) >= 0);
 
-  if (sched_verbose >= 2)
-    sel_print ("sel_target_adjust_priority: insn %d,  %d +%d = %d.\n", 
-	       INSN_UID (EXPR_INSN_RTX (expr)), EXPR_PRIORITY (expr), 
+  if (sched_verbose >= 4)
+    sel_print ("sel_target_adjust_priority: insn %d,  %d+%d = %d.\n",
+	       INSN_UID (EXPR_INSN_RTX (expr)), EXPR_PRIORITY (expr),
 	       EXPR_PRIORITY_ADJ (expr), new_priority);
 
   return new_priority;
 }
 
 /* Rank two available exprs for schedule.  Never return 0 here.  */
-static int 
+static int
 sel_rank_for_schedule (const void *x, const void *y)
 {
   expr_t tmp = *(const expr_t *) y;
@@ -3260,11 +3342,17 @@ sel_rank_for_schedule (const void *x, const void *y)
   tmp2_vinsn = EXPR_VINSN (tmp2);
   tmp_insn = EXPR_INSN_RTX (tmp);
   tmp2_insn = EXPR_INSN_RTX (tmp2);
-  
+
+  /* Schedule debug insns as early as possible.  */
+  if (DEBUG_INSN_P (tmp_insn) && !DEBUG_INSN_P (tmp2_insn))
+    return -1;
+  else if (DEBUG_INSN_P (tmp2_insn))
+    return 1;
+
   /* Prefer SCHED_GROUP_P insns to any others.  */
   if (SCHED_GROUP_P (tmp_insn) != SCHED_GROUP_P (tmp2_insn))
     {
-      if (VINSN_UNIQUE_P (tmp_vinsn) && VINSN_UNIQUE_P (tmp2_vinsn)) 
+      if (VINSN_UNIQUE_P (tmp_vinsn) && VINSN_UNIQUE_P (tmp2_vinsn))
         return SCHED_GROUP_P (tmp2_insn) ? 1 : -1;
 
       /* Now uniqueness means SCHED_GROUP_P is set, because schedule groups
@@ -3303,7 +3391,7 @@ sel_rank_for_schedule (const void *x, const void *y)
       val = p2 * EXPR_USEFULNESS (tmp2) - p1 * EXPR_USEFULNESS (tmp);
     }
   else
-    val = EXPR_PRIORITY (tmp2) - EXPR_PRIORITY (tmp) 
+    val = EXPR_PRIORITY (tmp2) - EXPR_PRIORITY (tmp)
 	  + EXPR_PRIORITY_ADJ (tmp2) - EXPR_PRIORITY_ADJ (tmp);
   if (val)
     return val;
@@ -3332,24 +3420,21 @@ sel_rank_for_schedule (const void *x, const void *y)
 	return dw;
     }
 
-  tmp_insn = EXPR_INSN_RTX (tmp);
-  tmp2_insn = EXPR_INSN_RTX (tmp2);
-
   /* Prefer an old insn to a bookkeeping insn.  */
-  if (INSN_UID (tmp_insn) < first_emitted_uid 
+  if (INSN_UID (tmp_insn) < first_emitted_uid
       && INSN_UID (tmp2_insn) >= first_emitted_uid)
     return -1;
-  if (INSN_UID (tmp_insn) >= first_emitted_uid 
+  if (INSN_UID (tmp_insn) >= first_emitted_uid
       && INSN_UID (tmp2_insn) < first_emitted_uid)
     return 1;
 
-  /* Prefer an insn with smaller UID, as a last resort.  
+  /* Prefer an insn with smaller UID, as a last resort.
      We can't safely use INSN_LUID as it is defined only for those insns
      that are in the stream.  */
   return INSN_UID (tmp_insn) - INSN_UID (tmp2_insn);
 }
 
-/* Filter out expressions from av set pointed to by AV_PTR 
+/* Filter out expressions from av set pointed to by AV_PTR
    that are pipelined too many times.  */
 static void
 process_pipelined_exprs (av_set_t *av_ptr)
@@ -3358,7 +3443,7 @@ process_pipelined_exprs (av_set_t *av_ptr)
   av_set_iterator si;
 
   /* Don't pipeline already pipelined code as that would increase
-     number of unnecessary register moves.  */  
+     number of unnecessary register moves.  */
   FOR_EACH_EXPR_1 (expr, si, av_ptr)
     {
       if (EXPR_SCHED_TIMES (expr)
@@ -3429,8 +3514,8 @@ process_spec_exprs (av_set_t *av_ptr)
     }
 }
 
-/* Search for any use-like insns in AV_PTR and decide on scheduling 
-   them.  Return one when found, and NULL otherwise.  
+/* Search for any use-like insns in AV_PTR and decide on scheduling
+   them.  Return one when found, and NULL otherwise.
    Note that we check here whether a USE could be scheduled to avoid
    an infinite loop later.  */
 static expr_t
@@ -3500,7 +3585,7 @@ vinsn_vec_has_expr_p (vinsn_vec_t vinsn_vec, expr_t expr)
   vinsn_t vinsn;
   int n;
 
-  for (n = 0; VEC_iterate (vinsn_t, vinsn_vec, n, vinsn); n++)
+  FOR_EACH_VEC_ELT (vinsn_t, vinsn_vec, n, vinsn)
     if (VINSN_SEPARABLE_P (vinsn))
       {
         if (vinsn_equal_p (vinsn, EXPR_VINSN (expr)))
@@ -3512,7 +3597,7 @@ vinsn_vec_has_expr_p (vinsn_vec_t vinsn_vec, expr_t expr)
            another pattern due to substitution, and we can't choose
            different register as in the above case.  Check all registers
            being written instead.  */
-        if (bitmap_intersect_p (VINSN_REG_SETS (vinsn), 
+        if (bitmap_intersect_p (VINSN_REG_SETS (vinsn),
                                 VINSN_REG_SETS (EXPR_VINSN (expr))))
           return true;
       }
@@ -3573,8 +3658,8 @@ vinsn_vec_clear (vinsn_vec_t *vinsn_vec)
     {
       vinsn_t vinsn;
       int n;
-      
-      for (n = 0; VEC_iterate (vinsn_t, *vinsn_vec, n, vinsn); n++)
+
+      FOR_EACH_VEC_ELT (vinsn_t, *vinsn_vec, n, vinsn)
         vinsn_detach (vinsn);
       VEC_block_remove (vinsn_t, *vinsn_vec, 0, len);
     }
@@ -3588,7 +3673,7 @@ vinsn_vec_add (vinsn_vec_t *vinsn_vec, expr_t expr)
   VEC_safe_push (vinsn_t, heap, *vinsn_vec, EXPR_VINSN (expr));
 }
 
-/* Free the vector representing blocked expressions.  */    
+/* Free the vector representing blocked expressions.  */
 static void
 vinsn_vec_free (vinsn_vec_t *vinsn_vec)
 {
@@ -3603,15 +3688,15 @@ void sel_add_to_insn_priority (rtx insn, int amount)
   EXPR_PRIORITY_ADJ (INSN_EXPR (insn)) += amount;
 
   if (sched_verbose >= 2)
-    sel_print ("sel_add_to_insn_priority: insn %d, by %d (now %d+%d).\n", 
+    sel_print ("sel_add_to_insn_priority: insn %d, by %d (now %d+%d).\n",
 	       INSN_UID (insn), amount, EXPR_PRIORITY (INSN_EXPR (insn)),
 	       EXPR_PRIORITY_ADJ (INSN_EXPR (insn)));
 }
 
-/* Turn AV into a vector, filter inappropriate insns and sort it.  Return 
+/* Turn AV into a vector, filter inappropriate insns and sort it.  Return
    true if there is something to schedule.  BNDS and FENCE are current
    boundaries and fence, respectively.  If we need to stall for some cycles
-   before an expr from AV would become available, write this number to 
+   before an expr from AV would become available, write this number to
    *PNEED_STALL.  */
 static bool
 fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
@@ -3637,7 +3722,7 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
      for each insn.  */
   gcc_assert (VEC_empty (expr_t, vec_av_set));
   FOR_EACH_EXPR (expr, si, av)
-    {  
+    {
       VEC_safe_push (expr_t, heap, vec_av_set, expr);
 
       gcc_assert (EXPR_PRIORITY_ADJ (expr) == 0 || *pneed_stall);
@@ -3647,8 +3732,7 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
     }
 
   /* Sort the vector.  */
-  qsort (VEC_address (expr_t, vec_av_set), VEC_length (expr_t, vec_av_set),
-         sizeof (expr_t), sel_rank_for_schedule);
+  VEC_qsort (expr_t, vec_av_set, sel_rank_for_schedule);
 
   /* We record maximal priority of insns in av set for current instruction
      group.  */
@@ -3662,7 +3746,7 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
     {
       expr_t expr = VEC_index (expr_t, vec_av_set, n);
       insn_t insn = EXPR_INSN_RTX (expr);
-      char target_available;
+      signed char target_available;
       bool is_orig_reg_p = true;
       int need_cycles, new_prio;
 
@@ -3673,12 +3757,12 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
           continue;
         }
 
-      /* Set number of sched_next insns (just in case there 
+      /* Set number of sched_next insns (just in case there
          could be several).  */
       if (FENCE_SCHED_NEXT (fence))
         sched_next_worked++;
-      
-      /* Check all liveness requirements and try renaming.  
+
+      /* Check all liveness requirements and try renaming.
          FIXME: try to minimize calls to this.  */
       target_available = EXPR_TARGET_AVAILABLE (expr);
 
@@ -3699,13 +3783,13 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
                        INSN_UID (insn));
           continue;
         }
-      
+
       if (target_available == true)
 	{
           /* Do nothing -- we can use an existing register.  */
 	  is_orig_reg_p = EXPR_SEPARABLE_P (expr);
         }
-      else if (/* Non-separable instruction will never 
+      else if (/* Non-separable instruction will never
                   get another register. */
                (target_available == false
                 && !EXPR_SEPARABLE_P (expr))
@@ -3717,7 +3801,7 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
         {
           VEC_unordered_remove (expr_t, vec_av_set, n);
           if (sched_verbose >= 4)
-            sel_print ("Expr %d has no suitable target register\n", 
+            sel_print ("Expr %d has no suitable target register\n",
                        INSN_UID (insn));
           continue;
         }
@@ -3785,20 +3869,20 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
 	  if (need_cycles > 0)
 	    {
 	      stalled++;
-	      min_need_stall = (min_need_stall < 0 
+	      min_need_stall = (min_need_stall < 0
 				? need_cycles
 				: MIN (min_need_stall, need_cycles));
 	      VEC_unordered_remove (expr_t, vec_av_set, n);
 
 	      if (sched_verbose >= 4)
-		sel_print ("Expr %d is not ready until cycle %d (cached)\n", 
+		sel_print ("Expr %d is not ready until cycle %d (cached)\n",
 			   INSN_UID (insn),
 			   FENCE_READY_TICKS (fence)[INSN_UID (insn)]);
 	      continue;
 	    }
 	}
 
-      /* Now resort to dependence analysis to find whether EXPR might be 
+      /* Now resort to dependence analysis to find whether EXPR might be
          stalled due to dependencies from FENCE's context.  */
       need_cycles = tick_check_p (expr, dc, fence);
       new_prio = EXPR_PRIORITY (expr) + EXPR_PRIORITY_ADJ (expr) + need_cycles;
@@ -3812,24 +3896,24 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
           if (INSN_UID (insn) >= FENCE_READY_TICKS_SIZE (fence))
             {
               int new_size = INSN_UID (insn) * 3 / 2;
-              
-              FENCE_READY_TICKS (fence) 
+
+              FENCE_READY_TICKS (fence)
                 = (int *) xrecalloc (FENCE_READY_TICKS (fence),
                                      new_size, FENCE_READY_TICKS_SIZE (fence),
                                      sizeof (int));
             }
-          FENCE_READY_TICKS (fence)[INSN_UID (insn)] 
-            = FENCE_CYCLE (fence) + need_cycles; 
-          
+          FENCE_READY_TICKS (fence)[INSN_UID (insn)]
+            = FENCE_CYCLE (fence) + need_cycles;
+
           stalled++;
-          min_need_stall = (min_need_stall < 0 
+          min_need_stall = (min_need_stall < 0
                             ? need_cycles
                             : MIN (min_need_stall, need_cycles));
 
           VEC_unordered_remove (expr_t, vec_av_set, n);
-          
+
           if (sched_verbose >= 4)
-            sel_print ("Expr %d is not ready yet until cycle %d\n", 
+            sel_print ("Expr %d is not ready yet until cycle %d\n",
                        INSN_UID (insn),
                        FENCE_READY_TICKS (fence)[INSN_UID (insn)]);
           continue;
@@ -3862,15 +3946,14 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
     gcc_assert (min_need_stall == 0);
 
   /* Sort the vector.  */
-  qsort (VEC_address (expr_t, vec_av_set), VEC_length (expr_t, vec_av_set),
-         sizeof (expr_t), sel_rank_for_schedule);
-  
+  VEC_qsort (expr_t, vec_av_set, sel_rank_for_schedule);
+
   if (sched_verbose >= 4)
     {
-      sel_print ("Total ready exprs: %d, stalled: %d\n", 
+      sel_print ("Total ready exprs: %d, stalled: %d\n",
                  VEC_length (expr_t, vec_av_set), stalled);
       sel_print ("Sorted av set (%d): ", VEC_length (expr_t, vec_av_set));
-      for (n = 0; VEC_iterate (expr_t, vec_av_set, n, expr); n++)
+      FOR_EACH_VEC_ELT (expr_t, vec_av_set, n, expr)
         dump_expr (expr);
       sel_print ("\n");
     }
@@ -3890,7 +3973,7 @@ convert_vec_av_set_to_ready (void)
   /* Allocate and fill the ready list from the sorted vector.  */
   ready.n_ready = VEC_length (expr_t, vec_av_set);
   ready.first = ready.n_ready - 1;
-  
+
   gcc_assert (ready.n_ready > 0);
 
   if (ready.n_ready > max_issue_size)
@@ -3898,8 +3981,8 @@ convert_vec_av_set_to_ready (void)
       max_issue_size = ready.n_ready;
       sched_extend_ready_list (ready.n_ready);
     }
-  
-  for (n = 0; VEC_iterate (expr_t, vec_av_set, n, expr); n++)
+
+  FOR_EACH_VEC_ELT (expr_t, vec_av_set, n, expr)
     {
       vinsn_t vi = EXPR_VINSN (expr);
       insn_t insn = VINSN_INSN_RTX (vi);
@@ -3911,8 +3994,8 @@ convert_vec_av_set_to_ready (void)
 
 /* Initialize ready list from *AV_PTR for the max_issue () call.
    If any unrecognizable insn found in *AV_PTR, return it (and skip
-   max_issue).  BND and FENCE are current boundary and fence, 
-   respectively.  If we need to stall for some cycles before an expr 
+   max_issue).  BND and FENCE are current boundary and fence,
+   respectively.  If we need to stall for some cycles before an expr
    from *AV_PTR would become available, write this number to *PNEED_STALL.  */
 static expr_t
 fill_ready_list (av_set_t *av_ptr, blist_t bnds, fence_t fence,
@@ -3923,7 +4006,7 @@ fill_ready_list (av_set_t *av_ptr, blist_t bnds, fence_t fence,
   /* We do not support multiple boundaries per fence.  */
   gcc_assert (BLIST_NEXT (bnds) == NULL);
 
-  /* Process expressions required special handling, i.e.  pipelined, 
+  /* Process expressions required special handling, i.e.  pipelined,
      speculative and recog() < 0 expressions first.  */
   process_pipelined_exprs (av_ptr);
   process_spec_exprs (av_ptr);
@@ -3952,8 +4035,8 @@ fill_ready_list (av_set_t *av_ptr, blist_t bnds, fence_t fence,
 static bool
 sel_dfa_new_cycle (insn_t insn, fence_t fence)
 {
-  int last_scheduled_cycle = FENCE_LAST_SCHEDULED_INSN (fence) 
-                             ? INSN_SCHED_CYCLE (FENCE_LAST_SCHEDULED_INSN (fence)) 
+  int last_scheduled_cycle = FENCE_LAST_SCHEDULED_INSN (fence)
+                             ? INSN_SCHED_CYCLE (FENCE_LAST_SCHEDULED_INSN (fence))
                              : FENCE_CYCLE (fence) - 1;
   bool res = false;
   int sort_p = 0;
@@ -4015,7 +4098,7 @@ invoke_reorder_hooks (fence_t fence)
            && !SCHED_GROUP_P (ready_element (&ready, 0)))
     {
       if (ready.n_ready == 1)
-        issue_more = 
+        issue_more =
           targetm.sched.reorder2 (sched_dump, sched_verbose,
                                   ready_lastpos (&ready),
                                   &ready.n_ready, FENCE_CYCLE (fence));
@@ -4036,8 +4119,8 @@ invoke_reorder_hooks (fence_t fence)
 
       ran_hook = true;
     }
-  else 
-    issue_more = issue_rate;
+  else
+    issue_more = FENCE_ISSUE_MORE (fence);
 
   /* Ensure that ready list and vec_av_set are in line with each other,
      i.e. vec_av_set[i] == ready_element (&ready, i).  */
@@ -4057,7 +4140,7 @@ invoke_reorder_hooks (fence_t fence)
                 break;
             gcc_assert (j < n);
 
-            tmp = vec[i]; 
+            tmp = vec[i];
             vec[i] = vec[j];
             vec[j] = tmp;
           }
@@ -4066,9 +4149,9 @@ invoke_reorder_hooks (fence_t fence)
   return issue_more;
 }
 
-/* Return an EXPR correponding to INDEX element of ready list, if 
-   FOLLOW_READY_ELEMENT is true (i.e., an expr of 
-   ready_element (&ready, INDEX) will be returned), and to INDEX element of 
+/* Return an EXPR correponding to INDEX element of ready list, if
+   FOLLOW_READY_ELEMENT is true (i.e., an expr of
+   ready_element (&ready, INDEX) will be returned), and to INDEX element of
    ready.vec otherwise.  */
 static inline expr_t
 find_expr_for_ready (int index, bool follow_ready_element)
@@ -4090,7 +4173,7 @@ static int
 invoke_dfa_lookahead_guard (void)
 {
   int i, n;
-  bool have_hook 
+  bool have_hook
     = targetm.sched.first_cycle_multipass_dfa_lookahead_guard != NULL;
 
   if (sched_verbose >= 2)
@@ -4102,18 +4185,18 @@ invoke_dfa_lookahead_guard (void)
       insn_t insn;
       int r;
 
-      /* In this loop insn is Ith element of the ready list given by 
+      /* In this loop insn is Ith element of the ready list given by
          ready_element, not Ith element of ready.vec.  */
       insn = ready_element (&ready, i);
-      
+
       if (! have_hook || i == 0)
         r = 0;
       else
         r = !targetm.sched.first_cycle_multipass_dfa_lookahead_guard (insn);
-      
+
       gcc_assert (INSN_CODE (insn) >= 0);
-        
-      /* Only insns with ready_try = 0 can get here 
+
+      /* Only insns with ready_try = 0 can get here
          from fill_ready_list.  */
       gcc_assert (ready_try [i] == 0);
       ready_try[i] = r;
@@ -4121,7 +4204,7 @@ invoke_dfa_lookahead_guard (void)
         n++;
 
       expr = find_expr_for_ready (i, true);
-      
+
       if (sched_verbose >= 2)
         {
           dump_vinsn (EXPR_VINSN (expr));
@@ -4139,7 +4222,6 @@ static int
 calculate_privileged_insns (void)
 {
   expr_t cur_expr, min_spec_expr = NULL;
-  insn_t cur_insn, min_spec_insn;
   int privileged_n = 0, i;
 
   for (i = 0; i < ready.n_ready; i++)
@@ -4148,12 +4230,8 @@ calculate_privileged_insns (void)
         continue;
 
       if (! min_spec_expr)
-        {
-          min_spec_insn = ready_element (&ready, i);
-          min_spec_expr = find_expr_for_ready (i, true);
-        }
-      
-      cur_insn = ready_element (&ready, i);
+	min_spec_expr = find_expr_for_ready (i, true);
+
       cur_expr = find_expr_for_ready (i, true);
 
       if (EXPR_SPEC (cur_expr) > EXPR_SPEC (min_spec_expr))
@@ -4171,7 +4249,7 @@ calculate_privileged_insns (void)
   return privileged_n;
 }
 
-/* Call the rest of the hooks after the choice was made.  Return 
+/* Call the rest of the hooks after the choice was made.  Return
    the number of insns that still can be issued given that the current
    number is ISSUE_MORE.  FENCE and BEST_INSN are the current fence
    and the insn chosen for scheduling, respectively.  */
@@ -4182,11 +4260,11 @@ invoke_aftermath_hooks (fence_t fence, rtx best_insn, int issue_more)
 
   /* First, call dfa_new_cycle, and then variable_issue, if available.  */
   sel_dfa_new_cycle (best_insn, fence);
-  
+
   if (targetm.sched.variable_issue)
     {
       memcpy (curr_state, FENCE_STATE (fence), dfa_state_size);
-      issue_more = 
+      issue_more =
         targetm.sched.variable_issue (sched_dump, sched_verbose, best_insn,
                                       issue_more);
       memcpy (FENCE_STATE (fence), curr_state, dfa_state_size);
@@ -4218,7 +4296,7 @@ estimate_insn_cost (rtx insn, state_t state)
   return cost;
 }
 
-/* Return the cost of issuing EXPR on the FENCE as estimated by DFA.  
+/* Return the cost of issuing EXPR on the FENCE as estimated by DFA.
    This function properly handles ASMs, USEs etc.  */
 static int
 get_expr_cost (expr_t expr, fence_t fence)
@@ -4227,9 +4305,7 @@ get_expr_cost (expr_t expr, fence_t fence)
 
   if (recog_memoized (insn) < 0)
     {
-      if (!FENCE_STARTS_CYCLE_P (fence) 
-          /* FIXME: Is this condition necessary?  */
-          && VINSN_UNIQUE_P (EXPR_VINSN (expr))
+      if (!FENCE_STARTS_CYCLE_P (fence)
 	  && INSN_ASM_P (insn))
 	/* This is asm insn which is tryed to be issued on the
 	   cycle not first.  Issue it on the next cycle.  */
@@ -4245,7 +4321,7 @@ get_expr_cost (expr_t expr, fence_t fence)
     return estimate_insn_cost (insn, FENCE_STATE (fence));
 }
 
-/* Find the best insn for scheduling, either via max_issue or just take 
+/* Find the best insn for scheduling, either via max_issue or just take
    the most prioritized available.  */
 static int
 choose_best_insn (fence_t fence, int privileged_n, int *index)
@@ -4255,8 +4331,9 @@ choose_best_insn (fence_t fence, int privileged_n, int *index)
   if (dfa_lookahead > 0)
     {
       cycle_issued_insns = FENCE_ISSUED_INSNS (fence);
+      /* TODO: pass equivalent of first_cycle_insn_p to max_issue ().  */
       can_issue = max_issue (&ready, privileged_n,
-                             FENCE_STATE (fence), index);
+                             FENCE_STATE (fence), true, index);
       if (sched_verbose >= 2)
         sel_print ("max_issue: we can issue %d insns, already did %d insns\n",
                    can_issue, FENCE_ISSUED_INSNS (fence));
@@ -4292,16 +4369,16 @@ choose_best_insn (fence_t fence, int privileged_n, int *index)
   return can_issue;
 }
 
-/* Choose the best expr from *AV_VLIW_PTR and a suitable register for it.  
-   BNDS and FENCE are current boundaries and scheduling fence respectively.  
-   Return the expr found and NULL if nothing can be issued atm.  
-   Write to PNEED_STALL the number of cycles to stall if no expr was found.  */ 
+/* Choose the best expr from *AV_VLIW_PTR and a suitable register for it.
+   BNDS and FENCE are current boundaries and scheduling fence respectively.
+   Return the expr found and NULL if nothing can be issued atm.
+   Write to PNEED_STALL the number of cycles to stall if no expr was found.  */
 static expr_t
 find_best_expr (av_set_t *av_vliw_ptr, blist_t bnds, fence_t fence,
                 int *pneed_stall)
 {
   expr_t best;
-  
+
   /* Choose the best insn for scheduling via:
      1) sorting the ready list based on priority;
      2) calling the reorder hook;
@@ -4309,22 +4386,22 @@ find_best_expr (av_set_t *av_vliw_ptr, blist_t bnds, fence_t fence,
   best = fill_ready_list (av_vliw_ptr, bnds, fence, pneed_stall);
   if (best == NULL && ready.n_ready > 0)
     {
-      int privileged_n, index, avail_n;
+      int privileged_n, index;
 
       can_issue_more = invoke_reorder_hooks (fence);
       if (can_issue_more > 0)
         {
-          /* Try choosing the best insn until we find one that is could be 
+          /* Try choosing the best insn until we find one that is could be
              scheduled due to liveness restrictions on its destination register.
              In the future, we'd like to choose once and then just probe insns
              in the order of their priority.  */
-          avail_n = invoke_dfa_lookahead_guard ();
+          invoke_dfa_lookahead_guard ();
           privileged_n = calculate_privileged_insns ();
           can_issue_more = choose_best_insn (fence, privileged_n, &index);
           if (can_issue_more)
             best = find_expr_for_ready (index, true);
         }
-      /* We had some available insns, so if we can't issue them, 
+      /* We had some available insns, so if we can't issue them,
          we have a stall.  */
       if (can_issue_more == 0)
         {
@@ -4337,10 +4414,11 @@ find_best_expr (av_set_t *av_vliw_ptr, blist_t bnds, fence_t fence,
     {
       can_issue_more = invoke_aftermath_hooks (fence, EXPR_INSN_RTX (best),
                                                can_issue_more);
-      if (can_issue_more == 0)
+      if (targetm.sched.variable_issue
+	  && can_issue_more == 0)
         *pneed_stall = 1;
     }
-  
+
   if (sched_verbose >= 2)
     {
       if (best != NULL)
@@ -4360,10 +4438,10 @@ find_best_expr (av_set_t *av_vliw_ptr, blist_t bnds, fence_t fence,
 /* Functions that implement the core of the scheduler.  */
 
 
-/* Emit an instruction from EXPR with SEQNO and VINSN after 
+/* Emit an instruction from EXPR with SEQNO and VINSN after
    PLACE_TO_INSERT.  */
 static insn_t
-emit_insn_from_expr_after (expr_t expr, vinsn_t vinsn, int seqno, 
+emit_insn_from_expr_after (expr_t expr, vinsn_t vinsn, int seqno,
                            insn_t place_to_insert)
 {
   /* This assert fails when we have identical instructions
@@ -4377,15 +4455,15 @@ emit_insn_from_expr_after (expr_t expr, vinsn_t vinsn, int seqno,
   if (EXPR_WAS_RENAMED (expr))
     {
       unsigned regno = expr_dest_regno (expr);
-      
+
       if (HARD_REGISTER_NUM_P (regno))
 	{
 	  df_set_regs_ever_live (regno, true);
 	  reg_rename_tick[regno] = ++reg_rename_this_tick;
 	}
     }
-  
-  return sel_gen_insn_from_expr_after (expr, vinsn, seqno, 
+
+  return sel_gen_insn_from_expr_after (expr, vinsn, seqno,
                                        place_to_insert);
 }
 
@@ -4412,15 +4490,16 @@ block_valid_for_bookkeeping_p (basic_block bb)
 /* Attempt to find a block that can hold bookkeeping code for path(s) incoming
    into E2->dest, except from E1->src (there may be a sequence of empty basic
    blocks between E1->src and E2->dest).  Return found block, or NULL if new
-   one must be created.  */
+   one must be created.  If LAX holds, don't assume there is a simple path
+   from E1->src to E2->dest.  */
 static basic_block
-find_block_for_bookkeeping (edge e1, edge e2)
+find_block_for_bookkeeping (edge e1, edge e2, bool lax)
 {
   basic_block candidate_block = NULL;
   edge e;
 
   /* Loop over edges from E1 to E2, inclusive.  */
-  for (e = e1; ; e = EDGE_SUCC (e->dest, 0))
+  for (e = e1; !lax || e->dest != EXIT_BLOCK_PTR; e = EDGE_SUCC (e->dest, 0))
     {
       if (EDGE_COUNT (e->dest->preds) == 2)
 	{
@@ -4438,10 +4517,18 @@ find_block_for_bookkeeping (edge e1, edge e2)
 	return NULL;
 
       if (e == e2)
-	return (block_valid_for_bookkeeping_p (candidate_block)
+	return ((!lax || candidate_block)
+		&& block_valid_for_bookkeeping_p (candidate_block)
 		? candidate_block
 		: NULL);
+
+      if (lax && EDGE_COUNT (e->dest->succs) != 1)
+	return NULL;
     }
+
+  if (lax)
+    return NULL;
+
   gcc_unreachable ();
 }
 
@@ -4485,6 +4572,98 @@ create_block_for_bookkeeping (edge e1, edge e2)
   gcc_assert (e1->dest == new_bb);
   gcc_assert (sel_bb_empty_p (bb));
 
+  /* To keep basic block numbers in sync between debug and non-debug
+     compilations, we have to rotate blocks here.  Consider that we
+     started from (a,b)->d, (c,d)->e, and d contained only debug
+     insns.  It would have been removed before if the debug insns
+     weren't there, so we'd have split e rather than d.  So what we do
+     now is to swap the block numbers of new_bb and
+     single_succ(new_bb) == e, so that the insns that were in e before
+     get the new block number.  */
+
+  if (MAY_HAVE_DEBUG_INSNS)
+    {
+      basic_block succ;
+      insn_t insn = sel_bb_head (new_bb);
+      insn_t last;
+
+      if (DEBUG_INSN_P (insn)
+	  && single_succ_p (new_bb)
+	  && (succ = single_succ (new_bb))
+	  && succ != EXIT_BLOCK_PTR
+	  && DEBUG_INSN_P ((last = sel_bb_end (new_bb))))
+	{
+	  while (insn != last && (DEBUG_INSN_P (insn) || NOTE_P (insn)))
+	    insn = NEXT_INSN (insn);
+
+	  if (insn == last)
+	    {
+	      sel_global_bb_info_def gbi;
+	      sel_region_bb_info_def rbi;
+	      int i;
+
+	      if (sched_verbose >= 2)
+		sel_print ("Swapping block ids %i and %i\n",
+			   new_bb->index, succ->index);
+
+	      i = new_bb->index;
+	      new_bb->index = succ->index;
+	      succ->index = i;
+
+	      SET_BASIC_BLOCK (new_bb->index, new_bb);
+	      SET_BASIC_BLOCK (succ->index, succ);
+
+	      memcpy (&gbi, SEL_GLOBAL_BB_INFO (new_bb), sizeof (gbi));
+	      memcpy (SEL_GLOBAL_BB_INFO (new_bb), SEL_GLOBAL_BB_INFO (succ),
+		      sizeof (gbi));
+	      memcpy (SEL_GLOBAL_BB_INFO (succ), &gbi, sizeof (gbi));
+
+	      memcpy (&rbi, SEL_REGION_BB_INFO (new_bb), sizeof (rbi));
+	      memcpy (SEL_REGION_BB_INFO (new_bb), SEL_REGION_BB_INFO (succ),
+		      sizeof (rbi));
+	      memcpy (SEL_REGION_BB_INFO (succ), &rbi, sizeof (rbi));
+
+	      i = BLOCK_TO_BB (new_bb->index);
+	      BLOCK_TO_BB (new_bb->index) = BLOCK_TO_BB (succ->index);
+	      BLOCK_TO_BB (succ->index) = i;
+
+	      i = CONTAINING_RGN (new_bb->index);
+	      CONTAINING_RGN (new_bb->index) = CONTAINING_RGN (succ->index);
+	      CONTAINING_RGN (succ->index) = i;
+
+	      for (i = 0; i < current_nr_blocks; i++)
+		if (BB_TO_BLOCK (i) == succ->index)
+		  BB_TO_BLOCK (i) = new_bb->index;
+		else if (BB_TO_BLOCK (i) == new_bb->index)
+		  BB_TO_BLOCK (i) = succ->index;
+
+	      FOR_BB_INSNS (new_bb, insn)
+		if (INSN_P (insn))
+		  EXPR_ORIG_BB_INDEX (INSN_EXPR (insn)) = new_bb->index;
+
+	      FOR_BB_INSNS (succ, insn)
+		if (INSN_P (insn))
+		  EXPR_ORIG_BB_INDEX (INSN_EXPR (insn)) = succ->index;
+
+	      if (bitmap_clear_bit (code_motion_visited_blocks, new_bb->index))
+		bitmap_set_bit (code_motion_visited_blocks, succ->index);
+
+	      gcc_assert (LABEL_P (BB_HEAD (new_bb))
+			  && LABEL_P (BB_HEAD (succ)));
+
+	      if (sched_verbose >= 4)
+		sel_print ("Swapping code labels %i and %i\n",
+			   CODE_LABEL_NUMBER (BB_HEAD (new_bb)),
+			   CODE_LABEL_NUMBER (BB_HEAD (succ)));
+
+	      i = CODE_LABEL_NUMBER (BB_HEAD (new_bb));
+	      CODE_LABEL_NUMBER (BB_HEAD (new_bb))
+		= CODE_LABEL_NUMBER (BB_HEAD (succ));
+	      CODE_LABEL_NUMBER (BB_HEAD (succ)) = i;
+	    }
+	}
+    }
+
   return bb;
 }
 
@@ -4496,12 +4675,42 @@ find_place_for_bookkeeping (edge e1, edge e2)
   insn_t place_to_insert;
   /* Find a basic block that can hold bookkeeping.  If it can be found, do not
      create new basic block, but insert bookkeeping there.  */
-  basic_block book_block = find_block_for_bookkeeping (e1, e2);
+  basic_block book_block = find_block_for_bookkeeping (e1, e2, FALSE);
+
+  if (book_block)
+    {
+      place_to_insert = BB_END (book_block);
+
+      /* Don't use a block containing only debug insns for
+	 bookkeeping, this causes scheduling differences between debug
+	 and non-debug compilations, for the block would have been
+	 removed already.  */
+      if (DEBUG_INSN_P (place_to_insert))
+	{
+	  rtx insn = sel_bb_head (book_block);
+
+	  while (insn != place_to_insert &&
+		 (DEBUG_INSN_P (insn) || NOTE_P (insn)))
+	    insn = NEXT_INSN (insn);
+
+	  if (insn == place_to_insert)
+	    book_block = NULL;
+	}
+    }
 
   if (!book_block)
-    book_block = create_block_for_bookkeeping (e1, e2);
-
-  place_to_insert = BB_END (book_block);
+    {
+      book_block = create_block_for_bookkeeping (e1, e2);
+      place_to_insert = BB_END (book_block);
+      if (sched_verbose >= 9)
+	sel_print ("New block is %i, split from bookkeeping block %i\n",
+		   EDGE_SUCC (book_block, 0)->dest->index, book_block->index);
+    }
+  else
+    {
+      if (sched_verbose >= 9)
+	sel_print ("Pre-existing bookkeeping block is %i\n", book_block->index);
+    }
 
   /* If basic block ends with a jump, insert bookkeeping code right before it.  */
   if (INSN_P (place_to_insert) && control_flow_insn_p (place_to_insert))
@@ -4521,15 +4730,31 @@ find_seqno_for_bookkeeping (insn_t place_to_insert, insn_t join_point)
   /* Check if we are about to insert bookkeeping copy before a jump, and use
      jump's seqno for the copy; otherwise, use JOIN_POINT's seqno.  */
   next = NEXT_INSN (place_to_insert);
-  if (INSN_P (next) 
+  if (INSN_P (next)
       && JUMP_P (next)
       && BLOCK_FOR_INSN (next) == BLOCK_FOR_INSN (place_to_insert))
-    seqno = INSN_SEQNO (next);
+    {
+      gcc_assert (INSN_SCHED_TIMES (next) == 0);
+      seqno = INSN_SEQNO (next);
+    }
   else if (INSN_SEQNO (join_point) > 0)
     seqno = INSN_SEQNO (join_point);
   else
-    seqno = get_seqno_by_preds (place_to_insert);
-  
+    {
+      seqno = get_seqno_by_preds (place_to_insert);
+
+      /* Sometimes the fences can move in such a way that there will be
+         no instructions with positive seqno around this bookkeeping.
+         This means that there will be no way to get to it by a regular
+         fence movement.  Never mind because we pick up such pieces for
+         rescheduling anyways, so any positive value will do for now.  */
+      if (seqno < 0)
+        {
+          gcc_assert (pipelining_p);
+          seqno = 1;
+        }
+    }
+
   gcc_assert (seqno > 0);
   return seqno;
 }
@@ -4571,6 +4796,8 @@ generate_bookkeeping_insn (expr_t c_expr, edge e1, edge e2)
 
   join_point = sel_bb_head (e2->dest);
   place_to_insert = find_place_for_bookkeeping (e1, e2);
+  if (!place_to_insert)
+    return NULL;
   new_seqno = find_seqno_for_bookkeeping (place_to_insert, join_point);
   need_to_exchange_data_sets
     = sel_bb_empty_p (BLOCK_FOR_INSN (place_to_insert));
@@ -4593,7 +4820,7 @@ generate_bookkeeping_insn (expr_t c_expr, edge e1, edge e2)
   return BLOCK_FOR_INSN (new_insn);
 }
 
-/* Remove from AV_PTR all insns that may need bookkeeping when scheduling 
+/* Remove from AV_PTR all insns that may need bookkeeping when scheduling
    on FENCE, but we are unable to copy them.  */
 static void
 remove_insns_that_need_bookkeeping (fence_t fence, av_set_t *av_ptr)
@@ -4601,11 +4828,11 @@ remove_insns_that_need_bookkeeping (fence_t fence, av_set_t *av_ptr)
   expr_t expr;
   av_set_iterator i;
 
-  /*  An expression does not need bookkeeping if it is available on all paths 
-      from current block to original block and current block dominates 
-      original block.  We check availability on all paths by examining 
-      EXPR_SPEC; this is not equivalent, because it may be positive even 
-      if expr is available on all paths (but if expr is not available on 
+  /*  An expression does not need bookkeeping if it is available on all paths
+      from current block to original block and current block dominates
+      original block.  We check availability on all paths by examining
+      EXPR_SPEC; this is not equivalent, because it may be positive even
+      if expr is available on all paths (but if expr is not available on
       any path, EXPR_SPEC will be positive).  */
 
   FOR_EACH_EXPR_1 (expr, i, av_ptr)
@@ -4638,15 +4865,15 @@ remove_insns_that_need_bookkeeping (fence_t fence, av_set_t *av_ptr)
        NOTE BASIC BLOCK:
        ...
 
-   We can schedule jump one cycle earlier, than mov, because they cannot be 
+   We can schedule jump one cycle earlier, than mov, because they cannot be
    executed together as their predicates are mutually exclusive.
 
-   This is done in this way: first, new fallthrough basic block is created 
-   after jump (it is always can be done, because there already should be a 
+   This is done in this way: first, new fallthrough basic block is created
+   after jump (it is always can be done, because there already should be a
    fallthrough block, where control flow goes in case of predicate being true -
-   in our example; otherwise there should be a dependence between those 
-   instructions and jump and we cannot schedule jump right now); 
-   next, all instructions between jump and current scheduling point are moved 
+   in our example; otherwise there should be a dependence between those
+   instructions and jump and we cannot schedule jump right now);
+   next, all instructions between jump and current scheduling point are moved
    to this new block.  And the result is this:
 
       NOTE BASIC BLOCK:
@@ -4661,22 +4888,39 @@ static void
 move_cond_jump (rtx insn, bnd_t bnd)
 {
   edge ft_edge;
-  basic_block block_from, block_next, block_new;
-  rtx next, prev, link;
+  basic_block block_from, block_next, block_new, block_bnd, bb;
+  rtx next, prev, link, head;
 
-  /* BLOCK_FROM holds basic block of the jump.  */
   block_from = BLOCK_FOR_INSN (insn);
+  block_bnd = BLOCK_FOR_INSN (BND_TO (bnd));
+  prev = BND_TO (bnd);
 
-  /* Moving of jump should not cross any other jumps or
-  beginnings of new basic blocks.  */
-  gcc_assert (block_from == BLOCK_FOR_INSN (BND_TO (bnd)));
+#ifdef ENABLE_CHECKING
+  /* Moving of jump should not cross any other jumps or beginnings of new
+     basic blocks.  The only exception is when we move a jump through
+     mutually exclusive insns along fallthru edges.  */
+  if (block_from != block_bnd)
+    {
+      bb = block_from;
+      for (link = PREV_INSN (insn); link != PREV_INSN (prev);
+           link = PREV_INSN (link))
+        {
+          if (INSN_P (link))
+            gcc_assert (sched_insns_conditions_mutex_p (insn, link));
+          if (BLOCK_FOR_INSN (link) && BLOCK_FOR_INSN (link) != bb)
+            {
+              gcc_assert (single_pred (bb) == BLOCK_FOR_INSN (link));
+              bb = BLOCK_FOR_INSN (link);
+            }
+        }
+    }
+#endif
 
   /* Jump is moved to the boundary.  */
-  prev = BND_TO (bnd);
   next = PREV_INSN (insn);
   BND_TO (bnd) = insn;
 
-  ft_edge = find_fallthru_edge (block_from);
+  ft_edge = find_fallthru_edge_from (block_from);
   block_next = ft_edge->dest;
   /* There must be a fallthrough block (or where should go
   control flow in case of false jump predicate otherwise?).  */
@@ -4687,28 +4931,35 @@ move_cond_jump (rtx insn, bnd_t bnd)
   gcc_assert (block_new->next_bb == block_next
               && block_from->next_bb == block_new);
 
-  gcc_assert (BB_END (block_from) == insn);
-
-  /* Move all instructions except INSN from BLOCK_FROM to
-     BLOCK_NEW.  */
-  for (link = prev; link != insn; link = NEXT_INSN (link))
+  /* Move all instructions except INSN to BLOCK_NEW.  */
+  bb = block_bnd;
+  head = BB_HEAD (block_new);
+  while (bb != block_from->next_bb)
     {
-      EXPR_ORIG_BB_INDEX (INSN_EXPR (link)) = block_new->index;
-      df_insn_change_bb (link, block_new);
+      rtx from, to;
+      from = bb == block_bnd ? prev : sel_bb_head (bb);
+      to = bb == block_from ? next : sel_bb_end (bb);
+
+      /* The jump being moved can be the first insn in the block.
+         In this case we don't have to move anything in this block.  */
+      if (NEXT_INSN (to) != from)
+        {
+          reorder_insns (from, to, head);
+
+          for (link = to; link != head; link = PREV_INSN (link))
+            EXPR_ORIG_BB_INDEX (INSN_EXPR (link)) = block_new->index;
+          head = to;
+        }
+
+      /* Cleanup possibly empty blocks left.  */
+      block_next = bb->next_bb;
+      if (bb != block_from)
+	tidy_control_flow (bb, false);
+      bb = block_next;
     }
-
-  /* Set correct basic block and instructions properties.  */
-  BB_END (block_new) = PREV_INSN (insn);
-
-  NEXT_INSN (PREV_INSN (prev)) = insn;
-  PREV_INSN (insn) = PREV_INSN (prev);
 
   /* Assert there is no jump to BLOCK_NEW, only fallthrough edge.  */
   gcc_assert (NOTE_INSN_BASIC_BLOCK_P (BB_HEAD (block_new)));
-  PREV_INSN (prev) = BB_HEAD (block_new);
-  NEXT_INSN (next) = NEXT_INSN (BB_HEAD (block_new));
-  NEXT_INSN (BB_HEAD (block_new)) = prev;
-  PREV_INSN (NEXT_INSN (next)) = next;
 
   gcc_assert (!sel_bb_empty_p (block_from)
               && !sel_bb_empty_p (block_new));
@@ -4732,20 +4983,20 @@ move_cond_jump (rtx insn, bnd_t bnd)
 /* Remove nops generated during move_op for preventing removal of empty
    basic blocks.  */
 static void
-remove_temp_moveop_nops (void)
+remove_temp_moveop_nops (bool full_tidying)
 {
   int i;
   insn_t insn;
-  
-  for (i = 0; VEC_iterate (insn_t, vec_temp_moveop_nops, i, insn); i++)
+
+  FOR_EACH_VEC_ELT (insn_t, vec_temp_moveop_nops, i, insn)
     {
       gcc_assert (INSN_NOP_P (insn));
-      return_nop_to_pool (insn);
+      return_nop_to_pool (insn, full_tidying);
     }
 
   /* Empty the vector.  */
   if (VEC_length (insn_t, vec_temp_moveop_nops) > 0)
-    VEC_block_remove (insn_t, vec_temp_moveop_nops, 0, 
+    VEC_block_remove (insn_t, vec_temp_moveop_nops, 0,
 		      VEC_length (insn_t, vec_temp_moveop_nops));
 }
 
@@ -4774,7 +5025,7 @@ remove_insns_for_debug (blist_t bnds, av_set_t *av_vliw_p)
     }
 }
 
-/* Compute available instructions on BNDS.  FENCE is the current fence.  Write 
+/* Compute available instructions on BNDS.  FENCE is the current fence.  Write
    the computed set to *AV_VLIW_P.  */
 static void
 compute_av_set_on_boundaries (fence_t fence, blist_t bnds, av_set_t *av_vliw_p)
@@ -4819,7 +5070,7 @@ compute_av_set_on_boundaries (fence_t fence, blist_t bnds, av_set_t *av_vliw_p)
       BND_AV1 (bnd) = av_set_copy (BND_AV (bnd));
 
       moveup_set_inside_insn_group (&BND_AV1 (bnd), NULL);
-      
+
       av1_copy = av_set_copy (BND_AV1 (bnd));
       av_set_union_and_clear (av_vliw_p, &av1_copy, NULL);
     }
@@ -4832,8 +5083,8 @@ compute_av_set_on_boundaries (fence_t fence, blist_t bnds, av_set_t *av_vliw_p)
     }
 }
 
-/* Calculate the sequential av set on BND corresponding to the EXPR_VLIW 
-   expression.  When FOR_MOVEOP is true, also replace the register of 
+/* Calculate the sequential av set on BND corresponding to the EXPR_VLIW
+   expression.  When FOR_MOVEOP is true, also replace the register of
    expressions found with the register from EXPR_VLIW.  */
 static av_set_t
 find_sequential_best_exprs (bnd_t bnd, expr_t expr_vliw, bool for_moveop)
@@ -4841,15 +5092,15 @@ find_sequential_best_exprs (bnd_t bnd, expr_t expr_vliw, bool for_moveop)
   av_set_t expr_seq = NULL;
   expr_t expr;
   av_set_iterator i;
-  
+
   FOR_EACH_EXPR (expr, i, BND_AV (bnd))
     {
       if (equal_after_moveup_path_p (expr, NULL, expr_vliw))
         {
           if (for_moveop)
             {
-              /* The sequential expression has the right form to pass 
-                 to move_op except when renaming happened.  Put the 
+              /* The sequential expression has the right form to pass
+                 to move_op except when renaming happened.  Put the
                  correct register in EXPR then.  */
               if (EXPR_SEPARABLE_P (expr) && REG_P (EXPR_LHS (expr)))
 		{
@@ -4858,10 +5109,10 @@ find_sequential_best_exprs (bnd_t bnd, expr_t expr_vliw, bool for_moveop)
 		      replace_dest_with_reg_in_expr (expr, EXPR_LHS (expr_vliw));
 		      stat_renamed_scheduled++;
 		    }
-		  /* Also put the correct TARGET_AVAILABLE bit on the expr.  
-                     This is needed when renaming came up with original 
+		  /* Also put the correct TARGET_AVAILABLE bit on the expr.
+                     This is needed when renaming came up with original
                      register.  */
-                  else if (EXPR_TARGET_AVAILABLE (expr) 
+                  else if (EXPR_TARGET_AVAILABLE (expr)
                            != EXPR_TARGET_AVAILABLE (expr_vliw))
 		    {
 		      gcc_assert (EXPR_TARGET_AVAILABLE (expr_vliw) == 1);
@@ -4873,10 +5124,10 @@ find_sequential_best_exprs (bnd_t bnd, expr_t expr_vliw, bool for_moveop)
             }
 
           av_set_add (&expr_seq, expr);
-          
-          /* With substitution inside insn group, it is possible 
-             that more than one expression in expr_seq will correspond 
-             to expr_vliw.  In this case, choose one as the attempt to 
+
+          /* With substitution inside insn group, it is possible
+             that more than one expression in expr_seq will correspond
+             to expr_vliw.  In this case, choose one as the attempt to
              move both leads to miscompiles.  */
           break;
         }
@@ -4888,7 +5139,7 @@ find_sequential_best_exprs (bnd_t bnd, expr_t expr_vliw, bool for_moveop)
       dump_av_set (expr_seq);
       sel_print ("\n");
     }
-  
+
   return expr_seq;
 }
 
@@ -4899,7 +5150,7 @@ move_nop_to_previous_block (insn_t nop, basic_block prev_bb)
 {
   insn_t prev_insn, next_insn, note;
 
-  gcc_assert (sel_bb_head_p (nop) 
+  gcc_assert (sel_bb_head_p (nop)
               && prev_bb == BLOCK_FOR_INSN (nop)->prev_bb);
   note = bb_note (BLOCK_FOR_INSN (nop));
   prev_insn = sel_bb_end (prev_bb);
@@ -4933,8 +5184,20 @@ prepare_place_to_insert (bnd_t bnd)
     {
       /* Add it after last scheduled.  */
       place_to_insert = ILIST_INSN (BND_PTR (bnd));
+      if (DEBUG_INSN_P (place_to_insert))
+	{
+	  ilist_t l = BND_PTR (bnd);
+	  while ((l = ILIST_NEXT (l)) &&
+		 DEBUG_INSN_P (ILIST_INSN (l)))
+	    ;
+	  if (!l)
+	    place_to_insert = NULL;
+	}
     }
   else
+    place_to_insert = NULL;
+
+  if (!place_to_insert)
     {
       /* Add it before BND_TO.  The difference is in the
          basic block, where INSN will be added.  */
@@ -4946,10 +5209,10 @@ prepare_place_to_insert (bnd_t bnd)
   return place_to_insert;
 }
 
-/* Find original instructions for EXPR_SEQ and move it to BND boundary.  
+/* Find original instructions for EXPR_SEQ and move it to BND boundary.
    Return the expression to emit in C_EXPR.  */
 static bool
-move_exprs_to_boundary (bnd_t bnd, expr_t expr_vliw, 
+move_exprs_to_boundary (bnd_t bnd, expr_t expr_vliw,
                         av_set_t expr_seq, expr_t c_expr)
 {
   bool b, should_move;
@@ -4966,24 +5229,33 @@ move_exprs_to_boundary (bnd_t bnd, expr_t expr_vliw,
   bitmap_clear (current_copies);
   bitmap_clear (current_originators);
 
-  b = move_op (BND_TO (bnd), expr_seq, expr_vliw, 
+  b = move_op (BND_TO (bnd), expr_seq, expr_vliw,
                get_dest_from_orig_ops (expr_seq), c_expr, &should_move);
 
-  /* We should be able to find the expression we've chosen for 
+  /* We should be able to find the expression we've chosen for
      scheduling.  */
   gcc_assert (b);
-  
+
   if (stat_bookkeeping_copies > n_bookkeeping_copies_before_moveop)
     stat_insns_needed_bookkeeping++;
-  
+
   EXECUTE_IF_SET_IN_BITMAP (current_copies, 0, book_uid, bi)
     {
+      unsigned uid;
+      bitmap_iterator bi;
+
       /* We allocate these bitmaps lazily.  */
       if (! INSN_ORIGINATORS_BY_UID (book_uid))
         INSN_ORIGINATORS_BY_UID (book_uid) = BITMAP_ALLOC (NULL);
-      
-      bitmap_copy (INSN_ORIGINATORS_BY_UID (book_uid), 
+
+      bitmap_copy (INSN_ORIGINATORS_BY_UID (book_uid),
                    current_originators);
+
+      /* Transitively add all originators' originators.  */
+      EXECUTE_IF_SET_IN_BITMAP (current_originators, 0, uid, bi)
+       if (INSN_ORIGINATORS_BY_UID (uid))
+	 bitmap_ior_into (INSN_ORIGINATORS_BY_UID (book_uid),
+			  INSN_ORIGINATORS_BY_UID (uid));
     }
 
   return should_move;
@@ -5003,7 +5275,7 @@ debug_state (state_t state)
   sel_print ("\n");
 }
 
-/* Advance state on FENCE with INSN.  Return true if INSN is 
+/* Advance state on FENCE with INSN.  Return true if INSN is
    an ASM, and we should advance state once more.  */
 static bool
 advance_state_on_fence (fence_t fence, insn_t insn)
@@ -5014,7 +5286,7 @@ advance_state_on_fence (fence_t fence, insn_t insn)
     {
       int res;
       state_t temp_state = alloca (dfa_state_size);
-              
+
       gcc_assert (!INSN_ASM_P (insn));
       asm_p = false;
 
@@ -5030,10 +5302,10 @@ advance_state_on_fence (fence_t fence, insn_t insn)
           if (FENCE_ISSUED_INSNS (fence) > issue_rate)
             gcc_unreachable ();
         }
-    } 
+    }
   else
     {
-      /* This could be an ASM insn which we'd like to schedule 
+      /* This could be an ASM insn which we'd like to schedule
          on the next cycle.  */
       asm_p = INSN_ASM_P (insn);
       if (!FENCE_STARTS_CYCLE_P (fence) && asm_p)
@@ -5042,7 +5314,9 @@ advance_state_on_fence (fence_t fence, insn_t insn)
 
   if (sched_verbose >= 2)
     debug_state (FENCE_STATE (fence));
-  FENCE_STARTS_CYCLE_P (fence) = 0;
+  if (!DEBUG_INSN_P (insn))
+    FENCE_STARTS_CYCLE_P (fence) = 0;
+  FENCE_ISSUE_MORE (fence) = can_issue_more;
   return asm_p;
 }
 
@@ -5052,7 +5326,7 @@ static void
 update_fence_and_insn (fence_t fence, insn_t insn, int need_stall)
 {
   bool asm_p;
-  
+
   /* First, reflect that something is scheduled on this fence.  */
   asm_p = advance_state_on_fence (fence, insn);
   FENCE_LAST_SCHEDULED_INSN (fence) = insn;
@@ -5076,10 +5350,10 @@ update_fence_and_insn (fence_t fence, insn_t insn, int need_stall)
   INSN_SCHED_CYCLE (insn) = FENCE_CYCLE (fence);
 
   /* This does not account for adjust_cost hooks, just add the biggest
-     constant the hook may add to the latency.  TODO: make this 
+     constant the hook may add to the latency.  TODO: make this
      a target dependent constant.  */
-  INSN_READY_CYCLE (insn) 
-    = INSN_SCHED_CYCLE (insn) + (INSN_CODE (insn) < 0 
+  INSN_READY_CYCLE (insn)
+    = INSN_SCHED_CYCLE (insn) + (INSN_CODE (insn) < 0
                                  ? 1
                                  : maximal_insn_latency (insn) + 1);
 
@@ -5087,7 +5361,7 @@ update_fence_and_insn (fence_t fence, insn_t insn, int need_stall)
   FENCE_AFTER_STALL_P (fence) = 0;
   if (asm_p || need_stall)
     advance_one_cycle (fence);
-  
+
   /* Indicate that we've scheduled something on this fence.  */
   FENCE_SCHEDULED_P (fence) = true;
   scheduled_something_on_previous_fence = true;
@@ -5101,26 +5375,42 @@ update_fence_and_insn (fence_t fence, insn_t insn, int need_stall)
     }
 }
 
-/* Update boundary BND with INSN, remove the old boundary from
-   BNDSP, add new boundaries to BNDS_TAIL_P and return it.  */
+/* Update boundary BND (and, if needed, FENCE) with INSN, remove the
+   old boundary from BNDSP, add new boundaries to BNDS_TAIL_P and
+   return it.  */
 static blist_t *
-update_boundaries (bnd_t bnd, insn_t insn, blist_t *bndsp, 
+update_boundaries (fence_t fence, bnd_t bnd, insn_t insn, blist_t *bndsp,
                    blist_t *bnds_tailp)
 {
   succ_iterator si;
   insn_t succ;
 
   advance_deps_context (BND_DC (bnd), insn);
-  FOR_EACH_SUCC_1 (succ, si, insn, 
+  FOR_EACH_SUCC_1 (succ, si, insn,
                    SUCCS_NORMAL | SUCCS_SKIP_TO_LOOP_EXITS)
     {
       ilist_t ptr = ilist_copy (BND_PTR (bnd));
-      
+
       ilist_add (&ptr, insn);
+
+      if (DEBUG_INSN_P (insn) && sel_bb_end_p (insn)
+	  && is_ineligible_successor (succ, ptr))
+	{
+	  ilist_clear (&ptr);
+	  continue;
+	}
+
+      if (FENCE_INSN (fence) == insn && !sel_bb_end_p (insn))
+	{
+	  if (sched_verbose >= 9)
+	    sel_print ("Updating fence insn from %i to %i\n",
+		       INSN_UID (insn), INSN_UID (succ));
+	  FENCE_INSN (fence) = succ;
+	}
       blist_add (bnds_tailp, succ, ptr, BND_DC (bnd));
       bnds_tailp = &BLIST_NEXT (*bnds_tailp);
     }
-  
+
   blist_remove (bndsp);
   return bnds_tailp;
 }
@@ -5138,14 +5428,14 @@ schedule_expr_on_boundary (bnd_t bnd, expr_t expr_vliw, int seqno)
   expr_seq = find_sequential_best_exprs (bnd, expr_vliw, true);
 
   /* In case of scheduling a jump skipping some other instructions,
-     prepare CFG.  After this, jump is at the boundary and can be 
+     prepare CFG.  After this, jump is at the boundary and can be
      scheduled as usual insn by MOVE_OP.  */
   if (vinsn_cond_branch_p (EXPR_VINSN (expr_vliw)))
     {
       insn = EXPR_INSN_RTX (expr_vliw);
-              
+
       /* Speculative jumps are not handled.  */
-      if (insn != BND_TO (bnd) 
+      if (insn != BND_TO (bnd)
           && !sel_insn_is_speculation_check (insn))
         move_cond_jump (insn, bnd);
     }
@@ -5154,15 +5444,15 @@ schedule_expr_on_boundary (bnd_t bnd, expr_t expr_vliw, int seqno)
   place_to_insert = prepare_place_to_insert (bnd);
   should_move = move_exprs_to_boundary (bnd, expr_vliw, expr_seq, c_expr);
   clear_expr (c_expr);
-            
-  /* Add the instruction.  The corner case to care about is when 
-     the expr_seq set has more than one expr, and we chose the one that 
-     is not equal to expr_vliw.  Then expr_vliw may be insn in stream, and 
+
+  /* Add the instruction.  The corner case to care about is when
+     the expr_seq set has more than one expr, and we chose the one that
+     is not equal to expr_vliw.  Then expr_vliw may be insn in stream, and
      we can't use it.  Generate the new vinsn.  */
   if (INSN_IN_STREAM_P (EXPR_INSN_RTX (expr_vliw)))
     {
       vinsn_t vinsn_new;
-      
+
       vinsn_new = vinsn_copy (EXPR_VINSN (expr_vliw), false);
       change_vinsn_in_expr (expr_vliw, vinsn_new);
       should_move = false;
@@ -5170,18 +5460,18 @@ schedule_expr_on_boundary (bnd_t bnd, expr_t expr_vliw, int seqno)
   if (should_move)
     insn = sel_move_insn (expr_vliw, seqno, place_to_insert);
   else
-    insn = emit_insn_from_expr_after (expr_vliw, NULL, seqno, 
+    insn = emit_insn_from_expr_after (expr_vliw, NULL, seqno,
                                       place_to_insert);
 
   /* Return the nops generated for preserving of data sets back
      into pool.  */
   if (INSN_NOP_P (place_to_insert))
-    return_nop_to_pool (place_to_insert);
-  remove_temp_moveop_nops ();
+    return_nop_to_pool (place_to_insert, !DEBUG_INSN_P (insn));
+  remove_temp_moveop_nops (!DEBUG_INSN_P (insn));
 
   av_set_clear (&expr_seq);
- 
-  /* Save the expression scheduled so to reset target availability if we'll 
+
+  /* Save the expression scheduled so to reset target availability if we'll
      meet it later on the same fence.  */
   if (EXPR_WAS_RENAMED (expr_vliw))
     vinsn_vec_add (&vec_target_unavailable_vinsns, INSN_EXPR (insn));
@@ -5199,7 +5489,7 @@ static void
 stall_for_cycles (fence_t fence, int n)
 {
   int could_more;
-              
+
   could_more = n > 1 || FENCE_ISSUED_INSNS (fence) < issue_rate;
   while (n--)
     advance_one_cycle (fence);
@@ -5207,8 +5497,8 @@ stall_for_cycles (fence_t fence, int n)
     FENCE_AFTER_STALL_P (fence) = 1;
 }
 
-/* Gather a parallel group of insns at FENCE and assign their seqno 
-   to SEQNO.  All scheduled insns are gathered in SCHEDULED_INSNS_TAILPP 
+/* Gather a parallel group of insns at FENCE and assign their seqno
+   to SEQNO.  All scheduled insns are gathered in SCHEDULED_INSNS_TAILPP
    list for later recalculation of seqnos.  */
 static void
 fill_insns (fence_t fence, int seqno, ilist_t **scheduled_insns_tailpp)
@@ -5218,12 +5508,13 @@ fill_insns (fence_t fence, int seqno, ilist_t **scheduled_insns_tailpp)
   insn_t insn = FENCE_INSN (fence);
 
   if (sched_verbose >= 2)
-    sel_print ("Starting fill_insns for insn %d, cycle %d\n", 
+    sel_print ("Starting fill_insns for insn %d, cycle %d\n",
                INSN_UID (insn), FENCE_CYCLE (fence));
 
   blist_add (&bnds, insn, NULL, FENCE_DC (fence));
   bnds_tailp = &BLIST_NEXT (bnds);
   set_target_context (FENCE_TC (fence));
+  can_issue_more = FENCE_ISSUE_MORE (fence);
   target_bb = INSN_BB (insn);
 
   /* Do while we can add any operation to the current group.  */
@@ -5232,10 +5523,12 @@ fill_insns (fence_t fence, int seqno, ilist_t **scheduled_insns_tailpp)
       blist_t *bnds_tailp1, *bndsp;
       expr_t expr_vliw;
       int need_stall;
-      int was_stall = 0, scheduled_insns = 0, stall_iterations = 0;
+      int was_stall = 0, scheduled_insns = 0;
       int max_insns = pipelining_p ? issue_rate : 2 * issue_rate;
       int max_stall = pipelining_p ? 1 : 3;
-      
+      bool last_insn_was_debug = false;
+      bool was_debug_bb_end_p = false;
+
       compute_av_set_on_boundaries (fence, bnds, &av_vliw);
       remove_insns_that_need_bookkeeping (fence, &av_vliw);
       remove_insns_for_debug (bnds, &av_vliw);
@@ -5249,16 +5542,15 @@ fill_insns (fence_t fence, int seqno, ilist_t **scheduled_insns_tailpp)
       do
         {
           expr_vliw = find_best_expr (&av_vliw, bnds, fence, &need_stall);
-          if (!expr_vliw && need_stall)
+          if (! expr_vliw && need_stall)
             {
               /* All expressions required a stall.  Do not recompute av sets
                  as we'll get the same answer (modulo the insns between
                  the fence and its boundary, which will not be available for
-                 pipelining).  */
-              gcc_assert (! expr_vliw && stall_iterations < 2);
-              was_stall++;
-	      /* If we are going to stall for too long, break to recompute av
+                 pipelining).
+		 If we are going to stall for too long, break to recompute av
 		 sets and bring more insns for pipelining.  */
+              was_stall++;
 	      if (need_stall <= 3)
 		stall_for_cycles (fence, need_stall);
 	      else
@@ -5269,7 +5561,7 @@ fill_insns (fence_t fence, int seqno, ilist_t **scheduled_insns_tailpp)
             }
         }
       while (! expr_vliw && need_stall);
-      
+
       /* Now either we've selected expr_vliw or we have nothing to schedule.  */
       if (!expr_vliw)
         {
@@ -5281,7 +5573,7 @@ fill_insns (fence_t fence, int seqno, ilist_t **scheduled_insns_tailpp)
       bnds_tailp1 = bnds_tailp;
 
       do
-	/* This code will be executed only once until we'd have several 
+	/* This code will be executed only once until we'd have several
            boundaries per fence.  */
         {
 	  bnd_t bnd = BLIST_BND (*bndsp);
@@ -5291,10 +5583,13 @@ fill_insns (fence_t fence, int seqno, ilist_t **scheduled_insns_tailpp)
 	      bndsp = &BLIST_NEXT (*bndsp);
 	      continue;
 	    }
-          
+
           insn = schedule_expr_on_boundary (bnd, expr_vliw, seqno);
+	  last_insn_was_debug = DEBUG_INSN_P (insn);
+	  if (last_insn_was_debug)
+	    was_debug_bb_end_p = (insn == BND_TO (bnd) && sel_bb_end_p (insn));
           update_fence_and_insn (fence, insn, need_stall);
-          bnds_tailp = update_boundaries (bnd, insn, bndsp, bnds_tailp);
+          bnds_tailp = update_boundaries (fence, bnd, insn, bndsp, bnds_tailp);
 
 	  /* Add insn to the list of scheduled on this cycle instructions.  */
 	  ilist_add (*scheduled_insns_tailpp, insn);
@@ -5303,22 +5598,23 @@ fill_insns (fence_t fence, int seqno, ilist_t **scheduled_insns_tailpp)
       while (*bndsp != *bnds_tailp1);
 
       av_set_clear (&av_vliw);
-      scheduled_insns++;
+      if (!last_insn_was_debug)
+	scheduled_insns++;
 
       /* We currently support information about candidate blocks only for
 	 one 'target_bb' block.  Hence we can't schedule after jump insn,
 	 as this will bring two boundaries and, hence, necessity to handle
 	 information for two or more blocks concurrently.  */
-      if (sel_bb_end_p (insn)
-          || (was_stall 
-              && (was_stall >= max_stall 
+      if ((last_insn_was_debug ? was_debug_bb_end_p : sel_bb_end_p (insn))
+          || (was_stall
+              && (was_stall >= max_stall
                   || scheduled_insns >= max_insns)))
         break;
     }
   while (bnds);
 
   gcc_assert (!FENCE_BNDS (fence));
-  
+
   /* Update boundaries of the FENCE.  */
   while (bnds)
     {
@@ -5331,7 +5627,7 @@ fill_insns (fence_t fence, int seqno, ilist_t **scheduled_insns_tailpp)
 	  if (!ilist_is_in_p (FENCE_BNDS (fence), insn))
 	    ilist_add (&FENCE_BNDS (fence), insn);
 	}
-      
+
       blist_remove (&bnds);
     }
 
@@ -5377,7 +5673,7 @@ update_and_record_unavailable_insns (basic_block book_block)
   expr_t cur_expr;
   rtx bb_end = sel_bb_end (book_block);
 
-  /* First, get correct liveness in the bookkeeping block.  The problem is 
+  /* First, get correct liveness in the bookkeeping block.  The problem is
      the range between the bookeeping insn and the end of block.  */
   update_liveness_on_insn (bb_end);
   if (control_flow_insn_p (bb_end))
@@ -5390,18 +5686,18 @@ update_and_record_unavailable_insns (basic_block book_block)
     {
       old_av_set = av_set_copy (BB_AV_SET (book_block));
       update_data_sets (sel_bb_head (book_block));
-    
+
       /* Traverse all the expressions in the old av_set and check whether
 	 CUR_EXPR is in new AV_SET.  */
       FOR_EACH_EXPR (cur_expr, i, old_av_set)
         {
-          expr_t new_expr = av_set_lookup (BB_AV_SET (book_block), 
+          expr_t new_expr = av_set_lookup (BB_AV_SET (book_block),
 					   EXPR_VINSN (cur_expr));
 
-          if (! new_expr 
-              /* In this case, we can just turn off the E_T_A bit, but we can't 
+          if (! new_expr
+              /* In this case, we can just turn off the E_T_A bit, but we can't
                  represent this information with the current vector.  */
-              || EXPR_TARGET_AVAILABLE (new_expr) 
+              || EXPR_TARGET_AVAILABLE (new_expr)
 		 != EXPR_TARGET_AVAILABLE (cur_expr))
 	    /* Unfortunately, the below code could be also fired up on
 	       separable insns.
@@ -5413,21 +5709,21 @@ update_and_record_unavailable_insns (basic_block book_block)
     }
 }
 
-/* The main effect of this function is that sparams->c_expr is merged 
+/* The main effect of this function is that sparams->c_expr is merged
    with (or copied to) lparams->c_expr_merged.  If there's only one successor,
    we avoid merging anything by copying sparams->c_expr to lparams->c_expr_merged.
-   lparams->c_expr_merged is copied back to sparams->c_expr after all 
-   successors has been traversed.  lparams->c_expr_local is an expr allocated 
-   on stack in the caller function, and is used if there is more than one 
-   successor. 
+   lparams->c_expr_merged is copied back to sparams->c_expr after all
+   successors has been traversed.  lparams->c_expr_local is an expr allocated
+   on stack in the caller function, and is used if there is more than one
+   successor.
 
    SUCC is one of the SUCCS_NORMAL successors of INSN,
    MOVEOP_DRV_CALL_RES is the result of call code_motion_path_driver on succ,
    LPARAMS and STATIC_PARAMS contain the parameters described above.  */
 static void
-move_op_merge_succs (insn_t insn ATTRIBUTE_UNUSED, 
-                     insn_t succ ATTRIBUTE_UNUSED, 
-		     int moveop_drv_call_res, 
+move_op_merge_succs (insn_t insn ATTRIBUTE_UNUSED,
+                     insn_t succ ATTRIBUTE_UNUSED,
+		     int moveop_drv_call_res,
 		     cmpd_local_params_p lparams, void *static_params)
 {
   moveop_static_params_p sparams = (moveop_static_params_p) static_params;
@@ -5452,15 +5748,15 @@ move_op_merge_succs (insn_t insn ATTRIBUTE_UNUSED,
 	 probability and will never be scheduled because of
 	 weakness_cutoff in find_best_expr.
 
-	 We call merge_expr_data here instead of merge_expr 
+	 We call merge_expr_data here instead of merge_expr
 	 because due to speculation C_EXPR and X may have the
 	 same insns with different speculation types.  And as of
-	 now such insns are considered non-equal.  
+	 now such insns are considered non-equal.
 
-	 However, EXPR_SCHED_TIMES is different -- we must get 
-	 SCHED_TIMES from a real insn, not a bookkeeping copy.  
+	 However, EXPR_SCHED_TIMES is different -- we must get
+	 SCHED_TIMES from a real insn, not a bookkeeping copy.
 	 We force this here.  Instead, we may consider merging
-	 SCHED_TIMES to the maximum instead of minimum in the 
+	 SCHED_TIMES to the maximum instead of minimum in the
 	 below function.  */
       int old_times = EXPR_SCHED_TIMES (lparams->c_expr_merged);
 
@@ -5479,16 +5775,16 @@ move_op_merge_succs (insn_t insn ATTRIBUTE_UNUSED,
      if SUCC is one of SUCCS_BACK or SUCCS_OUT.
    STATIC_PARAMS contain USED_REGS set.  */
 static void
-fur_merge_succs (insn_t insn ATTRIBUTE_UNUSED, insn_t succ, 
-		 int moveop_drv_call_res, 
-		 cmpd_local_params_p lparams ATTRIBUTE_UNUSED, 
+fur_merge_succs (insn_t insn ATTRIBUTE_UNUSED, insn_t succ,
+		 int moveop_drv_call_res,
+		 cmpd_local_params_p lparams ATTRIBUTE_UNUSED,
 		 void *static_params)
 {
   regset succ_live;
   fur_static_params_p sparams = (fur_static_params_p) static_params;
 
   /* Here we compute live regsets only for branches that do not lie
-     on the code motion paths.  These branches correspond to value 
+     on the code motion paths.  These branches correspond to value
      MOVEOP_DRV_CALL_RES==0 and include SUCCS_BACK and SUCCS_OUT, though
      for such branches code_motion_path_driver is not called.  */
   if (moveop_drv_call_res != 0)
@@ -5507,7 +5803,7 @@ fur_merge_succs (insn_t insn ATTRIBUTE_UNUSED, insn_t succ,
    into SP->CEXPR.  */
 static void
 move_op_after_merge_succs (cmpd_local_params_p lp, void *sparams)
-{  
+{
   moveop_static_params_p sp = (moveop_static_params_p) sparams;
 
   sp->c_expr = lp->c_expr_merged;
@@ -5522,17 +5818,15 @@ track_scheduled_insns_and_blocks (rtx insn)
      we still need to count it as an originator.  */
   bitmap_set_bit (current_originators, INSN_UID (insn));
 
-  if (!bitmap_bit_p (current_copies, INSN_UID (insn)))
+  if (!bitmap_clear_bit (current_copies, INSN_UID (insn)))
     {
       /* Note that original block needs to be rescheduled, as we pulled an
 	 instruction out of it.  */
       if (INSN_SCHED_TIMES (insn) > 0)
 	bitmap_set_bit (blocks_to_reschedule, BLOCK_FOR_INSN (insn)->index);
-      else if (INSN_UID (insn) < first_emitted_uid)
+      else if (INSN_UID (insn) < first_emitted_uid && !DEBUG_INSN_P (insn))
 	num_insns_scheduled++;
     }
-  else
-    bitmap_clear_bit (current_copies, INSN_UID (insn));
 
   /* For instructions we must immediately remove insn from the
      stream, so subsequent update_data_sets () won't include this
@@ -5542,42 +5836,47 @@ track_scheduled_insns_and_blocks (rtx insn)
     stat_bookkeeping_copies--;
 }
 
-/* Emit a register-register copy for INSN if needed.  Return true if 
+/* Emit a register-register copy for INSN if needed.  Return true if
    emitted one.  PARAMS is the move_op static parameters.  */
 static bool
-maybe_emit_renaming_copy (rtx insn, 
+maybe_emit_renaming_copy (rtx insn,
                           moveop_static_params_p params)
 {
   bool insn_emitted  = false;
-  rtx cur_reg = expr_dest_reg (params->c_expr);
+  rtx cur_reg;
 
-  gcc_assert (!cur_reg || (params->dest && REG_P (params->dest)));
+  /* Bail out early when expression can not be renamed at all.  */
+  if (!EXPR_SEPARABLE_P (params->c_expr))
+    return false;
+
+  cur_reg = expr_dest_reg (params->c_expr);
+  gcc_assert (cur_reg && params->dest && REG_P (params->dest));
 
   /* If original operation has expr and the register chosen for
      that expr is not original operation's dest reg, substitute
      operation's right hand side with the register chosen.  */
-  if (cur_reg != NULL_RTX && REGNO (params->dest) != REGNO (cur_reg))
+  if (REGNO (params->dest) != REGNO (cur_reg))
     {
       insn_t reg_move_insn, reg_move_insn_rtx;
-      
-      reg_move_insn_rtx = create_insn_rtx_with_rhs (INSN_VINSN (insn), 
+
+      reg_move_insn_rtx = create_insn_rtx_with_rhs (INSN_VINSN (insn),
                                                     params->dest);
-      reg_move_insn = sel_gen_insn_from_rtx_after (reg_move_insn_rtx, 
-                                                   INSN_EXPR (insn), 
-                                                   INSN_SEQNO (insn), 
+      reg_move_insn = sel_gen_insn_from_rtx_after (reg_move_insn_rtx,
+                                                   INSN_EXPR (insn),
+                                                   INSN_SEQNO (insn),
                                                    insn);
       EXPR_SPEC_DONE_DS (INSN_EXPR (reg_move_insn)) = 0;
       replace_dest_with_reg_in_expr (params->c_expr, params->dest);
-      
+
       insn_emitted = true;
       params->was_renamed = true;
     }
-  
+
   return insn_emitted;
 }
 
-/* Emit a speculative check for INSN speculated as EXPR if needed.  
-   Return true if we've  emitted one.  PARAMS is the move_op static 
+/* Emit a speculative check for INSN speculated as EXPR if needed.
+   Return true if we've  emitted one.  PARAMS is the move_op static
    parameters.  */
 static bool
 maybe_emit_speculative_check (rtx insn, expr_t expr,
@@ -5599,17 +5898,17 @@ maybe_emit_speculative_check (rtx insn, expr_t expr,
       EXPR_SPEC_DONE_DS (INSN_EXPR (insn)) = 0;
       x = insn;
     }
-  
+
   gcc_assert (EXPR_SPEC_DONE_DS (INSN_EXPR (x)) == 0
               && EXPR_SPEC_TO_CHECK_DS (INSN_EXPR (x)) == 0);
   return insn_emitted;
 }
 
-/* Handle transformations that leave an insn in place of original 
-   insn such as renaming/speculation.  Return true if one of such 
+/* Handle transformations that leave an insn in place of original
+   insn such as renaming/speculation.  Return true if one of such
    transformations actually happened, and we have emitted this insn.  */
 static bool
-handle_emitting_transformations (rtx insn, expr_t expr, 
+handle_emitting_transformations (rtx insn, expr_t expr,
                                  moveop_static_params_p params)
 {
   bool insn_emitted = false;
@@ -5618,34 +5917,65 @@ handle_emitting_transformations (rtx insn, expr_t expr,
   insn_emitted |= maybe_emit_speculative_check (insn, expr, params);
 
   return insn_emitted;
-}  
+}
 
-/* Remove INSN from stream.  When ONLY_DISCONNECT is true, its data 
+/* If INSN is the only insn in the basic block (not counting JUMP,
+   which may be a jump to next insn, and DEBUG_INSNs), we want to
+   leave a NOP there till the return to fill_insns.  */
+
+static bool
+need_nop_to_preserve_insn_bb (rtx insn)
+{
+  insn_t bb_head, bb_end, bb_next, in_next;
+  basic_block bb = BLOCK_FOR_INSN (insn);
+
+  bb_head = sel_bb_head (bb);
+  bb_end = sel_bb_end (bb);
+
+  if (bb_head == bb_end)
+    return true;
+
+  while (bb_head != bb_end && DEBUG_INSN_P (bb_head))
+    bb_head = NEXT_INSN (bb_head);
+
+  if (bb_head == bb_end)
+    return true;
+
+  while (bb_head != bb_end && DEBUG_INSN_P (bb_end))
+    bb_end = PREV_INSN (bb_end);
+
+  if (bb_head == bb_end)
+    return true;
+
+  bb_next = NEXT_INSN (bb_head);
+  while (bb_next != bb_end && DEBUG_INSN_P (bb_next))
+    bb_next = NEXT_INSN (bb_next);
+
+  if (bb_next == bb_end && JUMP_P (bb_end))
+    return true;
+
+  in_next = NEXT_INSN (insn);
+  while (DEBUG_INSN_P (in_next))
+    in_next = NEXT_INSN (in_next);
+
+  if (IN_CURRENT_FENCE_P (in_next))
+    return true;
+
+  return false;
+}
+
+/* Remove INSN from stream.  When ONLY_DISCONNECT is true, its data
    is not removed but reused when INSN is re-emitted.  */
 static void
 remove_insn_from_stream (rtx insn, bool only_disconnect)
 {
-  insn_t nop, bb_head, bb_end;
-  bool need_nop_to_preserve_bb;
-  basic_block bb = BLOCK_FOR_INSN (insn);
-
-  /* If INSN is the only insn in the basic block (not counting JUMP,
-     which may be a jump to next insn), leave NOP there till the 
-     return to fill_insns.  */
-  bb_head = sel_bb_head (bb);
-  bb_end = sel_bb_end (bb);
-  need_nop_to_preserve_bb = ((bb_head == bb_end)
-                             || (NEXT_INSN (bb_head) == bb_end 
-                                 && JUMP_P (bb_end))
-                             || IN_CURRENT_FENCE_P (NEXT_INSN (insn)));
-
   /* If there's only one insn in the BB, make sure that a nop is
      inserted into it, so the basic block won't disappear when we'll
      delete INSN below with sel_remove_insn. It should also survive
-     till the return to fill_insns.  */	     
-  if (need_nop_to_preserve_bb)
+     till the return to fill_insns.  */
+  if (need_nop_to_preserve_insn_bb (insn))
     {
-      nop = get_nop_from_pool (insn);
+      insn_t nop = get_nop_from_pool (insn);
       gcc_assert (INSN_NOP_P (nop));
       VEC_safe_push (insn_t, heap, vec_temp_moveop_nops, nop);
     }
@@ -5654,17 +5984,17 @@ remove_insn_from_stream (rtx insn, bool only_disconnect)
 }
 
 /* This function is called when original expr is found.
-   INSN - current insn traversed, EXPR - the corresponding expr found.  
+   INSN - current insn traversed, EXPR - the corresponding expr found.
    LPARAMS is the local parameters of code modion driver, STATIC_PARAMS
    is static parameters of move_op.  */
 static void
-move_op_orig_expr_found (insn_t insn, expr_t expr, 
-                         cmpd_local_params_p lparams ATTRIBUTE_UNUSED, 
+move_op_orig_expr_found (insn_t insn, expr_t expr,
+                         cmpd_local_params_p lparams ATTRIBUTE_UNUSED,
                          void *static_params)
 {
   bool only_disconnect, insn_emitted;
   moveop_static_params_p params = (moveop_static_params_p) static_params;
-  
+
   copy_expr_onside (params->c_expr, INSN_EXPR (insn));
   track_scheduled_insns_and_blocks (insn);
   insn_emitted = handle_emitting_transformations (insn, expr, params);
@@ -5694,8 +6024,8 @@ fur_orig_expr_found (insn_t insn, expr_t expr ATTRIBUTE_UNUSED,
   def_list_add (params->original_insns, insn, params->crosses_call);
 
   /* Mark the registers that do not meet the following condition:
-    (2) not among the live registers of the point 
-	immediately following the first original operation on 
+    (2) not among the live registers of the point
+	immediately following the first original operation on
 	a given downward path, except for the original target
 	register of the operation.  */
   tmp = get_clear_regset_from_pool ();
@@ -5716,7 +6046,7 @@ fur_orig_expr_found (insn_t insn, expr_t expr ATTRIBUTE_UNUSED,
 	168: di=dx
 	  REG_DEAD: dx
      */
-  /* FIXME: see comment above and enable MEM_P 
+  /* FIXME: see comment above and enable MEM_P
      in vinsn_separable_p.  */
   gcc_assert (!VINSN_SEPARABLE_P (INSN_VINSN (insn))
 	      || !MEM_P (INSN_LHS (insn)));
@@ -5725,15 +6055,15 @@ fur_orig_expr_found (insn_t insn, expr_t expr ATTRIBUTE_UNUSED,
 /* This function is called on the ascending pass, before returning from
    current basic block.  */
 static void
-move_op_at_first_insn (insn_t insn, cmpd_local_params_p lparams, 
+move_op_at_first_insn (insn_t insn, cmpd_local_params_p lparams,
                        void *static_params)
 {
   moveop_static_params_p sparams = (moveop_static_params_p) static_params;
   basic_block book_block = NULL;
 
-  /* When we have removed the boundary insn for scheduling, which also 
+  /* When we have removed the boundary insn for scheduling, which also
      happened to be the end insn in its bb, we don't need to update sets.  */
-  if (!lparams->removed_last_insn 
+  if (!lparams->removed_last_insn
       && lparams->e1
       && sel_bb_head_p (insn))
     {
@@ -5745,13 +6075,13 @@ move_op_at_first_insn (insn_t insn, cmpd_local_params_p lparams,
       /* Update data sets for the current insn.  */
       update_data_sets (insn);
     }
-  
+
   /* If bookkeeping code was inserted, we need to update av sets of basic
-     block that received bookkeeping.  After generation of bookkeeping insn, 
+     block that received bookkeeping.  After generation of bookkeeping insn,
      bookkeeping block does not contain valid av set because we are not following
-     the original algorithm in every detail with regards to e.g. renaming 
+     the original algorithm in every detail with regards to e.g. renaming
      simple reg-reg copies.  Consider example:
-         
+
      bookkeeping block           scheduling fence
      \            /
       \    join  /
@@ -5762,7 +6092,7 @@ move_op_at_first_insn (insn_t insn, cmpd_local_params_p lparams,
      /             \
      r1 := r2          r1 := r3
 
-     We try to schedule insn "r1 := r3" on the current 
+     We try to schedule insn "r1 := r3" on the current
      scheduling fence.  Also, note that av set of bookkeeping block
      contain both insns "r1 := r2" and "r1 := r3".  When the insn has
      been scheduled, the CFG is as follows:
@@ -5782,23 +6112,23 @@ move_op_at_first_insn (insn_t insn, cmpd_local_params_p lparams,
      and bookkeeping code was generated at the bookeeping block.  This
      way insn "r1 := r2" is no longer available as a whole instruction
      (but only as expr) ahead of insn "r1 := r3" in bookkeeping block.
-     This situation is handled by calling update_data_sets.  
+     This situation is handled by calling update_data_sets.
 
      Since update_data_sets is called only on the bookkeeping block, and
-     it also may have predecessors with av_sets, containing instructions that 
+     it also may have predecessors with av_sets, containing instructions that
      are no longer available, we save all such expressions that become
      unavailable during data sets update on the bookkeeping block in
-     VEC_BOOKKEEPING_BLOCKED_VINSNS.  Later we avoid selecting such 
-     expressions for scheduling.  This allows us to avoid recomputation of 
+     VEC_BOOKKEEPING_BLOCKED_VINSNS.  Later we avoid selecting such
+     expressions for scheduling.  This allows us to avoid recomputation of
      av_sets outside the code motion path.  */
-      
+
   if (book_block)
     update_and_record_unavailable_insns (book_block);
 
   /* If INSN was previously marked for deletion, it's time to do it.  */
   if (lparams->removed_last_insn)
     insn = PREV_INSN (insn);
-  
+
   /* Do not tidy control flow at the topmost moveop, as we can erroneously
      kill a block with a single nop in which the insn should be emitted.  */
   if (lparams->e1)
@@ -5808,8 +6138,8 @@ move_op_at_first_insn (insn_t insn, cmpd_local_params_p lparams,
 /* This function is called on the ascending pass, before returning from the
    current basic block.  */
 static void
-fur_at_first_insn (insn_t insn, 
-                   cmpd_local_params_p lparams ATTRIBUTE_UNUSED, 
+fur_at_first_insn (insn_t insn,
+                   cmpd_local_params_p lparams ATTRIBUTE_UNUSED,
                    void *static_params ATTRIBUTE_UNUSED)
 {
   gcc_assert (!sel_bb_head_p (insn) || AV_SET_VALID_P (insn)
@@ -5834,11 +6164,11 @@ move_op_ascend (insn_t insn, void *static_params)
   update_liveness_on_insn (insn);
 }
 
-/* This function is called on enter to the basic block.  
-   Returns TRUE if this block already have been visited and 
+/* This function is called on enter to the basic block.
+   Returns TRUE if this block already have been visited and
    code_motion_path_driver should return 1, FALSE otherwise.  */
 static int
-fur_on_enter (insn_t insn ATTRIBUTE_UNUSED, cmpd_local_params_p local_params, 
+fur_on_enter (insn_t insn ATTRIBUTE_UNUSED, cmpd_local_params_p local_params,
 	      void *static_params, bool visited_p)
 {
   fur_static_params_p sparams = (fur_static_params_p) static_params;
@@ -5862,8 +6192,8 @@ fur_on_enter (insn_t insn ATTRIBUTE_UNUSED, cmpd_local_params_p local_params,
 
 /* Same as above but for move_op.   */
 static int
-move_op_on_enter (insn_t insn ATTRIBUTE_UNUSED, 
-                  cmpd_local_params_p local_params ATTRIBUTE_UNUSED, 
+move_op_on_enter (insn_t insn ATTRIBUTE_UNUSED,
+                  cmpd_local_params_p local_params ATTRIBUTE_UNUSED,
                   void *static_params ATTRIBUTE_UNUSED, bool visited_p)
 {
   if (visited_p)
@@ -5871,10 +6201,10 @@ move_op_on_enter (insn_t insn ATTRIBUTE_UNUSED,
   return 1;
 }
 
-/* This function is called while descending current basic block if current 
+/* This function is called while descending current basic block if current
    insn is not the original EXPR we're searching for.
 
-   Return value: FALSE, if code_motion_path_driver should perform a local 
+   Return value: FALSE, if code_motion_path_driver should perform a local
 			cleanup and return 0 itself;
 		 TRUE, if code_motion_path_driver should continue.  */
 static bool
@@ -5888,14 +6218,14 @@ move_op_orig_expr_not_found (insn_t insn, av_set_t orig_ops ATTRIBUTE_UNUSED,
 #endif
 
   /* If we're scheduling separate expr, in order to generate correct code
-     we need to stop the search at bookkeeping code generated with the 
+     we need to stop the search at bookkeeping code generated with the
      same destination register or memory.  */
   if (lhs_of_insn_equals_to_dest_p (insn, sparams->dest))
     return false;
   return true;
 }
 
-/* This function is called while descending current basic block if current 
+/* This function is called while descending current basic block if current
    insn is not the original EXPR we're searching for.
 
    Return value: TRUE (code_motion_path_driver should continue).  */
@@ -5909,6 +6239,8 @@ fur_orig_expr_not_found (insn_t insn, av_set_t orig_ops, void *static_params)
 
   if (CALL_P (insn))
     sparams->crosses_call = true;
+  else if (DEBUG_INSN_P (insn))
+    return true;
 
   /* If current insn we are looking at cannot be executed together
      with original insn, then we can skip it safely.
@@ -5955,7 +6287,7 @@ struct code_motion_path_driver_info_def move_op_hooks = {
   "move_op"
 };
 
-/* Hooks and data to perform find_used_regs operations 
+/* Hooks and data to perform find_used_regs operations
    with code_motion_path_driver.  */
 struct code_motion_path_driver_info_def fur_hooks = {
   fur_on_enter,
@@ -5970,16 +6302,16 @@ struct code_motion_path_driver_info_def fur_hooks = {
 };
 
 /* Traverse all successors of INSN.  For each successor that is SUCCS_NORMAL
-   code_motion_path_driver is called recursively.  Original operation 
-   was found at least on one path that is starting with one of INSN's 
+   code_motion_path_driver is called recursively.  Original operation
+   was found at least on one path that is starting with one of INSN's
    successors (this fact is asserted).  ORIG_OPS is expressions we're looking
    for, PATH is the path we've traversed, STATIC_PARAMS is the parameters
-   of either move_op or find_used_regs depending on the caller.  
+   of either move_op or find_used_regs depending on the caller.
 
    Return 0 if we haven't found expression, 1 if we found it, -1 if we don't
    know for sure at this point.  */
 static int
-code_motion_process_successors (insn_t insn, av_set_t orig_ops, 
+code_motion_process_successors (insn_t insn, av_set_t orig_ops,
                                 ilist_t path, void *static_params)
 {
   int res = 0;
@@ -5996,19 +6328,19 @@ code_motion_process_successors (insn_t insn, av_set_t orig_ops,
   lparams.c_expr_merged = NULL;
 
   /* We need to process only NORMAL succs for move_op, and collect live
-     registers from ALL branches (including those leading out of the 
-     region) for find_used_regs.  
+     registers from ALL branches (including those leading out of the
+     region) for find_used_regs.
 
      In move_op, there can be a case when insn's bb number has changed
-     due to created bookkeeping.  This happens very rare, as we need to 
-     move expression from the beginning to the end of the same block.  
-     Rescan successors in this case.  */     
+     due to created bookkeeping.  This happens very rare, as we need to
+     move expression from the beginning to the end of the same block.
+     Rescan successors in this case.  */
 
  rescan:
   bb = BLOCK_FOR_INSN (insn);
-  old_index = bb->index; 
+  old_index = bb->index;
   old_succs = EDGE_COUNT (bb->succs);
-  
+
   FOR_EACH_SUCC_1 (succ, succ_i, insn, code_motion_path_driver_info->succ_flags)
     {
       int b;
@@ -6019,7 +6351,7 @@ code_motion_process_successors (insn_t insn, av_set_t orig_ops,
       /* Go deep into recursion only for NORMAL edges (non-backedges within the
 	 current region).  */
       if (succ_i.current_flags == SUCCS_NORMAL)
-	b = code_motion_path_driver (succ, orig_ops, path, &lparams, 
+	b = code_motion_path_driver (succ, orig_ops, path, &lparams,
 				     static_params);
       else
 	b = 0;
@@ -6041,20 +6373,20 @@ code_motion_process_successors (insn_t insn, av_set_t orig_ops,
     }
 
 #ifdef ENABLE_CHECKING
-  /* Here, RES==1 if original expr was found at least for one of the 
+  /* Here, RES==1 if original expr was found at least for one of the
      successors.  After the loop, RES may happen to have zero value
-     only if at some point the expr searched is present in av_set, but is 
-     not found below.  In most cases, this situation is an error.  
+     only if at some point the expr searched is present in av_set, but is
+     not found below.  In most cases, this situation is an error.
      The exception is when the original operation is blocked by
      bookkeeping generated for another fence or for another path in current
      move_op.  */
-  gcc_assert (res == 1 
-              || (res == 0 
-                  && av_set_could_be_blocked_by_bookkeeping_p (orig_ops,
+  gcc_assert (res == 1
+	      || (res == 0
+		  && av_set_could_be_blocked_by_bookkeeping_p (orig_ops,
 							       static_params))
-              || res == -1);
+	      || res == -1);
 #endif
-  
+
   /* Merge data, clean up, etc.  */
   if (res != -1 && code_motion_path_driver_info->after_merge_succs)
     code_motion_path_driver_info->after_merge_succs (&lparams, static_params);
@@ -6063,8 +6395,8 @@ code_motion_process_successors (insn_t insn, av_set_t orig_ops,
 }
 
 
-/* Perform a cleanup when the driver is about to terminate.  ORIG_OPS_P 
-   is the pointer to the av set with expressions we were looking for, 
+/* Perform a cleanup when the driver is about to terminate.  ORIG_OPS_P
+   is the pointer to the av set with expressions we were looking for,
    PATH_P is the pointer to the traversed path.  */
 static inline void
 code_motion_path_driver_cleanup (av_set_t *orig_ops_p, ilist_t *path_p)
@@ -6073,20 +6405,20 @@ code_motion_path_driver_cleanup (av_set_t *orig_ops_p, ilist_t *path_p)
   av_set_clear (orig_ops_p);
 }
 
-/* The driver function that implements move_op or find_used_regs 
-   functionality dependent whether code_motion_path_driver_INFO is set to 
-   &MOVE_OP_HOOKS or &FUR_HOOKS.  This function implements the common parts 
+/* The driver function that implements move_op or find_used_regs
+   functionality dependent whether code_motion_path_driver_INFO is set to
+   &MOVE_OP_HOOKS or &FUR_HOOKS.  This function implements the common parts
    of code (CFG traversal etc) that are shared among both functions.  INSN
    is the insn we're starting the search from, ORIG_OPS are the expressions
    we're searching for, PATH is traversed path, LOCAL_PARAMS_IN are local
    parameters of the driver, and STATIC_PARAMS are static parameters of
-   the caller.  
+   the caller.
 
    Returns whether original instructions were found.  Note that top-level
    code_motion_path_driver always returns true.  */
 static int
-code_motion_path_driver (insn_t insn, av_set_t orig_ops, ilist_t path, 
-			 cmpd_local_params_p local_params_in, 
+code_motion_path_driver (insn_t insn, av_set_t orig_ops, ilist_t path,
+			 cmpd_local_params_p local_params_in,
 			 void *static_params)
 {
   expr_t expr = NULL;
@@ -6112,7 +6444,7 @@ code_motion_path_driver (insn_t insn, av_set_t orig_ops, ilist_t path,
         sel_print ("Insn %d is ineligible successor\n", INSN_UID (insn));
       return false;
     }
-  
+
   /* The block can have invalid av set, in which case it was created earlier
      during move_op.  Return immediately.  */
   if (sel_bb_head_p (insn))
@@ -6129,19 +6461,19 @@ code_motion_path_driver (insn_t insn, av_set_t orig_ops, ilist_t path,
         {
           /* We have already found an original operation on this branch, do not
              go any further and just return TRUE here.  If we don't stop here,
-             function can have exponential behaviour even on the small code 
+             function can have exponential behaviour even on the small code
              with many different paths (e.g. with data speculation and
              recovery blocks).  */
           if (sched_verbose >= 6)
             sel_print ("Block %d already visited in this traversal\n", bb->index);
           if (code_motion_path_driver_info->on_enter)
-            return code_motion_path_driver_info->on_enter (insn, 
+            return code_motion_path_driver_info->on_enter (insn,
                                                            local_params_in,
-                                                           static_params, 
+                                                           static_params,
                                                            true);
         }
     }
-  
+
   if (code_motion_path_driver_info->on_enter)
     code_motion_path_driver_info->on_enter (insn, local_params_in,
                                             static_params, false);
@@ -6149,7 +6481,7 @@ code_motion_path_driver (insn_t insn, av_set_t orig_ops, ilist_t path,
 
   /* Filter the orig_ops set.  */
   if (AV_SET_VALID_P (insn))
-    av_set_intersect (&orig_ops, AV_SET (insn));
+    av_set_code_motion_filter (&orig_ops, AV_SET (insn));
 
   /* If no more original ops, return immediately.  */
   if (!orig_ops)
@@ -6160,12 +6492,12 @@ code_motion_path_driver (insn_t insn, av_set_t orig_ops, ilist_t path,
     }
 
   /* For non-speculative insns we have to leave only one form of the
-     original operation, because if we don't, we may end up with 
+     original operation, because if we don't, we may end up with
      different C_EXPRes and, consequently, with bookkeepings for different
      expression forms along the same code motion path.  That may lead to
-     generation of incorrect code.  So for each code motion we stick to 
-     the single form of the instruction,  except for speculative insns 
-     which we need to keep in different forms with all speculation 
+     generation of incorrect code.  So for each code motion we stick to
+     the single form of the instruction,  except for speculative insns
+     which we need to keep in different forms with all speculation
      types.  */
   av_set_leave_one_nonspec (&orig_ops);
 
@@ -6179,7 +6511,7 @@ code_motion_path_driver (insn_t insn, av_set_t orig_ops, ilist_t path,
   bb_tail = sel_bb_end (bb);
 
   /* Descend the basic block in search of the original expr; this part
-     corresponds to the part of the original move_op procedure executed 
+     corresponds to the part of the original move_op procedure executed
      before the recursive call.  */
   for (;;)
     {
@@ -6190,7 +6522,7 @@ code_motion_path_driver (insn_t insn, av_set_t orig_ops, ilist_t path,
 
 	 If this insn doesn't contain currently scheduling OP, then proceed
 	 with searching and look at its successors.  Operations we're searching
-	 for could have changed when moving up through this insn via 
+	 for could have changed when moving up through this insn via
 	 substituting.  In this case, perform unsubstitution on them first.
 
 	 When traversing the DAG below this insn is finished, insert
@@ -6206,11 +6538,11 @@ code_motion_path_driver (insn_t insn, av_set_t orig_ops, ilist_t path,
           if (sched_verbose >= 6)
             sel_print ("Found original operation at insn %d\n", INSN_UID (insn));
 
-	  code_motion_path_driver_info->orig_expr_found 
+	  code_motion_path_driver_info->orig_expr_found
             (insn, expr, local_params_in, static_params);
 
 	  /* Step back, so on the way back we'll start traversing from the
-	     previous insn (or we'll see that it's bb_note and skip that 
+	     previous insn (or we'll see that it's bb_note and skip that
 	     loop).  */
           if (insn == first_insn)
             {
@@ -6224,17 +6556,17 @@ code_motion_path_driver (insn_t insn, av_set_t orig_ops, ilist_t path,
 	{
 	  /* We haven't found the original expr, continue descending the basic
 	     block.  */
-	  if (code_motion_path_driver_info->orig_expr_not_found 
+	  if (code_motion_path_driver_info->orig_expr_not_found
               (insn, orig_ops, static_params))
 	    {
-	      /* Av set ops could have been changed when moving through this 
+	      /* Av set ops could have been changed when moving through this
 	         insn.  To find them below it, we have to un-substitute them.  */
 	      undo_transformations (&orig_ops, insn);
 	    }
 	  else
 	    {
 	      /* Clean up and return, if the hook tells us to do so.  It may
-		 happen if we've encountered the previously created 
+		 happen if we've encountered the previously created
 		 bookkeeping.  */
 	      code_motion_path_driver_cleanup (&orig_ops, &path);
 	      return -1;
@@ -6250,7 +6582,7 @@ code_motion_path_driver (insn_t insn, av_set_t orig_ops, ilist_t path,
       insn = NEXT_INSN (insn);
     }
 
-  /* Here INSN either points to the insn before the original insn (may be 
+  /* Here INSN either points to the insn before the original insn (may be
      bb_note, if original insn was a bb_head) or to the bb_end.  */
   if (!expr)
     {
@@ -6263,9 +6595,9 @@ code_motion_path_driver (insn_t insn, av_set_t orig_ops, ilist_t path,
       if (insn != first_insn)
 	ilist_add (&path, insn);
 
-      /* Process_successors should be able to find at least one 
-	 successor for which code_motion_path_driver returns TRUE.  */ 
-      res = code_motion_process_successors (insn, orig_ops, 
+      /* Process_successors should be able to find at least one
+	 successor for which code_motion_path_driver returns TRUE.  */
+      res = code_motion_process_successors (insn, orig_ops,
                                             path, static_params);
 
       /* Remove bb tail from path.  */
@@ -6275,10 +6607,10 @@ code_motion_path_driver (insn_t insn, av_set_t orig_ops, ilist_t path,
       if (res != 1)
 	{
 	  /* This is the case when one of the original expr is no longer available
-	     due to bookkeeping created on this branch with the same register.  
+	     due to bookkeeping created on this branch with the same register.
 	     In the original algorithm, which doesn't have update_data_sets call
-	     on a bookkeeping block, it would simply result in returning 
-	     FALSE when we've encountered a previously generated bookkeeping 
+	     on a bookkeeping block, it would simply result in returning
+	     FALSE when we've encountered a previously generated bookkeeping
 	     insn in moveop_orig_expr_not_found.  */
 	  code_motion_path_driver_cleanup (&orig_ops, &path);
 	  return res;
@@ -6288,23 +6620,23 @@ code_motion_path_driver (insn_t insn, av_set_t orig_ops, ilist_t path,
   /* Don't need it any more.  */
   av_set_clear (&orig_ops);
 
-  /* Backward pass: now, when we have C_EXPR computed, we'll drag it to 
+  /* Backward pass: now, when we have C_EXPR computed, we'll drag it to
      the beginning of the basic block.  */
   before_first = PREV_INSN (first_insn);
   while (insn != before_first)
-    { 
+    {
       if (code_motion_path_driver_info->ascend)
 	code_motion_path_driver_info->ascend (insn, static_params);
 
       insn = PREV_INSN (insn);
     }
-  
+
   /* Now we're at the bb head.  */
   insn = first_insn;
   ilist_remove (&path);
   local_params_in->removed_last_insn = removed_last_insn;
   code_motion_path_driver_info->at_first_insn (insn, local_params_in, static_params);
-  
+
   /* This should be the very last operation as at bb head we could change
      the numbering by creating bookkeeping blocks.  */
   if (removed_last_insn)
@@ -6313,15 +6645,15 @@ code_motion_path_driver (insn_t insn, av_set_t orig_ops, ilist_t path,
   return true;
 }
 
-/* Move up the operations from ORIG_OPS set traversing the dag starting 
+/* Move up the operations from ORIG_OPS set traversing the dag starting
    from INSN.  PATH represents the edges traversed so far.
    DEST is the register chosen for scheduling the current expr.  Insert
    bookkeeping code in the join points.  EXPR_VLIW is the chosen expression,
-   C_EXPR is how it looks like at the given cfg point.  
+   C_EXPR is how it looks like at the given cfg point.
    Set *SHOULD_MOVE to indicate whether we have only disconnected
    one of the insns found.
 
-   Returns whether original instructions were found, which is asserted 
+   Returns whether original instructions were found, which is asserted
    to be true in the caller.  */
 static bool
 move_op (insn_t insn, av_set_t orig_ops, expr_t expr_vliw,
@@ -6331,7 +6663,7 @@ move_op (insn_t insn, av_set_t orig_ops, expr_t expr_vliw,
   struct cmpd_local_params lparams;
   bool res;
 
-  /* Init params for code_motion_path_driver.  */ 
+  /* Init params for code_motion_path_driver.  */
   sparams.dest = dest;
   sparams.c_expr = c_expr;
   sparams.uid = INSN_UID (EXPR_INSN_RTX (expr_vliw));
@@ -6343,7 +6675,7 @@ move_op (insn_t insn, av_set_t orig_ops, expr_t expr_vliw,
 
   /* We haven't visited any blocks yet.  */
   bitmap_clear (code_motion_visited_blocks);
-  
+
   /* Set appropriate hooks and data.  */
   code_motion_path_driver_info = &move_op_hooks;
   res = code_motion_path_driver (insn, orig_ops, NULL, &lparams, &sparams);
@@ -6362,8 +6694,8 @@ move_op (insn_t insn, av_set_t orig_ops, expr_t expr_vliw,
 /* Current number of seqno used in init_seqno and init_seqno_1.  */
 static int cur_seqno;
 
-/* A helper for init_seqno.  Traverse the region starting from BB and 
-   compute seqnos for visited insns, marking visited bbs in VISITED_BBS.  
+/* A helper for init_seqno.  Traverse the region starting from BB and
+   compute seqnos for visited insns, marking visited bbs in VISITED_BBS.
    Clear visited blocks from BLOCKS_TO_RESCHEDULE.  */
 static void
 init_seqno_1 (basic_block bb, sbitmap visited_bbs, bitmap blocks_to_reschedule)
@@ -6377,7 +6709,7 @@ init_seqno_1 (basic_block bb, sbitmap visited_bbs, bitmap blocks_to_reschedule)
   if (blocks_to_reschedule)
     bitmap_clear_bit (blocks_to_reschedule, bb->index);
 
-  FOR_EACH_SUCC_1 (succ_insn, si, BB_END (bb), 
+  FOR_EACH_SUCC_1 (succ_insn, si, BB_END (bb),
 		   SUCCS_NORMAL | SUCCS_SKIP_TO_LOOP_EXITS)
     {
       basic_block succ = BLOCK_FOR_INSN (succ_insn);
@@ -6391,6 +6723,8 @@ init_seqno_1 (basic_block bb, sbitmap visited_bbs, bitmap blocks_to_reschedule)
 
 	  init_seqno_1 (succ, visited_bbs, blocks_to_reschedule);
 	}
+      else if (blocks_to_reschedule)
+        bitmap_set_bit (forced_ebb_heads, succ->index);
     }
 
   for (insn = BB_END (bb); insn != note; insn = PREV_INSN (insn))
@@ -6398,10 +6732,10 @@ init_seqno_1 (basic_block bb, sbitmap visited_bbs, bitmap blocks_to_reschedule)
 }
 
 /* Initialize seqnos for the current region.  NUMBER_OF_INSNS is the number
-   of instructions in the region, BLOCKS_TO_RESCHEDULE contains blocks on 
+   of instructions in the region, BLOCKS_TO_RESCHEDULE contains blocks on
    which we're rescheduling when pipelining, FROM is the block where
    traversing region begins (it may not be the head of the region when
-   pipelining, but the head of the loop instead).  
+   pipelining, but the head of the loop instead).
 
    Returns the maximal seqno found.  */
 static int
@@ -6442,9 +6776,10 @@ sel_setup_region_sched_flags (void)
 {
   enable_schedule_as_rhs_p = 1;
   bookkeeping_p = 1;
-  pipelining_p = (bookkeeping_p 
+  pipelining_p = (bookkeeping_p
                   && (flag_sel_sched_pipelining != 0)
-		  && current_loop_nest != NULL);
+		  && current_loop_nest != NULL
+		  && loop_has_exit_edges (current_loop_nest));
   max_insns_to_rename = PARAM_VALUE (PARAM_SELSCHED_INSNS_TO_RENAME);
   max_ws = MAX_WS;
 }
@@ -6479,23 +6814,6 @@ setup_current_loop_nest (int rgn)
   gcc_assert (LOOP_MARKED_FOR_PIPELINING_P (current_loop_nest));
 }
 
-/* Purge meaningless empty blocks in the middle of a region.  */
-static void
-purge_empty_blocks (void)
-{
-  int i ;
-
-  for (i = 1; i < current_nr_blocks; )
-    {
-      basic_block b = BASIC_BLOCK (BB_TO_BLOCK (i));
-
-      if (maybe_tidy_empty_bb (b))
-	continue;
-
-      i++;
-    }
-}
-
 /* Compute instruction priorities for current region.  */
 static void
 sel_compute_priorities (int rgn)
@@ -6522,7 +6840,7 @@ sel_region_init (int rgn)
 
   rgn_setup_region (rgn);
 
-  /* Even if sched_is_disabled_for_current_region_p() is true, we still 
+  /* Even if sched_is_disabled_for_current_region_p() is true, we still
      do region initialization here so the region can be bundled correctly,
      but we'll skip the scheduling in sel_sched_region ().  */
   if (current_region_empty_p ())
@@ -6571,18 +6889,18 @@ sel_region_init (int rgn)
                     : 0);
 
       if (current_nr_blocks == header + 1)
-        update_liveness_on_insn 
+        update_liveness_on_insn
           (sel_bb_head (BASIC_BLOCK (BB_TO_BLOCK (header))));
     }
-      
+
   /* Set hooks so that no newly generated insn will go out unnoticed.  */
   sel_register_cfg_hooks ();
 
-  /* !!! We call target.sched.md_init () for the whole region, but we invoke
-     targetm.sched.md_finish () for every ebb.  */
-  if (targetm.sched.md_init)
+  /* !!! We call target.sched.init () for the whole region, but we invoke
+     targetm.sched.finish () for every ebb.  */
+  if (targetm.sched.init)
     /* None of the arguments are actually used in any target.  */
-    targetm.sched.md_init (sched_dump, sched_verbose, -1);
+    targetm.sched.init (sched_dump, sched_verbose, -1);
 
   first_emitted_uid = get_max_uid () + 1;
   preheader_removed = false;
@@ -6618,7 +6936,7 @@ simplify_changed_insns (void)
 	  {
 	    expr_t expr = INSN_EXPR (insn);
 
-	    if (EXPR_WAS_SUBSTITUTED (expr)) 
+	    if (EXPR_WAS_SUBSTITUTED (expr))
 	      validate_simplify_insn (insn);
 	  }
     }
@@ -6662,25 +6980,26 @@ reset_sched_cycles_in_current_ebb (void)
   int last_clock = 0;
   int haifa_last_clock = -1;
   int haifa_clock = 0;
+  int issued_insns = 0;
   insn_t insn;
 
-  if (targetm.sched.md_init)
+  if (targetm.sched.init)
     {
       /* None of the arguments are actually used in any target.
 	 NB: We should have md_reset () hook for cases like this.  */
-      targetm.sched.md_init (sched_dump, sched_verbose, -1);
+      targetm.sched.init (sched_dump, sched_verbose, -1);
     }
 
   state_reset (curr_state);
   advance_state (curr_state);
-  
+
   for (insn = current_sched_info->head;
        insn != current_sched_info->next_tail;
        insn = NEXT_INSN (insn))
     {
       int cost, haifa_cost;
       int sort_p;
-      bool asm_p, real_insn, after_stall;
+      bool asm_p, real_insn, after_stall, all_issued;
       int clock;
 
       if (!INSN_P (insn))
@@ -6702,7 +7021,7 @@ reset_sched_cycles_in_current_ebb (void)
 	       on the cycle.  */
 	    haifa_cost = 1;
 	  else
-	    /* This is a use/clobber insn.  It should not change 
+	    /* This is a use/clobber insn.  It should not change
 	       cost.  */
 	    haifa_cost = 0;
 	}
@@ -6716,7 +7035,9 @@ reset_sched_cycles_in_current_ebb (void)
           haifa_cost = cost;
           after_stall = 1;
         }
-
+      all_issued = issued_insns == issue_rate;
+      if (haifa_cost == 0 && all_issued)
+	haifa_cost = 1;
       if (haifa_cost > 0)
 	{
 	  int i = 0;
@@ -6724,6 +7045,7 @@ reset_sched_cycles_in_current_ebb (void)
 	  while (haifa_cost--)
 	    {
 	      advance_state (curr_state);
+	      issued_insns = 0;
               i++;
 
 	      if (sched_verbose >= 2)
@@ -6732,17 +7054,30 @@ reset_sched_cycles_in_current_ebb (void)
                   debug_state (curr_state);
                 }
 
-              /* The DFA may report that e.g. insn requires 2 cycles to be 
-                 issued, but on the next cycle it says that insn is ready 
+              /* The DFA may report that e.g. insn requires 2 cycles to be
+                 issued, but on the next cycle it says that insn is ready
                  to go.  Check this here.  */
               if (!after_stall
-                  && real_insn 
+                  && real_insn
                   && haifa_cost > 0
                   && estimate_insn_cost (insn, curr_state) == 0)
                 break;
-	    }
+
+              /* When the data dependency stall is longer than the DFA stall,
+                 and when we have issued exactly issue_rate insns and stalled,
+                 it could be that after this longer stall the insn will again
+                 become unavailable  to the DFA restrictions.  Looks strange
+                 but happens e.g. on x86-64.  So recheck DFA on the last
+                 iteration.  */
+              if ((after_stall || all_issued)
+                  && real_insn
+                  && haifa_cost == 0)
+                haifa_cost = estimate_insn_cost (insn, curr_state);
+            }
 
 	  haifa_clock += i;
+          if (sched_verbose >= 2)
+            sel_print ("haifa clock: %d\n", haifa_clock);
 	}
       else
 	gcc_assert (haifa_cost == 0);
@@ -6756,21 +7091,27 @@ reset_sched_cycles_in_current_ebb (void)
 					    &sort_p))
 	  {
 	    advance_state (curr_state);
+	    issued_insns = 0;
 	    haifa_clock++;
 	    if (sched_verbose >= 2)
               {
                 sel_print ("advance_state (dfa_new_cycle)\n");
                 debug_state (curr_state);
+		sel_print ("haifa clock: %d\n", haifa_clock + 1);
               }
           }
 
       if (real_insn)
 	{
 	  cost = state_transition (curr_state, insn);
+	  issued_insns++;
 
           if (sched_verbose >= 2)
-            debug_state (curr_state);
-
+	    {
+	      sel_print ("scheduled insn %d, clock %d\n", INSN_UID (insn),
+			 haifa_clock + 1);
+              debug_state (curr_state);
+	    }
 	  gcc_assert (cost < 0);
 	}
 
@@ -6819,7 +7160,7 @@ put_TImodes (void)
     }
 }
 
-/* Perform MD_FINISH on EBBs comprising current region.  When 
+/* Perform MD_FINISH on EBBs comprising current region.  When
    RESET_SCHED_CYCLES_P is true, run a pass emulating the scheduler
    to produce correct sched cycles on insns.  */
 static void
@@ -6846,14 +7187,14 @@ sel_region_target_finish (bool reset_sched_cycles_p)
       if (reset_sched_cycles_p)
 	reset_sched_cycles_in_current_ebb ();
 
-      if (targetm.sched.md_init)
-	targetm.sched.md_init (sched_dump, sched_verbose, -1);
+      if (targetm.sched.init)
+	targetm.sched.init (sched_dump, sched_verbose, -1);
 
       put_TImodes ();
 
-      if (targetm.sched.md_finish)
+      if (targetm.sched.finish)
 	{
-	  targetm.sched.md_finish (sched_dump, sched_verbose);
+	  targetm.sched.finish (sched_dump, sched_verbose);
 
 	  /* Extend luids so that insns generated by the target will
 	     get zero luid.  */
@@ -6865,7 +7206,7 @@ sel_region_target_finish (bool reset_sched_cycles_p)
 }
 
 /* Free the scheduling data for the current region.  When RESET_SCHED_CYCLES_P
-   is true, make an additional pass emulating scheduler to get correct insn 
+   is true, make an additional pass emulating scheduler to get correct insn
    cycles for md_finish calls.  */
 static void
 sel_region_finish (bool reset_sched_cycles_p)
@@ -6946,7 +7287,7 @@ schedule_on_fences (flist_t fences, int max_seqno,
       int seqno = 0;
       flist_t fences2;
       bool first_p = true;
-	  
+
       /* Choose the next fence group to schedule.
          The fact that insn can be scheduled only once
          on the cycle is guaranteed by two properties:
@@ -6982,7 +7323,7 @@ schedule_on_fences (flist_t fences, int max_seqno,
     }
 
   /* All av_sets are invalidated by GLOBAL_LEVEL increase, thus we
-     don't need to keep bookkeeping-invalidated and target-unavailable 
+     don't need to keep bookkeeping-invalidated and target-unavailable
      vinsns any more.  */
   vinsn_vec_clear (&vec_bookkeeping_blocked_vinsns);
   vinsn_vec_clear (&vec_target_unavailable_vinsns);
@@ -6998,7 +7339,7 @@ find_min_max_seqno (flist_t fences, int *min_seqno, int *max_seqno)
   while ((fences = FLIST_NEXT (fences)))
     {
       int seqno = INSN_SEQNO (FENCE_INSN (FLIST_FENCE (fences)));
-      
+
       if (*min_seqno > seqno)
         *min_seqno = seqno;
       else if (*max_seqno < seqno)
@@ -7007,7 +7348,7 @@ find_min_max_seqno (flist_t fences, int *min_seqno, int *max_seqno)
 }
 
 /* Calculate new fences from FENCES.  */
-static flist_t 
+static flist_t
 calculate_new_fences (flist_t fences, int orig_max_seqno)
 {
   flist_t old_fences = fences;
@@ -7018,7 +7359,7 @@ calculate_new_fences (flist_t fences, int orig_max_seqno)
     {
       fence_t fence = FLIST_FENCE (fences);
       insn_t insn;
-      
+
       if (!FENCE_BNDS (fence))
         {
           /* This fence doesn't have any successors.  */
@@ -7032,7 +7373,7 @@ calculate_new_fences (flist_t fences, int orig_max_seqno)
               gcc_assert (seqno > 0 && seqno <= orig_max_seqno);
 
               if (sched_verbose >= 1)
-                sel_print ("Fence %d[%d] has not changed\n", 
+                sel_print ("Fence %d[%d] has not changed\n",
                            INSN_UID (insn),
                            BLOCK_NUM (insn));
               move_fence_to_fences (fences, new_fences);
@@ -7050,14 +7391,14 @@ calculate_new_fences (flist_t fences, int orig_max_seqno)
    are the miminum and maximum seqnos of the group, HIGHEST_SEQNO_IN_USE is
    the highest seqno used in a region.  Return the updated highest seqno.  */
 static int
-update_seqnos_and_stage (int min_seqno, int max_seqno, 
-                         int highest_seqno_in_use, 
+update_seqnos_and_stage (int min_seqno, int max_seqno,
+                         int highest_seqno_in_use,
                          ilist_t *pscheduled_insns)
 {
   int new_hs;
   ilist_iterator ii;
   insn_t insn;
-  
+
   /* Actually, new_hs is the seqno of the instruction, that was
      scheduled first (i.e. it is the first one in SCHEDULED_INSNS).  */
   if (*pscheduled_insns)
@@ -7074,6 +7415,12 @@ update_seqnos_and_stage (int min_seqno, int max_seqno,
       gcc_assert (INSN_SEQNO (insn) < 0);
       INSN_SEQNO (insn) += highest_seqno_in_use + max_seqno - min_seqno + 2;
       gcc_assert (INSN_SEQNO (insn) <= new_hs);
+
+      /* When not pipelining, purge unneeded insn info on the scheduled insns.
+         For example, having reg_last array of INSN_DEPS_CONTEXT in memory may
+         require > 1GB of memory e.g. on limit-fnargs.c.  */
+      if (! pipelining_p)
+        free_data_for_scheduled_insn (insn);
     }
 
   ilist_clear (pscheduled_insns);
@@ -7082,9 +7429,9 @@ update_seqnos_and_stage (int min_seqno, int max_seqno,
   return new_hs;
 }
 
-/* The main driver for scheduling a region.  This function is responsible 
-   for correct propagation of fences (i.e. scheduling points) and creating 
-   a group of parallel insns at each of them.  It also supports 
+/* The main driver for scheduling a region.  This function is responsible
+   for correct propagation of fences (i.e. scheduling points) and creating
+   a group of parallel insns at each of them.  It also supports
    pipelining.  ORIG_MAX_SEQNO is the maximal seqno before this pass
    of scheduling.  */
 static void
@@ -7121,8 +7468,8 @@ sel_sched_region_2 (int orig_max_seqno)
                stat_substitutions_total);
 }
 
-/* Schedule a region.  When pipelining, search for possibly never scheduled 
-   bookkeeping code and schedule it.  Reschedule pipelined code without 
+/* Schedule a region.  When pipelining, search for possibly never scheduled
+   bookkeeping code and schedule it.  Reschedule pipelined code without
    pipelining after.  */
 static void
 sel_sched_region_1 (void)
@@ -7130,9 +7477,9 @@ sel_sched_region_1 (void)
   int number_of_insns;
   int orig_max_seqno;
 
-  /* Remove empty blocks that might be in the region from the beginning.  
+  /* Remove empty blocks that might be in the region from the beginning.
      We need to do save sched_max_luid before that, as it actually shows
-     the number of insns in the region, and purge_empty_blocks can 
+     the number of insns in the region, and purge_empty_blocks can
      alter it.  */
   number_of_insns = sched_max_luid - 1;
   purge_empty_blocks ();
@@ -7177,21 +7524,23 @@ sel_sched_region_1 (void)
             {
               basic_block bb = EBB_FIRST_BB (i);
 
-              if (sel_bb_empty_p (bb))
-                {
-                  bitmap_clear_bit (blocks_to_reschedule, bb->index);
-                  continue;
-                }
-
               if (bitmap_bit_p (blocks_to_reschedule, bb->index))
                 {
+                  if (! bb_ends_ebb_p (bb))
+                    bitmap_set_bit (blocks_to_reschedule, bb_next_bb (bb)->index);
+                  if (sel_bb_empty_p (bb))
+                    {
+                      bitmap_clear_bit (blocks_to_reschedule, bb->index);
+                      continue;
+                    }
                   clear_outdated_rtx_info (bb);
                   if (sel_insn_is_speculation_check (BB_END (bb))
                       && JUMP_P (BB_END (bb)))
                     bitmap_set_bit (blocks_to_reschedule,
                                     BRANCH_EDGE (bb)->dest->index);
                 }
-              else if (INSN_SCHED_TIMES (sel_bb_head (bb)) <= 0)
+              else if (! sel_bb_empty_p (bb)
+                       && INSN_SCHED_TIMES (sel_bb_head (bb)) <= 0)
                 bitmap_set_bit (blocks_to_reschedule, bb->index);
             }
 
@@ -7199,7 +7548,7 @@ sel_sched_region_1 (void)
             {
               bb = EBB_FIRST_BB (i);
 
-              /* While pipelining outer loops, skip bundling for loop 
+              /* While pipelining outer loops, skip bundling for loop
                  preheaders.  Those will be rescheduled in the outer
                  loop.  */
               if (sel_is_loop_preheader_p (bb))
@@ -7207,7 +7556,7 @@ sel_sched_region_1 (void)
                   clear_outdated_rtx_info (bb);
                   continue;
                 }
-                  
+
               if (bitmap_bit_p (blocks_to_reschedule, bb->index))
                 {
                   flist_tail_init (new_fences);
@@ -7217,14 +7566,12 @@ sel_sched_region_1 (void)
                   /* Mark BB as head of the new ebb.  */
                   bitmap_set_bit (forced_ebb_heads, bb->index);
 
-                  bitmap_clear_bit (blocks_to_reschedule, bb->index);
-  
                   gcc_assert (fences == NULL);
 
                   init_fences (bb_note (bb));
-  
+
                   sel_sched_region_2 (orig_max_seqno);
-  
+
                   do_p = true;
                   break;
                 }
@@ -7254,7 +7601,7 @@ sel_sched_region (int rgn)
   else
     /* Force initialization of INSN_SCHED_CYCLEs for correct bundling.  */
     reset_sched_cycles_p = true;
-  
+
   sel_region_finish (reset_sched_cycles_p);
 }
 
@@ -7275,7 +7622,7 @@ sel_global_init (void)
   sched_init_bbs ();
   /* Reset AFTER_RECOVERY if it has been set by the 1st scheduler pass.  */
   after_recovery = 0;
-  can_issue_more = issue_rate;	
+  can_issue_more = issue_rate;
 
   sched_extend_target ();
   sched_deps_init (true);

@@ -1,8 +1,8 @@
-/* Copyright (C) 2002, 2003, 2005, 2006, 2007, 2009
+/* Copyright (C) 2002, 2003, 2005, 2006, 2007, 2009, 2010, 2011
    Free Software Foundation, Inc.
    Contributed by Andy Vaught
 
-This file is part of the GNU Fortran 95 runtime library (libgfortran).
+This file is part of the GNU Fortran runtime library (libgfortran).
 
 Libgfortran is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -141,6 +141,36 @@ gfc_xtoa (GFC_UINTEGER_LARGEST n, char *buffer, size_t len)
   return p;
 }
 
+
+/* Hopefully thread-safe wrapper for a strerror_r() style function.  */
+
+char *
+gf_strerror (int errnum, 
+             char * buf __attribute__((unused)), 
+	     size_t buflen __attribute__((unused)))
+{
+#ifdef HAVE_STRERROR_R
+  /* TODO: How to prevent the compiler warning due to strerror_r of
+     the untaken branch having the wrong return type?  */
+  if (__builtin_classify_type (strerror_r (0, buf, 0)) == 5)
+    {
+      /* GNU strerror_r()  */
+      return strerror_r (errnum, buf, buflen);
+    }
+  else
+    {
+      /* POSIX strerror_r ()  */
+      strerror_r (errnum, buf, buflen);
+      return buf;
+    }
+#else
+  /* strerror () is not necessarily thread-safe, but should at least
+     be available everywhere.  */
+  return strerror (errnum);
+#endif
+}
+
+
 /* show_locus()-- Print a line number and filename describing where
  * something went wrong */
 
@@ -159,7 +189,7 @@ show_locus (st_parameter_common *cmp)
 	{
 	  st_printf ("At line %d of file %s (unit = %d, file = '%s')\n",
 		   (int) cmp->line, cmp->filename, (int) cmp->unit, filename);
-	  free_mem (filename);
+	  free (filename);
 	}
       else
 	{
@@ -192,6 +222,8 @@ recursion_check (void)
 }
 
 
+#define STRERR_MAXSZ 256
+
 /* os_error()-- Operating system error.  We get a message from the
  * operating system, show it and leave.  Some operating system errors
  * are caught and processed by the library.  If not, we come here. */
@@ -199,8 +231,10 @@ recursion_check (void)
 void
 os_error (const char *message)
 {
+  char errmsg[STRERR_MAXSZ];
   recursion_check ();
-  st_printf ("Operating system error: %s\n%s\n", get_oserror (), message);
+  st_printf ("Operating system error: %s\n%s\n", 
+	     gf_strerror (errno, errmsg, STRERR_MAXSZ), message);
   sys_exit (1);
 }
 iexport(os_error);
@@ -389,6 +423,7 @@ translate_error (int code)
 void
 generate_error (st_parameter_common *cmp, int family, const char *message)
 {
+  char errmsg[STRERR_MAXSZ];
 
   /* If there was a previous error, don't mask it with another
      error message, EOF or EOR condition.  */
@@ -402,7 +437,8 @@ generate_error (st_parameter_common *cmp, int family, const char *message)
 
   if (message == NULL)
     message =
-      (family == LIBERROR_OS) ? get_oserror () : translate_error (family);
+      (family == LIBERROR_OS) ? gf_strerror (errno, errmsg, STRERR_MAXSZ) :
+      translate_error (family);
 
   if (cmp->flags & IOPARM_HAS_IOMSG)
     cf_strcpy (cmp->iomsg, cmp->iomsg_len, message);
@@ -443,6 +479,20 @@ generate_error (st_parameter_common *cmp, int family, const char *message)
 }
 iexport(generate_error);
 
+
+/* generate_warning()-- Similar to generate_error but just give a warning.  */
+
+void
+generate_warning (st_parameter_common *cmp, const char *message)
+{
+  if (message == NULL)
+    message = " ";
+
+  show_locus (cmp);
+  st_printf ("Fortran runtime warning: %s\n", message);
+}
+
+
 /* Whether, for a feature included in a given standard set (GFC_STD_*),
    we should issue an error or a warning, or be quiet.  */
 
@@ -452,15 +502,14 @@ notification_std (int std)
   int warning;
 
   if (!compile_options.pedantic)
-    return SILENT;
+    return NOTIFICATION_SILENT;
 
   warning = compile_options.warn_std & std;
   if ((compile_options.allow_std & std) != 0 && !warning)
-    return SILENT;
+    return NOTIFICATION_SILENT;
 
-  return warning ? WARNING : ERROR;
+  return warning ? NOTIFICATION_WARNING : NOTIFICATION_ERROR;
 }
-
 
 
 /* Possibly issue a warning/error about use of a nonstandard (or deleted)

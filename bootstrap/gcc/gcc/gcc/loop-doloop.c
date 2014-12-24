@@ -1,6 +1,6 @@
 /* Perform doloop optimizations
-   Copyright (C) 2004, 2005, 2006, 2007, 2008 Free Software Foundation,
-   Inc.
+   Copyright (C) 2004, 2005, 2006, 2007, 2008, 2010
+   Free Software Foundation, Inc.
    Based on code by Michael P. Hayes (m.hayes@elec.canterbury.ac.nz)
 
 This file is part of GCC.
@@ -28,7 +28,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "expr.h"
 #include "hard-reg-set.h"
 #include "basic-block.h"
-#include "toplev.h"
+#include "diagnostic-core.h"
 #include "tm_p.h"
 #include "cfgloop.h"
 #include "output.h"
@@ -103,11 +103,11 @@ doloop_condition_get (rtx doloop_pat)
   if (GET_CODE (pattern) != PARALLEL)
     {
       rtx cond;
+      rtx prev_insn = prev_nondebug_insn (doloop_pat);
 
       /* We expect the decrement to immediately precede the branch.  */
 
-      if ((PREV_INSN (doloop_pat) == NULL_RTX)
-          || !INSN_P (PREV_INSN (doloop_pat)))
+      if (prev_insn == NULL_RTX || !INSN_P (prev_insn))
         return 0;
 
       cmp = pattern;
@@ -291,7 +291,8 @@ add_test (rtx cond, edge *e, basic_block dest)
   op0 = force_operand (op0, NULL_RTX);
   op1 = force_operand (op1, NULL_RTX);
   label = block_label (dest);
-  do_compare_rtx_and_jump (op0, op1, code, 0, mode, NULL_RTX, NULL_RTX, label);
+  do_compare_rtx_and_jump (op0, op1, code, 0, mode, NULL_RTX,
+			   NULL_RTX, label, -1);
 
   jump = get_last_insn ();
   if (!jump || !JUMP_P (jump))
@@ -317,7 +318,7 @@ add_test (rtx cond, edge *e, basic_block dest)
       redirect_edge_and_branch_force (*e, dest);
       return false;
     }
-      
+
   JUMP_LABEL (jump) = label;
 
   /* The jump is supposed to handle an unlikely special case.  */
@@ -333,14 +334,11 @@ add_test (rtx cond, edge *e, basic_block dest)
    describes the loop, DESC describes the number of iterations of the
    loop, and DOLOOP_INSN is the low-overhead looping insn to emit at the
    end of the loop.  CONDITION is the condition separated from the
-   DOLOOP_SEQ.  COUNT is the number of iterations of the LOOP.
-   ZERO_EXTEND_P says to zero extend COUNT after the increment of it to
-   word_mode from FROM_MODE.  */
+   DOLOOP_SEQ.  COUNT is the number of iterations of the LOOP.  */
 
 static void
 doloop_modify (struct loop *loop, struct niter_desc *desc,
-	       rtx doloop_seq, rtx condition, rtx count,
-	       bool zero_extend_p, enum machine_mode from_mode)
+	       rtx doloop_seq, rtx condition, rtx count)
 {
   rtx counter_reg;
   rtx tmp, noloop = NULL_RTX;
@@ -414,11 +412,7 @@ doloop_modify (struct loop *loop, struct niter_desc *desc,
     }
 
   if (increment_count)
-    count = simplify_gen_binary (PLUS, from_mode, count, const1_rtx);
-
-  if (zero_extend_p)
-    count = simplify_gen_unary (ZERO_EXTEND, word_mode,
-				count, from_mode);
+    count = simplify_gen_binary (PLUS, mode, count, const1_rtx);
 
   /* Insert initialization of the count register into the loop header.  */
   start_sequence ();
@@ -462,7 +456,7 @@ doloop_modify (struct loop *loop, struct niter_desc *desc,
 	  set_zero->count = preheader->count;
 	  set_zero->frequency = preheader->frequency;
 	}
- 
+
       if (EDGE_COUNT (set_zero->preds) == 0)
 	{
 	  /* All the conditions were simplified to false, remove the
@@ -477,7 +471,7 @@ doloop_modify (struct loop *loop, struct niter_desc *desc,
 	  sequence = get_insns ();
 	  end_sequence ();
 	  emit_insn_after (sequence, BB_END (set_zero));
-      
+
 	  set_immediate_dominator (CDI_DOMINATORS, set_zero,
 				   recompute_dominator (CDI_DOMINATORS,
 							set_zero));
@@ -530,7 +524,7 @@ doloop_modify (struct loop *loop, struct niter_desc *desc,
   if (true_prob_val)
     {
       /* Seems safer to use the branch probability.  */
-      add_reg_note (jump_insn, REG_BR_PROB, 
+      add_reg_note (jump_insn, REG_BR_PROB,
 		    GEN_INT (desc->in_edge->probability));
     }
 }
@@ -554,7 +548,6 @@ doloop_optimize (struct loop *loop)
   struct niter_desc *desc;
   unsigned word_mode_size;
   unsigned HOST_WIDE_INT word_mode_max;
-  bool zero_extend_p = false;
 
   if (dump_file)
     fprintf (dump_file, "Doloop: Processing loop %d.\n", loop->num);
@@ -629,7 +622,8 @@ doloop_optimize (struct loop *loop)
     {
       if (word_mode_size > GET_MODE_BITSIZE (mode))
 	{
-	  zero_extend_p = true;
+	  count = simplify_gen_unary (ZERO_EXTEND, word_mode,
+				      count, mode);
 	  iterations = simplify_gen_unary (ZERO_EXTEND, word_mode,
 					   iterations, mode);
 	  iterations_max = simplify_gen_unary (ZERO_EXTEND, word_mode,
@@ -673,8 +667,7 @@ doloop_optimize (struct loop *loop)
       return false;
     }
 
-  doloop_modify (loop, desc, doloop_seq, condition, count,
-		 zero_extend_p, mode);
+  doloop_modify (loop, desc, doloop_seq, condition, count);
   return true;
 }
 

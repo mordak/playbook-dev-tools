@@ -1,7 +1,29 @@
 /* -----------------------------------------------------------------------
-   sysv.S
+	
+   sysv.S - Copyright (c) 1998 Andreas Schwab
+	    Copyright (c) 2008 Red Hat, Inc. 
    
    m68k Foreign Function Interface 
+
+   Permission is hereby granted, free of charge, to any person obtaining
+   a copy of this software and associated documentation files (the
+   ``Software''), to deal in the Software without restriction, including
+   without limitation the rights to use, copy, modify, merge, publish,
+   distribute, sublicense, and/or sell copies of the Software, and to
+   permit persons to whom the Software is furnished to do so, subject to
+   the following conditions:
+
+   The above copyright notice and this permission notice shall be included
+   in all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED ``AS IS'', WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+   HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+   WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+   DEALINGS IN THE SOFTWARE.
    ----------------------------------------------------------------------- */
 
 #define LIBFFI_ASM	
@@ -64,7 +86,12 @@ ffi_call_SYSV:
 	move.l	16(%fp),%d2
 
 	| If the return value pointer is NULL, assume no return value.
+	| NOTE: On the mc68000, tst on an address register is not supported.
+#if defined(__mc68000__) && !defined(__mcoldfire__)
+	cmp.w	#0, %a1
+#else
 	tst.l	%a1
+#endif
 	jbeq	noretval
 
 	btst	#0,%d2
@@ -82,19 +109,34 @@ retlongint:
 retfloat:
 	btst	#2,%d2
 	jbeq	retdouble
+#if defined(__MC68881__)
 	fmove.s	%fp0,(%a1)
+#else
+	move.l	%d0,(%a1)
+#endif
 	jbra	epilogue
 
 retdouble:
 	btst	#3,%d2
 	jbeq	retlongdouble
+#if defined(__MC68881__)
 	fmove.d	%fp0,(%a1)
+#else
+	move.l	%d0,(%a1)+
+	move.l	%d1,(%a1)
+#endif
 	jbra	epilogue
 
 retlongdouble:
 	btst	#4,%d2
 	jbeq	retpointer
+#if defined(__MC68881__)
 	fmove.x	%fp0,(%a1)
+#else
+	move.l	%d0,(%a1)+
+	move.l	%d1,(%a1)+
+	move.l	%d2,(%a1)
+#endif
 	jbra	epilogue
 
 retpointer:
@@ -157,16 +199,31 @@ ffi_closure_SYSV:
 	move.l	(%a0),%d1
 	jra	.Lcls_epilogue
 .Lcls_ret_float:
+#if defined(__MC68881__)
 	fmove.s	(%a0),%fp0
+#else
+	move.l	(%a0),%d0
+#endif
 	jra	.Lcls_epilogue
 1:
 	lsr.l	#2,%d0
 	jne	1f
 	jcs	.Lcls_ret_ldouble
+#if defined(__MC68881__)
 	fmove.d	(%a0),%fp0
+#else
+	move.l	(%a0)+,%d0
+	move.l	(%a0),%d1
+#endif
 	jra	.Lcls_epilogue
 .Lcls_ret_ldouble:
+#if defined(__MC68881__)
 	fmove.x	(%a0),%fp0
+#else
+	move.l	(%a0)+,%d0
+	move.l	(%a0)+,%d1
+	move.l	(%a0),%d2
+#endif
 	jra	.Lcls_epilogue
 1:
 	lsr.l	#2,%d0

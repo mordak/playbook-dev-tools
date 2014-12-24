@@ -1,5 +1,5 @@
 /* Built-in and inline functions for gcj
-   Copyright (C) 2001, 2003, 2004, 2005, 2006, 2007, 2009
+   Copyright (C) 2001, 2003, 2004, 2005, 2006, 2007, 2009, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -24,6 +24,9 @@ The Free Software Foundation is independent of Sun Microsystems, Inc.  */
 
 /* Written by Tom Tromey <tromey@redhat.com>.  */
 
+/* FIXME: Still need to include rtl.h here (see below).  */
+#undef IN_GCC_FRONTEND
+
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
@@ -33,8 +36,9 @@ The Free Software Foundation is independent of Sun Microsystems, Inc.  */
 #include "flags.h"
 #include "langhooks.h"
 #include "java-tree.h"
-#include <stdarg.h>
-#include "convert.h"
+
+/* FIXME: All these headers are necessary for sync_compare_and_swap.
+   Front ends should never have to look at that.  */
 #include "rtl.h"
 #include "insn-codes.h"
 #include "expr.h"
@@ -65,15 +69,13 @@ typedef tree builtin_creator_function (tree, tree);
 
 /* Hold a char*, before initialization, or a tree, after
    initialization.  */
-union string_or_tree GTY(())
-{
+union GTY(()) string_or_tree {
   const char * GTY ((tag ("0"))) s;
   tree GTY ((tag ("1"))) t;
 };
 
 /* Used to hold a single builtin record.  */
-struct builtin_record GTY(())
-{
+struct GTY(()) builtin_record {
   union string_or_tree GTY ((desc ("1"))) class_name;
   union string_or_tree GTY ((desc ("1"))) method_name;
   builtin_creator_function * GTY((skip)) creator;
@@ -82,9 +84,9 @@ struct builtin_record GTY(())
 
 static GTY(()) struct builtin_record java_builtins[] =
 {
-  { { "java.lang.Math" }, { "min" }, min_builtin, 0 },
-  { { "java.lang.Math" }, { "max" }, max_builtin, 0 },
-  { { "java.lang.Math" }, { "abs" }, abs_builtin, 0 },
+  { { "java.lang.Math" }, { "min" }, min_builtin, (enum built_in_function) 0 },
+  { { "java.lang.Math" }, { "max" }, max_builtin, (enum built_in_function) 0 },
+  { { "java.lang.Math" }, { "abs" }, abs_builtin, (enum built_in_function) 0 },
   { { "java.lang.Math" }, { "acos" }, NULL, BUILT_IN_ACOS },
   { { "java.lang.Math" }, { "asin" }, NULL, BUILT_IN_ASIN },
   { { "java.lang.Math" }, { "atan" }, NULL, BUILT_IN_ATAN },
@@ -98,31 +100,47 @@ static GTY(()) struct builtin_record java_builtins[] =
   { { "java.lang.Math" }, { "sin" }, NULL, BUILT_IN_SIN },
   { { "java.lang.Math" }, { "sqrt" }, NULL, BUILT_IN_SQRT },
   { { "java.lang.Math" }, { "tan" }, NULL, BUILT_IN_TAN },
-  { { "java.lang.Float" }, { "intBitsToFloat" }, convert_real, 0 },
-  { { "java.lang.Double" }, { "longBitsToDouble" }, convert_real, 0 },
-  { { "java.lang.Float" }, { "floatToRawIntBits" }, convert_real, 0 },
-  { { "java.lang.Double" }, { "doubleToRawLongBits" }, convert_real, 0 },
-  { { "sun.misc.Unsafe" }, { "putInt" }, putObject_builtin, 0},
-  { { "sun.misc.Unsafe" }, { "putLong" }, putObject_builtin, 0},
-  { { "sun.misc.Unsafe" }, { "putObject" }, putObject_builtin, 0},
-  { { "sun.misc.Unsafe" }, { "compareAndSwapInt" }, 
-    compareAndSwapInt_builtin, 0},
-  { { "sun.misc.Unsafe" }, { "compareAndSwapLong" }, 
-    compareAndSwapLong_builtin, 0},
-  { { "sun.misc.Unsafe" }, { "compareAndSwapObject" }, 
-    compareAndSwapObject_builtin, 0},
-  { { "sun.misc.Unsafe" }, { "putOrderedInt" }, putVolatile_builtin, 0},
-  { { "sun.misc.Unsafe" }, { "putOrderedLong" }, putVolatile_builtin, 0},
-  { { "sun.misc.Unsafe" }, { "putOrderedObject" }, putVolatile_builtin, 0},
-  { { "sun.misc.Unsafe" }, { "putIntVolatile" }, putVolatile_builtin, 0},
-  { { "sun.misc.Unsafe" }, { "putLongVolatile" }, putVolatile_builtin, 0},
-  { { "sun.misc.Unsafe" }, { "putObjectVolatile" }, putVolatile_builtin, 0},
-  { { "sun.misc.Unsafe" }, { "getObjectVolatile" }, getVolatile_builtin, 0},
-  { { "sun.misc.Unsafe" }, { "getIntVolatile" }, getVolatile_builtin, 0},
-  { { "sun.misc.Unsafe" }, { "getLongVolatile" }, getVolatile_builtin, 0},
-  { { "sun.misc.Unsafe" }, { "getLong" }, getVolatile_builtin, 0},
-  { { "java.util.concurrent.atomic.AtomicLong" }, { "VMSupportsCS8" }, 
-    VMSupportsCS8_builtin, 0},
+  { { "java.lang.Float" }, { "intBitsToFloat" }, convert_real,
+    (enum built_in_function) 0 },
+  { { "java.lang.Double" }, { "longBitsToDouble" }, convert_real,
+    (enum built_in_function) 0 },
+  { { "java.lang.Float" }, { "floatToRawIntBits" }, convert_real,
+    (enum built_in_function) 0 },
+  { { "java.lang.Double" }, { "doubleToRawLongBits" }, convert_real,
+    (enum built_in_function) 0 },
+  { { "sun.misc.Unsafe" }, { "putInt" }, putObject_builtin,
+    (enum built_in_function) 0},
+  { { "sun.misc.Unsafe" }, { "putLong" }, putObject_builtin,
+    (enum built_in_function) 0},
+  { { "sun.misc.Unsafe" }, { "putObject" }, putObject_builtin,
+  (enum built_in_function) 0},
+  { { "sun.misc.Unsafe" }, { "compareAndSwapInt" },
+    compareAndSwapInt_builtin, (enum built_in_function) 0},
+  { { "sun.misc.Unsafe" }, { "compareAndSwapLong" },
+    compareAndSwapLong_builtin, (enum built_in_function) 0},
+  { { "sun.misc.Unsafe" }, { "compareAndSwapObject" },
+    compareAndSwapObject_builtin, (enum built_in_function) 0},
+  { { "sun.misc.Unsafe" }, { "putOrderedInt" }, putVolatile_builtin,
+    (enum built_in_function) 0},
+  { { "sun.misc.Unsafe" }, { "putOrderedLong" }, putVolatile_builtin,
+    (enum built_in_function) 0},
+  { { "sun.misc.Unsafe" }, { "putOrderedObject" }, putVolatile_builtin,
+    (enum built_in_function) 0},
+  { { "sun.misc.Unsafe" }, { "putIntVolatile" }, putVolatile_builtin,
+    (enum built_in_function) 0},
+  { { "sun.misc.Unsafe" }, { "putLongVolatile" }, putVolatile_builtin,
+    (enum built_in_function) 0},
+  { { "sun.misc.Unsafe" }, { "putObjectVolatile" }, putVolatile_builtin,
+    (enum built_in_function) 0},
+  { { "sun.misc.Unsafe" }, { "getObjectVolatile" }, getVolatile_builtin,
+    (enum built_in_function) 0},
+  { { "sun.misc.Unsafe" }, { "getIntVolatile" }, getVolatile_builtin,
+    (enum built_in_function) 0},
+  { { "sun.misc.Unsafe" }, { "getLongVolatile" }, getVolatile_builtin, (enum built_in_function) 0},
+  { { "sun.misc.Unsafe" }, { "getLong" }, getVolatile_builtin,
+    (enum built_in_function) 0},
+  { { "java.util.concurrent.atomic.AtomicLong" }, { "VMSupportsCS8" },
+    VMSupportsCS8_builtin, (enum built_in_function) 0},
   { { NULL }, { NULL }, NULL, END_BUILTINS }
 };
 
@@ -304,11 +322,13 @@ compareAndSwapInt_builtin (tree method_return_type ATTRIBUTE_UNUSED,
 			   tree orig_call)
 {
   enum machine_mode mode = TYPE_MODE (int_type_node);
-  if (sync_compare_and_swap_cc[mode] != CODE_FOR_nothing 
-      || sync_compare_and_swap[mode] != CODE_FOR_nothing)
+  if (direct_optab_handler (sync_compare_and_swap_optab, mode)
+      != CODE_FOR_nothing
+      || flag_use_atomic_builtins)
     {
       tree addr, stmt;
       UNMARSHAL5 (orig_call);
+      (void) value_type; /* Avoid set but not used warning.  */
 
       addr = build_addr_sum (int_type_node, obj_arg, offset_arg);
       stmt = build_call_expr (built_in_decls[BUILT_IN_BOOL_COMPARE_AND_SWAP_4],
@@ -324,11 +344,17 @@ compareAndSwapLong_builtin (tree method_return_type ATTRIBUTE_UNUSED,
 			    tree orig_call)
 {
   enum machine_mode mode = TYPE_MODE (long_type_node);
-  if (sync_compare_and_swap_cc[mode] != CODE_FOR_nothing 
-      || sync_compare_and_swap[mode] != CODE_FOR_nothing)
+  if (direct_optab_handler (sync_compare_and_swap_optab, mode)
+      != CODE_FOR_nothing
+      || (GET_MODE_SIZE (mode) <= GET_MODE_SIZE (word_mode)
+	  && flag_use_atomic_builtins))
+    /* We don't trust flag_use_atomic_builtins for multi-word
+       compareAndSwap.  Some machines such as ARM have atomic libfuncs
+       but not the multi-word versions.  */
     {
       tree addr, stmt;
       UNMARSHAL5 (orig_call);
+      (void) value_type; /* Avoid set but not used warning.  */
 
       addr = build_addr_sum (long_type_node, obj_arg, offset_arg);
       stmt = build_call_expr (built_in_decls[BUILT_IN_BOOL_COMPARE_AND_SWAP_8],
@@ -343,8 +369,9 @@ compareAndSwapObject_builtin (tree method_return_type ATTRIBUTE_UNUSED,
 			      tree orig_call)
 {
   enum machine_mode mode = TYPE_MODE (ptr_type_node);
-  if (sync_compare_and_swap_cc[mode] != CODE_FOR_nothing 
-      || sync_compare_and_swap[mode] != CODE_FOR_nothing)
+  if (direct_optab_handler (sync_compare_and_swap_optab, mode)
+      != CODE_FOR_nothing
+      || flag_use_atomic_builtins)
   {
     tree addr, stmt;
     int builtin;
@@ -392,7 +419,8 @@ getVolatile_builtin (tree method_return_type ATTRIBUTE_UNUSED,
 {
   tree addr, stmt, modify_stmt, tmp;
   UNMARSHAL3 (orig_call);
-  
+  (void) this_arg; /* Avoid set but not used warning.  */
+
   addr = build_addr_sum (method_return_type, obj_arg, offset_arg);
   addr 
     = fold_convert (build_pointer_type (build_type_variant 
@@ -400,7 +428,7 @@ getVolatile_builtin (tree method_return_type ATTRIBUTE_UNUSED,
   
   stmt = build_call_expr (built_in_decls[BUILT_IN_SYNCHRONIZE], 0);
   
-  tmp = build_decl (VAR_DECL, NULL, method_return_type);
+  tmp = build_decl (BUILTINS_LOCATION, VAR_DECL, NULL, method_return_type);
   DECL_IGNORED_P (tmp) = 1;
   DECL_ARTIFICIAL (tmp) = 1;
   pushdecl (tmp);
@@ -422,8 +450,8 @@ VMSupportsCS8_builtin (tree method_return_type,
 {
   enum machine_mode mode = TYPE_MODE (long_type_node);
   gcc_assert (method_return_type == boolean_type_node);
-  if (sync_compare_and_swap_cc[mode] != CODE_FOR_nothing 
-      || sync_compare_and_swap[mode] != CODE_FOR_nothing)
+  if (direct_optab_handler (sync_compare_and_swap_optab, mode)
+      != CODE_FOR_nothing)
     return boolean_true_node;
   else
     return boolean_false_node;
@@ -443,7 +471,8 @@ define_builtin (enum built_in_function val,
 {
   tree decl;
 
-  decl = build_decl (FUNCTION_DECL, get_identifier (name), type);
+  decl = build_decl (BUILTINS_LOCATION,
+		     FUNCTION_DECL, get_identifier (name), type);
   DECL_EXTERNAL (decl) = 1;
   TREE_PUBLIC (decl) = 1;
   SET_DECL_ASSEMBLER_NAME (decl, get_identifier (libname));
@@ -466,9 +495,8 @@ void
 initialize_builtins (void)
 {
   tree double_ftype_double, double_ftype_double_double;
-  tree float_ftype_float, float_ftype_float_float;
+  tree float_ftype_float_float;
   tree boolean_ftype_boolean_boolean;
-  tree t;
   int i;
 
   for (i = 0; java_builtins[i].builtin_code != END_BUILTINS; ++i)
@@ -482,15 +510,15 @@ initialize_builtins (void)
 
   void_list_node = end_params_node;
 
-  t = tree_cons (NULL_TREE, float_type_node, end_params_node);
-  float_ftype_float = build_function_type (float_type_node, t);
-  t = tree_cons (NULL_TREE, float_type_node, t);
-  float_ftype_float_float = build_function_type (float_type_node, t);
+  float_ftype_float_float
+    = build_function_type_list (float_type_node,
+				float_type_node, float_type_node, NULL_TREE);
 
-  t = tree_cons (NULL_TREE, double_type_node, end_params_node);
-  double_ftype_double = build_function_type (double_type_node, t);
-  t = tree_cons (NULL_TREE, double_type_node, t);
-  double_ftype_double_double = build_function_type (double_type_node, t);
+  double_ftype_double
+    = build_function_type_list (double_type_node, double_type_node, NULL_TREE);
+  double_ftype_double_double
+    = build_function_type_list (double_type_node,
+				double_type_node, double_type_node, NULL_TREE);
 
   define_builtin (BUILT_IN_FMOD, "__builtin_fmod",
 		  double_ftype_double_double, "fmod", BUILTIN_CONST);
@@ -537,9 +565,10 @@ initialize_builtins (void)
 		  double_ftype_double, "_ZN4java4lang4Math3tanEJdd",
 		  BUILTIN_CONST);
   
-  t = tree_cons (NULL_TREE, boolean_type_node, end_params_node);
-  t = tree_cons (NULL_TREE, boolean_type_node, t);
-  boolean_ftype_boolean_boolean = build_function_type (boolean_type_node, t);
+  boolean_ftype_boolean_boolean
+    = build_function_type_list (boolean_type_node,
+				boolean_type_node, boolean_type_node,
+				NULL_TREE);
   define_builtin (BUILT_IN_EXPECT, "__builtin_expect", 
 		  boolean_ftype_boolean_boolean,
 		  "__builtin_expect",
@@ -559,7 +588,7 @@ initialize_builtins (void)
 					    int_type_node, NULL_TREE), 
 		  "__sync_bool_compare_and_swap_8", 0);
   define_builtin (BUILT_IN_SYNCHRONIZE, "__sync_synchronize",
-		  build_function_type (void_type_node, void_list_node),
+		  build_function_type_list (void_type_node, NULL_TREE),
 		  "__sync_synchronize", BUILTIN_NOTHROW);
   
   define_builtin (BUILT_IN_RETURN_ADDRESS, "__builtin_return_address",

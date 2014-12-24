@@ -1,7 +1,7 @@
 // vector<bool> specialization -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
-// Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
+// 2011 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -49,9 +49,9 @@
  * purpose.  It is provided "as is" without express or implied warranty.
  */
 
-/** @file stl_bvector.h
+/** @file bits/stl_bvector.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{vector}
  */
 
 #ifndef _STL_BVECTOR_H
@@ -59,7 +59,9 @@
 
 #include <initializer_list>
 
-_GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
   typedef unsigned long _Bit_type;
   enum { _S_word_bit = int(__CHAR_BIT__ * sizeof(_Bit_type)) };
@@ -446,12 +448,15 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
       }
     };
 
-_GLIBCXX_END_NESTED_NAMESPACE
+_GLIBCXX_END_NAMESPACE_CONTAINER
+} // namespace std
 
 // Declare a partial specialization of vector<T, Alloc>.
 #include <bits/stl_vector.h>
 
-_GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
   /**
    *  @brief  A specialization of vector for booleans which offers fixed time
@@ -474,6 +479,10 @@ template<typename _Alloc>
   class vector<bool, _Alloc> : protected _Bvector_base<_Alloc>
   {
     typedef _Bvector_base<_Alloc>			 _Base;
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+    template<typename> friend class hash;
+#endif
 
   public:
     typedef bool                                         value_type;
@@ -524,7 +533,7 @@ template<typename _Alloc>
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
     vector(vector&& __x)
-    : _Base(std::forward<_Base>(__x)) { }
+    : _Base(std::move(__x)) { }
 
     vector(initializer_list<bool> __l,
 	   const allocator_type& __a = allocator_type())
@@ -565,6 +574,7 @@ template<typename _Alloc>
     vector&
     operator=(vector&& __x)
     {
+      // NB: DR 1204.
       // NB: DR 675.
       this->clear();
       this->swap(__x); 
@@ -600,7 +610,7 @@ template<typename _Alloc>
     assign(initializer_list<bool> __l)
     { this->assign(__l.begin(), __l.end()); }
 #endif
-    
+
     iterator
     begin()
     { return this->_M_impl._M_start; }
@@ -743,11 +753,7 @@ template<typename _Alloc>
     }
 
     void
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-    swap(vector&& __x)
-#else
     swap(vector& __x)
-#endif
     {
       std::swap(this->_M_impl._M_start, __x._M_impl._M_start);
       std::swap(this->_M_impl._M_finish, __x._M_impl._M_finish);
@@ -815,7 +821,8 @@ template<typename _Alloc>
     iterator
     erase(iterator __first, iterator __last)
     {
-      _M_erase_at_end(std::copy(__last, end(), __first));
+      if (__first != __last)
+	_M_erase_at_end(std::copy(__last, end(), __first));
       return __first;
     }
 
@@ -827,6 +834,12 @@ template<typename _Alloc>
       else
         insert(end(), __new_size - size(), __x);
     }
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+    void
+    shrink_to_fit()
+    { std::__shrink_to_fit<vector>::_S_do_it(*this); }
+#endif
 
     void
     flip()
@@ -1019,6 +1032,30 @@ template<typename _Alloc>
     { this->_M_impl._M_finish = __pos; }
   };
 
-_GLIBCXX_END_NESTED_NAMESPACE
+_GLIBCXX_END_NAMESPACE_CONTAINER
+} // namespace std
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+
+#include <bits/functional_hash.h>
+
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
+  // DR 1182.
+  /// std::hash specialization for vector<bool>.
+  template<typename _Alloc>
+    struct hash<_GLIBCXX_STD_C::vector<bool, _Alloc>>
+    : public __hash_base<size_t, _GLIBCXX_STD_C::vector<bool, _Alloc>>
+    {
+      size_t
+      operator()(const _GLIBCXX_STD_C::vector<bool, _Alloc>& __b) const;
+    };
+
+_GLIBCXX_END_NAMESPACE_VERSION
+}// namespace std
+
+#endif // __GXX_EXPERIMENTAL_CXX0X__
 
 #endif

@@ -1,5 +1,6 @@
 /* HOST_WIDE_INT definitions for the GNU compiler.
-   Copyright (C) 1998, 2002, 2004, 2008 Free Software Foundation, Inc.
+   Copyright (C) 1998, 2002, 2004, 2008, 2009, 2010
+   Free Software Foundation, Inc.
 
    This file is part of GCC.
 
@@ -16,8 +17,14 @@
 #define HOST_BITS_PER_LONG  (CHAR_BIT * SIZEOF_LONG)
 
 /* The string that should be inserted into a printf style format to
+   indicate a "long" operand.  */
+#ifndef HOST_LONG_FORMAT
+#define HOST_LONG_FORMAT "l"
+#endif
+
+/* The string that should be inserted into a printf style format to
    indicate a "long long" operand.  */
-#ifndef HOST_LONG_LONG_FORMAT 
+#ifndef HOST_LONG_LONG_FORMAT
 #define HOST_LONG_LONG_FORMAT "ll"
 #endif
 
@@ -70,14 +77,16 @@ extern char sizeof_long_long_must_be_8[sizeof(long long) == 8 ? 1 : -1];
 /* Various printf format strings for HOST_WIDE_INT.  */
 
 #if HOST_BITS_PER_WIDE_INT == HOST_BITS_PER_LONG
-# define HOST_WIDE_INT_PRINT "l"
+# define HOST_WIDE_INT_PRINT HOST_LONG_FORMAT
 # define HOST_WIDE_INT_PRINT_C "L"
   /* 'long' might be 32 or 64 bits, and the number of leading zeroes
      must be tweaked accordingly.  */
 # if HOST_BITS_PER_WIDE_INT == 64
-#  define HOST_WIDE_INT_PRINT_DOUBLE_HEX "0x%lx%016lx"
+#  define HOST_WIDE_INT_PRINT_DOUBLE_HEX \
+     "0x%" HOST_LONG_FORMAT "x%016" HOST_LONG_FORMAT "x"
 # else
-#  define HOST_WIDE_INT_PRINT_DOUBLE_HEX "0x%lx%08lx"
+#  define HOST_WIDE_INT_PRINT_DOUBLE_HEX \
+     "0x%" HOST_LONG_FORMAT "x%08" HOST_LONG_FORMAT "x"
 # endif
 #else
 # define HOST_WIDE_INT_PRINT HOST_LONG_LONG_FORMAT
@@ -90,7 +99,7 @@ extern char sizeof_long_long_must_be_8[sizeof(long long) == 8 ? 1 : -1];
 #define HOST_WIDE_INT_PRINT_DEC "%" HOST_WIDE_INT_PRINT "d"
 #define HOST_WIDE_INT_PRINT_DEC_C HOST_WIDE_INT_PRINT_DEC HOST_WIDE_INT_PRINT_C
 #define HOST_WIDE_INT_PRINT_UNSIGNED "%" HOST_WIDE_INT_PRINT "u"
-#define HOST_WIDE_INT_PRINT_HEX "0x%" HOST_WIDE_INT_PRINT "x"
+#define HOST_WIDE_INT_PRINT_HEX "%#" HOST_WIDE_INT_PRINT "x"
 
 /* Set HOST_WIDEST_INT.  This is a 64-bit type unless the compiler
    in use has no 64-bit type at all; in that case it's 32 bits.  */
@@ -99,6 +108,7 @@ extern char sizeof_long_long_must_be_8[sizeof(long long) == 8 ? 1 : -1];
     || (HOST_BITS_PER_LONGLONG < 64 && HOST_BITS_PER___INT64 < 64)
 # define HOST_WIDEST_INT		      HOST_WIDE_INT
 # define HOST_BITS_PER_WIDEST_INT	      HOST_BITS_PER_WIDE_INT
+# define HOST_WIDEST_INT_PRINT                HOST_WIDE_INT_PRINT
 # define HOST_WIDEST_INT_PRINT_DEC	      HOST_WIDE_INT_PRINT_DEC
 # define HOST_WIDEST_INT_PRINT_DEC_C	      HOST_WIDE_INT_PRINT_DEC_C
 # define HOST_WIDEST_INT_PRINT_UNSIGNED	      HOST_WIDE_INT_PRINT_UNSIGNED
@@ -116,10 +126,11 @@ extern char sizeof_long_long_must_be_8[sizeof(long long) == 8 ? 1 : -1];
     #error "This line should be impossible to reach"
 #  endif
 # endif
+# define HOST_WIDEST_INT_PRINT                HOST_LONG_LONG_FORMAT
 # define HOST_WIDEST_INT_PRINT_DEC	      "%" HOST_LONG_LONG_FORMAT "d"
 # define HOST_WIDEST_INT_PRINT_DEC_C	      "%" HOST_LONG_LONG_FORMAT "dLL"
 # define HOST_WIDEST_INT_PRINT_UNSIGNED	      "%" HOST_LONG_LONG_FORMAT "u"
-# define HOST_WIDEST_INT_PRINT_HEX	      "0x%" HOST_LONG_LONG_FORMAT "x"
+# define HOST_WIDEST_INT_PRINT_HEX	      "%#" HOST_LONG_LONG_FORMAT "x"
 # define HOST_WIDEST_INT_PRINT_DOUBLE_HEX     \
     "0x%" HOST_LONG_LONG_FORMAT "x%016" HOST_LONG_LONG_FORMAT "x"
 #endif
@@ -146,5 +157,104 @@ extern char sizeof_long_long_must_be_8[sizeof(long long) == 8 ? 1 : -1];
 #  define HOST_WIDEST_FAST_INT long
 #  define HOST_BITS_PER_WIDEST_FAST_INT HOST_BITS_PER_LONG
 #endif
+
+/* Inline functions operating on HOST_WIDE_INT.  */
+#if GCC_VERSION < 3004
+
+extern int clz_hwi (unsigned HOST_WIDE_INT x);
+extern int ctz_hwi (unsigned HOST_WIDE_INT x);
+extern int ffs_hwi (unsigned HOST_WIDE_INT x);
+
+/* Return log2, or -1 if not exact.  */
+extern int exact_log2                  (unsigned HOST_WIDE_INT);
+
+/* Return floor of log2, with -1 for zero.  */
+extern int floor_log2                  (unsigned HOST_WIDE_INT);
+
+#else /* GCC_VERSION >= 3004 */
+
+/* For convenience, define 0 -> word_size.  */
+static inline int
+clz_hwi (unsigned HOST_WIDE_INT x)
+{
+  if (x == 0)
+    return HOST_BITS_PER_WIDE_INT;
+# if HOST_BITS_PER_WIDE_INT == HOST_BITS_PER_LONG
+  return __builtin_clzl (x);
+# elif HOST_BITS_PER_WIDE_INT == HOST_BITS_PER_LONGLONG
+  return __builtin_clzll (x);
+# else
+  return __builtin_clz (x);
+# endif
+}
+
+static inline int
+ctz_hwi (unsigned HOST_WIDE_INT x)
+{
+  if (x == 0)
+    return HOST_BITS_PER_WIDE_INT;
+# if HOST_BITS_PER_WIDE_INT == HOST_BITS_PER_LONG
+  return __builtin_ctzl (x);
+# elif HOST_BITS_PER_WIDE_INT == HOST_BITS_PER_LONGLONG
+  return __builtin_ctzll (x);
+# else
+  return __builtin_ctz (x);
+# endif
+}
+
+static inline int
+ffs_hwi (unsigned HOST_WIDE_INT x)
+{
+# if HOST_BITS_PER_WIDE_INT == HOST_BITS_PER_LONG
+  return __builtin_ffsl (x);
+# elif HOST_BITS_PER_WIDE_INT == HOST_BITS_PER_LONGLONG
+  return __builtin_ffsll (x);
+# else
+  return __builtin_ffs (x);
+# endif
+}
+
+static inline int
+floor_log2 (unsigned HOST_WIDE_INT x)
+{
+  return HOST_BITS_PER_WIDE_INT - 1 - clz_hwi (x);
+}
+
+static inline int
+exact_log2 (unsigned HOST_WIDE_INT x)
+{
+  return x == (x & -x) && x ? ctz_hwi (x) : -1;
+}
+
+#endif /* GCC_VERSION >= 3004 */
+
+/* Compute the greatest common divisor of two numbers using
+   Euclid's algorithm.  */
+
+static inline int
+gcd (int a, int b)
+{
+  int x, y, z;
+
+  x = abs (a);
+  y = abs (b);
+
+  while (x > 0)
+    {
+      z = y % x;
+      y = x;
+      x = z;
+    }
+
+  return y;
+}
+
+/* Compute the least common multiple of two numbers A and B .  */
+
+static inline int
+least_common_multiple (int a, int b)
+{
+  return (abs (a) * abs (b) / gcd (a, b));
+}
 
 #endif /* ! GCC_HWINT_H */

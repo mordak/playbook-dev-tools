@@ -1,6 +1,7 @@
 // Deque implementation (out of line) -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
+// 2009, 2010, 2011
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -49,15 +50,44 @@
  * purpose.  It is provided "as is" without express or implied warranty.
  */
 
-/** @file deque.tcc
+/** @file bits/deque.tcc
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{deque}
  */
 
 #ifndef _DEQUE_TCC
 #define _DEQUE_TCC 1
 
-_GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_CONTAINER
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+  template <typename _Tp, typename _Alloc>
+    void
+    deque<_Tp, _Alloc>::
+    _M_default_initialize()
+    {
+      _Map_pointer __cur;
+      __try
+        {
+          for (__cur = this->_M_impl._M_start._M_node;
+	       __cur < this->_M_impl._M_finish._M_node;
+	       ++__cur)
+            std::__uninitialized_default_a(*__cur, *__cur + _S_buffer_size(),
+					   _M_get_Tp_allocator());
+          std::__uninitialized_default_a(this->_M_impl._M_finish._M_first,
+					 this->_M_impl._M_finish._M_cur,
+					 _M_get_Tp_allocator());
+        }
+      __catch(...)
+        {
+          std::_Destroy(this->_M_impl._M_start, iterator(*__cur, __cur),
+			_M_get_Tp_allocator());
+          __throw_exception_again;
+        }
+    }
+#endif
 
   template <typename _Tp, typename _Alloc>
     deque<_Tp, _Alloc>&
@@ -188,7 +218,9 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
     deque<_Tp, _Alloc>::
     erase(iterator __first, iterator __last)
     {
-      if (__first == begin() && __last == end())
+      if (__first == __last)
+	return __first;
+      else if (__first == begin() && __last == end())
 	{
 	  clear();
 	  return end();
@@ -270,6 +302,32 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
       else
         _M_insert_aux(__pos, __n, __x);
     }
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+  template <typename _Tp, typename _Alloc>
+    void
+    deque<_Tp, _Alloc>::
+    _M_default_append(size_type __n)
+    {
+      if (__n)
+	{
+	  iterator __new_finish = _M_reserve_elements_at_back(__n);
+	  __try
+	    {
+	      std::__uninitialized_default_a(this->_M_impl._M_finish,
+					     __new_finish,
+					     _M_get_Tp_allocator());
+	      this->_M_impl._M_finish = __new_finish;
+	    }
+	  __catch(...)
+	    {
+	      _M_destroy_nodes(this->_M_impl._M_finish._M_node + 1,
+			       __new_finish._M_node + 1);
+	      __throw_exception_again;
+	    }
+	}
+    }
+#endif
 
   template <typename _Tp, typename _Alloc>
     void
@@ -837,7 +895,7 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
     }
 
   // Overload for deque::iterators, exploiting the "segmented-iterator
-  // optimization".  NB: leave const_iterators alone!
+  // optimization".
   template<typename _Tp>
     void
     fill(const _Deque_iterator<_Tp, _Tp&, _Tp*>& __first,
@@ -858,6 +916,133 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_D)
 	std::fill(__first._M_cur, __last._M_cur, __value);
     }
 
-_GLIBCXX_END_NESTED_NAMESPACE
+  template<typename _Tp>
+    _Deque_iterator<_Tp, _Tp&, _Tp*>
+    copy(_Deque_iterator<_Tp, const _Tp&, const _Tp*> __first,
+	 _Deque_iterator<_Tp, const _Tp&, const _Tp*> __last,
+	 _Deque_iterator<_Tp, _Tp&, _Tp*> __result)
+    {
+      typedef typename _Deque_iterator<_Tp, _Tp&, _Tp*>::_Self _Self;
+      typedef typename _Self::difference_type difference_type;
+
+      difference_type __len = __last - __first;
+      while (__len > 0)
+	{
+	  const difference_type __clen
+	    = std::min(__len, std::min(__first._M_last - __first._M_cur,
+				       __result._M_last - __result._M_cur));
+	  std::copy(__first._M_cur, __first._M_cur + __clen, __result._M_cur);
+	  __first += __clen;
+	  __result += __clen;
+	  __len -= __clen;
+	}
+      return __result;
+    }
+
+  template<typename _Tp>
+    _Deque_iterator<_Tp, _Tp&, _Tp*>
+    copy_backward(_Deque_iterator<_Tp, const _Tp&, const _Tp*> __first,
+		  _Deque_iterator<_Tp, const _Tp&, const _Tp*> __last,
+		  _Deque_iterator<_Tp, _Tp&, _Tp*> __result)
+    {
+      typedef typename _Deque_iterator<_Tp, _Tp&, _Tp*>::_Self _Self;
+      typedef typename _Self::difference_type difference_type;
+
+      difference_type __len = __last - __first;
+      while (__len > 0)
+	{
+	  difference_type __llen = __last._M_cur - __last._M_first;
+	  _Tp* __lend = __last._M_cur;
+
+	  difference_type __rlen = __result._M_cur - __result._M_first;
+	  _Tp* __rend = __result._M_cur;
+
+	  if (!__llen)
+	    {
+	      __llen = _Self::_S_buffer_size();
+	      __lend = *(__last._M_node - 1) + __llen;
+	    }
+	  if (!__rlen)
+	    {
+	      __rlen = _Self::_S_buffer_size();
+	      __rend = *(__result._M_node - 1) + __rlen;
+	    }
+
+	  const difference_type __clen = std::min(__len,
+						  std::min(__llen, __rlen));
+	  std::copy_backward(__lend - __clen, __lend, __rend);
+	  __last -= __clen;
+	  __result -= __clen;
+	  __len -= __clen;
+	}
+      return __result;
+    }
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+  template<typename _Tp>
+    _Deque_iterator<_Tp, _Tp&, _Tp*>
+    move(_Deque_iterator<_Tp, const _Tp&, const _Tp*> __first,
+	 _Deque_iterator<_Tp, const _Tp&, const _Tp*> __last,
+	 _Deque_iterator<_Tp, _Tp&, _Tp*> __result)
+    {
+      typedef typename _Deque_iterator<_Tp, _Tp&, _Tp*>::_Self _Self;
+      typedef typename _Self::difference_type difference_type;
+
+      difference_type __len = __last - __first;
+      while (__len > 0)
+	{
+	  const difference_type __clen
+	    = std::min(__len, std::min(__first._M_last - __first._M_cur,
+				       __result._M_last - __result._M_cur));
+	  std::move(__first._M_cur, __first._M_cur + __clen, __result._M_cur);
+	  __first += __clen;
+	  __result += __clen;
+	  __len -= __clen;
+	}
+      return __result;
+    }
+
+  template<typename _Tp>
+    _Deque_iterator<_Tp, _Tp&, _Tp*>
+    move_backward(_Deque_iterator<_Tp, const _Tp&, const _Tp*> __first,
+		  _Deque_iterator<_Tp, const _Tp&, const _Tp*> __last,
+		  _Deque_iterator<_Tp, _Tp&, _Tp*> __result)
+    {
+      typedef typename _Deque_iterator<_Tp, _Tp&, _Tp*>::_Self _Self;
+      typedef typename _Self::difference_type difference_type;
+
+      difference_type __len = __last - __first;
+      while (__len > 0)
+	{
+	  difference_type __llen = __last._M_cur - __last._M_first;
+	  _Tp* __lend = __last._M_cur;
+
+	  difference_type __rlen = __result._M_cur - __result._M_first;
+	  _Tp* __rend = __result._M_cur;
+
+	  if (!__llen)
+	    {
+	      __llen = _Self::_S_buffer_size();
+	      __lend = *(__last._M_node - 1) + __llen;
+	    }
+	  if (!__rlen)
+	    {
+	      __rlen = _Self::_S_buffer_size();
+	      __rend = *(__result._M_node - 1) + __rlen;
+	    }
+
+	  const difference_type __clen = std::min(__len,
+						  std::min(__llen, __rlen));
+	  std::move_backward(__lend - __clen, __lend, __rend);
+	  __last -= __clen;
+	  __result -= __clen;
+	  __len -= __clen;
+	}
+      return __result;
+    }
+#endif
+
+_GLIBCXX_END_NAMESPACE_CONTAINER
+} // namespace std
 
 #endif

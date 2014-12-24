@@ -1,5 +1,5 @@
 /* MIPS ELF specific backend routines.
-   Copyright 2002, 2003, 2004, 2005, 2006, 2007
+   Copyright 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
    Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -21,6 +21,7 @@
 
 #include "elf/common.h"
 #include "elf/internal.h"
+#include "elf/mips.h"
 
 extern bfd_boolean _bfd_mips_elf_new_section_hook
   (bfd *, asection *);
@@ -41,7 +42,7 @@ extern bfd_boolean _bfd_mips_elf_section_from_bfd_section
 extern bfd_boolean _bfd_mips_elf_add_symbol_hook
   (bfd *, struct bfd_link_info *, Elf_Internal_Sym *,
    const char **, flagword *, asection **, bfd_vma *);
-extern bfd_boolean _bfd_mips_elf_link_output_symbol_hook
+extern int _bfd_mips_elf_link_output_symbol_hook
   (struct bfd_link_info *, const char *, Elf_Internal_Sym *,
    asection *, struct elf_link_hash_entry *);
 extern bfd_boolean _bfd_mips_elf_create_dynamic_sections
@@ -81,6 +82,8 @@ extern void _bfd_mips_elf_copy_indirect_symbol
    struct elf_link_hash_entry *);
 extern bfd_boolean _bfd_mips_elf_ignore_discarded_relocs
   (asection *);
+extern bfd_boolean _bfd_mips_elf_is_target_special_symbol
+  (bfd *abfd, asymbol *sym);
 extern bfd_boolean _bfd_mips_elf_find_nearest_line
   (bfd *, asection *, asymbol **, bfd_vma, const char **,
    const char **, unsigned int *);
@@ -91,8 +94,9 @@ extern bfd_boolean _bfd_mips_elf_set_section_contents
 extern bfd_byte *_bfd_elf_mips_get_relocated_section_contents
   (bfd *, struct bfd_link_info *, struct bfd_link_order *,
    bfd_byte *, bfd_boolean, asymbol **);
-extern bfd_boolean _bfd_mips_elf_mkobject
-  (bfd *);
+extern bfd_boolean _bfd_mips_elf_relax_section
+  (bfd *abfd, asection *sec, struct bfd_link_info *link_info,
+   bfd_boolean *again);
 extern struct bfd_link_hash_table *_bfd_mips_elf_link_hash_table_create
   (bfd *);
 extern struct bfd_link_hash_table *_bfd_mips_vxworks_link_hash_table_create
@@ -112,9 +116,9 @@ extern bfd_boolean _bfd_mips_elf_write_section
 
 extern bfd_boolean _bfd_mips_elf_read_ecoff_info
   (bfd *, asection *, struct ecoff_debug_info *);
-extern void _bfd_mips16_elf_reloc_unshuffle
+extern void _bfd_mips_elf_reloc_unshuffle
   (bfd *, int, bfd_boolean, bfd_byte *);
-extern void _bfd_mips16_elf_reloc_shuffle
+extern void _bfd_mips_elf_reloc_shuffle
   (bfd *, int, bfd_boolean, bfd_byte *);
 extern bfd_reloc_status_type _bfd_mips_elf_gprel16_with_gp
   (bfd *, asymbol *, arelent *, asection *, bfd_boolean, void *, bfd_vma);
@@ -156,6 +160,21 @@ extern void _bfd_mips_post_process_headers
 extern const struct bfd_elf_special_section _bfd_mips_elf_special_sections [];
 
 extern bfd_boolean _bfd_mips_elf_common_definition (Elf_Internal_Sym *);
+
+static inline bfd_boolean
+gprel16_reloc_p (unsigned int r_type)
+{
+  return (r_type == R_MIPS_GPREL16
+	  || r_type == R_MIPS16_GPREL
+	  || r_type == R_MICROMIPS_GPREL16
+	  || r_type == R_MICROMIPS_GPREL7_S2);
+}
+
+static inline bfd_boolean
+literal_reloc_p (int r_type)
+{
+  return r_type == R_MIPS_LITERAL || r_type == R_MICROMIPS_LITERAL;
+}
 
 #define elf_backend_common_definition   _bfd_mips_elf_common_definition
 #define elf_backend_name_local_section_symbols \

@@ -1,14 +1,18 @@
-/* { dg-options "-O -floop-block -fdump-tree-graphite-all" } */
+#define DEBUG 0
+#if DEBUG
+#include <stdio.h>
+#endif
 
 #define N 1000
+int a[N];
 
-int toto()
+static int __attribute__((noinline))
+foo (void)
 {
   int j;
   int i;
-  int a[N];
-  int b[N];
 
+  /* This is not blocked as it is not profitable.  */
   for (i = 0; i < N; i++)
     for (j = 0; j < N; j++)
       a[j] = a[i] + 1;
@@ -16,10 +20,27 @@ int toto()
   return a[0];
 }
 
-main()
+extern void abort ();
+
+int
+main (void)
 {
-  return toto();
+  int i, res;
+
+  for (i = 0; i < N; i++)
+    a[i] = i;
+
+  res = foo ();
+
+#if DEBUG
+  fprintf (stderr, "res = %d \n", res);
+#endif
+
+  if (res != 1999)
+    abort ();
+
+  return 0;
 }
 
-/* { dg-final { scan-tree-dump-times "will be loop blocked" 1 "graphite"} } */ 
+/* { dg-final { scan-tree-dump-not "will be loop blocked" "graphite" } } */
 /* { dg-final { cleanup-tree-dump "graphite" } } */

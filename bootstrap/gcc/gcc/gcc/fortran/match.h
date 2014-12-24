@@ -1,5 +1,5 @@
 /* All matcher functions.
-   Copyright (C) 2003, 2005, 2007, 2008
+   Copyright (C) 2003, 2005, 2007, 2008, 2010
    Free Software Foundation, Inc.
    Contributed by Steven Bosscher
 
@@ -23,8 +23,6 @@ along with GCC; see the file COPYING3.  If not see
 #ifndef GFC_MATCH_H
 #define GFC_MATCH_H
 
-#include "gfortran.h"
-
 /* gfc_new_block points to the symbol of a newly matched block.  */
 extern gfc_symbol *gfc_new_block;
 
@@ -33,6 +31,7 @@ extern gfc_symbol *gfc_new_block;
    separate.  */
 extern gfc_st_label *gfc_statement_label;
 
+extern int gfc_matching_ptr_assignment;
 extern int gfc_matching_procptr_assignment;
 extern bool gfc_matching_prefix;
 
@@ -69,14 +68,21 @@ match gfc_match_assignment (void);
 match gfc_match_if (gfc_statement *);
 match gfc_match_else (void);
 match gfc_match_elseif (void);
+match gfc_match_critical (void);
+match gfc_match_block (void);
+match gfc_match_associate (void);
 match gfc_match_do (void);
 match gfc_match_cycle (void);
 match gfc_match_exit (void);
 match gfc_match_pause (void);
 match gfc_match_stop (void);
+match gfc_match_error_stop (void);
 match gfc_match_continue (void);
 match gfc_match_assign (void);
 match gfc_match_goto (void);
+match gfc_match_sync_all (void);
+match gfc_match_sync_images (void);
+match gfc_match_sync_memory (void);
 
 match gfc_match_allocate (void);
 match gfc_match_nullify (void);
@@ -100,6 +106,9 @@ match gfc_match_equivalence (void);
 match gfc_match_st_function (void);
 match gfc_match_case (void);
 match gfc_match_select (void);
+match gfc_match_select_type (void);
+match gfc_match_type_is (void);
+match gfc_match_class_is (void);
 match gfc_match_where (gfc_statement *);
 match gfc_match_elsewhere (void);
 match gfc_match_forall (gfc_statement *);
@@ -138,7 +147,7 @@ match gfc_match_data (void);
 match gfc_match_null (gfc_expr **);
 match gfc_match_kind_spec (gfc_typespec *, bool);
 match gfc_match_old_kind_spec (gfc_typespec *);
-match gfc_match_type_spec (gfc_typespec *, int);
+match gfc_match_decl_type_spec (gfc_typespec *, int);
 
 match gfc_match_end (gfc_statement *);
 match gfc_match_data_decl (void);
@@ -158,8 +167,12 @@ void gfc_set_constant_character_len (int, gfc_expr *, int);
 
 /* Matchers for attribute declarations.  */
 match gfc_match_allocatable (void);
+match gfc_match_asynchronous (void);
+match gfc_match_codimension (void);
+match gfc_match_contiguous (void);
 match gfc_match_dimension (void);
 match gfc_match_external (void);
+match gfc_match_gcc_attributes (void);
 match gfc_match_import (void);
 match gfc_match_intent (void);
 match gfc_match_intrinsic (void);
@@ -203,8 +216,8 @@ gfc_try gfc_reduce_init_expr (gfc_expr *expr);
 match gfc_match_init_expr (gfc_expr **);
 
 /* array.c.  */
-match gfc_match_array_spec (gfc_array_spec **);
-match gfc_match_array_ref (gfc_array_ref *, gfc_array_spec *, int);
+match gfc_match_array_spec (gfc_array_spec **, bool, bool);
+match gfc_match_array_ref (gfc_array_ref *, gfc_array_spec *, int, int);
 match gfc_match_array_constructor (gfc_expr **);
 
 /* interface.c.  */

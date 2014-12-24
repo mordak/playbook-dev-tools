@@ -34,11 +34,11 @@ program main
   b2 = eoshift (a2,1,boundary=c2(:,:)) ! { dg-error "have rank 1 or be a scalar" }
   b2 = eoshift (a2,(/1/), boundary=c2(:,:)) ! { dg-error "have rank 1 or be a scalar" }
 
-  b = eoshift (a,(/1/), boundary=c(1,:)) ! { dg-error "Different shape in dimension 1" }
+  b = eoshift (a,(/1/), boundary=c(1,:)) ! { dg-error "invalid shape in dimension" }
 
   if (any(eoshift(foo,dim=1,shift=1,boundary=(/42.0,-7.0/))/= 0)) call abort() ! { dg-error "must be a scalar" }
   if (any(eoshift(tempn(2:1),dim=1,shift=1,boundary=(/42.0,-7.0/))/= 0)) call abort() ! { dg-error "must be a scalar" }
 
-  if (any(unpack(tempv,tempv(1:0)/=0,tempv) /= -47)) call abort() ! { dg-error "Different shape" }
-  if (any(unpack(tempv(5:4),tempv(1:0)/=0,tempv) /= -47)) call abort() ! { dg-error "Different shape" }
+  if (any(unpack(tempv,tempv(1:0)/=0,tempv) /= -47)) call abort() ! { dg-error "must have identical shape" }
+  if (any(unpack(tempv(5:4),tempv(1:0)/=0,tempv) /= -47)) call abort() ! { dg-error "must have identical shape" }
 end program main

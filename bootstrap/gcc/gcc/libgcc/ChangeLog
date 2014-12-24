@@ -1,14 +1,417 @@
-2009-10-15  Release Manager
+2012-03-01  Release Manager
 
-	* GCC 4.4.2 released.
+	* GCC 4.6.3 released.
 
-2009-07-22  Release Manager
+2011-12-15  H.J. Lu  <hongjiu.lu@intel.com>
 
-	* GCC 4.4.1 released.
+	Backport from mainline
+	2011-12-14  H.J. Lu  <hongjiu.lu@intel.com>
 
-2009-04-21  Release Manager
+	* generic-morestack.c (__generic_morestack_set_initial_sp): Check
+	__GLIBC__ instead of __linux__ when using __SIGRTMIN.
 
-	* GCC 4.4.0 released.
+2011-11-23  Gerald Pfeifer  <gerald@pfeifer.com>
+
+	* config.host (*-*-freebsd[12], *-*-freebsd[12].*,
+	*-*-freebsd*aout*): Remove.
+
+2011-10-26  Release Manager
+
+	* GCC 4.6.2 released.
+
+2011-08-24  Richard Sandiford  <richard.sandiford@linaro.org>
+
+	PR target/50090
+	* config/arm/bpabi-lib.h (RENAME_LIBRARY_SET): Delete.
+	(RENAME_LIBRARY): Use a C-level alias instead of an assembly one.
+
+2011-08-23  Uros Bizjak  <ubizjak@gmail.com>
+
+	* config/i386/64/sfp-machine.h (ASM_INVALID): New define.
+	(ASM_DIVZERO): Ditto.
+	(FP_HANLDE_EXCEPTIONS): Use ASM_INVALID and ASM_DIVZERO.
+
+2011-06-27  Release Manager
+
+	* GCC 4.6.1 released.
+
+2011-03-25  Release Manager
+
+	* GCC 4.6.0 released.
+
+2011-03-14  Andreas Tobler  <andreast@fgznet.ch>
+
+	* config.host (cpu_type): Add FreeBSD PowerPC specific parts.
+	Adjust copyright year.
+
+2011-03-07  Ian Lance Taylor  <iant@google.com>
+
+	* generic-morestack.c (__splitstack_find): Adjust returned stack
+	pointer to include all registers pushed by __morestack.
+
+2011-01-26  Dave Korn  <dave.korn.cygwin@gmail.com>
+
+	PR target/40125
+	* configure.ac: Call ACX_NONCANONICAL_TARGET.
+	(toolexecdir): Calculate and AC_SUBST.
+	(toolexeclibdir): Likewise.
+	* Makefile.in (target_noncanonical): Import.
+	(toolexecdir): Likewise.
+	(toolexeclibdir): Likewise.
+	* configure: Regenerate.
+
+2010-12-13  Nathan Froyd  <froydnj@codesourcery.com>
+
+	PR target/46040
+	* config/arm/bpabi.h: Rename to...
+	* config/arm/bpabi-lib.h: ...this.
+
+2010-12-10  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	* configure.ac: Use i386/t-crtstuff on i?86-*-solaris2* if
+	appropriate.
+	* configure: Regenerate.
+
+2010-11-24  Nathan Froyd  <froydnj@codesourcery.com>
+
+	* config/libbid/bid_conf.h (BID_BIG_ENDIAN): Define in terms of
+	__FLOAT_WORD_ORDER__.
+	* config/libbid/bid_gcc_intrinsics.h (LIBGCC2_FLOAT_WORDS_BIG_ENDIAN):
+	Delete.
+
+2010-11-20  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	PR other/46202
+	* Makefile.in (install-strip): New phony target.
+
+2010-11-07  Ian Lance Taylor  <iant@google.com>
+
+	PR target/46089
+	* config/i386/morestack.S (__morestack_large_model): New
+	function.
+
+2010-10-23  Nathan Froyd  <froydnj@codesourcery.com>
+
+	* config/libbid/bid_gcc_intrinsics.h (LIBGCC2_WORDS_BIG_ENDIAN):
+	Delete.
+	(LIBGCC2_FLOAT_WORDS_BIG_ENDIAN): Test __BYTE_ORDER__.
+
+2010-10-14  Nathan Froyd  <froydnj@codesourcery.com>
+
+	* config/arm/bpabi.h: New file.
+	* config/frv/frv-abi.h: New file.
+
+2010-10-01  Ian Lance Taylor  <iant@google.com>
+
+	* config/t-stack(LIB2ADD_ST): Set instead of LIB2ADD.
+	* config/i386/t-stack-i386 (LIB2ADD_ST): Likewise.
+
+2010-10-01  H.J. Lu  <hongjiu.lu@intel.com>
+
+	PR target/45858
+	* config.host: Add the missing `$'.
+
+2010-09-30  Michael Eager  <eager@eagercon.com>
+
+	* config.host: Add microblaze*-*-*.
+	* config/microblaze/{divsi3.asm,divsi3_table.c,moddi3.asm,modsi3.asm,
+	muldi3_hard.asm,mulsi3.asm,stack_overflow_exit.asm,t-microblaze,
+	udivsi3.asm,umodsi3.asm}:  New.
+
+2010-09-28  Ian Lance Taylor  <iant@google.com>
+
+	* configure.ac: Adjust CFI test to test assembler directly rather
+	than checking gcc preprocessor macro.
+	* configure: Rebuild.
+
+2010-09-27  Ian Lance Taylor  <iant@google.com>
+
+	* configure.ac: Test whether assembler supports CFI directives.
+	* config.host: Only add t-stack and i386/t-stack-i386 to
+	tmake_file if libgcc_cv_cfi is "yes".
+	* configure: Rebuild.
+
+2010-09-27  Ian Lance Taylor  <iant@google.com>
+
+	* generic-morestack.h: New file.
+	* generic-morestack.c: New file.
+	* generic-morestack-thread.c: New file.
+	* config/i386/morestack.S: New file.
+	* config/t-stack: New file.
+	* config/i386/t-stack-i386: New file.
+	* config.host (i[34567]86-*-linux* and friends): Add t-stack and
+	i386/t-stack-i386 to tmake_file.
+
+2010-09-21  Iain Sandoe  <iains@gcc.gnu.org>
+
+	* Makefile.in (libgcc-extra-parts):  Check for static archives and
+	invoke ranlib after installing them.
+	(gcc-extra-parts): Likewise.
+	(install-leaf): Likewise.
+
+2010-09-14  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* configure: Regenerated.
+
+2010-09-10  Kai Tietz  <kai.tietz@onevision.com>
+
+	* configure: Regenerated.
+
+2010-09-09  Gerald Pfeifer  <gerald@pfeifer.com>
+	    Andrew Pinski  <pinskia@gmail.com>
+
+	PR target/40959	
+	* config.host (ia64*-*-freebsd*): Set extra_parts.  Set tmake_file.
+
+2010-09-06  H.J. Lu  <hongjiu.lu@intel.com>
+
+	PR target/45524
+	* configure: Regenerated.
+
+2010-09-06  Andreas Schwab  <schwab@redhat.com>
+
+	* configure: Regenerate.
+
+2010-09-03  Uros Bizjak  <ubizjak@gmail.com>
+
+	* config/i386/t-sol2 (__copysigntf3, __fabstf3): Disable for
+	64bit targets.
+	(__fixtfti, __fixunstfti, __floattitf, __floatuntitf): Enable only
+	for 64bit targets.
+
+2010-09-03  Uros Bizjak  <ubizjak@gmail.com>
+	    Iain Sandoe  <iains@gcc.gnu.org>
+
+	PR target/45476
+	* Makefile.in (sifuncs, difuncs, tifuncs): Filter out
+	LIB2FUNCS_EXCLUDE functions.
+
+2010-09-03  Andreas Krebbel  <Andreas.Krebbel@de.ibm.com>
+
+	* configure.ac: Use the GCC_AC_ENABLE_DECIMAL_FLOAT macro.
+	Include dfp.m4.
+	* configure: Regenerate.
+
+2010-09-01  Uros Bizjak  <ubizjak@gmail.com>
+
+	* config.host (i[34567]86-*-freebsd*, x86_64-*-freebsd*): Add
+	i386/t-freebsd to tmake_file.
+	* config/i386/t-freebsd: New file.
+	* config/i386/libgcc-bsd.ver: New file.
+
+2010-07-23  Nathan Froyd  <froydnj@codesourcery.com>
+
+	* config.host (powerpc*-eabispe*): Set tmake_file.
+	(powerpc*-eabi*): Likewise.
+	* config/rs6000/t-ppccomm (EXTRA_PARTS): Add crtbegin, crtend,
+	crtbeginS, crtendS, crtbeginT.
+
+2010-06-12  Kazu Hirata  <kazu@codesourcery.com>
+
+	* config.host (mips64*-*-linux*, mips*-*-linux*): Add mips/t-crtfm
+	to tmake_file.  Add crtfastmath.o to extra_parts.
+	* config/mips/t-crtfm: New.
+
+2010-05-19  Joel Sherrill <joel.sherrill@oarcorp.com>
+
+	* config.host (sparc64-*-rtems*): New target.
+
+2010-05-19  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	* config/i386/32/sfp-machine.h (FP_HANDLE_EXCEPTIONS): Support Sun
+	assembler syntax.
+
+2010-04-15  Thomas Schwinge  <tschwinge@gnu.org>
+
+	* config.host <i[34567]86-*-gnu*>: Handle softfp as for Linux.
+
+2010-04-12  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	* config.host (alpha*-dec-osf[45]*): Removed alpha*-dec-osf4*,
+	alpha-dec-osf5.0* support.
+
+2010-04-01  Ralf Corsépius <ralf.corsepius@rtems.org>
+
+	* config.host: Add lm32-*-rtems*.
+
+2010-03-31  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+	    Uros Bizjak <ubizjak@gmail.com>
+
+	PR target/39048
+	* config.host (i[34567]86-*-solaris2): Handle 32-bit Solaris 2/x86
+	like other remaining 32-bit x86 OSes.
+	* config/i386/32/sfp-machine.h (FP_HANDLE_EXCEPTIONS): Support Sun
+	assembler syntax.
+	* config/i386/libgcc-sol2.ver: New file.
+	* config/i386/t-sol2 (SHLIB_MAPFILES): Add it.
+
+2010-03-30  Jack Howarth <howarth@bromo.med.uc.edu>
+
+	PR c/43553
+	* Makefile.in (INTERNAL_CFLAGS): Add @set_use_emutls@.
+	* configure.ac: Use GCC_CHECK_EMUTLS to see if emulated TLS
+	is used and substitute set_use_emutls.
+	* configure: Regenerated.
+
+2010-03-30  Tarik Graba  <tarik.graba@telecom-paristech.fr>
+
+	* config/lm32/t-lm32: Remove misplaced MULTILIB_OPTIONS.
+
+2010-03-22  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	PR target/38085
+	* config/i386/t-sol2 ($(T)gmon.o): Use CFLAGS instead of
+	MULTILIB_CFLAGS.
+	($(T)gcrt1.o): Likewise.
+	($(T)crt1.o): Likewise.
+	($(T)crti.o): Likewise.
+	($(T)crtn.o): Likewise.
+
+2010-03-01  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	PR other/42980
+	* Makefile.in (install): Use $(MAKE) string in rule, for
+	parallel make.
+
+2010-02-22  Hans-Peter Nilsson  <hp@bitrange.com>
+
+	Migrate from broken pre-libgcc legacy support to libgcc-centric rules.
+	* config/mmix/t-mmix: New file.
+	* config.host <mmix-knuth-mmixware> (extra_parts, tmake_file): Set.
+
+2010-02-02  Jack Howarth  <howarth@bromo.med.uc.edu>
+
+	PR java/41991
+	* config/t-slibgcc-darwin: Add libgcc-libsystem.ver to
+	SHLIB_MAPFILES.
+
+2010-01-04  Anthony Green  <green@moxielogic.com>
+
+	* config/moxie/crti.asm, config/moxie/crtn.asm,
+	config/moxie/t-moxie-softfp, config/moxie/sfp-machine.h,
+	config/moxie/t-moxie: New files.
+	* config.host: Add t-moxie-softfp reference.
+
+2009-11-18  Iain Sandoe <iain.sandoe@sandoe-acoustics.co.uk>
+
+	PR other/39888
+	* config/t-slibgcc-darwin: Fix embedded rpaths for
+	--enable-version-specific-runtime-libs, build extension stub
+	libs exposing features available from current libgcc_s.
+
+2009-11-11  Jon Beniston <jon@beniston.com>
+
+	* config.host: Add lm32 targets.
+	* config/lm32: New directory.
+	* config/lm32/libgcc_lm32.h: New file.
+	* config/lm32/_mulsi3.c: New file.
+	* config/lm32/_udivmodsi4.c: New file.
+	* config/lm32/_divsi3.c: New file.
+	* config/lm32/_modsi3.c: New file.
+	* config/lm32/_udivsi3.c: New file.
+	* config/lm32/_umodsi3.c: New file.
+	* config/lm32/_lshrsi3.S: New file.
+	* config/lm32/_ashrsi3.S: New file.
+	* config/lm32/_ashlsi3.S: New file.
+	* config/lm32/crti.S: New file.
+	* config/lm32/crtn.S: New file.
+	* config/lm32/t-lm32: New file.
+	* config/lm32/t-elf: New file.
+	* config/lm32/t-uclinux: New file.
+
+2009-10-26  Nick Clifton  <nickc@redhat.com>
+
+	* config.host: Add support for RX target.
+	* config/rx: New directory.
+	* config/rx/rx-abi-functions.c: New file. Supplementary
+	functions for libgcc to support the RX ABI.
+	* config/rx/rx-abi.h: New file.  Supplementary header file for
+	libgcc RX ABI functions.
+	* config/rx/t-rx: New file: Makefile fragment for building
+	libgcc for the RX.
+
+2009-10-09  Uros Bizjak  <ubizjak@gmail.com>
+
+	* config/i386/32/sfp-machine.h (__FP_FRAC_SUB_4): Change operand
+	constraint of y0 to "g".
+
+2009-10-07  Andreas Krebbel  <Andreas.Krebbel@de.ibm.com>
+
+	* config.host: Include the s390 makefile fragments.
+	* config/s390/32/_fixdfdi.c: New file.
+	* config/s390/32/_fixsfdi.c: New file.
+	* config/s390/32/_fixtfdi.c: New file.
+	* config/s390/32/_fixunsdfdi.c: New file.
+	* config/s390/32/_fixunssfdi.c: New file.
+	* config/s390/32/_fixunstfdi.c: New file.
+	* config/s390/32/t-floattodi: New file.
+	* config/s390/libgcc-glibc.ver: New file.
+	* config/s390/t-crtstuff: New file.
+	* config/s390/t-linux: New file.
+	* config/s390/t-tpf: New file.
+
+2009-08-24  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* configure.ac (AC_PREREQ): Bump to 2.64.
+
+2009-08-22  Kaz Kojima  <kkojima@gcc.gnu.org>
+
+	* config/sh/t-linux (HOST_LIBGCC2_CFLAGS): Add -mieee.
+
+2009-08-22  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* configure: Regenerate.
+
+2009-08-09  Douglas B Rupp  <rupp@gnat.com>
+
+	* config.host (ia64-hp-*vms*): New target.
+	(alpha64-dec-*vms*,alpha*-dec-*vms*): Fix for config/vms and unify
+	with ia64-hp-*vms*.
+
+2009-07-30  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* configure.ac: Add snippet for maintainer-mode.
+	* configure: Regenerate.
+	* Makefile.in (AUTOCONF, configure_deps): New variables.
+	($(srcdir)/configure)): New rule, active only with maintainer
+	mode turned on.
+
+2009-06-23  DJ Delorie  <dj@redhat.com>
+
+	Add MeP port.
+	* config.host: Add mep support.
+
+2009-06-22  Kai Tietz  <kai.tietz@onevision.com>
+
+	* config.host: Add i386/${host_address}/t-fprules-softfp and
+	t-softfp to tmake_file for i[34567]86-*-mingw*, x86_64-*-mingw*.
+
+	* config/i386/64/_divtc3.c: Disable usage of .symver assembly symbol
+	for mingw targets.
+	* config/i386/64/_multc3.c: Likewise.
+	* config/i386/64/_powitf2.c: Likewise.
+	* config/i386/64/eqtf2.c: Likewise.
+	* config/i386/64/getf2.c: Likewise.
+	* config/i386/64/letf2.c: Likewise.
+	* config/i386/64/letf2.c: Likewise.
+	* config/i386/64/sfp-machine.h (_FP_W_TYPE): Define as
+	unsigned long long for x64 mingw targets.
+	(_FP_WS_TYPE): Define as signed long long for x64 mingw target.
+	(_FP_I_TYPE): Define as long long for x64 mingw target.
+
+2009-06-10  Maciej W. Rozycki  <macro@linux-mips.org>
+
+	* config.host (vax-*-linux*): New.
+
+2009-05-31  Anthony Green  <green@moxielogic.com>
+
+	* config.host: Add moxie support.
+	* config/moxie/t-moxie: New file.
+
+2009-05-29  David Billinghurst <billingd@gcc.gnu.org>
+
+	* config.host: Add i386/${host_address}/t-fprules-softfp and
+	t-softfp to tmake_file for i[34567]86-*-cygwin*.
 
 2009-04-17  Aurelien Jarno  <aurelien@aurel32.net>
 
@@ -187,6 +590,21 @@
 	COPYING3 file and the FSF's license web page.
 	* config.host: Likewise.
 
+2009-04-07  Alan Modra  <amodra@bigpond.net.au>
+
+	* config.host: Reorder and merge to match config.gcc change.
+
+2009-04-03  Alan Modra  <amodra@bigpond.net.au>
+
+	* config.host (powerpc-*-linux*altivec*, powerpc-*-linux*spe): Delete.
+
+2009-03-28  Joseph Myers  <joseph@codesourcery.com>
+
+	* config.host (arm-*-coff*, armel-*-coff*, arm-semi-aof,
+	armel-semi-aof, h8300-*-*, i[34567]86-*-aout*, i[34567]86-*-coff*,
+	m68k-*-aout*, m68k-*-coff*, pdp11-*-bsd, rs6000-ibm-aix4.[12]*,
+	powerpc-ibm-aix4.[12]*, sh-*-*): Remove.
+
 2009-02-12  Uros Bizjak  <ubizjak@gmail.com>
 
 	* config.host (ia64*-*-linux*): Add t-softfp to tmake_file.
@@ -328,7 +746,7 @@
 
 	* config.host: Add i386/${host_address}/t-fprules-softfp to
 	tmake_file for i[34567]86-*-darwin*, x86_64-*-darwin*,
-	i[34567]86-*-linux*, x86_64-*-linux*. 
+	i[34567]86-*-linux*, x86_64-*-linux*.
 
 	* configure.ac: Set host_address to 64 or 32 for x86.
 	* configure: Regenerated.
@@ -424,7 +842,7 @@
 	* Makefile.in: Use @shlib_slibdir@ substitution to get
 	correct install name on darwin.
 	* config/t-slibgcc-darwin: Use @shlib_slibdir@ for -install_name.
-				
+
 2007-12-15  Hans-Peter Nilsson  <hp@axis.com>
 
 	* config.host (crisv32-*-elf, crisv32-*-none): New, same as
@@ -484,7 +902,7 @@
 
 	* config/t-tls: New file.
 
-	* Makefile.in (INTERNAL_CFLAGS): Add @set_have_cc_tls@. 
+	* Makefile.in (INTERNAL_CFLAGS): Add @set_have_cc_tls@.
 
 	* configure.ac: Include ../config/enable.m4 and
 	../config/tls.m4.  Use GCC_CHECK_CC_TLS to check if assembler
@@ -498,7 +916,7 @@
 2007-06-14  Danny Smith  <dannysmith@users.sourceforge.net>
 
 	* config.host(*-cygwin* |*-mingw* ): Add crtbegin.o, crtend.o to
-	extra_parts. Add config/i386/t-cygming to tmake_file. 
+	extra_parts. Add config/i386/t-cygming to tmake_file.
 	* config/i386/t-cygming: New file with rules for crtbegin.o, crtend.o.
 
 2007-05-29  Zuxy Meng  <zuxy.meng@gmail.com>
@@ -623,7 +1041,7 @@
 	* configure.ac: Add GCC_TOPLEV_SUBDIRS.
 	* configure: Regenerate.
 	* Makefile.in (host_subdir): Substitute it.
-	(gcc_objdir): Use it. 
+	(gcc_objdir): Use it.
 
 2007-01-04  Daniel Jacobowitz  <dan@codesourcery.com>
 

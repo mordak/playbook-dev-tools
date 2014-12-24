@@ -1,6 +1,6 @@
 // Temporary buffer implementation -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -49,9 +49,9 @@
  * purpose.  It is provided "as is" without express or implied warranty.
  */
 
-/** @file stl_tempbuf.h
+/** @file bits/stl_tempbuf.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{memory}
  */
 
 #ifndef _STL_TEMPBUF_H
@@ -59,9 +59,10 @@
 
 #include <bits/stl_algobase.h>
 #include <bits/stl_construct.h>
-#include <bits/stl_uninitialized.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   /**
    *  @brief Allocates a temporary buffer.
@@ -72,9 +73,9 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
    *
    *  This function tries to obtain storage for @c len adjacent Tp
    *  objects.  The objects themselves are not constructed, of course.
-   *  A pair<> is returned containing "the buffer s address and
+   *  A pair<> is returned containing <em>the buffer s address and
    *  capacity (in the units of sizeof(Tp)), or a pair of 0 values if
-   *  no storage can be obtained."  Note that the capacity obtained
+   *  no storage can be obtained.</em>  Note that the capacity obtained
    *  may be less than that requested if the memory is unavailable;
    *  you should compare len with the .second return value.
    *
@@ -176,6 +177,70 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       operator=(const _Temporary_buffer&);
     };
 
+
+  template<bool>
+    struct __uninitialized_construct_buf_dispatch
+    {
+      template<typename _ForwardIterator, typename _Tp>
+        static void
+        __ucr(_ForwardIterator __first, _ForwardIterator __last,
+	      _Tp& __value)
+        {
+	  if(__first == __last)
+	    return;
+
+	  _ForwardIterator __cur = __first;
+	  __try
+	    {
+	      std::_Construct(std::__addressof(*__first),
+			      _GLIBCXX_MOVE(__value));
+	      _ForwardIterator __prev = __cur;
+	      ++__cur;
+	      for(; __cur != __last; ++__cur, ++__prev)
+		std::_Construct(std::__addressof(*__cur),
+				_GLIBCXX_MOVE(*__prev));
+	      __value = _GLIBCXX_MOVE(*__prev);
+	    }
+	  __catch(...)
+	    {
+	      std::_Destroy(__first, __cur);
+	      __throw_exception_again;
+	    }
+	}
+    };
+
+  template<>
+    struct __uninitialized_construct_buf_dispatch<true>
+    {
+      template<typename _ForwardIterator, typename _Tp>
+        static void
+        __ucr(_ForwardIterator, _ForwardIterator, _Tp&) { }
+    };
+
+  // Constructs objects in the range [first, last).
+  // Note that while these new objects will take valid values,
+  // their exact value is not defined. In particular they may
+  // be 'moved from'.
+  //
+  // While __value may altered during this algorithm, it will have
+  // the same value when the algorithm finishes, unless one of the
+  // constructions throws.
+  //
+  // Requirements: _ForwardIterator::value_type(_Tp&&) is valid.
+  template<typename _ForwardIterator, typename _Tp>
+    inline void
+    __uninitialized_construct_buf(_ForwardIterator __first,
+				  _ForwardIterator __last,
+				  _Tp& __value)
+    {
+      typedef typename std::iterator_traits<_ForwardIterator>::value_type
+	_ValueType;
+
+      std::__uninitialized_construct_buf_dispatch<
+        __has_trivial_constructor(_ValueType)>::
+	  __ucr(__first, __last, __value);
+    }
+
   template<typename _ForwardIterator, typename _Tp>
     _Temporary_buffer<_ForwardIterator, _Tp>::
     _Temporary_buffer(_ForwardIterator __first, _ForwardIterator __last)
@@ -188,8 +253,9 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 					    value_type>(_M_original_len));
 	  _M_buffer = __p.first;
 	  _M_len = __p.second;
-	  if (!__is_pod(_Tp) && _M_len > 0)
-	    std::uninitialized_fill_n(_M_buffer, _M_len, *__first);
+	  if(_M_buffer)
+	    std::__uninitialized_construct_buf(_M_buffer, _M_buffer + _M_len,
+					       *__first);
 	}
       __catch(...)
 	{
@@ -200,7 +266,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	}
     }
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif /* _STL_TEMPBUF_H */
 

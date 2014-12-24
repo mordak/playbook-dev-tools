@@ -1,6 +1,6 @@
 // { dg-options "-std=gnu++0x" }
 
-// Copyright (C) 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2008, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -22,13 +22,11 @@
 #include <forward_list>
 #include <testsuite_hooks.h>
 
-bool test __attribute__((unused)) = true;
-
-// This test verifies the following.
-//
 void
 test01()
 {
+  bool test __attribute__((unused)) = true;
+
   std::forward_list<double> fld;
   VERIFY(fld.empty() == true);
 
@@ -38,9 +36,14 @@ test01()
   fld.resize(0);
   VERIFY(fld.empty() == true);
 
+#if defined(_GLIBCXX_DEBUG) || defined(_GLIBCXX_PROFILE)
+  using std::_GLIBCXX_STD_C::_Fwd_list_node;
+#else
+  using std::_Fwd_list_node;
+#endif
+
   VERIFY( (fld.max_size()
-	   == std::allocator<std::_Fwd_list_node<double,
-	                     std::allocator<double> > >().max_size()) );
+	   == std::allocator<_Fwd_list_node<double> >().max_size()) );
 }
 
 int

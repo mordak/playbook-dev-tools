@@ -1,7 +1,7 @@
 // Numeric functions implementation -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
-// Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
+// 2011 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -49,9 +49,9 @@
  * purpose.  It is provided "as is" without express or implied warranty.
  */
 
-/** @file stl_numeric.h
+/** @file bits/stl_numeric.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{numeric}
  */
 
 #ifndef _STL_NUMERIC_H
@@ -59,10 +59,13 @@
 
 #include <bits/concept_check.h>
 #include <debug/debug.h>
+#include <bits/move.h> // For _GLIBCXX_MOVE
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   /**
    *  @brief  Create a range of sequentially increasing values.
@@ -93,11 +96,14 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	}
     }
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace std
 
 #endif
 
-_GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_P)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_ALGO
 
   /**
    *  @brief  Accumulate values in a range.
@@ -216,10 +222,10 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_P)
   /**
    *  @brief  Return list of partial sums
    *
-   *  Accumulates the values in the range [first,last) using operator+().
+   *  Accumulates the values in the range [first,last) using the @c + operator.
    *  As each successive input value is added into the total, that partial sum
-   *  is written to @a result.  Therefore, the first value in result is the
-   *  first value of the input, the second value in result is the sum of the
+   *  is written to @p result.  Therefore, the first value in @p result is the
+   *  first value of the input, the second value in @p result is the sum of the
    *  first and second input values, and so on.
    *
    *  @param  first  Start of input range.
@@ -255,15 +261,16 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_P)
   /**
    *  @brief  Return list of partial sums
    *
-   *  Accumulates the values in the range [first,last) using operator+().
+   *  Accumulates the values in the range [first,last) using @p binary_op.
    *  As each successive input value is added into the total, that partial sum
-   *  is written to @a result.  Therefore, the first value in result is the
-   *  first value of the input, the second value in result is the sum of the
+   *  is written to @a result.  Therefore, the first value in @p result is the
+   *  first value of the input, the second value in @p result is the sum of the
    *  first and second input values, and so on.
    *
    *  @param  first  Start of input range.
    *  @param  last  End of input range.
    *  @param  result  Output to write sums to.
+   *  @param  binary_op  Function object.
    *  @return  Iterator pointing just beyond the values written to result.
    */
   template<typename _InputIterator, typename _OutputIterator,
@@ -302,6 +309,9 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_P)
    *  @param  last  End of input range.
    *  @param  result  Output to write sums to.
    *  @return  Iterator pointing just beyond the values written to result.
+   *
+   *  _GLIBCXX_RESOLVE_LIB_DEFECTS
+   *  DR 539. partial_sum and adjacent_difference should mention requirements
    */
   template<typename _InputIterator, typename _OutputIterator>
     _OutputIterator
@@ -324,7 +334,7 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_P)
 	{
 	  _ValueType __tmp = *__first;
 	  *++__result = __tmp - __value;
-	  __value = __tmp;
+	  __value = _GLIBCXX_MOVE(__tmp);
 	}
       return ++__result;
     }
@@ -340,6 +350,9 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_P)
    *  @param  last  End of input range.
    *  @param  result  Output to write sums to.
    *  @return  Iterator pointing just beyond the values written to result.
+   *
+   *  _GLIBCXX_RESOLVE_LIB_DEFECTS
+   *  DR 539. partial_sum and adjacent_difference should mention requirements
    */
   template<typename _InputIterator, typename _OutputIterator,
 	   typename _BinaryOperation>
@@ -363,11 +376,12 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD_P)
 	{
 	  _ValueType __tmp = *__first;
 	  *++__result = __binary_op(__tmp, __value);
-	  __value = __tmp;
+	  __value = _GLIBCXX_MOVE(__tmp);
 	}
       return ++__result;
     }
 
-_GLIBCXX_END_NESTED_NAMESPACE
+_GLIBCXX_END_NAMESPACE_ALGO
+} // namespace std
 
 #endif /* _STL_NUMERIC_H */

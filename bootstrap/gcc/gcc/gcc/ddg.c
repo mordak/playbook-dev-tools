@@ -1,5 +1,5 @@
 /* DDG - Data Dependence Graph implementation.
-   Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009
+   Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by Ayal Zaks and Mustafa Hagog <zaks,mustafa@il.ibm.com>
 
@@ -24,7 +24,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "system.h"
 #include "coretypes.h"
 #include "tm.h"
-#include "toplev.h"
+#include "diagnostic-core.h"
 #include "rtl.h"
 #include "tm_p.h"
 #include "hard-reg-set.h"
@@ -166,6 +166,9 @@ create_ddg_dep_from_intra_loop_link (ddg_ptr g, ddg_node_ptr src_node,
   else if (DEP_TYPE (link) == REG_DEP_OUTPUT)
     t = OUTPUT_DEP;
 
+  gcc_assert (!DEBUG_INSN_P (dest_node->insn) || t == ANTI_DEP);
+  gcc_assert (!DEBUG_INSN_P (src_node->insn) || t == ANTI_DEP);
+
   /* We currently choose not to create certain anti-deps edges and
      compensate for that by generating reg-moves based on the life-range
      analysis.  The anti-deps that will be deleted are the ones which
@@ -189,7 +192,7 @@ create_ddg_dep_from_intra_loop_link (ddg_ptr g, ddg_node_ptr src_node,
           first_def = df_bb_regno_first_def_find (g->bb, regno);
           gcc_assert (first_def);
 
-          if (bitmap_bit_p (bb_info->gen, DF_REF_ID (first_def)))
+          if (bitmap_bit_p (&bb_info->gen, DF_REF_ID (first_def)))
             return;
         }
     }
@@ -208,6 +211,9 @@ create_ddg_dep_no_link (ddg_ptr g, ddg_node_ptr from, ddg_node_ptr to,
   int l;
   enum reg_note dep_kind;
   struct _dep _dep, *dep = &_dep;
+
+  gcc_assert (!DEBUG_INSN_P (to->insn) || d_t == ANTI_DEP);
+  gcc_assert (!DEBUG_INSN_P (from->insn) || d_t == ANTI_DEP);
 
   if (d_t == ANTI_DEP)
     dep_kind = REG_DEP_ANTI;
@@ -257,7 +263,8 @@ add_cross_iteration_register_deps (ddg_ptr g, df_ref last_def)
 
 #ifdef ENABLE_CHECKING
   if (DF_REF_ID (last_def) != DF_REF_ID (first_def))
-    gcc_assert (!bitmap_bit_p (bb_info->gen, DF_REF_ID (first_def)));
+    gcc_assert (!bitmap_bit_p (&bb_info->gen,
+			       DF_REF_ID (first_def)));
 #endif
 
   /* Create inter-loop true dependences and anti dependences.  */
@@ -277,10 +284,11 @@ add_cross_iteration_register_deps (ddg_ptr g, df_ref last_def)
 	  /* Add true deps from last_def to it's uses in the next
 	     iteration.  Any such upwards exposed use appears before
 	     the last_def def.  */
-	  create_ddg_dep_no_link (g, last_def_node, use_node, TRUE_DEP,
+	  create_ddg_dep_no_link (g, last_def_node, use_node,
+				  DEBUG_INSN_P (use_insn) ? ANTI_DEP : TRUE_DEP,
 				  REG_DEP, 1);
 	}
-      else
+      else if (!DEBUG_INSN_P (use_insn))
 	{
 	  /* Add anti deps from last_def's uses in the current iteration
 	     to the first def in the next iteration.  We do not add ANTI
@@ -331,7 +339,7 @@ build_inter_loop_deps (ddg_ptr g)
   rd_bb_info = DF_RD_BB_INFO (g->bb);
 
   /* Find inter-loop register output, true and anti deps.  */
-  EXECUTE_IF_SET_IN_BITMAP (rd_bb_info->gen, 0, rd_num, bi)
+  EXECUTE_IF_SET_IN_BITMAP (&rd_bb_info->gen, 0, rd_num, bi)
   {
     df_ref rd = DF_DEFS_GET (rd_num);
 
@@ -340,21 +348,62 @@ build_inter_loop_deps (ddg_ptr g)
 }
 
 
+static int
+walk_mems_2 (rtx *x, rtx mem)
+{
+  if (MEM_P (*x))
+    {
+      if (may_alias_p (*x, mem))
+        return 1;
+
+      return -1;
+    }
+  return 0;
+}
+
+static int
+walk_mems_1 (rtx *x, rtx *pat)
+{
+  if (MEM_P (*x))
+    {
+      /* Visit all MEMs in *PAT and check indepedence.  */
+      if (for_each_rtx (pat, (rtx_function) walk_mems_2, *x))
+        /* Indicate that dependence was determined and stop traversal.  */
+        return 1;
+
+      return -1;
+    }
+  return 0;
+}
+
+/* Return 1 if two specified instructions have mem expr with conflict alias sets*/
+static int
+insns_may_alias_p (rtx insn1, rtx insn2)
+{
+  /* For each pair of MEMs in INSN1 and INSN2 check their independence.  */
+  return  for_each_rtx (&PATTERN (insn1), (rtx_function) walk_mems_1,
+			 &PATTERN (insn2));
+}
+
 /* Given two nodes, analyze their RTL insns and add inter-loop mem deps
    to ddg G.  */
 static void
 add_inter_loop_mem_dep (ddg_ptr g, ddg_node_ptr from, ddg_node_ptr to)
 {
-  if (!insn_alias_sets_conflict_p (from->insn, to->insn))
+  if (!insns_may_alias_p (from->insn, to->insn))
     /* Do not create edge if memory references have disjoint alias sets.  */
     return;
-    
+
   if (mem_write_insn_p (from->insn))
     {
       if (mem_read_insn_p (to->insn))
-  	create_ddg_dep_no_link (g, from, to, TRUE_DEP, MEM_DEP, 1);
+  	create_ddg_dep_no_link (g, from, to,
+				DEBUG_INSN_P (to->insn)
+				? ANTI_DEP : TRUE_DEP, MEM_DEP, 1);
       else if (from->cuid != to->cuid)
-  	create_ddg_dep_no_link (g, from, to, OUTPUT_DEP, MEM_DEP, 1);
+  	create_ddg_dep_no_link (g, from, to,
+				DEBUG_INSN_P (to->insn)
+				? ANTI_DEP : OUTPUT_DEP, MEM_DEP, 1);
     }
   else
     {
@@ -362,8 +411,11 @@ add_inter_loop_mem_dep (ddg_ptr g, ddg_node_ptr from, ddg_node_ptr to)
 	return;
       else if (from->cuid != to->cuid)
 	{
-  	  create_ddg_dep_no_link (g, from, to, ANTI_DEP, MEM_DEP, 1);
-  	  create_ddg_dep_no_link (g, to, from, TRUE_DEP, MEM_DEP, 1);
+	  create_ddg_dep_no_link (g, from, to, ANTI_DEP, MEM_DEP, 1);
+	  if (DEBUG_INSN_P (from->insn) || DEBUG_INSN_P (to->insn))
+	    create_ddg_dep_no_link (g, to, from, ANTI_DEP, MEM_DEP, 1);
+	  else
+	    create_ddg_dep_no_link (g, to, from, TRUE_DEP, MEM_DEP, 1);
 	}
     }
 
@@ -376,12 +428,12 @@ build_intra_loop_deps (ddg_ptr g)
 {
   int i;
   /* Hold the dependency analysis state during dependency calculations.  */
-  struct deps tmp_deps;
+  struct deps_desc tmp_deps;
   rtx head, tail;
 
   /* Build the dependence information, using the sched_analyze function.  */
   init_deps_global ();
-  init_deps (&tmp_deps);
+  init_deps (&tmp_deps, false);
 
   /* Do the intra-block data dependence analysis for the given block.  */
   get_ebb_head_tail (g->bb, g->bb, &head, &tail);
@@ -417,6 +469,8 @@ build_intra_loop_deps (ddg_ptr g)
 	  for (j = 0; j <= i; j++)
 	    {
 	      ddg_node_ptr j_node = &g->nodes[j];
+	      if (DEBUG_INSN_P (j_node->insn))
+		continue;
 	      if (mem_access_insn_p (j_node->insn))
  		/* Don't bother calculating inter-loop dep if an intra-loop dep
 		   already exists.  */
@@ -458,15 +512,20 @@ create_ddg (basic_block bb, int closing_branch_deps)
       if (! INSN_P (insn) || GET_CODE (PATTERN (insn)) == USE)
 	continue;
 
-      if (mem_read_insn_p (insn))
-	g->num_loads++;
-      if (mem_write_insn_p (insn))
-	g->num_stores++;
+      if (DEBUG_INSN_P (insn))
+	g->num_debug++;
+      else
+	{
+	  if (mem_read_insn_p (insn))
+	    g->num_loads++;
+	  if (mem_write_insn_p (insn))
+	    g->num_stores++;
+	}
       num_nodes++;
     }
 
   /* There is nothing to do for this BB.  */
-  if (num_nodes <= 1)
+  if ((num_nodes - g->num_debug) <= 1)
     {
       free (g);
       return NULL;
@@ -509,10 +568,10 @@ create_ddg (basic_block bb, int closing_branch_deps)
       g->nodes[i++].insn = insn;
       first_note = NULL_RTX;
     }
-  
+
   /* We must have found a branch in DDG.  */
   gcc_assert (g->closing_branch);
-  
+
 
   /* Build the data dependency graph.  */
   build_intra_loop_deps (g);
@@ -855,9 +914,9 @@ static int
 compare_sccs (const void *s1, const void *s2)
 {
   const int rec_l1 = (*(const ddg_scc_ptr *)s1)->recurrence_length;
-  const int rec_l2 = (*(const ddg_scc_ptr *)s2)->recurrence_length; 
+  const int rec_l2 = (*(const ddg_scc_ptr *)s2)->recurrence_length;
   return ((rec_l2 > rec_l1) - (rec_l2 < rec_l1));
-	  
+
 }
 
 /* Order the backarcs in descending recMII order using compare_sccs.  */

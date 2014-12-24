@@ -1,6 +1,6 @@
 ; Options for the S/390 / zSeries port of the compiler.
 
-; Copyright (C) 2005, 2006, 2007 Free Software Foundation, Inc.
+; Copyright (C) 2005, 2006, 2007, 2010 Free Software Foundation, Inc.
 ;
 ; This file is part of GCC.
 ;
@@ -41,10 +41,6 @@ Additional debug prints
 mesa
 Target Report RejectNegative Negative(mzarch) InverseMask(ZARCH)
 ESA/390 architecture
-
-mfused-madd
-Target Report Mask(FUSED_MADD)
-Enable fused multiply/add instructions
 
 mhard-dfp
 Target Report Mask(HARD_DFP)

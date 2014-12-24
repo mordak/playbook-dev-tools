@@ -1,6 +1,6 @@
 // chrono -*- C++ -*-
 
-// Copyright (C) 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -33,14 +33,16 @@
 #include <sys/time.h>
 #endif
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
   namespace chrono
   {
-    const bool system_clock::is_monotonic;
+  _GLIBCXX_BEGIN_NAMESPACE_VERSION
+ 
+   constexpr bool system_clock::is_monotonic;
 
     system_clock::time_point
-    system_clock::now()
+    system_clock::now() throw ()
     {
 #ifdef _GLIBCXX_USE_CLOCK_REALTIME
       timespec tp;
@@ -51,7 +53,7 @@ namespace std
 #elif defined(_GLIBCXX_USE_GETTIMEOFDAY)
       timeval tv;
       // EINVAL, EFAULT
-      gettimeofday(&tv, NULL);
+      gettimeofday(&tv, 0);
       return time_point(duration(chrono::seconds(tv.tv_sec)
 				 + chrono::microseconds(tv.tv_usec)));
 #else
@@ -61,7 +63,7 @@ namespace std
     }
     
 #ifdef _GLIBCXX_USE_CLOCK_MONOTONIC
-    const bool monotonic_clock::is_monotonic;
+    constexpr bool monotonic_clock::is_monotonic;
     
     monotonic_clock::time_point
     monotonic_clock::now()
@@ -73,7 +75,9 @@ namespace std
 				 + chrono::nanoseconds(tp.tv_nsec)));
     }
 #endif
-  }
-}
+
+  _GLIBCXX_END_NAMESPACE_VERSION
+  } // namespace chrono
+} // namespace std
 
 #endif // _GLIBCXX_USE_C99_STDINT_TR1

@@ -6,7 +6,7 @@
 --                                                                          --
 --                                  S p e c                                 --
 --                                                                          --
---          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -42,6 +42,7 @@ with System.Task_Info;
 with System.Soft_Links;
 with System.Task_Primitives;
 with System.Stack_Usage;
+with System.Multiprocessors;
 
 package System.Tasking is
    pragma Preelaborate;
@@ -128,17 +129,18 @@ package System.Tasking is
 
    type Task_States is
      (Unactivated,
-      --  Task has been created but has not been activated.
+      --  TCB initialized but not task has not been created.
       --  It cannot be executing.
+
+--    Activating,
+--    --  ??? Temporarily at end of list for GDB compatibility
+--    --  Task has been created and is being made Runnable.
 
       --  Active states
       --  For all states from here down, the task has been activated.
       --  For all states from here down, except for Terminated, the task
       --  may be executing.
       --  Activator = null iff it has not yet completed activating.
-
-      --  For all states from here down,
-      --  the task has been activated, and may be executing.
 
       Runnable,
       --  Task is not blocked for any reason known to Ada.
@@ -154,7 +156,11 @@ package System.Tasking is
       --  Task is waiting for created tasks to complete activation
 
       Acceptor_Sleep,
-      --  Task is waiting on an accept or selective wait statement
+      --  Task is waiting on an accept or select with terminate
+
+--    Acceptor_Delay_Sleep,
+--    --  ??? Temporarily at end of list for GDB compatibility
+--    --  Task is waiting on an selective wait statement
 
       Entry_Caller_Sleep,
       --  Task is waiting on an entry call
@@ -190,9 +196,15 @@ package System.Tasking is
       Asynchronous_Hold,
       --  The task has been held by Asynchronous_Task_Control.Hold_Task
 
-      Interrupt_Server_Blocked_On_Event_Flag
+      Interrupt_Server_Blocked_On_Event_Flag,
       --  The task has been blocked on a system call waiting for a
       --  completion event/signal to occur.
+
+      Activating,
+      --  Task has been created and is being made Runnable
+
+      Acceptor_Delay_Sleep
+      --  Task is waiting on an selective wait statement
      );
 
    type Call_Modes is
@@ -271,32 +283,31 @@ package System.Tasking is
       Cancelled
       --  the call was asynchronous, and was cancelled
      );
+   pragma Ordered (Entry_Call_State);
 
-   --  Never_Abortable is used for calls that are made in a abort
-   --  deferred region (see ARM 9.8(5-11), 9.8 (20)).
-   --  Such a call is never abortable.
+   --  Never_Abortable is used for calls that are made in a abort deferred
+   --  region (see ARM 9.8(5-11), 9.8 (20)). Such a call is never abortable.
 
-   --  The Was_ vs. Not_Yet_ distinction is needed to decide whether it
-   --  is OK to advance into the abortable part of an async. select stmt.
-   --  That is allowed iff the mode is Now_ or Was_.
+   --  The Was_ vs. Not_Yet_ distinction is needed to decide whether it is OK
+   --  to advance into the abortable part of an async. select stmt. That is
+   --  allowed iff the mode is Now_ or Was_.
 
-   --  Done indicates the call has been completed, without cancellation,
-   --  or no call has been made yet at this ATC nesting level,
-   --  and so aborting the call is no longer an issue.
-   --  Completion of the call does not necessarily indicate "success";
-   --  the call may be returning an exception if Exception_To_Raise is
-   --  non-null.
+   --  Done indicates the call has been completed, without cancellation, or no
+   --  call has been made yet at this ATC nesting level, and so aborting the
+   --  call is no longer an issue. Completion of the call does not necessarily
+   --  indicate "success"; the call may be returning an exception if
+   --  Exception_To_Raise is non-null.
 
-   --  Cancelled indicates the call was cancelled,
-   --  and so aborting the call is no longer an issue.
+   --  Cancelled indicates the call was cancelled, and so aborting the call is
+   --  no longer an issue.
 
-   --  The call is on an entry queue unless
-   --  State >= Done, in which case it may or may not be still Onqueue.
+   --  The call is on an entry queue unless State >= Done, in which case it may
+   --  or may not be still Onqueue.
 
-   --  Please do not modify the order of the values, without checking
-   --  all uses of this type. We rely on partial "monotonicity" of
-   --  Entry_Call_Record.State to avoid locking when we access this
-   --  value for certain tests. In particular:
+   --  Please do not modify the order of the values, without checking all uses
+   --  of this type. We rely on partial "monotonicity" of
+   --  Entry_Call_Record.State to avoid locking when we access this value for
+   --  certain tests. In particular:
 
    --  1)  Once State >= Done, we can rely that the call has been
    --      completed. If State >= Done, it will not
@@ -389,6 +400,15 @@ package System.Tasking is
    --  is in general a non-static value that can depend on discriminants
    --  of the task.
 
+   type Bit_Array is array (Integer range <>) of Boolean;
+   pragma Pack (Bit_Array);
+
+   subtype Debug_Event_Array is Bit_Array (1 .. 16);
+
+   Global_Task_Debug_Event_Set : Boolean := False;
+   --  Set True when running under debugger control and a task debug
+   --  event signal has been requested.
+
    ----------------------------------------------
    -- Ada_Task_Control_Block (ATCB) definition --
    ----------------------------------------------
@@ -444,6 +464,11 @@ package System.Tasking is
       --  via dynamic priorities package.
       --
       --  Protection: Only written by Self, accessed by anyone
+
+      Base_CPU : System.Multiprocessors.CPU_Range;
+      --  Base CPU, only changed via dispatching domains package.
+      --
+      --  Protection: Self.L
 
       Current_Priority : System.Any_Priority;
       --  Active priority, except that the effects of protected object
@@ -608,6 +633,10 @@ package System.Tasking is
       --  any of its dependent tasks.
       --
       --  Protection: Self.L
+
+      Debug_Events : Debug_Event_Array;
+      --  Word length array of per task debug events, of which 11 kinds are
+      --  currently defined in System.Tasking.Debugging package.
    end record;
 
    ---------------------------------------
@@ -671,9 +700,9 @@ package System.Tasking is
    Independent_Task_Level : constant Master_Level := 2;
    Library_Task_Level     : constant Master_Level := 3;
 
-   ------------------------------
-   -- Task size, priority info --
-   ------------------------------
+   -------------------
+   -- Priority info --
+   -------------------
 
    Unspecified_Priority : constant Integer := System.Priority'First - 1;
 
@@ -682,6 +711,13 @@ package System.Tasking is
 
    subtype Rendezvous_Priority is Integer
      range Priority_Not_Boosted .. System.Any_Priority'Last;
+
+   -------------------
+   -- Affinity info --
+   -------------------
+
+   Unspecified_CPU : constant := -1;
+   --  No affinity specified
 
    ------------------------------------
    -- Rendezvous related definitions --
@@ -834,7 +870,7 @@ package System.Tasking is
 
    type Direct_Index is range 0 .. Parameters.Default_Attribute_Count;
    subtype Direct_Index_Range is Direct_Index range 1 .. Direct_Index'Last;
-   --  Attributes with indices in this range are stored directly in the task
+   --  Attributes with indexes in this range are stored directly in the task
    --  control block. Such attributes must be Address-sized. Other attributes
    --  will be held in dynamically allocated records chained off of the task
    --  control block.
@@ -1068,6 +1104,7 @@ package System.Tasking is
       Parent           : Task_Id;
       Elaborated       : Access_Boolean;
       Base_Priority    : System.Any_Priority;
+      Base_CPU         : System.Multiprocessors.CPU_Range;
       Task_Info        : System.Task_Info.Task_Info_Type;
       Stack_Size       : System.Parameters.Size_Type;
       T                : Task_Id;

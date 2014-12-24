@@ -1,6 +1,6 @@
 /* Utility routines for finding and reading Java(TM) .class files.
    Copyright (C) 1996, 1997, 1998, 1999, 2000, 2002, 2003, 2004, 2005,
-   2006, 2007, 2008 Free Software Foundation, Inc.
+   2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -27,21 +27,14 @@ The Free Software Foundation is independent of Sun Microsystems, Inc.  */
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "tm.h"
 
 #include "jcf.h"
 #include "tree.h"
-#include "toplev.h"
 #include "java-tree.h"
 #include "hashtab.h"
 #include <dirent.h>
 
 #include "zlib.h"
-
-/* DOS brain-damage */
-#ifndef O_BINARY
-#define O_BINARY 0 /* MS-DOS brain-damage */
-#endif
 
 int
 jcf_unexpected_eof (JCF *jcf, int count ATTRIBUTE_UNUSED)
@@ -399,9 +392,8 @@ find_class (const char *classname, int classname_length, JCF *jcf)
 
   /* Remember that this class could not be found so that we do not
      have to look again.  */
-  *(const void **)htab_find_slot_with_hash (memoized_class_lookups,
-					    classname, hash, INSERT)
-    = classname;
+  *htab_find_slot_with_hash (memoized_class_lookups, classname, hash, INSERT)
+    = (void *) CONST_CAST (char *, classname);
 
   return NULL;
  found:

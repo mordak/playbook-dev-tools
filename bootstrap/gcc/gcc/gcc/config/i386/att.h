@@ -1,5 +1,5 @@
 /* Definitions for AT&T assembler syntax for the Intel 80386.
-   Copyright (C) 1988, 1996, 2000, 2001, 2002, 2007, 2009
+   Copyright (C) 1988, 1996, 2000, 2001, 2002, 2007, 2009, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -31,6 +31,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 /* Assembler pseudos to introduce constants of various size.  */
 
+#define ASM_BYTE "\t.byte\t"
 #define ASM_SHORT "\t.value\t"
 #define ASM_LONG "\t.long\t"
 #define ASM_QUAD "\t.quad\t"  /* Should not be used for 32bit compilation.  */
@@ -42,11 +43,11 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 do								\
 { size_t i = 0, limit = (SIZE); 				\
   while (i < limit)						\
-    { if (i%10 == 0) { if (i!=0) fprintf ((FILE), "\n");	\
-		       fputs ("\t.byte\t", (FILE)); }		\
-      else fprintf ((FILE), ",");				\
-	fprintf ((FILE), "0x%x", ((PTR)[i++] & 0377)) ;}	\
-      fprintf ((FILE), "\n");					\
+    { if (i%10 == 0) { if (i!=0) putc ('\n', (FILE));		\
+		       fputs (ASM_BYTE, (FILE)); }		\
+      else putc (',', (FILE));					\
+      fprintf ((FILE), "0x%x", ((PTR)[i++] & 0377)) ;}		\
+      putc ('\n', (FILE));					\
 } while (0)
 
 /* Output at beginning of assembler file.  */
@@ -83,7 +84,7 @@ do								\
 
 #undef ASM_GENERATE_INTERNAL_LABEL
 #define ASM_GENERATE_INTERNAL_LABEL(BUF,PREFIX,NUMBER)	\
-  sprintf ((BUF), "%s%s%ld", LOCAL_LABEL_PREFIX, (PREFIX), (long)(NUMBER))
+  sprintf ((BUF), LOCAL_LABEL_PREFIX "%s%ld", (PREFIX), (long)(NUMBER))
 
 /* The prefix to add to user-visible assembler symbols.  */
 

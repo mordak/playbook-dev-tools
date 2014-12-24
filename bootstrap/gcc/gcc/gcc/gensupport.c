@@ -1,6 +1,6 @@
 /* Support routines for the various generation passes.
-   Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008
-   Free Software Foundation, Inc.
+   Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
+   2010, Free Software Foundation, Inc.
 
    This file is part of GCC.
 
@@ -26,6 +26,7 @@
 #include "obstack.h"
 #include "errors.h"
 #include "hashtab.h"
+#include "read-md.h"
 #include "gensupport.h"
 
 
@@ -34,25 +35,16 @@ int target_flags;
 
 int insn_elision = 1;
 
-const char *in_fname;
-
-/* This callback will be invoked whenever an rtl include directive is
-   processed.  To be used for creation of the dependency file.  */
-void (*include_callback) (const char *);
-
 static struct obstack obstack;
 struct obstack *rtl_obstack = &obstack;
 
 static int sequence_num;
-static int errors;
 
 static int predicable_default;
 static const char *predicable_true;
 static const char *predicable_false;
 
 static htab_t condition_table;
-
-static char *base_dir = NULL;
 
 /* We initially queue all patterns, process the define_insn and
    define_cond_exec patterns, then return them one at a time.  */
@@ -68,6 +60,9 @@ struct queue_elem
   struct queue_elem *split;
 };
 
+#define MNEMONIC_ATTR_NAME "mnemonic"
+#define MNEMONIC_HTAB_SIZE 1024
+
 static struct queue_elem *define_attr_queue;
 static struct queue_elem **define_attr_tail = &define_attr_queue;
 static struct queue_elem *define_pred_queue;
@@ -81,22 +76,6 @@ static struct queue_elem **other_tail = &other_queue;
 
 static struct queue_elem *queue_pattern (rtx, struct queue_elem ***,
 					 const char *, int);
-
-/* Current maximum length of directory names in the search path
-   for include files.  (Altered as we get more of them.)  */
-
-size_t max_include_len;
-
-struct file_name_list
-  {
-    struct file_name_list *next;
-    const char *fname;
-  };
-
-struct file_name_list *first_dir_md_include = 0;  /* First dir to search */
-        /* First dir to search for <file> */
-struct file_name_list *first_bracket_include = 0;
-struct file_name_list *last_dir_md_include = 0;        /* Last in chain */
 
 static void remove_constraints (rtx);
 static void process_rtx (rtx, int);
@@ -114,25 +93,9 @@ static const char *alter_output_for_insn (struct queue_elem *,
 					  int, int);
 static void process_one_cond_exec (struct queue_elem *);
 static void process_define_cond_exec (void);
-static void process_include (rtx, int);
-static char *save_string (const char *, int);
 static void init_predicate_table (void);
 static void record_insn_name (int, const char *);
 
-void
-message_with_line (int lineno, const char *msg, ...)
-{
-  va_list ap;
-
-  va_start (ap, msg);
-
-  fprintf (stderr, "%s:%d: ", read_rtx_filename, lineno);
-  vfprintf (stderr, msg, ap);
-  fputc ('\n', stderr);
-
-  va_end (ap);
-}
-
 /* Make a version of gen_rtx_CONST_INT so that GEN_INT can be used in
    the gensupport programs.  */
 
@@ -197,74 +160,6 @@ remove_constraints (rtx part)
       }
 }
 
-/* Process an include file assuming that it lives in gcc/config/{target}/
-   if the include looks like (include "file").  */
-
-static void
-process_include (rtx desc, int lineno)
-{
-  const char *filename = XSTR (desc, 0);
-  const char *old_filename;
-  int old_lineno;
-  char *pathname;
-  FILE *input_file;
-
-  /* If specified file name is absolute, skip the include stack.  */
-  if (! IS_ABSOLUTE_PATH (filename))
-    {
-      struct file_name_list *stackp;
-
-      /* Search directory path, trying to open the file.  */
-      for (stackp = first_dir_md_include; stackp; stackp = stackp->next)
-	{
-	  static const char sep[2] = { DIR_SEPARATOR, '\0' };
-
-	  pathname = concat (stackp->fname, sep, filename, NULL);
-	  input_file = fopen (pathname, "r");
-	  if (input_file != NULL)
-	    goto success;
-	  free (pathname);
-	}
-    }
-
-  if (base_dir)
-    pathname = concat (base_dir, filename, NULL);
-  else
-    pathname = xstrdup (filename);
-  input_file = fopen (pathname, "r");
-  if (input_file == NULL)
-    {
-      free (pathname);
-      message_with_line (lineno, "include file `%s' not found", filename);
-      errors = 1;
-      return;
-    }
- success:
-
-  /* Save old cursor; setup new for the new file.  Note that "lineno" the
-     argument to this function is the beginning of the include statement,
-     while read_rtx_lineno has already been advanced.  */
-  old_filename = read_rtx_filename;
-  old_lineno = read_rtx_lineno;
-  read_rtx_filename = pathname;
-  read_rtx_lineno = 1;
-
-  if (include_callback)
-    include_callback (pathname);
-
-  /* Read the entire file.  */
-  while (read_rtx (input_file, &desc, &lineno))
-    process_rtx (desc, lineno);
-
-  /* Do not free pathname.  It is attached to the various rtx queue
-     elements.  */
-
-  read_rtx_filename = old_filename;
-  read_rtx_lineno = old_lineno;
-
-  fclose (input_file);
-}
-
 /* Process a top level rtx in some way, queuing as appropriate.  */
 
 static void
@@ -273,15 +168,16 @@ process_rtx (rtx desc, int lineno)
   switch (GET_CODE (desc))
     {
     case DEFINE_INSN:
-      queue_pattern (desc, &define_insn_tail, read_rtx_filename, lineno);
+      queue_pattern (desc, &define_insn_tail, read_md_filename, lineno);
       break;
 
     case DEFINE_COND_EXEC:
-      queue_pattern (desc, &define_cond_exec_tail, read_rtx_filename, lineno);
+      queue_pattern (desc, &define_cond_exec_tail, read_md_filename, lineno);
       break;
 
     case DEFINE_ATTR:
-      queue_pattern (desc, &define_attr_tail, read_rtx_filename, lineno);
+    case DEFINE_ENUM_ATTR:
+      queue_pattern (desc, &define_attr_tail, read_md_filename, lineno);
       break;
 
     case DEFINE_PREDICATE:
@@ -290,11 +186,7 @@ process_rtx (rtx desc, int lineno)
     case DEFINE_REGISTER_CONSTRAINT:
     case DEFINE_MEMORY_CONSTRAINT:
     case DEFINE_ADDRESS_CONSTRAINT:
-      queue_pattern (desc, &define_pred_tail, read_rtx_filename, lineno);
-      break;
-
-    case INCLUDE:
-      process_include (desc, lineno);
+      queue_pattern (desc, &define_pred_tail, read_md_filename, lineno);
       break;
 
     case DEFINE_INSN_AND_SPLIT:
@@ -322,7 +214,7 @@ process_rtx (rtx desc, int lineno)
 	split_cond = XSTR (desc, 4);
 	if (split_cond[0] == '&' && split_cond[1] == '&')
 	  {
-	    copy_rtx_ptr_loc (split_cond + 2, split_cond);
+	    copy_md_ptr_loc (split_cond + 2, split_cond);
 	    split_cond = join_c_conditions (XSTR (desc, 2), split_cond + 2);
 	  }
 	XSTR (split, 1) = split_cond;
@@ -336,16 +228,16 @@ process_rtx (rtx desc, int lineno)
 
 	/* Queue them.  */
 	insn_elem
-	  = queue_pattern (desc, &define_insn_tail, read_rtx_filename, 
+	  = queue_pattern (desc, &define_insn_tail, read_md_filename,
 			   lineno);
 	split_elem
-	  = queue_pattern (split, &other_tail, read_rtx_filename, lineno);
+	  = queue_pattern (split, &other_tail, read_md_filename, lineno);
 	insn_elem->split = split_elem;
 	break;
       }
 
     default:
-      queue_pattern (desc, &other_tail, read_rtx_filename, lineno);
+      queue_pattern (desc, &other_tail, read_md_filename, lineno);
       break;
     }
 }
@@ -379,9 +271,8 @@ is_predicable (struct queue_elem *elem)
 	case SET_ATTR_ALTERNATIVE:
 	  if (strcmp (XSTR (sub, 0), "predicable") == 0)
 	    {
-	      message_with_line (elem->lineno,
-				 "multiple alternatives for `predicable'");
-	      errors = 1;
+	      error_with_line (elem->lineno,
+			       "multiple alternatives for `predicable'");
 	      return 0;
 	    }
 	  break;
@@ -400,9 +291,8 @@ is_predicable (struct queue_elem *elem)
 	  /* ??? It would be possible to handle this if we really tried.
 	     It's not easy though, and I'm not going to bother until it
 	     really proves necessary.  */
-	  message_with_line (elem->lineno,
-			     "non-constant value for `predicable'");
-	  errors = 1;
+	  error_with_line (elem->lineno,
+			   "non-constant value for `predicable'");
 	  return 0;
 
 	default:
@@ -419,9 +309,7 @@ is_predicable (struct queue_elem *elem)
      to do this.  Delay this until we've got the basics solid.  */
   if (strchr (value, ',') != NULL)
     {
-      message_with_line (elem->lineno,
-			 "multiple alternatives for `predicable'");
-      errors = 1;
+      error_with_line (elem->lineno, "multiple alternatives for `predicable'");
       return 0;
     }
 
@@ -431,10 +319,8 @@ is_predicable (struct queue_elem *elem)
   if (strcmp (value, predicable_false) == 0)
     return 0;
 
-  message_with_line (elem->lineno,
-		     "unknown value `%s' for `predicable' attribute",
-		     value);
-  errors = 1;
+  error_with_line (elem->lineno,
+		   "unknown value `%s' for `predicable' attribute", value);
   return 0;
 }
 
@@ -453,9 +339,8 @@ identify_predicable_attribute (void)
     if (strcmp (XSTR (elem->data, 0), "predicable") == 0)
       goto found;
 
-  message_with_line (define_cond_exec_queue->lineno,
-		     "attribute `predicable' not defined");
-  errors = 1;
+  error_with_line (define_cond_exec_queue->lineno,
+		   "attribute `predicable' not defined");
   return;
 
  found:
@@ -464,9 +349,7 @@ identify_predicable_attribute (void)
   p_true = strchr (p_false, ',');
   if (p_true == NULL || strchr (++p_true, ',') != NULL)
     {
-      message_with_line (elem->lineno,
-			 "attribute `predicable' is not a boolean");
-      errors = 1;
+      error_with_line (elem->lineno, "attribute `predicable' is not a boolean");
       if (p_false)
         free (p_false);
       return;
@@ -483,17 +366,14 @@ identify_predicable_attribute (void)
       break;
 
     case CONST:
-      message_with_line (elem->lineno,
-			 "attribute `predicable' cannot be const");
-      errors = 1;
+      error_with_line (elem->lineno, "attribute `predicable' cannot be const");
       if (p_false)
 	free (p_false);
       return;
 
     default:
-      message_with_line (elem->lineno,
-			 "attribute `predicable' must have a constant default");
-      errors = 1;
+      error_with_line (elem->lineno,
+		       "attribute `predicable' must have a constant default");
       if (p_false)
 	free (p_false);
       return;
@@ -505,10 +385,8 @@ identify_predicable_attribute (void)
     predicable_default = 0;
   else
     {
-      message_with_line (elem->lineno,
-			 "unknown value `%s' for `predicable' attribute",
-			 value);
-      errors = 1;
+      error_with_line (elem->lineno,
+		       "unknown value `%s' for `predicable' attribute", value);
       if (p_false)
 	free (p_false);
     }
@@ -602,10 +480,8 @@ alter_predicate_for_insn (rtx pattern, int alt, int max_op, int lineno)
 
 	if (n_alternatives (c) != 1)
 	  {
-	    message_with_line (lineno,
-			       "too many alternatives for operand %d",
-			       XINT (pattern, 0));
-	    errors = 1;
+	    error_with_line (lineno, "too many alternatives for operand %d",
+			     XINT (pattern, 0));
 	    return NULL;
 	  }
 
@@ -780,6 +656,7 @@ process_one_cond_exec (struct queue_elem *ce_elem)
     {
       int alternatives, max_operand;
       rtx pred, insn, pattern, split;
+      char *new_name;
       int i;
 
       if (! is_predicable (insn_elem))
@@ -792,9 +669,7 @@ process_one_cond_exec (struct queue_elem *ce_elem)
 
       if (XVECLEN (ce_elem->data, 0) != 1)
 	{
-	  message_with_line (ce_elem->lineno,
-			     "too many patterns in predicate");
-	  errors = 1;
+	  error_with_line (ce_elem->lineno, "too many patterns in predicate");
 	  return;
 	}
 
@@ -806,7 +681,9 @@ process_one_cond_exec (struct queue_elem *ce_elem)
 
       /* Construct a new pattern for the new insn.  */
       insn = copy_rtx (insn_elem->data);
-      XSTR (insn, 0) = "";
+      new_name = XNEWVAR (char, strlen XSTR (insn_elem->data, 0) + 4);
+      sprintf (new_name, "*p %s", XSTR (insn_elem->data, 0));
+      XSTR (insn, 0) = new_name;
       pattern = rtx_alloc (COND_EXEC);
       XEXP (pattern, 0) = pred;
       if (XVECLEN (insn, 1) == 1)
@@ -875,7 +752,7 @@ process_one_cond_exec (struct queue_elem *ce_elem)
 	  XVECEXP (split, 2, i) = pattern;
 	}
       /* Add the new split to the queue.  */
-      queue_pattern (split, &other_tail, read_rtx_filename, 
+      queue_pattern (split, &other_tail, read_md_filename,
 		     insn_elem->split->lineno);
     }
 }
@@ -889,186 +766,267 @@ process_define_cond_exec (void)
   struct queue_elem *elem;
 
   identify_predicable_attribute ();
-  if (errors)
+  if (have_error)
     return;
 
   for (elem = define_cond_exec_queue; elem ; elem = elem->next)
     process_one_cond_exec (elem);
 }
+
+/* A read_md_files callback for reading an rtx.  */
 
-static char *
-save_string (const char *s, int len)
+static void
+rtx_handle_directive (int lineno, const char *rtx_name)
 {
-  char *result = XNEWVEC (char, len + 1);
+  rtx queue, x;
 
-  memcpy (result, s, len);
-  result[len] = 0;
-  return result;
+  if (read_rtx (rtx_name, &queue))
+    for (x = queue; x; x = XEXP (x, 1))
+      process_rtx (XEXP (x, 0), lineno);
 }
 
-
-/* The entry point for initializing the reader.  */
+/* Comparison function for the mnemonic hash table.  */
 
-int
-init_md_reader_args_cb (int argc, char **argv, bool (*parse_opt)(const char *))
+static int
+htab_eq_string (const void *s1, const void *s2)
 {
-  FILE *input_file;
-  int c, i, lineno;
-  char *lastsl;
-  rtx desc;
-  bool no_more_options;
-  bool already_read_stdin;
+  return strcmp ((const char*)s1, (const char*)s2) == 0;
+}
 
-  /* Unlock the stdio streams.  */
-  unlock_std_streams ();
+/* Add mnemonic STR with length LEN to the mnemonic hash table
+   MNEMONIC_HTAB.  A trailing zero end character is appendend to STR
+   and a permanent heap copy of STR is created.  */
 
-  /* First we loop over all the options.  */
-  for (i = 1; i < argc; i++)
+static void
+add_mnemonic_string (htab_t mnemonic_htab, const char *str, int len)
+{
+  char *new_str;
+  void **slot;
+  char *str_zero = (char*)alloca (len + 1);
+
+  memcpy (str_zero, str, len);
+  str_zero[len] = '\0';
+
+  slot = htab_find_slot (mnemonic_htab, str_zero, INSERT);
+
+  if (*slot)
+    return;
+
+  /* Not found; create a permanent copy and add it to the hash table.  */
+  new_str = XNEWVAR (char, len + 1);
+  memcpy (new_str, str_zero, len + 1);
+  *slot = new_str;
+}
+
+/* Scan INSN for mnemonic strings and add them to the mnemonic hash
+   table in MNEMONIC_HTAB.
+
+   The mnemonics cannot be found if they are emitted using C code.
+
+   If a mnemonic string contains ';' or a newline the string assumed
+   to consist of more than a single instruction.  The attribute value
+   will then be set to the user defined default value.  */
+
+static void
+gen_mnemonic_setattr (htab_t mnemonic_htab, rtx insn)
+{
+  const char *template_code, *cp;
+  int i;
+  int vec_len;
+  rtx set_attr;
+  char *attr_name;
+  rtvec new_vec;
+
+  template_code = XTMPL (insn, 3);
+
+  /* Skip patterns which use C code to emit the template.  */
+  if (template_code[0] == '*')
+    return;
+
+  if (template_code[0] == '@')
+    cp = &template_code[1];
+  else
+    cp = &template_code[0];
+
+  for (i = 0; *cp; )
     {
-      if (argv[i][0] != '-')
-	continue;
-      
-      c = argv[i][1];
-      switch (c)
+      const char *ep, *sp;
+      int size = 0;
+
+      while (ISSPACE (*cp))
+	cp++;
+
+      for (ep = sp = cp; !IS_VSPACE (*ep) && *ep != '\0'; ++ep)
+	if (!ISSPACE (*ep))
+	  sp = ep + 1;
+
+      if (i > 0)
+	obstack_1grow (&string_obstack, ',');
+
+      while (cp < sp && ((*cp >= '0' && *cp <= '9')
+			 || (*cp >= 'a' && *cp <= 'z')))
+
 	{
-	case 'I':		/* Add directory to path for includes.  */
-	  {
-	    struct file_name_list *dirtmp;
-
-	    dirtmp = XNEW (struct file_name_list);
-	    dirtmp->next = 0;	/* New one goes on the end */
-	    if (first_dir_md_include == 0)
-	      first_dir_md_include = dirtmp;
-	    else
-	      last_dir_md_include->next = dirtmp;
-	    last_dir_md_include = dirtmp;	/* Tail follows the last one */
-	    if (argv[i][1] == 'I' && argv[i][2] != 0)
-	      dirtmp->fname = argv[i] + 2;
-	    else if (i + 1 == argc)
-	      fatal ("directory name missing after -I option");
-	    else
-	      dirtmp->fname = argv[++i];
-	    if (strlen (dirtmp->fname) > max_include_len)
-	      max_include_len = strlen (dirtmp->fname);
-	  }
-	  break;
-
-	case '\0':
-	  /* An argument consisting of exactly one dash is a request to
-	     read stdin.  This will be handled in the second loop.  */
-	  continue;
-
-	case '-':
-	  /* An argument consisting of just two dashes causes option
-	     parsing to cease.  */
-	  if (argv[i][2] == '\0')
-	    goto stop_parsing_options;
-
-	default:
-	  /* The program may have provided a callback so it can
-	     accept its own options.  */
-	  if (parse_opt && parse_opt (argv[i]))
-	    break;
-
-	  fatal ("invalid option `%s'", argv[i]);
+	  obstack_1grow (&string_obstack, *cp);
+	  cp++;
+	  size++;
 	}
+
+      while (cp < sp)
+	{
+	  if (*cp == ';' || (*cp == '\\' && cp[1] == 'n'))
+	    {
+	      /* Don't set a value if there are more than one
+		 instruction in the string.  */
+	      obstack_next_free (&string_obstack) =
+		obstack_next_free (&string_obstack) - size;
+	      size = 0;
+
+	      cp = sp;
+	      break;
+	    }
+	  cp++;
+	}
+      if (size == 0)
+	obstack_1grow (&string_obstack, '*');
+      else
+	add_mnemonic_string (mnemonic_htab,
+			     obstack_next_free (&string_obstack) - size,
+			     size);
+      i++;
     }
 
- stop_parsing_options:
+  /* An insn definition might emit an empty string.  */
+  if (obstack_object_size (&string_obstack) == 0)
+    return;
 
+  obstack_1grow (&string_obstack, '\0');
+
+  set_attr = rtx_alloc (SET_ATTR);
+  XSTR (set_attr, 1) = XOBFINISH (&string_obstack, char *);
+  attr_name = XNEWVAR (char, strlen (MNEMONIC_ATTR_NAME) + 1);
+  strcpy (attr_name, MNEMONIC_ATTR_NAME);
+  XSTR (set_attr, 0) = attr_name;
+
+  if (!XVEC (insn, 4))
+    vec_len = 0;
+  else
+    vec_len = XVECLEN (insn, 4);
+
+  new_vec = rtvec_alloc (vec_len + 1);
+  for (i = 0; i < vec_len; i++)
+    RTVEC_ELT (new_vec, i) = XVECEXP (insn, 4, i);
+  RTVEC_ELT (new_vec, vec_len) = set_attr;
+  XVEC (insn, 4) = new_vec;
+}
+
+/* This function is called for the elements in the mnemonic hashtable
+   and generates a comma separated list of the mnemonics.  */
+
+static int
+mnemonic_htab_callback (void **slot, void *info ATTRIBUTE_UNUSED)
+{
+  obstack_grow (&string_obstack, (char*)*slot, strlen ((char*)*slot));
+  obstack_1grow (&string_obstack, ',');
+  return 1;
+}
+
+/* Generate (set_attr "mnemonic" "..") RTXs and append them to every
+   insn definition in case the back end requests it by defining the
+   mnemonic attribute.  The values for the attribute will be extracted
+   from the output patterns of the insn definitions as far as
+   possible.  */
+
+static void
+gen_mnemonic_attr (void)
+{
+  struct queue_elem *elem;
+  rtx mnemonic_attr = NULL;
+  htab_t mnemonic_htab;
+  const char *str, *p;
+  int i;
+
+  if (have_error)
+    return;
+
+  /* Look for the DEFINE_ATTR for `mnemonic'.  */
+  for (elem = define_attr_queue; elem != *define_attr_tail; elem = elem->next)
+    if (GET_CODE (elem->data) == DEFINE_ATTR
+	&& strcmp (XSTR (elem->data, 0), MNEMONIC_ATTR_NAME) == 0)
+      {
+	mnemonic_attr = elem->data;
+	break;
+      }
+
+  /* A (define_attr "mnemonic" "...") indicates that the back-end
+     wants a mnemonic attribute to be generated.  */
+  if (!mnemonic_attr)
+    return;
+
+  mnemonic_htab = htab_create_alloc (MNEMONIC_HTAB_SIZE, htab_hash_string,
+				     htab_eq_string, 0, xcalloc, free);
+
+  for (elem = define_insn_queue; elem; elem = elem->next)
+    {
+      rtx insn = elem->data;
+      bool found = false;
+
+      /* Check if the insn definition already has
+	 (set_attr "mnemonic" ...).  */
+      if (XVEC (insn, 4))
+ 	for (i = 0; i < XVECLEN (insn, 4); i++)
+	  if (strcmp (XSTR (XVECEXP (insn, 4, i), 0), MNEMONIC_ATTR_NAME) == 0)
+	    {
+	      found = true;
+	      break;
+	    }
+
+      if (!found)
+	gen_mnemonic_setattr (mnemonic_htab, insn);
+    }
+
+  /* Add the user defined values to the hash table.  */
+  str = XSTR (mnemonic_attr, 1);
+  while ((p = scan_comma_elt (&str)) != NULL)
+    add_mnemonic_string (mnemonic_htab, p, str - p);
+
+  htab_traverse (mnemonic_htab, mnemonic_htab_callback, NULL);
+
+  /* Replace the last ',' with the zero end character.  */
+  *((char *)obstack_next_free (&string_obstack) - 1) = '\0';
+  XSTR (mnemonic_attr, 1) = XOBFINISH (&string_obstack, char *);
+}
+
+/* The entry point for initializing the reader.  */
+
+bool
+init_rtx_reader_args_cb (int argc, char **argv,
+			 bool (*parse_opt) (const char *))
+{
   /* Prepare to read input.  */
   condition_table = htab_create (500, hash_c_test, cmp_c_test, NULL);
   init_predicate_table ();
   obstack_init (rtl_obstack);
-  errors = 0;
   sequence_num = 0;
-  no_more_options = false;
-  already_read_stdin = false;
 
-
-  /* Now loop over all input files.  */
-  for (i = 1; i < argc; i++)
-    {
-      if (argv[i][0] == '-')
-	{
-	  if (argv[i][1] == '\0')
-	    {
-	      /* Read stdin.  */
-	      if (already_read_stdin)
-		fatal ("cannot read standard input twice");
-	      
-	      base_dir = NULL;
-	      read_rtx_filename = in_fname = "<stdin>";
-	      read_rtx_lineno = 1;
-	      input_file = stdin;
-	      already_read_stdin = true;
-
-	      while (read_rtx (input_file, &desc, &lineno))
-		process_rtx (desc, lineno);
-	      fclose (input_file);
-	      continue;
-	    }
-	  else if (argv[i][1] == '-' && argv[i][2] == '\0')
-	    {
-	      /* No further arguments are to be treated as options.  */
-	      no_more_options = true;
-	      continue;
-	    }
-	  else if (!no_more_options)
-	    continue;
-	}
-
-      /* If we get here we are looking at a non-option argument, i.e.
-	 a file to be processed.  */
-
-      in_fname = argv[i];
-      lastsl = strrchr (in_fname, '/');
-      if (lastsl != NULL)
-	base_dir = save_string (in_fname, lastsl - in_fname + 1 );
-      else
-	base_dir = NULL;
-
-      read_rtx_filename = in_fname;
-      read_rtx_lineno = 1;
-      input_file = fopen (in_fname, "r");
-      if (input_file == 0)
-	{
-	  perror (in_fname);
-	  return FATAL_EXIT_CODE;
-	}
-
-      while (read_rtx (input_file, &desc, &lineno))
-	process_rtx (desc, lineno);
-      fclose (input_file);
-    }
-
-  /* If we get to this point without having seen any files to process,
-     read standard input now.  */
-  if (!in_fname)
-    {
-      base_dir = NULL;
-      read_rtx_filename = in_fname = "<stdin>";
-      read_rtx_lineno = 1;
-      input_file = stdin;
-
-      while (read_rtx (input_file, &desc, &lineno))
-	process_rtx (desc, lineno);
-      fclose (input_file);
-    }
+  read_md_files (argc, argv, parse_opt, rtx_handle_directive);
 
   /* Process define_cond_exec patterns.  */
   if (define_cond_exec_queue != NULL)
     process_define_cond_exec ();
 
-  return errors ? FATAL_EXIT_CODE : SUCCESS_EXIT_CODE;
+  if (define_attr_queue != NULL)
+    gen_mnemonic_attr ();
+
+  return !have_error;
 }
 
 /* Programs that don't have their own options can use this entry point
    instead.  */
-int
-init_md_reader_args (int argc, char **argv)
+bool
+init_rtx_reader_args (int argc, char **argv)
 {
-  return init_md_reader_args_cb (argc, argv, 0);
+  return init_rtx_reader_args_cb (argc, argv, 0);
 }
 
 /* The entry point for reading a single rtx from an md file.  */
@@ -1096,7 +1054,7 @@ read_md_rtx (int *lineno, int *seqnr)
   elem = *queue;
   *queue = elem->next;
   desc = elem->data;
-  read_rtx_filename = elem->filename;
+  read_md_filename = elem->filename;
   *lineno = elem->lineno;
   *seqnr = sequence_num;
 
@@ -1224,53 +1182,6 @@ traverse_c_tests (htab_trav callback, void *info)
     htab_traverse (condition_table, callback, info);
 }
 
-
-/* Given a string, return the number of comma-separated elements in it.
-   Return 0 for the null string.  */
-int
-n_comma_elts (const char *s)
-{
-  int n;
-
-  if (*s == '\0')
-    return 0;
-
-  for (n = 1; *s; s++)
-    if (*s == ',')
-      n++;
-
-  return n;
-}
-
-/* Given a pointer to a (char *), return a pointer to the beginning of the
-   next comma-separated element in the string.  Advance the pointer given
-   to the end of that element.  Return NULL if at end of string.  Caller
-   is responsible for copying the string if necessary.  White space between
-   a comma and an element is ignored.  */
-
-const char *
-scan_comma_elt (const char **pstr)
-{
-  const char *start;
-  const char *p = *pstr;
-
-  if (*p == ',')
-    p++;
-  while (ISSPACE(*p))
-    p++;
-
-  if (*p == '\0')
-    return NULL;
-
-  start = p;
-
-  while (*p != ',' && *p != '\0')
-    p++;
-
-  *pstr = p;
-  return start;
-}
-
 /* Helper functions for define_predicate and define_special_predicate
    processing.  Shared between genrecog.c and genpreds.c.  */
 
@@ -1358,7 +1269,7 @@ static const struct std_pred_table std_preds[] = {
   {"register_operand", false, false, {SUBREG, REG}},
   {"pmode_register_operand", true, false, {SUBREG, REG}},
   {"scratch_operand", false, false, {SCRATCH, REG}},
-  {"immediate_operand", false, true, {0}},
+  {"immediate_operand", false, true, {UNKNOWN}},
   {"const_int_operand", false, false, {CONST_INT}},
   {"const_double_operand", false, false, {CONST_INT, CONST_DOUBLE}},
   {"nonimmediate_operand", false, false, {SUBREG, REG, MEM}},
@@ -1367,6 +1278,9 @@ static const struct std_pred_table std_preds[] = {
   {"pop_operand", false, false, {MEM}},
   {"memory_operand", false, false, {SUBREG, MEM}},
   {"indirect_operand", false, false, {SUBREG, MEM}},
+  {"ordered_comparison_operator", false, false, {EQ, NE,
+						 LE, LT, GE, GT,
+						 LEU, LTU, GEU, GTU}},
   {"comparison_operator", false, false, {EQ, NE,
 					 LE, LT, GE, GT,
 					 LEU, LTU, GEU, GTU,
@@ -1401,8 +1315,8 @@ init_predicate_table (void)
       if (std_preds[i].allows_const_p)
 	for (j = 0; j < NUM_RTX_CODE; j++)
 	  if (GET_RTX_CLASS (j) == RTX_CONST_OBJ)
-	    add_predicate_code (pred, j);
-      
+	    add_predicate_code (pred, (enum rtx_code) j);
+
       add_predicate (pred);
     }
 }

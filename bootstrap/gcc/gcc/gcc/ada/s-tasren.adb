@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---         Copyright (C) 1992-2009, Free Software Foundation, Inc.          --
+--         Copyright (C) 1992-2010, Free Software Foundation, Inc.          --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -405,11 +405,10 @@ package body System.Tasking.Rendezvous is
       --  If this is a call made inside of an abort deferred region,
       --  the call should be never abortable.
 
-      if Self_Id.Deferral_Level > 1 then
-         Entry_Call.State := Never_Abortable;
-      else
-         Entry_Call.State := Now_Abortable;
-      end if;
+      Entry_Call.State :=
+        (if Self_Id.Deferral_Level > 1
+         then Never_Abortable
+         else Now_Abortable);
 
       Entry_Call.E := Entry_Index (E);
       Entry_Call.Prio := Get_Priority (Self_Id);
@@ -1225,9 +1224,31 @@ package body System.Tasking.Rendezvous is
       --  we would not have gotten this far, so now we should
       --  (re)enqueue the call, if the mode permits that.
 
-      if Entry_Call.Mode /= Conditional_Call
-        or else not Entry_Call.With_Abort
+      --  If the call is timed, it may have timed out before the requeue,
+      --  in the unusual case where the current accept has taken longer than
+      --  the given delay. In that case the requeue is cancelled, and the
+      --  outer timed call will be aborted.
+
+      if Entry_Call.Mode = Conditional_Call
+        or else
+          (Entry_Call.Mode = Timed_Call
+            and then Entry_Call.With_Abort
+            and then Entry_Call.Cancellation_Attempted)
       then
+         STPO.Unlock (Acceptor);
+
+         if Parent_Locked then
+            STPO.Unlock (Parent);
+         end if;
+
+         STPO.Write_Lock (Entry_Call.Self);
+
+         pragma Assert (Entry_Call.State >= Was_Abortable);
+
+         Initialization.Wakeup_Entry_Caller (Self_ID, Entry_Call, Cancelled);
+         STPO.Unlock (Entry_Call.Self);
+
+      else
          --  Timed_Call, Simple_Call, or Asynchronous_Call
 
          Queuing.Enqueue (Acceptor.Entry_Queues (E), Entry_Call);
@@ -1247,7 +1268,7 @@ package body System.Tasking.Rendezvous is
 
          if Old_State /= Entry_Call.State
            and then Entry_Call.State = Now_Abortable
-           and then Entry_Call.Mode > Simple_Call
+           and then Entry_Call.Mode /= Simple_Call
            and then Entry_Call.Self /= Self_ID
 
          --  Asynchronous_Call or Conditional_Call
@@ -1266,22 +1287,6 @@ package body System.Tasking.Rendezvous is
 
             STPO.Unlock (Entry_Call.Self);
          end if;
-
-      else
-         --  Conditional_Call and With_Abort
-
-         STPO.Unlock (Acceptor);
-
-         if Parent_Locked then
-            STPO.Unlock (Parent);
-         end if;
-
-         STPO.Write_Lock (Entry_Call.Self);
-
-         pragma Assert (Entry_Call.State >= Was_Abortable);
-
-         Initialization.Wakeup_Entry_Caller (Self_ID, Entry_Call, Cancelled);
-         STPO.Unlock (Entry_Call.Self);
       end if;
 
       return True;
@@ -1525,7 +1530,7 @@ package body System.Tasking.Rendezvous is
             --  Wait for a normal call and a pending action until the
             --  Wakeup_Time is reached.
 
-            Self_Id.Common.State := Acceptor_Sleep;
+            Self_Id.Common.State := Acceptor_Delay_Sleep;
 
             --  Try to remove calls to Sleep in the loop below by letting the
             --  caller a chance of getting ready immediately, using Unlock
@@ -1557,7 +1562,7 @@ package body System.Tasking.Rendezvous is
                exit when Self_Id.Open_Accepts = null;
 
                if Timedout then
-                  Sleep (Self_Id, Acceptor_Sleep);
+                  Sleep (Self_Id, Acceptor_Delay_Sleep);
                else
                   if Parameters.Runtime_Traces then
                      Send_Trace_Info (WT_Select,
@@ -1567,7 +1572,7 @@ package body System.Tasking.Rendezvous is
                   end if;
 
                   STPO.Timed_Sleep (Self_Id, Timeout, Mode,
-                    Acceptor_Sleep, Timedout, Yielded);
+                    Acceptor_Delay_Sleep, Timedout, Yielded);
                end if;
 
                if Timedout then
@@ -1613,9 +1618,9 @@ package body System.Tasking.Rendezvous is
             --  3) Spurious wakeup
 
             Self_Id.Open_Accepts := null;
-            Self_Id.Common.State := Acceptor_Sleep;
+            Self_Id.Common.State := Acceptor_Delay_Sleep;
 
-            STPO.Timed_Sleep (Self_Id, Timeout, Mode, Acceptor_Sleep,
+            STPO.Timed_Sleep (Self_Id, Timeout, Mode, Acceptor_Delay_Sleep,
               Timedout, Yielded);
 
             Self_Id.Common.State := Runnable;
@@ -1700,11 +1705,10 @@ package body System.Tasking.Rendezvous is
       --  If this is a call made inside of an abort deferred region,
       --  the call should be never abortable.
 
-      if Self_Id.Deferral_Level > 1 then
-         Entry_Call.State := Never_Abortable;
-      else
-         Entry_Call.State := Now_Abortable;
-      end if;
+      Entry_Call.State :=
+        (if Self_Id.Deferral_Level > 1
+         then Never_Abortable
+         else Now_Abortable);
 
       Entry_Call.E := Entry_Index (E);
       Entry_Call.Prio := Get_Priority (Self_Id);

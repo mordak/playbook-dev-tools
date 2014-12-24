@@ -1,6 +1,6 @@
 /* Routines to implement minimum-cost maximal flow algorithm used to smooth
    basic block and edge frequency counts.
-   Copyright (C) 2008
+   Copyright (C) 2008, 2009
    Free Software Foundation, Inc.
    Contributed by Paul Yuan (yingbo.com@gmail.com) and
                   Vinodha Ramasamy (vinodha@google.com).
@@ -388,8 +388,9 @@ add_edge (fixup_graph_type *fixup_graph, int src, int dest, gcov_type cost)
    MAX_CAPACITY to the edge_list in the fixup graph.  */
 
 static void
-add_fixup_edge (fixup_graph_type *fixup_graph, int src, int dest, int type,
-		gcov_type weight, gcov_type cost, gcov_type max_capacity)
+add_fixup_edge (fixup_graph_type *fixup_graph, int src, int dest,
+		edge_type type, gcov_type weight, gcov_type cost,
+		gcov_type max_capacity)
 {
   fixup_edge_p curr_edge = add_edge(fixup_graph, src, dest, cost);
   curr_edge->type = type;
@@ -1018,7 +1019,7 @@ find_augmenting_path (fixup_graph_type *fixup_graph,
    2. Find an augmenting path form source to sink.
    3. Send flow equal to the path's residual capacity along the edges of this path.
    4. Repeat steps 2 and 3 until no new augmenting path is found.
-   
+
 Parameters:
 SOURCE: index of source vertex (input)
 SINK: index of sink vertex    (input)
@@ -1238,9 +1239,9 @@ adjust_cfg_counts (fixup_graph_type *fixup_graph)
 	    fprintf (dump_file, " = " HOST_WIDEST_INT_PRINT_DEC "\t(%.1f%%)\n",
 		     e->count, e->probability * 100.0 / REG_BR_PROB_BASE);
         }
-    } 
+    }
 
-  ENTRY_BLOCK_PTR->count = sum_edge_counts (ENTRY_BLOCK_PTR->succs); 
+  ENTRY_BLOCK_PTR->count = sum_edge_counts (ENTRY_BLOCK_PTR->succs);
   EXIT_BLOCK_PTR->count = sum_edge_counts (EXIT_BLOCK_PTR->preds);
 
   /* Compute edge probabilities.  */

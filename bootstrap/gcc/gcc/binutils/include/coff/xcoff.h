@@ -1,14 +1,14 @@
 /* Internal format of XCOFF object file data structures for BFD.
 
-   Copyright 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2005
-   Free Software Foundation, Inc.
+   Copyright 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2005,
+   2009, 2010  Free Software Foundation, Inc.
    Written by Ian Lance Taylor <ian@cygnus.com>, Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
+   the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
    
    This program is distributed in the hope that it will be useful,
@@ -18,10 +18,28 @@
    
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
 
 #ifndef _INTERNAL_XCOFF_H
 #define _INTERNAL_XCOFF_H
+
+/* XCOFF specific f_flags.  */
+
+/* File was profiled with fdpr.  */
+#define F_FDPR_PROF 0x0010
+
+/* File was reordered with fdpr.  */
+#define F_FDPR_OPTI 0x0020
+
+/* File use very large program support.  */
+#define F_DSA       0x0040
+
+/* One aux header specifying medium page sizes is non-zero.  */
+#define F_VARPG     0x0100
+
+/* Read/write sections are non-executable.  */
+#define F_NONEXEC   0x8000
 
 /* Linker */
 
@@ -34,24 +52,43 @@
 #define _EXCEPT ".except"
 #define _TYPCHK ".typchk"
 
+/* XCOFF uses special .dwXXX sections with the type STYP_DWARF.  */
+#define STYP_DWARF  0x0010
+
+/* High-order 16-bits dwarf subtypes.  */
+#define SSUBTYP_DWINFO  0x10000
+#define SSUBTYP_DWLINE  0x20000
+#define SSUBTYP_DWPBNMS 0x30000
+#define SSUBTYP_DWPBTYP 0x40000
+#define SSUBTYP_DWARNGE 0x50000
+#define SSUBTYP_DWABREV 0x60000
+#define SSUBTYP_DWSTR   0x70000
+#define SSUBTYP_DWRNGES 0x80000
+
 /* XCOFF uses a special .loader section with type STYP_LOADER.  */
 #define STYP_LOADER 0x1000
-
-/* XCOFF uses a special .debug section with type STYP_DEBUG.  */
-#define STYP_DEBUG 0x2000
-
-/* XCOFF handles line number or relocation overflow by creating
-   another section header with STYP_OVRFLO set.  */
-#define STYP_OVRFLO 0x8000
 
 /* Specifies an exception section.  A section of this type provides 
    information to identify the reason that a trap or ececptin occured within 
    and executable object program */
 #define STYP_EXCEPT 0x0100
 
+/* Specifies an initialized thread-local data section.  */
+#define STYP_TDATA  0x0400
+
+/* Specifies an uninitialized thread-local data section.  */
+#define STYP_TBSS   0x0800
+
+/* XCOFF uses a special .debug section with type STYP_DEBUG.  */
+#define STYP_DEBUG  0x2000
+
 /* Specifies a type check section.  A section of this type contains parameter 
    argument type check strings used by the AIX binder.  */
 #define STYP_TYPCHK 0x4000
+
+/* XCOFF handles line number or relocation overflow by creating
+   another section header with STYP_OVRFLO set.  */
+#define STYP_OVRFLO 0x8000
 
 #define	RS6K_AOUTHDR_OMAGIC 0x0107 /* old: text & data writeable */
 #define	RS6K_AOUTHDR_NMAGIC 0x0108 /* new: text r/o, data r/w */
@@ -83,12 +120,23 @@
 #define R_RBAC  (0x19)
 #define R_RBR   (0x1a)
 #define R_RBRC  (0x1b)
+#define R_TLS   (0x20)
+#define R_TLS_IE (0x21)
+#define R_TLS_LD (0x22)
+#define R_TLS_LE (0x23)
+#define R_TLSM  (0x24)
+#define R_TLSML (0x25)
+#define R_TOCU  (0x30)
+#define R_TOCL  (0x31)
 
 /* Storage class #defines, from /usr/include/storclass.h that are not already 
    defined in internal.h */
 
 /* Comment string in .info section */
 #define	C_INFO		110	
+
+/* Dwarf symbol.  */
+#define C_DWARF		112
 
 /* Auxillary Symbol Entries  */
 
@@ -214,6 +262,8 @@ struct internal_ldsym
 #define L_ENTRY (0x20)
 /* Exported symbol.  */
 #define L_EXPORT (0x10)
+/* Weak symbol.  */
+#define L_WEAK (0x08)
 
 /* The ldrel structure.  This is used to represent a reloc in the
    .loader section.  */
@@ -291,11 +341,12 @@ struct xcoff_link_hash_entry
 #define XCOFF_LDREL            0x00000008
 /* Symbol is the entry point.  */
 #define XCOFF_ENTRY            0x00000010
-/* Symbol is called; this is, it appears in a R_BR reloc.  */
+/* Symbol is for a function and is the target of a relocation.
+   The relocation may or may not be a branch-type relocation.  */
 #define XCOFF_CALLED           0x00000020
 /* Symbol needs the TOC entry filled in.  */
 #define XCOFF_SET_TOC          0x00000040
-/* Symbol is explicitly imported.  */
+/* Symbol is implicitly or explicitly imported.  */
 #define XCOFF_IMPORT           0x00000080
 /* Symbol is explicitly exported.  */
 #define XCOFF_EXPORT           0x00000100
@@ -315,6 +366,10 @@ struct xcoff_link_hash_entry
 #define XCOFF_SYSCALL32        0x00008000
 /* Symbol is an imported 64 bit syscall.  */
 #define XCOFF_SYSCALL64        0x00010000 
+/* Symbol was not explicitly defined by the time it was marked.  */
+#define XCOFF_WAS_UNDEFINED    0x00020000
+/* We have assigned an output XCOFF entry to this symbol.  */
+#define XCOFF_ALLOCATED	       0x00040000
 
 /* The XCOFF linker hash table.  */
 
@@ -326,64 +381,9 @@ struct xcoff_link_hash_entry
 #define XCOFF_SPECIAL_SECTION_END        4
 #define XCOFF_SPECIAL_SECTION_END2       5
 
-struct xcoff_link_hash_table
-{
-  struct bfd_link_hash_table root;
-
-  /* The .debug string hash table.  We need to compute this while
-     reading the input files, so that we know how large the .debug
-     section will be before we assign section positions.  */
-  struct bfd_strtab_hash *debug_strtab;
-
-  /* The .debug section we will use for the final output.  */
-  asection *debug_section;
-
-  /* The .loader section we will use for the final output.  */
-  asection *loader_section;
-
-  /* A count of non TOC relative relocs which will need to be
-     allocated in the .loader section.  */
-  size_t ldrel_count;
-
-  /* The .loader section header.  */
-  struct internal_ldhdr ldhdr;
-
-  /* The .gl section we use to hold global linkage code.  */
-  asection *linkage_section;
-
-  /* The .tc section we use to hold toc entries we build for global
-     linkage code.  */
-  asection *toc_section;
-
-  /* The .ds section we use to hold function descriptors which we
-     create for exported symbols.  */
-  asection *descriptor_section;
-
-  /* The list of import files.  */
-  struct xcoff_import_file *imports;
-
-  /* Required alignment of sections within the output file.  */
-  unsigned long file_align;
-
-  /* Whether the .text section must be read-only.  */
-  bfd_boolean textro;
-
-  /* Whether garbage collection was done.  */
-  bfd_boolean gc;
-
-  /* A linked list of symbols for which we have size information.  */
-  struct xcoff_link_size_list
-  {
-    struct xcoff_link_size_list *next;
-    struct xcoff_link_hash_entry *h;
-    bfd_size_type size;
-  } 
-  *size_list;
-
-  /* Magic sections: _text, _etext, _data, _edata, _end, end. */
-  asection *special_sections[XCOFF_NUMBER_OF_SPECIAL_SECTIONS];
-};
-
+/* These flags indicate which of -bexpall and -bexpfull are in effect.  */
+#define XCOFF_EXPALL 1
+#define XCOFF_EXPFULL 2
 
 /* This structure is used to pass information through
    xcoff_link_hash_traverse.  */
@@ -399,8 +399,8 @@ struct xcoff_loader_info
   /* Link information structure.  */
   struct bfd_link_info *info;
 
-  /* Whether all defined symbols should be exported.  */
-  bfd_boolean export_defineds;
+  /* A mask of XCOFF_EXPALL and XCOFF_EXPFULL flags.  */
+  unsigned int auto_export_flags;
 
   /* Number of ldsym structures.  */
   size_t ldsym_count;
@@ -635,5 +635,9 @@ struct xcoff_ar_hdr_big
   ((struct xcoff_ar_hdr *) arch_eltdata (bfd)->arch_header)
 #define arch_xhdr_big(bfd) \
   ((struct xcoff_ar_hdr_big *) arch_eltdata (bfd)->arch_header)
+
+/* True if symbols of class CLASS are external.  */
+#define EXTERN_SYM_P(CLASS) \
+  ((CLASS) == C_EXT || (CLASS) == C_AIX_WEAKEXT)
 
 #endif /* _INTERNAL_XCOFF_H */

@@ -1,7 +1,7 @@
 /* Operating system specific defines to be used when targeting GCC for
    hosting on Windows32, using a Unix style C library and tools.
    Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003,
-   2004, 2005, 2007, 2008, 2009
+   2004, 2005, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -33,11 +33,42 @@ along with GCC; see the file COPYING3.  If not see
 #define PREFERRED_DEBUGGING_TYPE DBX_DEBUG
 #endif
 
-#undef TARGET_64BIT_MS_ABI
-#define TARGET_64BIT_MS_ABI (!cfun ? DEFAULT_ABI == MS_ABI : TARGET_64BIT && cfun->machine->call_abi == MS_ABI)
+#undef TARGET_SEH
+#define TARGET_SEH  (TARGET_64BIT_MS_ABI && flag_unwind_tables)
+
+/* Win64 with SEH cannot represent DRAP stack frames.  Disable its use.
+   Force the use of different mechanisms to allocate aligned local data.  */
+#undef MAX_STACK_ALIGNMENT
+#define MAX_STACK_ALIGNMENT  (TARGET_SEH ? 128 : MAX_OFILE_ALIGNMENT)
+
+/* Support hooks for SEH.  */
+#undef  TARGET_ASM_UNWIND_EMIT
+#define TARGET_ASM_UNWIND_EMIT  i386_pe_seh_unwind_emit
+#undef  TARGET_ASM_UNWIND_EMIT_BEFORE_INSN
+#define TARGET_ASM_UNWIND_EMIT_BEFORE_INSN  false
+#undef  TARGET_ASM_FUNCTION_END_PROLOGUE
+#define TARGET_ASM_FUNCTION_END_PROLOGUE  i386_pe_seh_end_prologue
+#define SUBTARGET_ASM_UNWIND_INIT  i386_pe_seh_init
 
 #undef DEFAULT_ABI
 #define DEFAULT_ABI (TARGET_64BIT ? MS_ABI : SYSV_ABI)
+
+#if ! defined (USE_MINGW64_LEADING_UNDERSCORES)
+#undef USER_LABEL_PREFIX
+#define USER_LABEL_PREFIX (TARGET_64BIT ? "" : "_")
+
+#undef LOCAL_LABEL_PREFIX
+#define LOCAL_LABEL_PREFIX (TARGET_64BIT ? "." : "")
+
+#undef ASM_GENERATE_INTERNAL_LABEL
+#define ASM_GENERATE_INTERNAL_LABEL(BUF,PREFIX,NUMBER)  \
+  sprintf ((BUF), "*%s%s%ld", LOCAL_LABEL_PREFIX, \
+	   (PREFIX), (long)(NUMBER))
+
+#undef LPREFIX
+#define LPREFIX (TARGET_64BIT ? ".L" : "L")
+
+#endif
 
 #undef DBX_REGISTER_NUMBER
 #define DBX_REGISTER_NUMBER(n)				\
@@ -49,8 +80,13 @@ along with GCC; see the file COPYING3.  If not see
    target, always use the svr4_dbx_register_map for DWARF .eh_frame
    even if we don't use DWARF .debug_frame. */
 #undef DWARF_FRAME_REGNUM
-#define DWARF_FRAME_REGNUM(n) TARGET_64BIT \
-	? dbx64_register_map[(n)] : svr4_dbx_register_map[(n)] 
+#define DWARF_FRAME_REGNUM(n)				\
+  (TARGET_64BIT ? dbx64_register_map[(n)]		\
+		: svr4_dbx_register_map[(n)])
+
+/* The MS_ABI changes the set of call-used registers.  */
+#undef DWARF_FRAME_REGISTERS
+#define DWARF_FRAME_REGISTERS (TARGET_64BIT ? 33 : 17)
 
 #ifdef HAVE_GAS_PE_SECREL32_RELOC
 /* Use section relative relocations for debugging offsets.  Unlike
@@ -58,31 +94,47 @@ along with GCC; see the file COPYING3.  If not see
    won't allow it.  */
 #define ASM_OUTPUT_DWARF_OFFSET(FILE, SIZE, LABEL, SECTION)	\
   do {								\
-    if (SIZE != 4 && (!TARGET_64BIT || SIZE != 8))		\
-      abort ();							\
-								\
-    fputs ("\t.secrel32\t", FILE);				\
-    assemble_name (FILE, LABEL);				\
+    switch (SIZE)						\
+      {								\
+      case 4:							\
+	fputs ("\t.secrel32\t", FILE);				\
+	assemble_name (FILE, LABEL);				\
+	break;							\
+      case 8:							\
+	/* This is a hack.  There is no 64-bit section relative	\
+	   relocation.  However, the COFF format also does not	\
+	   support 64-bit file offsets; 64-bit applications are	\
+	   limited to 32-bits of code+data in any one module.	\
+	   Fake the 64-bit offset by zero-extending it.  */	\
+	fputs ("\t.secrel32\t", FILE);				\
+	assemble_name (FILE, LABEL);				\
+	fputs ("\n\t.long\t0", FILE);				\
+	break;							\
+      default:							\
+	gcc_unreachable ();					\
+      }								\
   } while (0)
 #endif
 
 #define TARGET_EXECUTABLE_SUFFIX ".exe"
-
-#include <stdio.h>
 
 #define TARGET_OS_CPP_BUILTINS()					\
   do									\
     {									\
 	if (!TARGET_64BIT)						\
 	  builtin_define ("_X86_=1");					\
+	if (TARGET_SEH)							\
+	  builtin_define ("__SEH__");				\
 	builtin_assert ("system=winnt");				\
 	builtin_define ("__stdcall=__attribute__((__stdcall__))");	\
 	builtin_define ("__fastcall=__attribute__((__fastcall__))");	\
+	builtin_define ("__thiscall=__attribute__((__thiscall__))");	\
 	builtin_define ("__cdecl=__attribute__((__cdecl__))");		\
 	if (!flag_iso)							\
 	  {								\
 	    builtin_define ("_stdcall=__attribute__((__stdcall__))");	\
 	    builtin_define ("_fastcall=__attribute__((__fastcall__))");	\
+	    builtin_define ("_thiscall=__attribute__((__thiscall__))");	\
 	    builtin_define ("_cdecl=__attribute__((__cdecl__))");	\
 	  }								\
 	/* Even though linkonce works with static libs, this is needed 	\
@@ -124,11 +176,6 @@ along with GCC; see the file COPYING3.  If not see
 #undef LONG_TYPE_SIZE
 #define LONG_TYPE_SIZE 32
 
-/* Enable parsing of #pragma pack(push,<n>) and #pragma pack(pop).  */
-#define HANDLE_PRAGMA_PACK_PUSH_POP 1
-/* Enable push_macro & pop_macro */
-#define HANDLE_PRAGMA_PUSH_POP_MACRO 1
-
 union tree_node;
 #define TREE union tree_node *
 
@@ -146,7 +193,15 @@ union tree_node;
 #undef  SUBTARGET_OVERRIDE_OPTIONS
 #define SUBTARGET_OVERRIDE_OPTIONS					\
 do {									\
-  if (flag_pic)								\
+  if (TARGET_64BIT && flag_pic != 1)					\
+    {									\
+      if (flag_pic > 1)							\
+        warning (0,							\
+	         "-fPIC ignored for target (all code is position independent)"\
+                 );                         				\
+      flag_pic = 1;							\
+    }									\
+  else if (!TARGET_64BIT && flag_pic)					\
     {									\
       warning (0, "-f%s ignored for target (all code is position independent)",\
 	       (flag_pic > 1) ? "PIC" : "pic");				\
@@ -197,13 +252,17 @@ do {						\
   fputs ((NAME), (STREAM));			\
 } while (0)
 
+/* This does much the same in memory rather than to a stream.  */
+#undef TARGET_MANGLE_ASSEMBLER_NAME
+#define TARGET_MANGLE_ASSEMBLER_NAME i386_pe_mangle_assembler_name
+
 
 /* Emit code to check the stack when allocating more than 4000
    bytes in one go.  */
 #define CHECK_STACK_LIMIT 4000
 
 #undef STACK_BOUNDARY
-#define STACK_BOUNDARY	(DEFAULT_ABI == MS_ABI ? 128 : BITS_PER_WORD)
+#define STACK_BOUNDARY	(ix86_abi == MS_ABI ? 128 : BITS_PER_WORD)
 
 /* By default, target has a 80387, uses IEEE compatible arithmetic,
    returns float values in the 387 and needs stack probes.
@@ -244,15 +303,12 @@ do {						\
    properly.  If we are generating SDB debugging information, this
    will happen automatically, so we only need to handle other cases.  */
 #undef ASM_DECLARE_FUNCTION_NAME
-#define ASM_DECLARE_FUNCTION_NAME(FILE, NAME, DECL)			\
-  do									\
-    {									\
-      i386_pe_maybe_record_exported_symbol (DECL, NAME, 0);		\
-      if (write_symbols != SDB_DEBUG)					\
-	i386_pe_declare_function_type (FILE, NAME, TREE_PUBLIC (DECL));	\
-      ASM_OUTPUT_LABEL (FILE, NAME);					\
-    }									\
-  while (0)
+#define ASM_DECLARE_FUNCTION_NAME(FILE, NAME, DECL) \
+  i386_pe_start_function (FILE, NAME, DECL)
+
+#undef ASM_DECLARE_FUNCTION_SIZE
+#define ASM_DECLARE_FUNCTION_SIZE(FILE,NAME,DECL) \
+  i386_pe_end_function (FILE, NAME, DECL)
 
 /* Add an external function to the list of functions to be declared at
    the end of the file.  */
@@ -273,6 +329,12 @@ do {						\
 #define ASM_OUTPUT_ALIGNED_BSS(FILE, DECL, NAME, SIZE, ALIGN) \
   asm_output_aligned_bss ((FILE), (DECL), (NAME), (SIZE), (ALIGN))
 
+/* Put all *tf routines in libgcc.  */
+#undef LIBGCC2_HAS_TF_MODE
+#define LIBGCC2_HAS_TF_MODE 1
+#define LIBGCC2_TF_CEXT q
+#define TF_SIZE 113
+
 /* Output function declarations at the end of the file.  */
 #undef TARGET_ASM_FILE_END
 #define TARGET_ASM_FILE_END i386_pe_file_end
@@ -287,6 +349,10 @@ do {						\
 /* The logic of this #if must be kept synchronised with the logic
    for selecting the tmake_eh_file fragment in config.gcc.  */
 #define DWARF2_UNWIND_INFO 1
+/* If multilib is selected break build as sjlj is required.  */
+#if defined (TARGET_BI_ARCH)
+#error For 64-bit windows and 32-bit based multilib version of gcc just SJLJ exceptions are supported.
+#endif
 #else
 #define DWARF2_UNWIND_INFO 0
 #endif
@@ -358,6 +424,7 @@ do {						\
     {									\
       const char *alias							\
 	= IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (DECL));		\
+      i386_pe_maybe_record_exported_symbol (DECL, alias, 0);		\
       if (TREE_CODE (DECL) == FUNCTION_DECL)				\
 	i386_pe_declare_function_type (STREAM, alias,			\
 				       TREE_PUBLIC (DECL));		\
@@ -379,7 +446,7 @@ do {						\
 /* FIXME: SUPPORTS_WEAK && TARGET_HAVE_NAMED_SECTIONS is true,
    but for .jcr section to work we also need crtbegin and crtend
    objects.  */
-#define TARGET_USE_JCR_SECTION 0
+#define TARGET_USE_JCR_SECTION 1
 
 /* Decide whether it is safe to use a local alias for a virtual function
    when constructing thunks.  */
@@ -397,6 +464,12 @@ do {						\
 #define TARGET_VALID_DLLIMPORT_ATTRIBUTE_P i386_pe_valid_dllimport_attribute_p
 #define TARGET_CXX_ADJUST_CLASS_AT_DEFINITION i386_pe_adjust_class_at_definition
 #define TARGET_MANGLE_DECL_ASSEMBLER_NAME i386_pe_mangle_decl_assembler_name
+
+#undef TARGET_ASM_ASSEMBLE_VISIBILITY
+#define TARGET_ASM_ASSEMBLE_VISIBILITY i386_pe_assemble_visibility
+
+/* Static stack checking is supported by means of probes.  */
+#define STACK_CHECK_STATIC_BUILTIN 1
 
 #undef TREE
 

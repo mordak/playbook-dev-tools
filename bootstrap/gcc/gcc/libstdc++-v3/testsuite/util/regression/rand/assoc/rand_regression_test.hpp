@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -124,7 +124,7 @@ namespace detail
       };
 
     // XXX RAII, constructor takes bool for display
-    xml_test_rand_regression_formatter* p_fmt = NULL;
+    xml_test_rand_regression_formatter* p_fmt = 0;
     if (disp)
       p_fmt = new xml_test_rand_regression_formatter(sd, n, m, tp, ip, ep, cp, mp);
 
@@ -148,7 +148,7 @@ namespace detail
 
 namespace detail
 {
-  void
+  inline void
   usage(const std::string& name)
   {
     using namespace std;
@@ -179,7 +179,7 @@ namespace detail
     cerr << "'t' or 'f' determine whether progress will be displayed" << endl;
   }
 
-  void
+  inline void
   verify_params(size_t& r_seed, size_t& r_n, 
 		size_t& r_m, double& r_tp, double& r_ip, double& r_ep, 
 		double& r_cp, double& r_mp, bool& r_d)

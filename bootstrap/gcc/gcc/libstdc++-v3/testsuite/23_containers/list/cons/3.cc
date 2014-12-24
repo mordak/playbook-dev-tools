@@ -15,45 +15,11 @@
 // with this library; see the file COPYING3.  If not see
 // <http://www.gnu.org/licenses/>.
 
-// 23.2.2.1 list constructors, copy, and assignment
-
+#include "3.h"
 #include <list>
-#include <testsuite_hooks.h>
-
-bool test __attribute__((unused)) = true;
-
-// A nontrivial type.
-template<typename T>
-  struct A { };
-
-// Another nontrivial type
-struct B { };
-
-// A nontrivial type convertible from an int
-struct C {
-  C(int i) : i_(i) { }
-  bool operator==(const C& rhs) { return i_ == rhs.i_; }
-  int i_;
-};
-
-// Fill constructor disguised as a range constructor
-void
-test02D()
-{
-  const std::size_t LIST_SIZE = 5;
-  const int INIT_VALUE = 7;
-  std::size_t count = 0;
-  std::list<C> list0204(LIST_SIZE, INIT_VALUE);
-  std::list<C>::iterator i = list0204.begin();
-  for (; i != list0204.end(); ++i, ++count)
-    VERIFY(*i == INIT_VALUE);
-  VERIFY(count == LIST_SIZE);
-  VERIFY(list0204.size() == LIST_SIZE);
-}
 
 int main()
 {
-  test02D(); 
+  cons03<std::list<C> >();
   return 0;
 }
-// vi:set sw=2 ts=2:

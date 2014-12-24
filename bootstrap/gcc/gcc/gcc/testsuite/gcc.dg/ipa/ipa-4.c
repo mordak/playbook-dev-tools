@@ -1,6 +1,6 @@
 /* { dg-do compile } */
-/* { dg-options "-O3 -fipa-cp -fipa-cp-clone -fdump-ipa-cp"  } */
-/* { dg-skip-if "PR 25442" { "*-*-*" } { "-fpic" "-fPIC" } { "" } } */
+/* { dg-options "-O3 -fipa-cp -fipa-cp-clone -fdump-ipa-cp -fno-early-inlining"  } */
+/* { dg-add-options bind_pic_locally } */
 
 #include <stdio.h>
 int g (int b, int c)
@@ -9,17 +9,19 @@ int g (int b, int c)
 }
 int f (int a)
 {
-  /* First and second parameter of g gets different values.  */ 
-     
+  /* First and second parameter of g gets different values.  */
+
   if (a > 0)
     g (a, 3);
   else
-    g (a+1, 5); 	
+    g (a+1, 5);
 }
 int main ()
 {
-  f (7);
-  return 0;	
+  int i;
+  for (i = 0; i < 100; i++)
+    f (7);
+  return 0;
 }
 
 

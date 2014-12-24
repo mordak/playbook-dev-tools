@@ -32,122 +32,41 @@
 #ifndef _GLIBCXX_PARALLEL_CHECKERS_H
 #define _GLIBCXX_PARALLEL_CHECKERS_H 1
 
-#include <functional>
 #include <cstdio>
 #include <bits/stl_algobase.h>
+#include <bits/stl_function.h>
 
 namespace __gnu_parallel
 {
   /**
-   * @brief Check whether @c [begin, @c end) is sorted according to @c comp.
-   * @param begin Begin iterator of sequence.
-   * @param end End iterator of sequence.
-   * @param comp Comparator.
+   * @brief Check whether @c [__begin, @c __end) is sorted according
+   * to @c __comp.
+   * @param __begin Begin iterator of sequence.
+   * @param __end End iterator of sequence.
+   * @param __comp Comparator.
    * @return @c true if sorted, @c false otherwise.
    */
-  // XXX Comparator default template argument
-  template<typename InputIterator, typename Comparator>
+  template<typename _IIter, typename _Compare>
     bool
-    is_sorted(InputIterator begin, InputIterator end,
-	      Comparator comp
-	      = std::less<typename std::iterator_traits<InputIterator>::
-	      value_type>())
+    __is_sorted(_IIter __begin, _IIter __end, _Compare __comp)
     {
-      if (begin == end)
-	return true;
+      if (__begin == __end)
+        return true;
 
-      InputIterator current(begin), recent(begin);
+      _IIter __current(__begin), __recent(__begin);
 
-      unsigned long long position = 1;
-      for (current++; current != end; current++)
-	{
-	  if (comp(*current, *recent))
-	    {
-	      printf("is_sorted: check failed before position %i.\n",
-		     position);
-	      return false;
-	    }
-	  recent = current;
-	  position++;
-	}
+      unsigned long long __position = 1;
+      for (__current++; __current != __end; __current++)
+        {
+          if (__comp(*__current, *__recent))
+            {
+              return false;
+            }
+          __recent = __current;
+          __position++;
+        }
 
       return true;
-    }
-
-  /**
-   * @brief Check whether @c [begin, @c end) is sorted according to @c comp.
-   * Prints the position in case an unordered pair is found.
-   * @param begin Begin iterator of sequence.
-   * @param end End iterator of sequence.
-   * @param first_failure The first failure is returned in this variable.
-   * @param comp Comparator.
-   * @return @c true if sorted, @c false otherwise.
-   */
-  // XXX Comparator default template argument
-  template<typename InputIterator, typename Comparator>
-    bool
-    is_sorted_failure(InputIterator begin, InputIterator end,
-		      InputIterator& first_failure,
-		      Comparator comp
-		      = std::less<typename std::iterator_traits<InputIterator>::
-		      value_type>())
-    {
-      if (begin == end)
-	return true;
-
-      InputIterator current(begin), recent(begin);
-
-      unsigned long long position = 1;
-      for (current++; current != end; current++)
-	{
-	  if (comp(*current, *recent))
-	    {
-	      first_failure = current;
-	      printf("is_sorted: check failed before position %lld.\n",
-		     position);
-	      return false;
-	    }
-	  recent = current;
-	  position++;
-	}
-
-      first_failure = end;
-      return true;
-    }
-
-  /**
-   * @brief Check whether @c [begin, @c end) is sorted according to @c comp.
-   * Prints all unordered pair, including the surrounding two elements.
-   * @param begin Begin iterator of sequence.
-   * @param end End iterator of sequence.
-   * @param comp Comparator.
-   * @return @c true if sorted, @c false otherwise.
-   */
-  template<typename InputIterator, typename Comparator>
-    bool
-    // XXX Comparator default template argument
-    is_sorted_print_failures(InputIterator begin, InputIterator end,
-			     Comparator comp
-			     = std::less<typename std::iterator_traits
-			     <InputIterator>::value_type>())
-    {
-      if (begin == end)
-	return true;
-
-      InputIterator recent(begin);
-      bool ok = true;
-
-      for (InputIterator pos(begin + 1); pos != end; pos++)
-	{
-	  if (comp(*pos, *recent))
-	    {
-	      printf("%ld: %d %d %d %d\n", pos - begin, *(pos - 2),
-		     *(pos- 1), *pos, *(pos + 1));
-	      ok = false;
-	    }
-	  recent = pos;
-	}
-      return ok;
     }
 }
 

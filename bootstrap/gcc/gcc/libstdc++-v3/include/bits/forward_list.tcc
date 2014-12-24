@@ -1,6 +1,6 @@
 // <forward_list.tcc> -*- C++ -*-
 
-// Copyright (C) 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -22,240 +22,79 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file forward_list.tcc
- *  This is a Standard C++ Library header.
+/** @file bits/forward_list.tcc
+ *  This is an internal header file, included by other library headers.
+ *  Do not attempt to use it directly. @headername{forward_list}
  */
 
 #ifndef _FORWARD_LIST_TCC
 #define _FORWARD_LIST_TCC 1
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
-  template<typename _Alloc>
-    void
-    _Fwd_list_node_base<_Alloc>::
-    _M_transfer_after(_Pointer __bbegin)
-    {
-      _Pointer __bend = __bbegin;
-      while (__bend && __bend->_M_next)
-	__bend = __bend->_M_next;
-      _M_transfer_after(__bbegin, __bend);
-    }
-
-  template<typename _Alloc>
-    void
-    _Fwd_list_node_base<_Alloc>::
-    _M_transfer_after(_Pointer __bbegin, _Pointer __bend)
-    {
-      _Pointer __keep = __bbegin->_M_next;
-      if (__bend)
-	{
-	  __bbegin->_M_next = __bend->_M_next;
-	  __bend->_M_next = _M_next;
-	}
-      else
-	__bbegin->_M_next = 0;
-      _M_next = __keep;
-    }
- 
-  template<typename _Alloc>
-    void
-    _Fwd_list_node_base<_Alloc>::
-    _M_reverse_after()
-    {
-      _Pointer __tail = _M_next;
-      if (!__tail)
-	return;
-      while (_Pointer __temp = __tail->_M_next)
-	{
-	  _Pointer __keep = _M_next;
-	  _M_next = __temp;
-	  __tail->_M_next = __temp->_M_next;
-	  _M_next->_M_next = __keep;
-	}
-    }
-
- /**
-  *  @brief  Sort the singly linked list starting after this node.
-  *          This node is assumed to be an empty head node (of type
-  *          _Fwd_list_node_base).
-  */
-  template<typename _Tp, class _Alloc>
-    template<typename _Comp>
-      void
-      _Fwd_list_node<_Tp, _Alloc>::
-      _M_sort_after(_Comp __comp)
-      {
-        // If `next' is 0, return immediately.
-        _Pointer __list = __static_pointer_cast<_Pointer>(this->_M_next);
-        if (!__list)
-          return;
-
-        unsigned long __insize = 1;
-
-        while (1)
-          {
-            _Pointer __p = __list;
-            __list = 0;
-            _Pointer __tail = 0;
-
-            // Count number of merges we do in this pass.
-            unsigned long __nmerges = 0;
-
-            while (__p)
-              {
-                ++__nmerges;
-                // There exists a merge to be done.
-                // Step `insize' places along from p.
-                _Pointer __q = __p;
-                unsigned long __psize = 0;
-                for (unsigned long __i = 0; __i < __insize; ++__i)
-                  {
-                    ++__psize;
-                    __q = __static_pointer_cast<_Pointer>(__q->_M_next);
-                    if (!__q)
-                      break;
-                  }
-
-                // If q hasn't fallen off end, we have two lists to merge.
-                unsigned long __qsize = __insize;
-
-                // Now we have two lists; merge them.
-                while (__psize > 0 || (__qsize > 0 && __q))
-                  {
-                    // Decide whether next node of merge comes from p or q.
-                    _Pointer __e;
-                    if (__psize == 0)
-                      {
-                        // p is empty; e must come from q.
-                        __e = __q;
-                        __q = __static_pointer_cast<_Pointer>(__q->_M_next);
-                        --__qsize;
-                      }
-                    else if (__qsize == 0 || !__q)
-                      {
-                        // q is empty; e must come from p.
-                        __e = __p;
-                        __p = __static_pointer_cast<_Pointer>(__p->_M_next);
-                        --__psize;
-                      }
-                    else if (__comp(__p->_M_value, __q->_M_value))
-                      {
-                        // First node of p is lower; e must come from p.
-                        __e = __p;
-                        __p = __static_pointer_cast<_Pointer>(__p->_M_next);
-                        --__psize;
-                      }
-                    else
-                      {
-                        // First node of q is lower; e must come from q.
-                        __e = __q;
-                        __q = __static_pointer_cast<_Pointer>(__q->_M_next);
-                        --__qsize;
-                      }
-
-                    // Add the next node to the merged list.
-                    if (__tail)
-                      __tail->_M_next = __e;
-                    else
-                      __list = __e;
-                    __tail = __e;
-                  }
-
-                // Now p has stepped `insize' places along, and q has too.
-                __p = __q;
-              }
-            __tail->_M_next = 0;
-
-            // If we have done only one merge, we're finished.
-            // Allow for nmerges == 0, the empty list case.
-            if (__nmerges <= 1)
-              {
-                this->_M_next = __list;
-                return;
-              }
-
-            // Otherwise repeat, merging lists twice the size.
-            __insize *= 2;
-          }
-      }
- 
   template<typename _Tp, typename _Alloc>
     _Fwd_list_base<_Tp, _Alloc>::
     _Fwd_list_base(const _Fwd_list_base& __lst, const _Alloc& __a)
     : _M_impl(__a)
     {
       this->_M_impl._M_head._M_next = 0;
-      typename _Node_base::_Pointer __to = &this->_M_impl._M_head;
-      typename _Node::_Pointer __curr 
-        = __static_pointer_cast<typename _Node::_Pointer>
-                               (__lst._M_impl._M_head._M_next);
+      _Fwd_list_node_base* __to = &this->_M_impl._M_head;
+      _Node* __curr = static_cast<_Node*>(__lst._M_impl._M_head._M_next);
+
       while (__curr)
         {
           __to->_M_next = _M_create_node(__curr->_M_value);
           __to = __to->_M_next;
-          __curr = __static_pointer_cast<typename _Node::_Pointer>
-                                        (__curr->_M_next);
+          __curr = static_cast<_Node*>(__curr->_M_next);
         }
     }
 
   template<typename _Tp, typename _Alloc>
     template<typename... _Args>
-      typename _Fwd_list_base<_Tp, _Alloc>::_Node_base::_Pointer
+      _Fwd_list_node_base*
       _Fwd_list_base<_Tp, _Alloc>::
       _M_insert_after(const_iterator __pos, _Args&&... __args)
       {
-        typename _Node_base::_Pointer __to 
-          = __const_pointer_cast<typename _Node_base::_Pointer>
-                                (__pos._M_node);
-        typename _Node::_Pointer __thing 
-          = __static_pointer_cast<typename _Node::_Pointer>( 
-                _M_create_node(std::forward<_Args>(__args)...) );
+        _Fwd_list_node_base* __to
+	  = const_cast<_Fwd_list_node_base*>(__pos._M_node);
+	_Node* __thing = _M_create_node(std::forward<_Args>(__args)...);
         __thing->_M_next = __to->_M_next;
         __to->_M_next = __thing;
-        return __static_pointer_cast<typename _Node_base::_Pointer>
-                                    (__to->_M_next);
+        return __to->_M_next;
       }
 
   template<typename _Tp, typename _Alloc>
-    typename _Fwd_list_base<_Tp, _Alloc>::_Node_base::_Pointer
+    _Fwd_list_node_base*
     _Fwd_list_base<_Tp, _Alloc>::
-    _M_erase_after(typename _Node_base::_Pointer __pos)
+    _M_erase_after(_Fwd_list_node_base* __pos)
     {
-      typename _Node::_Pointer __curr 
-        = __static_pointer_cast<typename _Node::_Pointer>(__pos->_M_next);
-      if (__curr)
-        {
-          typename _Node_base::_Pointer __next = __curr->_M_next;
-          __pos->_M_next = __next;
-          _M_get_Node_allocator().destroy(__curr);
-          _M_put_node(__curr);
-        }
-      return __pos;
+      _Node* __curr = static_cast<_Node*>(__pos->_M_next);
+      __pos->_M_next = __curr->_M_next;
+      _M_get_Node_allocator().destroy(__curr);
+      _M_put_node(__curr);
+      return __pos->_M_next;
     }
 
   template<typename _Tp, typename _Alloc>
-    typename _Fwd_list_base<_Tp, _Alloc>::_Node_base::_Pointer
+    _Fwd_list_node_base*
     _Fwd_list_base<_Tp, _Alloc>::
-    _M_erase_after(typename _Node_base::_Pointer __pos, 
-                   typename _Node_base::_Pointer __last)
+    _M_erase_after(_Fwd_list_node_base* __pos, 
+                   _Fwd_list_node_base* __last)
     {
-      typename _Node::_Pointer __curr 
-        = __static_pointer_cast<typename _Node::_Pointer>(__pos->_M_next);
-      while (__curr)
+      _Node* __curr = static_cast<_Node*>(__pos->_M_next);
+      while (__curr != __last)
         {
-          typename _Node::_Pointer __temp = __curr;
-          __curr = __static_pointer_cast<typename _Node::_Pointer>
-                                        (__curr->_M_next);
+          _Node* __temp = __curr;
+          __curr = static_cast<_Node*>(__curr->_M_next);
           _M_get_Node_allocator().destroy(__temp);
           _M_put_node(__temp);
-          __pos->_M_next = __curr;
-          if (__temp == __last)
-            break;
         }
-      return __pos;
+      __pos->_M_next = __last;
+      return __last;
     }
-  
+
   // Called by the range constructor to implement [23.1.1]/9
   template<typename _Tp, typename _Alloc>
     template<typename _InputIterator>
@@ -264,7 +103,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       _M_initialize_dispatch(_InputIterator __first, _InputIterator __last,
                              __false_type)
       {
-        typename _Node_base::_Pointer __to = &this->_M_impl._M_head;
+        _Node_base* __to = &this->_M_impl._M_head;
         for (; __first != __last; ++__first)
           {
             __to->_M_next = this->_M_create_node(*__first);
@@ -279,10 +118,23 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     forward_list<_Tp, _Alloc>::
     _M_fill_initialize(size_type __n, const value_type& __value)
     {
-      typename _Node_base::_Pointer __to = &this->_M_impl._M_head;
-      for (; __n > 0; --__n)
+      _Node_base* __to = &this->_M_impl._M_head;
+      for (; __n; --__n)
         {
           __to->_M_next = this->_M_create_node(__value);
+          __to = __to->_M_next;
+        }
+    }
+
+  template<typename _Tp, typename _Alloc>
+    void
+    forward_list<_Tp, _Alloc>::
+    _M_default_initialize(size_type __n)
+    {
+      _Node_base* __to = &this->_M_impl._M_head;
+      for (; __n; --__n)
+        {
+          __to->_M_next = this->_M_create_node();
           __to = __to->_M_next;
         }
     }
@@ -317,7 +169,44 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   template<typename _Tp, typename _Alloc>
     void
     forward_list<_Tp, _Alloc>::
-    resize(size_type __sz, value_type __val)
+    _M_default_insert_after(const_iterator __pos, size_type __n)
+    {
+      const_iterator __saved_pos = __pos;
+      __try
+	{
+	  for (; __n; --__n)
+	    __pos = emplace_after(__pos);
+	}
+      __catch(...)
+	{
+	  erase_after(__saved_pos, ++__pos);
+	  __throw_exception_again;
+	}
+    }
+
+  template<typename _Tp, typename _Alloc>
+    void
+    forward_list<_Tp, _Alloc>::
+    resize(size_type __sz)
+    {
+      iterator __k = before_begin();
+
+      size_type __len = 0;
+      while (__k._M_next() != end() && __len < __sz)
+        {
+          ++__k;
+          ++__len;
+        }
+      if (__len == __sz)
+        erase_after(__k, end());
+      else
+	_M_default_insert_after(__k, __sz - __len);
+    }
+
+  template<typename _Tp, typename _Alloc>
+    void
+    forward_list<_Tp, _Alloc>::
+    resize(size_type __sz, const value_type& __val)
     {
       iterator __k = before_begin();
 
@@ -334,36 +223,66 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     }
 
   template<typename _Tp, typename _Alloc>
-    void
+    typename forward_list<_Tp, _Alloc>::iterator
     forward_list<_Tp, _Alloc>::
-    splice_after(const_iterator __pos, forward_list&& __list)
+    _M_splice_after(const_iterator __pos, forward_list&& __list)
     {
-      if (!__list.empty() && &__list != this)
-        {
-          typename _Node_base::_Pointer __tmp 
-            = __const_pointer_cast<typename _Node_base::_Pointer>
-                                  (__pos._M_node);
-          const_iterator __before = __list.cbefore_begin();
-          __tmp->_M_transfer_after(__const_pointer_cast
-                                     <typename _Node_base::_Pointer>
-                                     (__before._M_node));
-        }
+      _Node_base* __tmp = const_cast<_Node_base*>(__pos._M_node);
+      iterator __before = __list.before_begin();
+      return iterator(__tmp->_M_transfer_after(__before._M_node));
     }
 
   template<typename _Tp, typename _Alloc>
     void
     forward_list<_Tp, _Alloc>::
-    splice_after(const_iterator __pos, forward_list&& __list,
+    splice_after(const_iterator __pos, forward_list&&,
                  const_iterator __before, const_iterator __last)
     {
-      typename _Node_base::_Pointer __tmp 
-        = __const_pointer_cast<typename _Node_base::_Pointer>(__pos._M_node);
-      __tmp->_M_transfer_after(__const_pointer_cast
-                                 <typename _Node_base::_Pointer>
-                                 (__before._M_node),
-                               __const_pointer_cast
-                                 <typename _Node_base::_Pointer>
-                                 (__last._M_node));
+      _Node_base* __tmp = const_cast<_Node_base*>(__pos._M_node);
+      __tmp->_M_transfer_after(const_cast<_Node_base*>(__before._M_node),
+                               const_cast<_Node_base*>(__last._M_node));
+    }
+
+  template<typename _Tp, typename _Alloc>
+    typename forward_list<_Tp, _Alloc>::iterator
+    forward_list<_Tp, _Alloc>::
+    insert_after(const_iterator __pos, size_type __n, const _Tp& __val)
+    {
+      if (__n)
+	{
+	  forward_list __tmp(__n, __val, this->_M_get_Node_allocator());
+	  return _M_splice_after(__pos, std::move(__tmp));
+	}
+      else
+	return iterator(const_cast<_Node_base*>(__pos._M_node));
+    }
+
+  template<typename _Tp, typename _Alloc>
+    template<typename _InputIterator>
+      typename forward_list<_Tp, _Alloc>::iterator
+      forward_list<_Tp, _Alloc>::
+      insert_after(const_iterator __pos,
+		   _InputIterator __first, _InputIterator __last)
+      {
+	forward_list __tmp(__first, __last, this->_M_get_Node_allocator());
+	if (!__tmp.empty())
+	  return _M_splice_after(__pos, std::move(__tmp));
+	else
+	  return iterator(const_cast<_Node_base*>(__pos._M_node));
+      }
+
+  template<typename _Tp, typename _Alloc>
+    typename forward_list<_Tp, _Alloc>::iterator
+    forward_list<_Tp, _Alloc>::
+    insert_after(const_iterator __pos, std::initializer_list<_Tp> __il)
+    {
+      if (__il.size())
+	{
+	  forward_list __tmp(__il, this->_M_get_Node_allocator());
+	  return _M_splice_after(__pos, std::move(__tmp));
+	}
+      else
+	return iterator(const_cast<_Node_base*>(__pos._M_node));
     }
 
   template<typename _Tp, typename _Alloc>
@@ -371,18 +290,27 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     forward_list<_Tp, _Alloc>::
     remove(const _Tp& __val)
     {
-      typename _Node::_Pointer __curr 
-        = __static_pointer_cast<typename _Node::_Pointer>
-                               (&this->_M_impl._M_head);
-      while (typename _Node::_Pointer __temp = 
-             __static_pointer_cast<typename _Node::_Pointer>(__curr->_M_next))
+      _Node* __curr = static_cast<_Node*>(&this->_M_impl._M_head);
+      _Node* __extra = 0;
+
+      while (_Node* __tmp = static_cast<_Node*>(__curr->_M_next))
         {
-          if (__temp->_M_value == __val)
-            this->_M_erase_after(__curr);
-          else
-            __curr = __static_pointer_cast<typename _Node::_Pointer>
-                                          (__curr->_M_next);
+          if (__tmp->_M_value == __val)
+	    {
+	      if (std::__addressof(__tmp->_M_value)
+		  != std::__addressof(__val))
+		{
+		  this->_M_erase_after(__curr);
+		  continue;
+		}
+	      else
+		__extra = __curr;
+	    }
+	  __curr = static_cast<_Node*>(__curr->_M_next);
         }
+
+      if (__extra)
+	this->_M_erase_after(__extra);
     }
 
   template<typename _Tp, typename _Alloc>
@@ -391,17 +319,13 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       forward_list<_Tp, _Alloc>::
       remove_if(_Pred __pred)
       {
-        typename _Node::_Pointer __curr 
-          = __static_pointer_cast<typename _Node::_Pointer>
-                                 (&this->_M_impl._M_head);
-        while (typename _Node::_Pointer __temp = 
-               __static_pointer_cast<typename _Node::_Pointer>(__curr->_M_next))
+	_Node* __curr = static_cast<_Node*>(&this->_M_impl._M_head);
+        while (_Node* __tmp = static_cast<_Node*>(__curr->_M_next))
           {
-            if (__pred(__temp->_M_value))
+            if (__pred(__tmp->_M_value))
               this->_M_erase_after(__curr);
             else
-              __curr = __static_pointer_cast<typename _Node::_Pointer>
-                                            (__curr->_M_next);
+              __curr = static_cast<_Node*>(__curr->_M_next);
           }
       }
 
@@ -432,12 +356,12 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       forward_list<_Tp, _Alloc>::
       merge(forward_list&& __list, _Comp __comp)
       {
-        typename _Node_base::_Pointer __node = &this->_M_impl._M_head;
+        _Node_base* __node = &this->_M_impl._M_head;
         while (__node->_M_next && __list._M_impl._M_head._M_next)
           {
-            if (__comp(__static_pointer_cast<typename _Node::_Pointer>
+            if (__comp(static_cast<_Node*>
                        (__list._M_impl._M_head._M_next)->_M_value,
-                       __static_pointer_cast<typename _Node::_Pointer>
+                       static_cast<_Node*>
                        (__node->_M_next)->_M_value))
               __node->_M_transfer_after(&__list._M_impl._M_head,
                                         __list._M_impl._M_head._M_next);
@@ -472,7 +396,108 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
         return false;
     }
 
-_GLIBCXX_END_NAMESPACE // namespace std
+  template<typename _Tp, class _Alloc>
+    template<typename _Comp>
+      void
+      forward_list<_Tp, _Alloc>::
+      sort(_Comp __comp)
+      {
+        // If `next' is 0, return immediately.
+        _Node* __list = static_cast<_Node*>(this->_M_impl._M_head._M_next);
+        if (!__list)
+          return;
+
+        unsigned long __insize = 1;
+
+        while (1)
+          {
+            _Node* __p = __list;
+            __list = 0;
+            _Node* __tail = 0;
+
+            // Count number of merges we do in this pass.
+            unsigned long __nmerges = 0;
+
+            while (__p)
+              {
+                ++__nmerges;
+                // There exists a merge to be done.
+                // Step `insize' places along from p.
+                _Node* __q = __p;
+                unsigned long __psize = 0;
+                for (unsigned long __i = 0; __i < __insize; ++__i)
+                  {
+                    ++__psize;
+                    __q = static_cast<_Node*>(__q->_M_next);
+                    if (!__q)
+                      break;
+                  }
+
+                // If q hasn't fallen off end, we have two lists to merge.
+                unsigned long __qsize = __insize;
+
+                // Now we have two lists; merge them.
+                while (__psize > 0 || (__qsize > 0 && __q))
+                  {
+                    // Decide whether next node of merge comes from p or q.
+                    _Node* __e;
+                    if (__psize == 0)
+                      {
+                        // p is empty; e must come from q.
+                        __e = __q;
+                        __q = static_cast<_Node*>(__q->_M_next);
+                        --__qsize;
+                      }
+                    else if (__qsize == 0 || !__q)
+                      {
+                        // q is empty; e must come from p.
+                        __e = __p;
+                        __p = static_cast<_Node*>(__p->_M_next);
+                        --__psize;
+                      }
+                    else if (__comp(__p->_M_value, __q->_M_value))
+                      {
+                        // First node of p is lower; e must come from p.
+                        __e = __p;
+                        __p = static_cast<_Node*>(__p->_M_next);
+                        --__psize;
+                      }
+                    else
+                      {
+                        // First node of q is lower; e must come from q.
+                        __e = __q;
+                        __q = static_cast<_Node*>(__q->_M_next);
+                        --__qsize;
+                      }
+
+                    // Add the next node to the merged list.
+                    if (__tail)
+                      __tail->_M_next = __e;
+                    else
+                      __list = __e;
+                    __tail = __e;
+                  }
+
+                // Now p has stepped `insize' places along, and q has too.
+                __p = __q;
+              }
+            __tail->_M_next = 0;
+
+            // If we have done only one merge, we're finished.
+            // Allow for nmerges == 0, the empty list case.
+            if (__nmerges <= 1)
+              {
+                this->_M_impl._M_head._M_next = __list;
+                return;
+              }
+
+            // Otherwise repeat, merging lists twice the size.
+            __insize *= 2;
+          }
+      }
+ 
+_GLIBCXX_END_NAMESPACE_CONTAINER
+} // namespace std
 
 #endif /* _FORWARD_LIST_TCC */
 

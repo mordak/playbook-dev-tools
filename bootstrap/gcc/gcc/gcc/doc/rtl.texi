@@ -1,5 +1,5 @@
 @c Copyright (C) 1988, 1989, 1992, 1994, 1997, 1998, 1999, 2000, 2001, 2002,
-@c 2003, 2004, 2005, 2006, 2007, 2008
+@c 2003, 2004, 2005, 2006, 2007, 2008, 2010
 @c Free Software Foundation, Inc.
 @c This is part of the GCC manual.
 @c For copying conditions, see the file gcc.texi.
@@ -38,6 +38,7 @@ form uses nested parentheses to indicate the pointers in the internal form.
 * Side Effects::      Expressions for storing in registers, etc.
 * Incdec::            Embedded side-effects for autoincrement addressing.
 * Assembler::         Representing @code{asm} with operands.
+* Debug Information:: Expressions representing debugging information.
 * Insns::             Expression types for entire insns.
 * Calls::             RTL representation of function call insns.
 * Sharing::           Some expressions are unique; others *must* be copied.
@@ -181,7 +182,8 @@ and are lvalues (so they can be used for insertion as well).
 
 @item RTX_TERNARY
 An RTX code for other three input operations.  Currently only
-@code{IF_THEN_ELSE} and @code{VEC_MERGE}.
+@code{IF_THEN_ELSE},  @code{VEC_MERGE}, @code{SIGN_EXTRACT},
+@code{ZERO_EXTRACT}, and @code{FMA}.
 
 @item RTX_INSN
 An RTX code for an entire instruction:  @code{INSN}, @code{JUMP_INSN}, and
@@ -420,6 +422,11 @@ the size is implied by the mode.
 @findex MEM_ALIGN
 @item MEM_ALIGN (@var{x})
 The known alignment in bits of the memory reference.
+
+@findex MEM_ADDR_SPACE
+@item MEM_ADDR_SPACE (@var{x})
+The address space of the memory reference.  This will commonly be zero
+for the generic address space.
 @end table
 
 @item REG
@@ -882,6 +889,14 @@ Stored in the @code{volatil} field and printed as @samp{/v}.
 Most uses of @code{SYMBOL_REF_FLAG} are historic and may be subsumed
 by @code{SYMBOL_REF_FLAGS}.  Certainly use of @code{SYMBOL_REF_FLAGS}
 is mandatory if the target requires more than one bit of storage.
+
+@findex PREFETCH_SCHEDULE_BARRIER_P
+@cindex @code{prefetch} and @samp{/v}
+@cindex @code{volatile}, in @code{prefetch}
+@item PREFETCH_SCHEDULE_BARRIER_P (@var{x})
+In a @code{prefetch}, indicates that the prefetch is a scheduling barrier.
+No other INSNs will be moved over it.
+Stored in the @code{volatil} field and printed as @samp{/v}.
 @end table
 
 These are the fields to which the above macros refer:
@@ -1033,6 +1048,9 @@ In an @code{insn}, 1 means the insn has been deleted.
 
 In @code{label_ref} and @code{reg_label} expressions, 1 means a reference
 to a non-local label.
+
+In @code{prefetch} expressions, 1 means that the containing insn is a
+scheduling barrier.
 
 In an RTL dump, this flag is represented as @samp{/v}.
 @end table
@@ -1253,7 +1271,7 @@ accumulator.  The default format is ``64.64''.
 is a machine-specific set of bits used to represent the result of a
 comparison operation.  Other machine-specific modes may also be used for
 the condition code.  These modes are not used on machines that use
-@code{cc0} (see @pxref{Condition Code}).
+@code{cc0} (@pxref{Condition Code}).
 
 @findex BLKmode
 @item BLKmode
@@ -2217,6 +2235,12 @@ not be the same.
 For unsigned widening multiplication, use the same idiom, but with
 @code{zero_extend} instead of @code{sign_extend}.
 
+@findex fma
+@item (fma:@var{m} @var{x} @var{y} @var{z})
+Represents the @code{fma}, @code{fmaf}, and @code{fmal} builtin
+functions that do a combined multiply of @var{x} and @var{y} and then
+adding to@var{z} without doing an intermediate rounding step.
+
 @findex div
 @findex ss_div
 @cindex division
@@ -2353,9 +2377,14 @@ Similar but represent left and right rotate.  If @var{c} is a constant,
 use @code{rotate}.
 
 @findex abs
+@findex ss_abs
 @cindex absolute value
 @item (abs:@var{m} @var{x})
+@item (ss_abs:@var{m} @var{x})
 Represents the absolute value of @var{x}, computed in mode @var{m}.
+@code{ss_abs} ensures that an out-of-bounds result saturates to the
+maximum signed value.
+
 
 @findex sqrt
 @cindex square root
@@ -2593,9 +2622,12 @@ a set bit indicates it is taken from @var{vec1}.
 @findex vec_select
 @item (vec_select:@var{m} @var{vec1} @var{selection})
 This describes an operation that selects parts of a vector.  @var{vec1} is
-the source vector, @var{selection} is a @code{parallel} that contains a
+the source vector, and @var{selection} is a @code{parallel} that contains a
 @code{const_int} for each of the subparts of the result vector, giving the
-number of the source subpart that should be stored into it.
+number of the source subpart that should be stored into it.  
+The result mode @var{m} is either the submode for a single element of
+@var{vec1} (if only one subpart is selected), or another vector mode 
+with that element submode (if multiple subparts are selected).
 
 @findex vec_concat
 @item (vec_concat:@var{m} @var{vec1} @var{vec2})
@@ -2950,7 +2982,7 @@ store a value in @var{x}.  @var{x} must be a @code{reg} expression.
 In some situations, it may be tempting to add a @code{use} of a
 register in a @code{parallel} to describe a situation where the value
 of a special register will modify the behavior of the instruction.
-An hypothetical example might be a pattern for an addition that can
+A hypothetical example might be a pattern for an addition that can
 either wrap around or use saturating addition depending on the value
 of a special control register:
 
@@ -3256,10 +3288,42 @@ mode @var{m1} is the mode of the sum @code{x+y}; @var{m2} is that of
 
 When an @code{asm} statement has multiple output values, its insn has
 several such @code{set} RTX's inside of a @code{parallel}.  Each @code{set}
-contains a @code{asm_operands}; all of these share the same assembler
+contains an @code{asm_operands}; all of these share the same assembler
 template and vectors, but each contains the constraint for the respective
 output operand.  They are also distinguished by the output-operand index
 number, which is 0, 1, @dots{} for successive output operands.
+
+@node Debug Information
+@section Variable Location Debug Information in RTL
+@cindex Variable Location Debug Information in RTL
+
+Variable tracking relies on @code{MEM_EXPR} and @code{REG_EXPR}
+annotations to determine what user variables memory and register
+references refer to.
+
+Variable tracking at assignments uses these notes only when they refer
+to variables that live at fixed locations (e.g., addressable
+variables, global non-automatic variables).  For variables whose
+location may vary, it relies on the following types of notes.
+
+@table @code
+@findex var_location
+@item (var_location:@var{mode} @var{var} @var{exp} @var{stat})
+Binds variable @code{var}, a tree, to value @var{exp}, an RTL
+expression.  It appears only in @code{NOTE_INSN_VAR_LOCATION} and
+@code{DEBUG_INSN}s, with slightly different meanings.  @var{mode}, if
+present, represents the mode of @var{exp}, which is useful if it is a
+modeless expression.  @var{stat} is only meaningful in notes,
+indicating whether the variable is known to be initialized or
+uninitialized.
+
+@findex debug_expr
+@item (debug_expr:@var{mode} @var{decl})
+Stands for the value bound to the @code{DEBUG_EXPR_DECL} @var{decl},
+that points back to it, within value expressions in
+@code{VAR_LOCATION} nodes.
+
+@end table
 
 @node Insns
 @section Insns
@@ -3336,7 +3400,7 @@ of @code{PREV_INSN (NEXT_INSN (@var{insn}))} if @var{insn} is the last
 insn in the @code{sequence} expression.  You can use these expressions
 to find the containing @code{sequence} expression.
 
-Every insn has one of the following six expression codes:
+Every insn has one of the following expression codes:
 
 @table @code
 @findex insn
@@ -3527,9 +3591,54 @@ invariants.
 Appears at the start of the function body, after the function
 prologue.
 
+@findex NOTE_INSN_VAR_LOCATION
+@findex NOTE_VAR_LOCATION
+@item NOTE_INSN_VAR_LOCATION
+This note is used to generate variable location debugging information.
+It indicates that the user variable in its @code{VAR_LOCATION} operand
+is at the location given in the RTL expression, or holds a value that
+can be computed by evaluating the RTL expression from that static
+point in the program up to the next such note for the same user
+variable.
+
 @end table
 
 These codes are printed symbolically when they appear in debugging dumps.
+
+@findex debug_insn
+@findex INSN_VAR_LOCATION
+@item debug_insn
+The expression code @code{debug_insn} is used for pseudo-instructions
+that hold debugging information for variable tracking at assignments
+(see @option{-fvar-tracking-assignments} option).  They are the RTL
+representation of @code{GIMPLE_DEBUG} statements
+(@ref{@code{GIMPLE_DEBUG}}), with a @code{VAR_LOCATION} operand that
+binds a user variable tree to an RTL representation of the
+@code{value} in the corresponding statement.  A @code{DEBUG_EXPR} in
+it stands for the value bound to the corresponding
+@code{DEBUG_EXPR_DECL}.
+
+Throughout optimization passes, binding information is kept in
+pseudo-instruction form, so that, unlike notes, it gets the same
+treatment and adjustments that regular instructions would.  It is the
+variable tracking pass that turns these pseudo-instructions into var
+location notes, analyzing control flow, value equivalences and changes
+to registers and memory referenced in value expressions, propagating
+the values of debug temporaries and determining expressions that can
+be used to compute the value of each user variable at as many points
+(ranges, actually) in the program as possible.
+
+Unlike @code{NOTE_INSN_VAR_LOCATION}, the value expression in an
+@code{INSN_VAR_LOCATION} denotes a value at that specific point in the
+program, rather than an expression that can be evaluated at any later
+point before an overriding @code{VAR_LOCATION} is encountered.  E.g.,
+if a user variable is bound to a @code{REG} and then a subsequent insn
+modifies the @code{REG}, the note location would keep mapping the user
+variable to the register across the insn, whereas the insn location
+would keep the variable bound to the value, so that the variable
+tracking pass would emit another location note for the variable at the
+point in which the register is modified.
+
 @end table
 
 @cindex @code{TImode}, in @code{insn}
@@ -3680,7 +3789,7 @@ used, and flow optimization to build an accurate flow graph.
 
 @findex REG_LABEL_TARGET
 @item REG_LABEL_TARGET
-This insn is a @code{jump_insn} but not a @code{addr_vec} or
+This insn is a @code{jump_insn} but not an @code{addr_vec} or
 @code{addr_diff_vec}.  It uses @var{op}, a @code{code_label} as a
 direct or indirect jump target.  Its purpose is similar to that of
 @code{REG_LABEL_OPERAND}.  This note is only present if the insn has
@@ -3690,7 +3799,7 @@ insn-field) goes into the @code{JUMP_LABEL} field and does not have a
 
 @findex REG_CROSSING_JUMP
 @item REG_CROSSING_JUMP
-This insn is an branching instruction (either an unconditional jump or
+This insn is a branching instruction (either an unconditional jump or
 an indirect jump) which crosses between hot and cold sections, which
 could potentially be very far apart in the executable.  The presence
 of this note indicates to other optimizations that this branching
@@ -4035,5 +4144,5 @@ does not contain all the information about the program.
 
 The proper way to interface GCC to a new language front end is with
 the ``tree'' data structure, described in the files @file{tree.h} and
-@file{tree.def}.  The documentation for this structure (@pxref{Trees})
+@file{tree.def}.  The documentation for this structure (@pxref{GENERIC})
 is incomplete.

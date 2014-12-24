@@ -1,6 +1,6 @@
 /* Definitions of target machine for GNU compiler,
    for IBM RS/6000 POWER running AIX V6.1.
-   Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2008
+   Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by David Edelsohn (edelsohn@gnu.org).
 
@@ -20,14 +20,8 @@
    along with GCC; see the file COPYING3.  If not see
    <http://www.gnu.org/licenses/>.  */
 
-/* Sometimes certain combinations of command options do not make sense
-   on a particular target machine.  You can define a macro
-   `OVERRIDE_OPTIONS' to take account of this.  This macro, if
-   defined, is executed once just after all the command options have
-   been parsed.
-
-   The macro SUBTARGET_OVERRIDE_OPTIONS is provided for subtargets, to
-   get control.  */
+/* The macro SUBTARGET_OVERRIDE_OPTIONS is provided for subtargets, to
+   get control in TARGET_OPTION_OVERRIDE.  */
 
 #define NON_POWERPC_MASKS (MASK_POWER | MASK_POWER2)
 #define SUBTARGET_OVERRIDE_OPTIONS					\
@@ -57,20 +51,24 @@ do {									\
 #undef ASM_SPEC
 #define ASM_SPEC "-u %{maix64:-a64 %{!mcpu*:-mppc64}} %(asm_cpu)"
 
-/* Common ASM definitions used by ASM_SPEC amongst the various targets
-   for handling -mcpu=xxx switches.  */
+/* Common ASM definitions used by ASM_SPEC amongst the various targets for
+   handling -mcpu=xxx switches.  There is a parallel list in driver-rs6000.c to
+   provide the default assembler options if the user uses -mcpu=native, so if
+   you make changes here, make them there also.  */
 #undef ASM_CPU_SPEC
 #define ASM_CPU_SPEC \
 "%{!mcpu*: %{!maix64: \
   %{mpowerpc64: -mppc64} \
   %{maltivec: -m970} \
   %{!maltivec: %{!mpower64: %(asm_default)}}}} \
+%{mcpu=native: %(asm_cpu_native)} \
 %{mcpu=power3: -m620} \
 %{mcpu=power4: -mpwr4} \
 %{mcpu=power5: -mpwr5} \
 %{mcpu=power5+: -mpwr5x} \
 %{mcpu=power6: -mpwr6} \
 %{mcpu=power6x: -mpwr6} \
+%{mcpu=power7: -mpwr7} \
 %{mcpu=powerpc: -mppc} \
 %{mcpu=rs64a: -mppc} \
 %{mcpu=603: -m603} \
@@ -102,7 +100,7 @@ do {									\
 #define CPP_SPEC "%{posix: -D_POSIX_SOURCE}	\
   %{ansi: -D_ANSI_C_SOURCE}			\
   %{maix64: -D__64BIT__}			\
-  %{mpe: -I/usr/lpp/ppe.poe/include}		\
+  %{mpe: -I%R/usr/lpp/ppe.poe/include}		\
   %{pthread: -D_THREAD_SAFE}"
 
 /* The GNU C++ standard library requires that these macros be 
@@ -111,16 +109,16 @@ do {									\
 #define CPLUSPLUS_CPP_SPEC			\
   "-D_ALL_SOURCE -D__COMPATMATH__		\
    %{maix64: -D__64BIT__}			\
-   %{mpe: -I/usr/lpp/ppe.poe/include}		\
+   %{mpe: -I%R/usr/lpp/ppe.poe/include}		\
    %{pthread: -D_THREAD_SAFE}"
 
 #undef  TARGET_DEFAULT
 #define TARGET_DEFAULT (MASK_POWERPC | MASK_NEW_MNEMONICS)
 
 #undef  PROCESSOR_DEFAULT
-#define PROCESSOR_DEFAULT PROCESSOR_POWER5
+#define PROCESSOR_DEFAULT PROCESSOR_POWER7
 #undef  PROCESSOR_DEFAULT64
-#define PROCESSOR_DEFAULT64 PROCESSOR_POWER5
+#define PROCESSOR_DEFAULT64 PROCESSOR_POWER7
 
 #undef  TARGET_POWER
 #define TARGET_POWER 0
@@ -137,10 +135,10 @@ do {									\
 #undef	MULTILIB_DEFAULTS
 
 #undef LIB_SPEC
-#define LIB_SPEC "%{pg:-L/lib/profiled -L/usr/lib/profiled}\
-   %{p:-L/lib/profiled -L/usr/lib/profiled}\
+#define LIB_SPEC "%{pg:-L%R/lib/profiled -L%R/usr/lib/profiled}\
+   %{p:-L%R/lib/profiled -L%R/usr/lib/profiled}\
    %{!maix64:%{!shared:%{g*:-lg}}}\
-   %{mpe:-L/usr/lpp/ppe.poe/lib -lmpi -lvtd}\
+   %{mpe:-L%R/usr/lpp/ppe.poe/lib -lmpi -lvtd}\
    %{pthread:-lpthreads} -lc"
 
 #undef LINK_SPEC
@@ -199,6 +197,4 @@ extern long long int    atoll(const char *);
 
 #define TARGET_USE_JCR_SECTION 0
 
-/* Default to 128 bit long double.  */
-
-#define RS6000_DEFAULT_LONG_DOUBLE_SIZE 128
+#define TARGET_AIX_VERSION 61

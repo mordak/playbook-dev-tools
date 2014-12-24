@@ -3,8 +3,16 @@
 #endif
 #include <stdlib.h>
 #include "cpuid.h"
+#include "avx-os-support.h"
 
 static void pclmul_avx_test (void);
+
+static void
+__attribute__ ((noinline))
+do_test (void)
+{
+  pclmul_avx_test ();
+}
 
 int
 main ()
@@ -15,9 +23,11 @@ main ()
     return 0;
 
   /* Run PCLMUL + AVX test only if host has PCLMUL + AVX support.  */
-  if ((ecx & (bit_AVX | bit_PCLMUL)) == (bit_AVX | bit_PCLMUL))
+  if (((ecx & (bit_AVX | bit_OSXSAVE | bit_PCLMUL))
+       == (bit_AVX | bit_OSXSAVE | bit_PCLMUL))
+      && avx_os_support ())
     {
-      pclmul_avx_test ();
+      do_test ();
 #ifdef DEBUG
       printf ("PASSED\n");
 #endif

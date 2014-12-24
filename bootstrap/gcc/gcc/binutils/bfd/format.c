@@ -1,6 +1,6 @@
 /* Generic BFD support for file formats.
    Copyright 1990, 1991, 1992, 1993, 1994, 1995, 1999, 2000, 2001, 2002,
-   2003, 2005, 2007, 2008 Free Software Foundation, Inc.
+   2003, 2005, 2007, 2008, 2009 Free Software Foundation, Inc.
    Written by Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -121,8 +121,8 @@ bfd_check_format_matches (bfd *abfd, bfd_format format, char ***matching)
   extern const bfd_target binary_vec;
   const bfd_target * const *target;
   const bfd_target **matching_vector = NULL;
-  const bfd_target *save_targ, *right_targ, *ar_right_targ;
-  int match_count;
+  const bfd_target *save_targ, *right_targ, *ar_right_targ, *match_targ;
+  int match_count, best_count, best_match;
   int ar_match_index;
 
   if (matching != NULL)
@@ -149,13 +149,16 @@ bfd_check_format_matches (bfd *abfd, bfd_format format, char ***matching)
       bfd_size_type amt;
 
       amt = sizeof (*matching_vector) * 2 * _bfd_target_vector_entries;
-      matching_vector = bfd_malloc (amt);
+      matching_vector = (const bfd_target **) bfd_malloc (amt);
       if (!matching_vector)
 	return FALSE;
     }
 
   right_targ = 0;
   ar_right_targ = 0;
+  match_targ = 0;
+  best_match = 256;
+  best_count = 0;
 
   /* Presume the answer is yes.  */
   abfd->format = format;
@@ -194,7 +197,8 @@ bfd_check_format_matches (bfd *abfd, bfd_format format, char ***matching)
 
       /* Don't check the default target twice.  */
       if (*target == &binary_vec
-	  || (!abfd->target_defaulted && *target == save_targ))
+	  || (!abfd->target_defaulted && *target == save_targ)
+	  || (*target)->match_priority > best_match)
 	continue;
 
       abfd->xvec = *target;	/* Change BFD's target temporarily.  */
@@ -209,6 +213,8 @@ bfd_check_format_matches (bfd *abfd, bfd_format format, char ***matching)
       bfd_set_error (bfd_error_wrong_format);
 
       temp = BFD_SEND_FMT (abfd, _bfd_check_format, (abfd));
+      if (temp)
+	match_targ = temp;
 
       if (temp && (abfd->format != bfd_archive || bfd_has_map (abfd)))
 	{
@@ -219,14 +225,18 @@ bfd_check_format_matches (bfd *abfd, bfd_format format, char ***matching)
 	     targets might match.  People who want those other targets
 	     have to set the GNUTARGET variable.  */
 	  if (temp == bfd_default_vector[0])
-	    {
-	      match_count = 1;
-	      break;
-	    }
+	    goto ok_ret;
 
 	  if (matching_vector)
 	    matching_vector[match_count] = temp;
 	  match_count++;
+
+	  if (temp->match_priority < best_match)
+	    {
+	      best_match = temp->match_priority;
+	      best_count = 0;
+	    }
+	  best_count++;
 	}
       else if (temp
 	       || (err = bfd_get_error ()) == bfd_error_wrong_object_format
@@ -244,6 +254,9 @@ bfd_check_format_matches (bfd *abfd, bfd_format format, char ***matching)
       else if (err != bfd_error_wrong_format)
 	goto err_ret;
     }
+
+  if (best_count == 1)
+    match_count = 1;
 
   if (match_count == 0)
     {
@@ -287,9 +300,18 @@ bfd_check_format_matches (bfd *abfd, bfd_format format, char ***matching)
 
   if (match_count == 1)
     {
-    ok_ret:
-      abfd->xvec = right_targ;		/* Change BFD's target permanently.  */
+      abfd->xvec = right_targ;
+      /* If we come out of the loop knowing that the last target that
+	 matched is the one we want, then ABFD should still be in a usable
+	 state (except possibly for XVEC).  */
+      if (match_targ != right_targ)
+	{
+	  if (bfd_seek (abfd, (file_ptr) 0, SEEK_SET) != 0)
+	    goto err_ret;
+	  match_targ = BFD_SEND_FMT (abfd, _bfd_check_format, (abfd));
+	}
 
+    ok_ret:
       /* If the file was opened for update, then `output_has_begun'
 	 some time ago when the file was created.  Do not recompute
 	 sections sizes or alignments in _bfd_set_section_contents.

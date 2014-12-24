@@ -1,5 +1,5 @@
 /* Simulate storage of variables into target memory, header.
-   Copyright (C) 2007, 2008
+   Copyright (C) 2007, 2008, 2010
    Free Software Foundation, Inc.
    Contributed by Paul Thomas and Brooks Moses
 
@@ -22,8 +22,6 @@ along with GCC; see the file COPYING3.  If not see
 #ifndef GFC_TARGET_MEMORY_H
 #define GFC_TARGET_MEMORY_H
 
-#include "gfortran.h"
-
 /* Convert a BOZ to REAL or COMPLEX.  */
 bool gfc_convert_boz (gfc_expr *, gfc_typespec *);
 
@@ -39,7 +37,7 @@ int gfc_target_encode_expr (gfc_expr *, unsigned char *, size_t);
 
 int gfc_interpret_integer (int, unsigned char *, size_t, mpz_t);
 int gfc_interpret_float (int, unsigned char *, size_t, mpfr_t);
-int gfc_interpret_complex (int, unsigned char *, size_t, mpfr_t, mpfr_t);
+int gfc_interpret_complex (int, unsigned char *, size_t, mpc_t);
 int gfc_interpret_logical (int, unsigned char *, size_t, int *);
 int gfc_interpret_character (unsigned char *, size_t, gfc_expr *);
 int gfc_interpret_derived (unsigned char *, size_t, gfc_expr *);

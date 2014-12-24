@@ -24,7 +24,10 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 
 /* Do code reading to identify a signal frame, and set the frame
-   state data appropriately.  See unwind-dw2.c for the structs.  */
+   state data appropriately.  See unwind-dw2.c for the structs.
+   Don't use this at all if inhibit_libc is used.  */
+
+#ifndef inhibit_libc
 
 #include <signal.h>
 #include <sys/ucontext.h>
@@ -248,3 +251,5 @@ sh_fallback_frame_state (struct _Unwind_Context *context,
   return _URC_NO_REASON;
 }
 #endif /* defined (__SH5__) */
+
+#endif /* inhibit_libc */

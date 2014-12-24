@@ -1,8 +1,9 @@
 /* { dg-do run } */
-/* { dg-options "-O2 -fmodulo-sched -fstrict-aliasing " } */
+/* { dg-options "-O2 -fmodulo-sched -fstrict-aliasing -fdump-rtl-sms" } */
 
 extern void abort (void);
 
+__attribute__ ((noinline))
 void foo (int * __restrict__ a, int * __restrict__ b, short * c) 
 {
    int i;
@@ -20,7 +21,12 @@ short c[100];
 
 int main()
 {
+#if (__SIZEOF_INT__ <= 2)
+  int i;
+  long res;
+#else
   int i, res;
+#endif  
   for(i = 0; i < 100; i++)
     {
       b[i] = c[i] = i;
@@ -38,4 +44,7 @@ int main()
   return 0;        
 }
 
+/* { dg-final { scan-rtl-dump-times "SMS succeeded" 1 "sms"  { target spu-*-* } } } */
+/* { dg-final { scan-rtl-dump-times "SMS succeeded" 3  "sms" { target powerpc*-*-* } } } */
+/* { dg-final { cleanup-rtl-dump "sms" } } */
 

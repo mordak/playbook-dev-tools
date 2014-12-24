@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1997-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1997-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -47,6 +47,7 @@ with Sem_Cat;  use Sem_Cat;
 with Sem_Ch7;  use Sem_Ch7;
 with Sem_Ch8;  use Sem_Ch8;
 with Sem_Res;  use Sem_Res;
+with Sem_Type; use Sem_Type;
 with Sem_Util; use Sem_Util;
 with Sinfo;    use Sinfo;
 with Sinput;   use Sinput;
@@ -598,9 +599,7 @@ package body Sem_Elab is
 
       --  No checks needed for pure or preelaborated compilation units
 
-      if Is_Pure (E_Scope)
-        or else Is_Preelaborated (E_Scope)
-      then
+      if Is_Pure (E_Scope) or else Is_Preelaborated (E_Scope) then
          return;
       end if;
 
@@ -939,9 +938,17 @@ package body Sem_Elab is
                Insert_Elab_Check (N,
                  Make_Attribute_Reference (Loc,
                    Attribute_Name => Name_Elaborated,
-                   Prefix =>
-                     New_Occurrence_Of
-                       (Spec_Entity (E_Scope), Loc)));
+                   Prefix => New_Occurrence_Of (Spec_Entity (E_Scope), Loc)));
+
+               --  Prevent duplicate elaboration checks on the same call,
+               --  which can happen if the body enclosing the call appears
+               --  itself in a call whose elaboration check is delayed.
+
+               if Nkind_In (N, N_Function_Call,
+                               N_Procedure_Call_Statement)
+               then
+                  Set_No_Elaboration_Check (N);
+               end if;
             end if;
 
          --  Case of static elaboration model
@@ -1460,18 +1467,18 @@ package body Sem_Elab is
          Process_Init_Proc : declare
             Unit_Decl : constant Node_Id := Unit_Declaration_Node (Ent);
 
-            function Find_Init_Call (Nod : Node_Id) return Traverse_Result;
+            function Check_Init_Call (Nod : Node_Id) return Traverse_Result;
             --  Find subprogram calls within body of Init_Proc for Traverse
             --  instantiation below.
 
-            procedure Traverse_Body is new Traverse_Proc (Find_Init_Call);
+            procedure Traverse_Body is new Traverse_Proc (Check_Init_Call);
             --  Traversal procedure to find all calls with body of Init_Proc
 
-            --------------------
-            -- Find_Init_Call --
-            --------------------
+            ---------------------
+            -- Check_Init_Call --
+            ---------------------
 
-            function Find_Init_Call (Nod : Node_Id) return Traverse_Result is
+            function Check_Init_Call (Nod : Node_Id) return Traverse_Result is
                Func : Entity_Id;
 
             begin
@@ -1491,7 +1498,7 @@ package body Sem_Elab is
                else
                   return OK;
                end if;
-            end Find_Init_Call;
+            end Check_Init_Call;
 
          --  Start of processing for Process_Init_Proc
 
@@ -1679,7 +1686,7 @@ package body Sem_Elab is
 
          --  Here is where we give the warning
 
-                  --  All OK if warnings suppressed on the entity
+         --  All OK if warnings suppressed on the entity
 
          if not Has_Warnings_Off (Ent) then
             Error_Msg_Sloc := Sloc (Ent);
@@ -1891,6 +1898,11 @@ package body Sem_Elab is
       --  other local bodies are elaborated already.
 
       elsif In_Task_Activation then
+         return;
+
+      --  Nothing to do if call is within a generic unit
+
+      elsif Inside_A_Generic then
          return;
       end if;
 
@@ -2286,7 +2298,7 @@ package body Sem_Elab is
                     ("task will be activated before elaboration of its body?",
                       Decl);
                   Error_Msg_N
-                    ("\Program_Error will be raised at run-time?", Decl);
+                    ("\Program_Error will be raised at run time?", Decl);
 
                elsif
                  Present (Corresponding_Body (Unit_Declaration_Node (Proc)))
@@ -2415,8 +2427,7 @@ package body Sem_Elab is
                  Make_Attribute_Reference (Loc,
                    Attribute_Name => Name_Elaborated,
                    Prefix =>
-                     New_Occurrence_Of
-                       (Spec_Entity (Task_Scope), Loc)));
+                     New_Occurrence_Of (Spec_Entity (Task_Scope), Loc)));
             end if;
 
          else
@@ -2429,7 +2440,8 @@ package body Sem_Elab is
               and then not Elaboration_Checks_Suppressed (Task_Scope)
             then
                Error_Msg_Node_2 := Task_Scope;
-               Error_Msg_NE ("activation of an instance of task type&" &
+               Error_Msg_NE
+                 ("activation of an instance of task type&" &
                   " requires pragma Elaborate_All on &?", N, Ent);
             end if;
 
@@ -2848,9 +2860,11 @@ package body Sem_Elab is
                Typ : constant Entity_Id := Etype (N);
                Chk : constant Boolean   := Do_Range_Check (N);
 
-               R   : constant Node_Id :=
-                       Make_Raise_Program_Error (Loc,
+               R  : constant Node_Id :=
+                      Make_Raise_Program_Error (Loc,
                          Reason => PE_Access_Before_Elaboration);
+
+               Reloc_N : Node_Id;
 
             begin
                Set_Etype (R, Typ);
@@ -2859,9 +2873,11 @@ package body Sem_Elab is
                   Rewrite (N, R);
 
                else
+                  Reloc_N := Relocate_Node (N);
+                  Save_Interps (N, Reloc_N);
                   Rewrite (N,
                     Make_Conditional_Expression (Loc,
-                      Expressions => New_List (C, Relocate_Node (N), R)));
+                      Expressions => New_List (C, Reloc_N, R)));
                end if;
 
                Analyze_And_Resolve (N, Typ);
@@ -3006,10 +3022,7 @@ package body Sem_Elab is
       --  Check for case of body entity
       --  Why is the check for E_Void needed???
 
-      if Ekind (E) = E_Void
-        or else Ekind (E) = E_Subprogram_Body
-        or else Ekind (E) = E_Package_Body
-      then
+      if Ekind_In (E, E_Void, E_Subprogram_Body, E_Package_Body) then
          Decl := E;
 
          loop
@@ -3040,17 +3053,17 @@ package body Sem_Elab is
 
             if No (Corresponding_Body (N)) then
                declare
-                  Loc : constant Source_Ptr := Sloc (N);
-                  B : Node_Id;
-                  Formals : constant List_Id :=
-                     Copy_Parameter_List (Ent);
-                  Nam  : constant Entity_Id :=
-                    Make_Defining_Identifier (Loc, Chars (Ent));
-                  Spec : Node_Id;
-                  Stats : constant List_Id :=
-                    New_List
-                      (Make_Raise_Program_Error (Loc,
-                         Reason => PE_Access_Before_Elaboration));
+                  Loc     : constant Source_Ptr := Sloc (N);
+                  B       : Node_Id;
+                  Formals : constant List_Id := Copy_Parameter_List (Ent);
+                  Nam     : constant Entity_Id :=
+                              Make_Defining_Identifier (Loc, Chars (Ent));
+                  Spec    : Node_Id;
+                  Stats   : constant List_Id :=
+                              New_List
+                               (Make_Raise_Program_Error (Loc,
+                                  Reason => PE_Access_Before_Elaboration));
+
                begin
                   if Ekind (Ent) = E_Function then
                      Spec :=

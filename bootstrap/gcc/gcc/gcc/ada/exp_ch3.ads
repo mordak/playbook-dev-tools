@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -67,7 +67,8 @@ package Exp_Ch3 is
       In_Init_Proc      : Boolean := False;
       Enclos_Type       : Entity_Id := Empty;
       Discr_Map         : Elist_Id := New_Elmt_List;
-      With_Default_Init : Boolean := False) return List_Id;
+      With_Default_Init : Boolean := False;
+      Constructor_Ref   : Node_Id := Empty) return List_Id;
    --  Builds a call to the initialization procedure for the base type of Typ,
    --  passing it the object denoted by Id_Ref, plus additional parameters as
    --  appropriate for the type (the _Master, for task types, for example).
@@ -76,7 +77,7 @@ package Exp_Ch3 is
    --  enable the use of discriminals. Enclos_Type is the enclosing type when
    --  initializing a component in an outer init proc, and it is used for
    --  various expansion cases including the case where Typ is a task type
-   --  which is an array component, the indices of the enclosing type are
+   --  which is an array component, the indexes of the enclosing type are
    --  used to build the string that identifies each task at runtime.
    --
    --  Discr_Map is used to replace discriminants by their discriminals in
@@ -88,6 +89,9 @@ package Exp_Ch3 is
    --  Ada 2005 (AI-287): With_Default_Init is used to indicate that the
    --  initialization call corresponds to a default initialized component
    --  of an aggregate.
+   --
+   --  Constructor_Ref is a call to a constructor subprogram. It is currently
+   --  used only to support C++ constructors.
 
    procedure Build_Master_Renaming (N : Node_Id; T : Entity_Id);
    --  If the designated type of an access type is a task type or contains
@@ -122,14 +126,18 @@ package Exp_Ch3 is
    --  then tags components located at variable positions of Target are
    --  initialized.
 
-   function Needs_Simple_Initialization (T : Entity_Id) return Boolean;
+   function Needs_Simple_Initialization
+     (T           : Entity_Id;
+      Consider_IS : Boolean := True) return Boolean;
    --  Certain types need initialization even though there is no specific
    --  initialization routine. In this category are access types (which need
    --  initializing to null), packed array types whose implementation is a
    --  modular type, and all scalar types if Normalize_Scalars is set, as well
    --  as private types whose underlying type is present and meets any of these
    --  criteria. Finally, descendants of String and Wide_String also need
-   --  initialization in Initialize/Normalize_Scalars mode.
+   --  initialization in Initialize/Normalize_Scalars mode. Consider_IS is
+   --  normally True. If it is False, the Initialize_Scalars is not considered
+   --  in determining whether simple initialization is needed.
 
    function Get_Simple_Init_Val
      (T    : Entity_Id;

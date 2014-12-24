@@ -74,15 +74,15 @@ C<auto> c;					// { dg-error "auto|invalid" }
 C<auto *> c2;					// { dg-error "auto|invalid" }
 
 enum : auto { EE = 0 };				// { dg-error "must be an integral type" }
-enum struct D : auto * { FF = 0 };		// { dg-error "declar|expected" }
+enum struct D : auto * { FF = 0 };		// { dg-error "must be an integral type|declar|expected" }
 
 void
 bar ()
 {
-  try { } catch (auto i) { }			// { dg-error "invalid use of" }
-  try { } catch (auto) { }			// { dg-error "invalid use of" }
-  try { } catch (auto *i) { }			// { dg-error "invalid use of" }
-  try { } catch (auto *) { }			// { dg-error "invalid use of" }
+  try { } catch (auto i) { }			// { dg-error "parameter declared" }
+  try { } catch (auto) { }			// { dg-error "parameter declared" }
+  try { } catch (auto *i) { }			// { dg-error "parameter declared" }
+  try { } catch (auto *) { }			// { dg-error "parameter declared" }
 }
 
 void
@@ -119,3 +119,6 @@ H<auto> h;					// { dg-error "invalid" }
 
 void qq (auto);			// { dg-error "auto" }
 void qr (auto*);		// { dg-error "auto" }
+
+// PR c++/46145
+typedef auto autot;		// { dg-error "auto" }

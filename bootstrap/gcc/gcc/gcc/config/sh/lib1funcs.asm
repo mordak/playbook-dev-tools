@@ -30,6 +30,11 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 !! recoded in assembly by Toshiyasu Morita
 !! tm@netcom.com
 
+#if defined(__ELF__) && defined(__linux__)
+.section .note.GNU-stack,"",%progbits
+.previous
+#endif
+
 /* SH2 optimizations for ___ashrsi3, ___ashlsi3, ___lshrsi3 and
    ELF local label prefixes by J"orn Rennecke
    amylaar@cygnus.com  */
@@ -2080,8 +2085,9 @@ GLOBAL(ic_invalidate):
 GLOBAL(ic_invalidate):
 	ocbwb	@r4
 	synco
-	rts
 	icbi	@r4
+	rts
+	  nop
 	ENDFUNC(GLOBAL(ic_invalidate))
 #elif defined(__SH4_SINGLE__) || defined(__SH4__) || defined(__SH4_SINGLE_ONLY__) || (defined(__SH4_NOFPU__) && !defined(__SH5__))
 	/* For system code, we use ic_invalidate_line_i, but user code
@@ -2147,8 +2153,10 @@ GLOBAL(ic_invalidate):
 GLOBAL(ic_invalidate_array):
 	add	r1,r4
 	synco
-	rts
 	icbi	@r4
+	rts
+	  nop
+	.align 2
 	.long	0
 	ENDFUNC(GLOBAL(ic_invalidate_array))
 #elif defined(__SH4_SINGLE__) || defined(__SH4__) || defined(__SH4_SINGLE_ONLY__) || (defined(__SH4_NOFPU__) && !defined(__SH5__))

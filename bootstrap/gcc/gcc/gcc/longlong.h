@@ -1,6 +1,6 @@
 /* longlong.h -- definitions for mixed size 32/64 bit arithmetic.
    Copyright (C) 1991, 1992, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
-   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
 
    This file is part of the GNU C Library.
@@ -318,6 +318,7 @@ UDItype __umulsidi3 (USItype, USItype);
 #endif
 
 #if (defined (__i370__) || defined (__s390__) || defined (__mvs__)) && W_TYPE_SIZE == 32
+#if !defined (__zarch__)
 #define smul_ppmm(xh, xl, m0, m1) \
   do {									\
     union {DItype __ll;							\
@@ -339,6 +340,29 @@ UDItype __umulsidi3 (USItype, USItype);
 	     : "0" (__x.__ll), "r" (d));				\
     (q) = __x.__i.__l; (r) = __x.__i.__h;				\
   } while (0)
+#else
+#define smul_ppmm(xh, xl, m0, m1) \
+  do {                                                                  \
+    register SItype __r0 __asm__ ("0");					\
+    register SItype __r1 __asm__ ("1") = (m0);				\
+                                                                        \
+    __asm__ ("mr\t%%r0,%3"                                              \
+             : "=r" (__r0), "=r" (__r1)					\
+             : "r"  (__r1),  "r" (m1));					\
+    (xh) = __r0; (xl) = __r1;						\
+  } while (0)
+
+#define sdiv_qrnnd(q, r, n1, n0, d) \
+  do {                                                                  \
+    register SItype __r0 __asm__ ("0") = (n1);				\
+    register SItype __r1 __asm__ ("1") = (n0);				\
+                                                                        \
+    __asm__ ("dr\t%%r0,%4"                                              \
+             : "=r" (__r0), "=r" (__r1)					\
+             : "r" (__r0), "r" (__r1), "r" (d));			\
+    (q) = __r1; (r) = __r0;						\
+  } while (0)
+#endif /* __zarch__ */
 #endif
 
 #if (defined (__i386__) || defined (__i486__)) && W_TYPE_SIZE == 32
@@ -694,6 +718,43 @@ UDItype __umulsidi3 (USItype, USItype);
 #define UDIV_TIME 150
 #endif /* __mc88110__ */
 #endif /* __m88000__ */
+
+#if defined (__mn10300__)
+# if defined (__AM33__)
+#  define count_leading_zeros(COUNT,X)	((COUNT) = __builtin_clz (X))
+#  define umul_ppmm(w1, w0, u, v)		\
+    asm("mulu %3,%2,%1,%0" : "=r"(w0), "=r"(w1) : "r"(u), "r"(v))
+#  define smul_ppmm(w1, w0, u, v)		\
+    asm("mul %3,%2,%1,%0" : "=r"(w0), "=r"(w1) : "r"(u), "r"(v))
+# else
+#  define umul_ppmm(w1, w0, u, v)		\
+    asm("nop; nop; mulu %3,%0" : "=d"(w0), "=z"(w1) : "%0"(u), "d"(v))
+#  define smul_ppmm(w1, w0, u, v)		\
+    asm("nop; nop; mul %3,%0" : "=d"(w0), "=z"(w1) : "%0"(u), "d"(v))
+# endif
+# define add_ssaaaa(sh, sl, ah, al, bh, bl)	\
+  do {						\
+    DWunion __s, __a, __b;			\
+    __a.s.low = (al); __a.s.high = (ah);	\
+    __b.s.low = (bl); __b.s.high = (bh);	\
+    __s.ll = __a.ll + __b.ll;			\
+    (sl) = __s.s.low; (sh) = __s.s.high;	\
+  } while (0)
+# define sub_ddmmss(sh, sl, ah, al, bh, bl)	\
+  do {						\
+    DWunion __s, __a, __b;			\
+    __a.s.low = (al); __a.s.high = (ah);	\
+    __b.s.low = (bl); __b.s.high = (bh);	\
+    __s.ll = __a.ll - __b.ll;			\
+    (sl) = __s.s.low; (sh) = __s.s.high;	\
+  } while (0)
+# define udiv_qrnnd(q, r, nh, nl, d)		\
+  asm("divu %2,%0" : "=D"(q), "=z"(r) : "D"(d), "0"(nl), "1"(nh))
+# define sdiv_qrnnd(q, r, nh, nl, d)		\
+  asm("div %2,%0" : "=D"(q), "=z"(r) : "D"(d), "0"(nl), "1"(nh))
+# define UMUL_TIME 3
+# define UDIV_TIME 38
+#endif
 
 #if defined (__mips__) && W_TYPE_SIZE == 32
 #define umul_ppmm(w1, w0, u, v)						\
@@ -1323,6 +1384,28 @@ UDItype __umulsidi3 (USItype, USItype);
 #define count_leading_zeros(COUNT, X)	((COUNT) = __builtin_clz (X))
 #define count_trailing_zeros(COUNT, X)	((COUNT) = __builtin_ctz (X))
 #endif /* __xtensa__ */
+
+#if defined xstormy16
+extern UHItype __stormy16_count_leading_zeros (UHItype);
+#define count_leading_zeros(count, x)					\
+  do									\
+    {									\
+      UHItype size;							\
+									\
+      /* We assume that W_TYPE_SIZE is a multiple of 16...  */		\
+      for ((count) = 0, size = W_TYPE_SIZE; size; size -= 16)		\
+	{								\
+	  UHItype c;							\
+									\
+	  c = __clzhi2 ((x) >> (size - 16));				\
+	  (count) += c;							\
+	  if (c != 16)							\
+	    break;							\
+	}								\
+    }									\
+  while (0)
+#define COUNT_LEADING_ZEROS_0 W_TYPE_SIZE
+#endif
 
 #if defined (__z8000__) && W_TYPE_SIZE == 16
 #define add_ssaaaa(sh, sl, ah, al, bh, bl) \

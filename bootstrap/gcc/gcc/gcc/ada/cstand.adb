@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -36,7 +36,6 @@ with Output;   use Output;
 with Targparm; use Targparm;
 with Tbuild;   use Tbuild;
 with Ttypes;   use Ttypes;
-with Ttypef;   use Ttypef;
 with Scn;
 with Sem_Mech; use Sem_Mech;
 with Sem_Util; use Sem_Util;
@@ -141,8 +140,16 @@ package body CStand is
       Set_Type_Definition (Parent (E),
         Make_Floating_Point_Definition (Stloc,
           Digits_Expression => Make_Integer (UI_From_Int (Digs))));
+
       Set_Ekind                      (E, E_Floating_Point_Type);
       Set_Etype                      (E, E);
+
+      if AAMP_On_Target then
+         Set_Float_Rep (E, AAMP);
+      else
+         Set_Float_Rep (E, IEEE_Binary);
+      end if;
+
       Init_Size                      (E, Siz);
       Set_Elem_Alignment             (E);
       Init_Digits_Value              (E, Digs);
@@ -287,11 +294,10 @@ package body CStand is
       Set_Etype (Last_Entity  (Standard_Op_Concatw), Standard_Wide_String);
 
       Set_Etype (First_Entity (Standard_Op_Concatww),
-                  Standard_Wide_Wide_String);
+                 Standard_Wide_Wide_String);
 
       Set_Etype (Last_Entity (Standard_Op_Concatww),
-                   Standard_Wide_Wide_String);
-
+                 Standard_Wide_Wide_String);
    end Create_Operators;
 
    ---------------------
@@ -324,6 +330,10 @@ package body CStand is
       procedure Build_Exception (S : Standard_Entity_Type);
       --  Procedure to declare given entity as an exception
 
+      procedure Pack_String_Type (String_Type : Entity_Id);
+      --  Generate proper tree for pragma Pack that applies to given type, and
+      --  mark type as having the pragma.
+
       ---------------------
       -- Build_Exception --
       ---------------------
@@ -340,6 +350,25 @@ package body CStand is
              Defining_Identifier => Standard_Entity (S));
          Append (Decl, Decl_S);
       end Build_Exception;
+
+      ----------------------
+      -- Pack_String_Type --
+      ----------------------
+
+      procedure Pack_String_Type (String_Type : Entity_Id) is
+         Prag : constant Node_Id :=
+                  Make_Pragma (Stloc,
+                    Chars                        => Name_Pack,
+                    Pragma_Argument_Associations =>
+                      New_List (
+                        Make_Pragma_Argument_Association (Stloc,
+                          Expression =>
+                            New_Occurrence_Of (String_Type, Stloc))));
+      begin
+         Append (Prag, Decl_S);
+         Record_Rep_Item (String_Type, Prag);
+         Set_Has_Pragma_Pack (String_Type, True);
+      end Pack_String_Type;
 
    --  Start of processing for Create_Standard
 
@@ -424,6 +453,7 @@ package body CStand is
 
       Set_Is_Unsigned_Type           (Standard_Boolean);
       Set_Size_Known_At_Compile_Time (Standard_Boolean);
+      Set_Has_Pragma_Ordered         (Standard_Boolean);
 
       Set_Ekind           (Standard_True, E_Enumeration_Literal);
       Set_Etype           (Standard_True, Standard_Boolean);
@@ -544,6 +574,7 @@ package body CStand is
       Init_RM_Size       (Standard_Character, 8);
       Set_Elem_Alignment (Standard_Character);
 
+      Set_Has_Pragma_Ordered         (Standard_Character);
       Set_Is_Unsigned_Type           (Standard_Character);
       Set_Is_Character_Type          (Standard_Character);
       Set_Is_Known_Valid             (Standard_Character);
@@ -589,6 +620,7 @@ package body CStand is
       Init_Size      (Standard_Wide_Character, Standard_Wide_Character_Size);
 
       Set_Elem_Alignment             (Standard_Wide_Character);
+      Set_Has_Pragma_Ordered         (Standard_Wide_Character);
       Set_Is_Unsigned_Type           (Standard_Wide_Character);
       Set_Is_Character_Type          (Standard_Wide_Character);
       Set_Is_Known_Valid             (Standard_Wide_Character);
@@ -636,6 +668,7 @@ package body CStand is
                  Standard_Wide_Wide_Character_Size);
 
       Set_Elem_Alignment             (Standard_Wide_Wide_Character);
+      Set_Has_Pragma_Ordered         (Standard_Wide_Wide_Character);
       Set_Is_Unsigned_Type           (Standard_Wide_Wide_Character);
       Set_Is_Character_Type          (Standard_Wide_Wide_Character);
       Set_Is_Known_Valid             (Standard_Wide_Wide_Character);
@@ -688,12 +721,13 @@ package body CStand is
       Append (Identifier_For (S_Positive), Subtype_Marks (Tdef_Node));
       Set_Type_Definition (Parent (Standard_String), Tdef_Node);
 
-      Set_Ekind          (Standard_String, E_String_Type);
-      Set_Etype          (Standard_String, Standard_String);
-      Set_Component_Type (Standard_String, Standard_Character);
-      Set_Component_Size (Standard_String, Uint_8);
-      Init_Size_Align    (Standard_String);
-      Set_Alignment      (Standard_String, Uint_1);
+      Set_Ekind           (Standard_String, E_String_Type);
+      Set_Etype           (Standard_String, Standard_String);
+      Set_Component_Type  (Standard_String, Standard_Character);
+      Set_Component_Size  (Standard_String, Uint_8);
+      Init_Size_Align     (Standard_String);
+      Set_Alignment       (Standard_String, Uint_1);
+      Pack_String_Type    (Standard_String);
 
       --  On targets where a storage unit is larger than a byte (such as AAMP),
       --  pragma Pack has a real effect on the representation of type String,
@@ -731,11 +765,12 @@ package body CStand is
       Append (Identifier_For (S_Positive), Subtype_Marks (Tdef_Node));
       Set_Type_Definition (Parent (Standard_Wide_String), Tdef_Node);
 
-      Set_Ekind          (Standard_Wide_String, E_String_Type);
-      Set_Etype          (Standard_Wide_String, Standard_Wide_String);
-      Set_Component_Type (Standard_Wide_String, Standard_Wide_Character);
-      Set_Component_Size (Standard_Wide_String, Uint_16);
-      Init_Size_Align    (Standard_Wide_String);
+      Set_Ekind           (Standard_Wide_String, E_String_Type);
+      Set_Etype           (Standard_Wide_String, Standard_Wide_String);
+      Set_Component_Type  (Standard_Wide_String, Standard_Wide_Character);
+      Set_Component_Size  (Standard_Wide_String, Uint_16);
+      Init_Size_Align     (Standard_Wide_String);
+      Pack_String_Type    (Standard_Wide_String);
 
       --  Set index type of Wide_String
 
@@ -772,6 +807,7 @@ package body CStand is
       Set_Component_Size   (Standard_Wide_Wide_String, Uint_32);
       Init_Size_Align      (Standard_Wide_Wide_String);
       Set_Is_Ada_2005_Only (Standard_Wide_Wide_String);
+      Pack_String_Type     (Standard_Wide_Wide_String);
 
       --  Set index type of Wide_Wide_String
 
@@ -933,17 +969,17 @@ package body CStand is
       Set_Ekind (Standard_Debug_Renaming_Type, E_Signed_Integer_Subtype);
       Set_Scope (Standard_Debug_Renaming_Type, Standard_Standard);
       Set_Etype (Standard_Debug_Renaming_Type, Base_Type (Standard_Integer));
-      Init_Esize         (Standard_Debug_Renaming_Type, 0);
-      Init_RM_Size       (Standard_Debug_Renaming_Type, 0);
+      Init_Esize          (Standard_Debug_Renaming_Type, 0);
+      Init_RM_Size        (Standard_Debug_Renaming_Type, 0);
       Set_Size_Known_At_Compile_Time (Standard_Debug_Renaming_Type);
-      Set_Integer_Bounds (Standard_Debug_Renaming_Type,
-        Typ => Base_Type (Standard_Debug_Renaming_Type),
+      Set_Integer_Bounds  (Standard_Debug_Renaming_Type,
+        Typ => Base_Type  (Standard_Debug_Renaming_Type),
         Lb  => Uint_1,
         Hb  => Uint_0);
-      Set_Is_Constrained (Standard_Debug_Renaming_Type);
+      Set_Is_Constrained  (Standard_Debug_Renaming_Type);
       Set_Has_Size_Clause (Standard_Debug_Renaming_Type);
 
-      Make_Name      (Standard_Debug_Renaming_Type, "_renaming_type");
+      Make_Name           (Standard_Debug_Renaming_Type, "_renaming_type");
 
       --  Note on type names. The type names for the following special types
       --  are constructed so that they will look reasonable should they ever
@@ -1144,6 +1180,7 @@ package body CStand is
       Set_Is_Unsigned_Type  (Standard_Unsigned);
       Set_Size_Known_At_Compile_Time
                             (Standard_Unsigned);
+      Set_Is_Known_Valid    (Standard_Unsigned, True);
 
       R_Node := New_Node (N_Range, Stloc);
       Set_Low_Bound  (R_Node, Make_Integer (Uint_0));
@@ -1311,7 +1348,6 @@ package body CStand is
       begin
          Comp      := First_Entity (Standard_Exception_Type);
          Comp_List := New_List;
-
          while Present (Comp) loop
             Append (
               Make_Component_Declaration (Stloc,
@@ -1487,7 +1523,6 @@ package body CStand is
 
    function Identifier_For (S : Standard_Entity_Type) return Node_Id is
       Ident_Node : Node_Id;
-
    begin
       Ident_Node := New_Node (N_Identifier, Stloc);
       Set_Chars (Ident_Node, Chars (Standard_Entity (S)));
@@ -1642,61 +1677,11 @@ package body CStand is
       -------------------
 
       procedure P_Float_Range (Id : Entity_Id) is
-         Digs : constant Nat := UI_To_Int (Digits_Value (Id));
-
       begin
          Write_Str ("     range ");
-
-         if Vax_Float (Id) then
-            if Digs = VAXFF_Digits then
-               Write_Str (VAXFF_First'Universal_Literal_String);
-               Write_Str (" .. ");
-               Write_Str (VAXFF_Last'Universal_Literal_String);
-
-            elsif Digs = VAXDF_Digits then
-               Write_Str (VAXDF_First'Universal_Literal_String);
-               Write_Str (" .. ");
-               Write_Str (VAXDF_Last'Universal_Literal_String);
-
-            else
-               pragma Assert (Digs = VAXGF_Digits);
-
-               Write_Str (VAXGF_First'Universal_Literal_String);
-               Write_Str (" .. ");
-               Write_Str (VAXGF_Last'Universal_Literal_String);
-            end if;
-
-         elsif Is_AAMP_Float (Id) then
-            if Digs = AAMPS_Digits then
-               Write_Str (AAMPS_First'Universal_Literal_String);
-               Write_Str (" .. ");
-               Write_Str (AAMPS_Last'Universal_Literal_String);
-
-            else
-               pragma Assert (Digs = AAMPL_Digits);
-               Write_Str (AAMPL_First'Universal_Literal_String);
-               Write_Str (" .. ");
-               Write_Str (AAMPL_Last'Universal_Literal_String);
-            end if;
-
-         elsif Digs = IEEES_Digits then
-            Write_Str (IEEES_First'Universal_Literal_String);
-            Write_Str (" .. ");
-            Write_Str (IEEES_Last'Universal_Literal_String);
-
-         elsif Digs = IEEEL_Digits then
-            Write_Str (IEEEL_First'Universal_Literal_String);
-            Write_Str (" .. ");
-            Write_Str (IEEEL_Last'Universal_Literal_String);
-
-         else
-            pragma Assert (Digs = IEEEX_Digits);
-
-            Write_Str (IEEEX_First'Universal_Literal_String);
-            Write_Str (" .. ");
-            Write_Str (IEEEX_Last'Universal_Literal_String);
-         end if;
-
+         UR_Write (Realval (Type_Low_Bound (Id)));
+         Write_Str (" .. ");
+         UR_Write (Realval (Type_High_Bound (Id)));
          Write_Str (";");
          Write_Eol;
       end P_Float_Range;
@@ -1880,81 +1865,29 @@ package body CStand is
    ----------------------
 
    procedure Set_Float_Bounds (Id  : Entity_Id) is
-      L  : Node_Id;
+      L : Node_Id;
       --  Low bound of literal value
 
-      H  : Node_Id;
+      H : Node_Id;
       --  High bound of literal value
 
-      R  : Node_Id;
+      R : Node_Id;
       --  Range specification
 
-      Digs  : constant Nat := UI_To_Int (Digits_Value (Id));
-      --  Digits value, used to select bounds
+      Radix       : constant Uint := Machine_Radix_Value (Id);
+      Mantissa    : constant Uint := Machine_Mantissa_Value (Id);
+      Emax        : constant Uint := Machine_Emax_Value (Id);
+      Significand : constant Uint := Radix ** Mantissa - 1;
+      Exponent    : constant Uint := Emax - Mantissa;
 
    begin
       --  Note: for the call from Cstand to initially create the types in
-      --  Standard, Vax_Float will always be False. Circuitry in Sem_Vfpt
-      --  will adjust these types appropriately in the Vax_Float case if
-      --  a pragma Float_Representation (VAX_Float) is used.
+      --  Standard, Float_Rep will never be VAX_Native. Circuitry in Sem_Vfpt
+      --  will adjust these types appropriately VAX_Native if a pragma
+      --  Float_Representation (VAX_Float) is used.
 
-      if Vax_Float (Id) then
-         if Digs = VAXFF_Digits then
-            L := Real_Convert
-                   (VAXFF_First'Universal_Literal_String);
-            H := Real_Convert
-                   (VAXFF_Last'Universal_Literal_String);
-
-         elsif Digs = VAXDF_Digits then
-            L := Real_Convert
-                   (VAXDF_First'Universal_Literal_String);
-            H := Real_Convert
-                   (VAXDF_Last'Universal_Literal_String);
-
-         else
-            pragma Assert (Digs = VAXGF_Digits);
-
-            L := Real_Convert
-                   (VAXGF_First'Universal_Literal_String);
-            H := Real_Convert
-                   (VAXGF_Last'Universal_Literal_String);
-         end if;
-
-      elsif Is_AAMP_Float (Id) then
-         if Digs = AAMPS_Digits then
-            L := Real_Convert
-                   (AAMPS_First'Universal_Literal_String);
-            H := Real_Convert
-                   (AAMPS_Last'Universal_Literal_String);
-
-         else
-            pragma Assert (Digs = AAMPL_Digits);
-            L := Real_Convert
-                   (AAMPL_First'Universal_Literal_String);
-            H := Real_Convert
-                   (AAMPL_Last'Universal_Literal_String);
-         end if;
-
-      elsif Digs = IEEES_Digits then
-         L := Real_Convert
-                (IEEES_First'Universal_Literal_String);
-         H := Real_Convert
-                (IEEES_Last'Universal_Literal_String);
-
-      elsif Digs = IEEEL_Digits then
-         L := Real_Convert
-                (IEEEL_First'Universal_Literal_String);
-         H := Real_Convert
-                (IEEEL_Last'Universal_Literal_String);
-
-      else
-         pragma Assert (Digs = IEEEX_Digits);
-
-         L := Real_Convert
-                (IEEEX_First'Universal_Literal_String);
-         H := Real_Convert
-                (IEEEX_Last'Universal_Literal_String);
-      end if;
+      H := Make_Float_Literal (Stloc, Radix, Significand, Exponent);
+      L := Make_Float_Literal (Stloc, Radix, -Significand, Exponent);
 
       Set_Etype                (L, Id);
       Set_Is_Static_Expression (L);

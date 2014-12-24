@@ -1,6 +1,6 @@
 // dwarf_reader.cc -- parse dwarf2/3 debug information
 
-// Copyright 2007, 2008 Free Software Foundation, Inc.
+// Copyright 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -31,76 +31,10 @@
 #include "parameters.h"
 #include "reloc.h"
 #include "dwarf_reader.h"
+#include "int_encoding.h"
+#include "compressed_output.h"
 
 namespace gold {
-
-// Read an unsigned LEB128 number.  Each byte contains 7 bits of
-// information, plus one bit saying whether the number continues or
-// not.
-
-uint64_t
-read_unsigned_LEB_128(const unsigned char* buffer, size_t* len)
-{
-  uint64_t result = 0;
-  size_t num_read = 0;
-  unsigned int shift = 0;
-  unsigned char byte;
-
-  do
-    {
-      if (num_read >= 64 / 7) 
-        {
-          gold_warning(_("Unusually large LEB128 decoded, "
-			 "debug information may be corrupted"));
-          break;
-        }
-      byte = *buffer++;
-      num_read++;
-      result |= (static_cast<uint64_t>(byte & 0x7f)) << shift;
-      shift += 7;
-    }
-  while (byte & 0x80);
-
-  *len = num_read;
-
-  return result;
-}
-
-// Read a signed LEB128 number.  These are like regular LEB128
-// numbers, except the last byte may have a sign bit set.
-
-int64_t
-read_signed_LEB_128(const unsigned char* buffer, size_t* len)
-{
-  int64_t result = 0;
-  int shift = 0;
-  size_t num_read = 0;
-  unsigned char byte;
-
-  do
-    {
-      if (num_read >= 64 / 7) 
-        {
-          gold_warning(_("Unusually large LEB128 decoded, "
-			 "debug information may be corrupted"));
-          break;
-        }
-      byte = *buffer++;
-      num_read++;
-      result |= (static_cast<uint64_t>(byte & 0x7f) << shift);
-      shift += 7;
-    }
-  while (byte & 0x80);
-
-  if ((shift < 8 * static_cast<int>(sizeof(result))) && (byte & 0x40))
-    result |= -((static_cast<int64_t>(1)) << shift);
-  *len = num_read;
-  return result;
-}
-
-// This is the format of a DWARF2/3 line state machine that we process
-// opcodes using.  There is no need for anything outside the lineinfo
-// processor to know how this works.
 
 struct LineStateMachine
 {
@@ -129,23 +63,41 @@ ResetLineStateMachine(struct LineStateMachine* lsm, bool default_is_stmt)
 
 template<int size, bool big_endian>
 Sized_dwarf_line_info<size, big_endian>::Sized_dwarf_line_info(Object* object,
-                                                               off_t read_shndx)
+                                                               unsigned int read_shndx)
   : data_valid_(false), buffer_(NULL), symtab_buffer_(NULL),
     directories_(), files_(), current_header_index_(-1)
 {
   unsigned int debug_shndx;
-  for (debug_shndx = 0; debug_shndx < object->shnum(); ++debug_shndx)
-    // FIXME: do this more efficiently: section_name() isn't super-fast
-    if (object->section_name(debug_shndx) == ".debug_line")
-      {
-        section_size_type buffer_size;
-        this->buffer_ = object->section_contents(debug_shndx, &buffer_size,
-						 false);
-        this->buffer_end_ = this->buffer_ + buffer_size;
-        break;
-      }
+  for (debug_shndx = 1; debug_shndx < object->shnum(); ++debug_shndx)
+    {
+      // FIXME: do this more efficiently: section_name() isn't super-fast
+      std::string name = object->section_name(debug_shndx);
+      if (name == ".debug_line" || name == ".zdebug_line")
+	{
+	  section_size_type buffer_size;
+	  this->buffer_ = object->section_contents(debug_shndx, &buffer_size,
+						   false);
+	  this->buffer_end_ = this->buffer_ + buffer_size;
+	  break;
+	}
+    }
   if (this->buffer_ == NULL)
     return;
+
+  section_size_type uncompressed_size = 0;
+  unsigned char* uncompressed_data = NULL;
+  if (object->section_is_compressed(debug_shndx, &uncompressed_size))
+    {
+      uncompressed_data = new unsigned char[uncompressed_size];
+      if (!decompress_input_section(this->buffer_,
+				    this->buffer_end_ - this->buffer_,
+				    uncompressed_data,
+				    uncompressed_size))
+	object->error(_("could not decompress section %s"),
+		      object->section_name(debug_shndx).c_str());
+      this->buffer_ = uncompressed_data;
+      this->buffer_end_ = this->buffer_ + uncompressed_size;
+    }
 
   // Find the relocation section for ".debug_line".
   // We expect these for relobjs (.o's) but not dynobjs (.so's).
@@ -161,6 +113,7 @@ Sized_dwarf_line_info<size, big_endian>::Sized_dwarf_line_info(Object* object,
 	{
 	  got_relocs = this->track_relocs_.initialize(object, reloc_shndx,
                                                       reloc_sh_type);
+	  this->track_relocs_type_ = reloc_sh_type;
 	  break;
 	}
     }
@@ -235,7 +188,7 @@ Sized_dwarf_line_info<size, big_endian>::read_header_prolog(
   header_.opcode_base = *lineptr;
   lineptr += 1;
 
-  header_.std_opcode_lengths.reserve(header_.opcode_base + 1);
+  header_.std_opcode_lengths.resize(header_.opcode_base + 1);
   header_.std_opcode_lengths[0] = 0;
   for (int i = 1; i < header_.opcode_base; i++)
     {
@@ -317,10 +270,6 @@ Sized_dwarf_line_info<size, big_endian>::read_header_tables(
 }
 
 // Process a single opcode in the .debug.line structure.
-
-// Templating on size and big_endian would yield more efficient (and
-// simpler) code, but would bloat the binary.  Speed isn't important
-// here.
 
 template<int size, bool big_endian>
 bool
@@ -440,13 +389,21 @@ Sized_dwarf_line_info<size, big_endian>::process_one_opcode(
 
           case elfcpp::DW_LNE_set_address:
             {
-              lsm->address = elfcpp::Swap_unaligned<size, big_endian>::readval(start);
+              lsm->address =
+		elfcpp::Swap_unaligned<size, big_endian>::readval(start);
               typename Reloc_map::const_iterator it
-                  = reloc_map_.find(start - this->buffer_);
+                  = this->reloc_map_.find(start - this->buffer_);
               if (it != reloc_map_.end())
                 {
-                  // value + addend.
-                  lsm->address += it->second.second;
+		  // If this is a SHT_RELA section, then ignore the
+		  // section contents.  This assumes that this is a
+		  // straight reloc which just uses the reloc addend.
+		  // The reloc addend has already been included in the
+		  // symbol value.
+		  if (this->track_relocs_type_ == elfcpp::SHT_RELA)
+		    lsm->address = 0;
+		  // Add in the symbol value.
+		  lsm->address += it->second.second;
                   lsm->shndx = it->second.first;
                 }
               else
@@ -508,7 +465,7 @@ Sized_dwarf_line_info<size, big_endian>::process_one_opcode(
 template<int size, bool big_endian>
 unsigned const char*
 Sized_dwarf_line_info<size, big_endian>::read_lines(unsigned const char* lineptr,
-                                                    off_t shndx)
+                                                    unsigned int shndx)
 {
   struct LineStateMachine lsm;
 
@@ -535,8 +492,18 @@ Sized_dwarf_line_info<size, big_endian>::read_lines(unsigned const char* lineptr
             {
               Offset_to_lineno_entry entry
                   = { lsm.address, this->current_header_index_,
-                      lsm.file_num, lsm.line_num };
-              line_number_map_[lsm.shndx].push_back(entry);
+                      lsm.file_num, true, lsm.line_num };
+	      std::vector<Offset_to_lineno_entry>&
+		map(this->line_number_map_[lsm.shndx]);
+	      // If we see two consecutive entries with the same
+	      // offset and a real line number, then mark the first
+	      // one as non-canonical.
+	      if (!map.empty()
+		  && (map.back().offset == static_cast<off_t>(lsm.address))
+		  && lsm.line_num != -1
+		  && map.back().line_num != -1)
+		map.back().last_line_for_offset = false;
+	      map.push_back(entry);
             }
           lineptr += oplength;
         }
@@ -584,7 +551,10 @@ Sized_dwarf_line_info<size, big_endian>::read_relocs(Object* object)
       // There is no reason to record non-ordinary section indexes, or
       // SHN_UNDEF, because they will never match the real section.
       if (is_ordinary && shndx != elfcpp::SHN_UNDEF)
-	this->reloc_map_[reloc_offset] = std::make_pair(shndx, value);
+	{
+	  value += this->track_relocs_.next_addend();
+	  this->reloc_map_[reloc_offset] = std::make_pair(shndx, value);
+	}
 
       this->track_relocs_.advance(reloc_offset + 1);
     }
@@ -595,7 +565,7 @@ Sized_dwarf_line_info<size, big_endian>::read_relocs(Object* object)
 template<int size, bool big_endian>
 void
 Sized_dwarf_line_info<size, big_endian>::read_line_mappings(Object* object,
-							    off_t shndx)
+							    unsigned int shndx)
 {
   gold_assert(this->data_valid_ == true);
 
@@ -641,7 +611,7 @@ static std::vector<Offset_to_lineno_entry>::const_iterator
 offset_to_iterator(const std::vector<Offset_to_lineno_entry>* offsets,
                    off_t offset)
 {
-  const Offset_to_lineno_entry lookup_key = { offset, 0, 0, 0 };
+  const Offset_to_lineno_entry lookup_key = { offset, 0, 0, true, 0 };
 
   // lower_bound() returns the smallest offset which is >= lookup_key.
   // If no offset in offsets is >= lookup_key, returns end().
@@ -650,25 +620,27 @@ offset_to_iterator(const std::vector<Offset_to_lineno_entry>* offsets,
 
   // This code is easiest to understand with a concrete example.
   // Here's a possible offsets array:
-  // {{offset = 3211, header_num = 0, file_num = 1, line_num = 16},  // 0
-  //  {offset = 3224, header_num = 0, file_num = 1, line_num = 20},  // 1
-  //  {offset = 3226, header_num = 0, file_num = 1, line_num = 22},  // 2
-  //  {offset = 3231, header_num = 0, file_num = 1, line_num = 25},  // 3
-  //  {offset = 3232, header_num = 0, file_num = 1, line_num = -1},  // 4
-  //  {offset = 3232, header_num = 0, file_num = 1, line_num = 65},  // 5
-  //  {offset = 3235, header_num = 0, file_num = 1, line_num = 66},  // 6
-  //  {offset = 3236, header_num = 0, file_num = 1, line_num = -1},  // 7
-  //  {offset = 5764, header_num = 0, file_num = 1, line_num = 47},  // 8
-  //  {offset = 5765, header_num = 0, file_num = 1, line_num = 48},  // 9
-  //  {offset = 5767, header_num = 0, file_num = 1, line_num = 49},  // 10
-  //  {offset = 5768, header_num = 0, file_num = 1, line_num = 50},  // 11
-  //  {offset = 5773, header_num = 0, file_num = 1, line_num = -1},  // 12
-  //  {offset = 5787, header_num = 1, file_num = 1, line_num = 19},  // 13
-  //  {offset = 5790, header_num = 1, file_num = 1, line_num = 20},  // 14
-  //  {offset = 5793, header_num = 1, file_num = 1, line_num = 67},  // 15
-  //  {offset = 5793, header_num = 1, file_num = 1, line_num = -1},  // 16
-  //  {offset = 5795, header_num = 1, file_num = 1, line_num = 68},  // 17
-  //  {offset = 5798, header_num = 1, file_num = 1, line_num = -1},  // 18
+  // {{offset = 3211, header_num = 0, file_num = 1, last, line_num = 16},  // 0
+  //  {offset = 3224, header_num = 0, file_num = 1, last, line_num = 20},  // 1
+  //  {offset = 3226, header_num = 0, file_num = 1, last, line_num = 22},  // 2
+  //  {offset = 3231, header_num = 0, file_num = 1, last, line_num = 25},  // 3
+  //  {offset = 3232, header_num = 0, file_num = 1, last, line_num = -1},  // 4
+  //  {offset = 3232, header_num = 0, file_num = 1, last, line_num = 65},  // 5
+  //  {offset = 3235, header_num = 0, file_num = 1, last, line_num = 66},  // 6
+  //  {offset = 3236, header_num = 0, file_num = 1, last, line_num = -1},  // 7
+  //  {offset = 5764, header_num = 0, file_num = 1, last, line_num = 48},  // 8
+  //  {offset = 5764, header_num = 0, file_num = 1,!last, line_num = 47},  // 9
+  //  {offset = 5765, header_num = 0, file_num = 1, last, line_num = 49},  // 10
+  //  {offset = 5767, header_num = 0, file_num = 1, last, line_num = 50},  // 11
+  //  {offset = 5768, header_num = 0, file_num = 1, last, line_num = 51},  // 12
+  //  {offset = 5773, header_num = 0, file_num = 1, last, line_num = -1},  // 13
+  //  {offset = 5787, header_num = 1, file_num = 1, last, line_num = 19},  // 14
+  //  {offset = 5790, header_num = 1, file_num = 1, last, line_num = 20},  // 15
+  //  {offset = 5793, header_num = 1, file_num = 1, last, line_num = 67},  // 16
+  //  {offset = 5793, header_num = 1, file_num = 1, last, line_num = -1},  // 17
+  //  {offset = 5793, header_num = 1, file_num = 1,!last, line_num = 66},  // 18
+  //  {offset = 5795, header_num = 1, file_num = 1, last, line_num = 68},  // 19
+  //  {offset = 5798, header_num = 1, file_num = 1, last, line_num = -1},  // 20
   // The entries with line_num == -1 mark the end of a function: the
   // associated offset is one past the last instruction in the
   // function.  This can correspond to the beginning of the next
@@ -680,7 +652,7 @@ offset_to_iterator(const std::vector<Offset_to_lineno_entry>* offsets,
   //         offsets[0].  Since it's not an exact match and we're
   //         at the beginning of offsets, we return end() (invalid).
   // Case 2: lookup_key has offset 10000.  lower_bound returns
-  //         offset[19] (end()).  We return end() (invalid).
+  //         offset[21] (end()).  We return end() (invalid).
   // Case 3: lookup_key has offset == 3211.  lower_bound matches
   //         offsets[0] exactly, and that's the entry we return.
   // Case 4: lookup_key has offset == 3232.  lower_bound returns
@@ -699,16 +671,17 @@ offset_to_iterator(const std::vector<Offset_to_lineno_entry>* offsets,
   //         end-of-function, we know lookup_key is between
   //         functions, so we return end() (not a valid offset).
   // Case 7: lookup_key has offset == 5794.  lower_bound returns
-  //         offsets[17].  Since it's not an exact match, we back
-  //         up to offsets[15].  Note we back up to the *first*
-  //         entry with offset 5793, not just offsets[17-1].
-  //         We note offsets[15] is a valid entry, so we return it.
-  //         If offsets[15] had had line_num == -1, we would have
-  //         checked offsets[16].  The reason for this is that
-  //         15 and 16 can be in an arbitrary order, since we sort
-  //         only by offset.  (Note it doesn't help to use line_number
-  //         as a secondary sort key, since sometimes we want the -1
-  //         to be first and sometimes we want it to be last.)
+  //         offsets[19].  Since it's not an exact match, we back
+  //         up to offsets[16].  Note we back up to the *first*
+  //         entry with offset 5793, not just offsets[19-1].
+  //         We note offsets[16] is a valid entry, so we return it.
+  //         If offsets[16] had had line_num == -1, we would have
+  //         checked offsets[17].  The reason for this is that
+  //         16 and 17 can be in an arbitrary order, since we sort
+  //         only by offset and last_line_for_offset.  (Note it
+  //         doesn't help to use line_number as a tertiary sort key,
+  //         since sometimes we want the -1 to be first and sometimes
+  //         we want it to be last.)
 
   // This deals with cases (1) and (2).
   if ((it == offsets->begin() && offset < it->offset)
@@ -739,19 +712,25 @@ offset_to_iterator(const std::vector<Offset_to_lineno_entry>* offsets,
 
   // This handles cases (5), (6), and (7): if any entry in the
   // equal_range [it, range_end) has a line_num != -1, it's a valid
-  // match.  If not, we're not in a function.
+  // match.  If not, we're not in a function.  The line number we saw
+  // last for an offset will be sorted first, so it'll get returned if
+  // it's present.
   for (; it != range_end; ++it)
     if (it->line_num != -1)
       return it;
   return offsets->end();
 }
 
-// Return a string for a file name and line number.
+// Returns the canonical filename:lineno for the address passed in.
+// If other_lines is not NULL, appends the non-canonical lines
+// assigned to the same address.
 
 template<int size, bool big_endian>
 std::string
-Sized_dwarf_line_info<size, big_endian>::do_addr2line(unsigned int shndx,
-                                                      off_t offset)
+Sized_dwarf_line_info<size, big_endian>::do_addr2line(
+    unsigned int shndx,
+    off_t offset,
+    std::vector<std::string>* other_lines)
 {
   if (this->data_valid_ == false)
     return "";
@@ -772,21 +751,38 @@ Sized_dwarf_line_info<size, big_endian>::do_addr2line(unsigned int shndx,
   if (it == offsets->end())
     return "";
 
-  // Convert the file_num + line_num into a string.
+  std::string result = this->format_file_lineno(*it);
+  if (other_lines != NULL)
+    for (++it; it != offsets->end() && it->offset == offset; ++it)
+      {
+        if (it->line_num == -1)
+          continue;  // The end of a previous function.
+        other_lines->push_back(this->format_file_lineno(*it));
+      }
+  return result;
+}
+
+// Convert the file_num + line_num into a string.
+
+template<int size, bool big_endian>
+std::string
+Sized_dwarf_line_info<size, big_endian>::format_file_lineno(
+    const Offset_to_lineno_entry& loc) const
+{
   std::string ret;
 
-  gold_assert(it->header_num < static_cast<int>(this->files_.size()));
-  gold_assert(it->file_num
-	      < static_cast<int>(this->files_[it->header_num].size()));
+  gold_assert(loc.header_num < static_cast<int>(this->files_.size()));
+  gold_assert(loc.file_num
+	      < static_cast<int>(this->files_[loc.header_num].size()));
   const std::pair<int, std::string>& filename_pair
-      = this->files_[it->header_num][it->file_num];
+      = this->files_[loc.header_num][loc.file_num];
   const std::string& filename = filename_pair.second;
 
-  gold_assert(it->header_num < static_cast<int>(this->directories_.size()));
+  gold_assert(loc.header_num < static_cast<int>(this->directories_.size()));
   gold_assert(filename_pair.first
-              < static_cast<int>(this->directories_[it->header_num].size()));
+              < static_cast<int>(this->directories_[loc.header_num].size()));
   const std::string& dirname
-      = this->directories_[it->header_num][filename_pair.first];
+      = this->directories_[loc.header_num][filename_pair.first];
 
   if (!dirname.empty())
     {
@@ -798,7 +794,7 @@ Sized_dwarf_line_info<size, big_endian>::do_addr2line(unsigned int shndx,
     ret = "(unknown)";
 
   char buffer[64];   // enough to hold a line number
-  snprintf(buffer, sizeof(buffer), "%d", it->line_num);
+  snprintf(buffer, sizeof(buffer), "%d", loc.line_num);
   ret += ":";
   ret += buffer;
 
@@ -832,7 +828,8 @@ static std::vector<Addr2line_cache_entry> addr2line_cache;
 std::string
 Dwarf_line_info::one_addr2line(Object* object,
                                unsigned int shndx, off_t offset,
-                               size_t cache_size)
+                               size_t cache_size,
+                               std::vector<std::string>* other_lines)
 {
   Dwarf_line_info* lineinfo = NULL;
   std::vector<Addr2line_cache_entry>::iterator it;
@@ -883,7 +880,7 @@ Dwarf_line_info::one_addr2line(Object* object,
   }
 
   // Now that we have our object, figure out the answer
-  std::string retval = lineinfo->addr2line(shndx, offset);
+  std::string retval = lineinfo->addr2line(shndx, offset, other_lines);
 
   // Finally, if our cache has grown too big, delete old objects.  We
   // assume the common (probably only) case is deleting only one object.

@@ -1,5 +1,5 @@
 /* M16C/M32C specific support for 32-bit ELF.
-   Copyright (C) 2005, 2006, 2007, 2008
+   Copyright (C) 2005, 2006, 2007, 2008, 2009, 2010, 2011
    Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -435,15 +435,8 @@ m32c_elf_relocate_section
 	}
 
       if (sec != NULL && elf_discarded_section (sec))
-	{
-	  /* For relocs against symbols from removed linkonce sections,
-	     or sections discarded by a linker script, we just want the
-	     section contents zeroed.  Avoid any special processing.  */
-	  _bfd_clear_contents (howto, input_bfd, contents + rel->r_offset);
-	  rel->r_info = 0;
-	  rel->r_addend = 0;
-	  continue;
-	}
+	RELOC_AGAINST_DISCARDED_SECTION (info, input_bfd, input_section,
+					 rel, relend, howto, contents);
 
       if (info->relocatable)
 	{
@@ -996,9 +989,6 @@ m32c_relax_plt_check (struct elf_link_hash_entry *h,
 {
   struct relax_plt_data *data = (struct relax_plt_data *) xdata;
 
-  if (h->root.type == bfd_link_hash_warning)
-    h = (struct elf_link_hash_entry *) h->root.u.i.link;
-
   if (h->plt.offset != (bfd_vma) -1)
     {
       bfd_vma address;
@@ -1030,9 +1020,6 @@ m32c_relax_plt_realloc (struct elf_link_hash_entry *h,
                         PTR xdata)
 {
   bfd_vma *entry = (bfd_vma *) xdata;
-
-  if (h->root.type == bfd_link_hash_warning)
-    h = (struct elf_link_hash_entry *) h->root.u.i.link;
 
   if (h->plt.offset != (bfd_vma) -1)
     {
@@ -1188,7 +1175,7 @@ static bfd_vma
 m32c_offset_for_reloc (bfd *abfd,
 		       Elf_Internal_Rela *rel,
 		       Elf_Internal_Shdr *symtab_hdr,
-		       Elf_External_Sym_Shndx *shndx_buf,
+		       Elf_External_Sym_Shndx *shndx_buf ATTRIBUTE_UNUSED,
 		       Elf_Internal_Sym *intsyms)
 {
   bfd_vma symval;
@@ -1198,14 +1185,10 @@ m32c_offset_for_reloc (bfd *abfd,
     {
       /* A local symbol.  */
       Elf_Internal_Sym *isym;
-      Elf_External_Sym_Shndx *shndx;
       asection *ssec;
-
 
       isym = intsyms + ELF32_R_SYM (rel->r_info);
       ssec = bfd_section_from_elf_index (abfd, isym->st_shndx);
-      shndx = shndx_buf + (shndx_buf ? ELF32_R_SYM (rel->r_info) : 0);
-
       symval = isym->st_value;
       if (ssec)
 	symval += ssec->output_section->vma
@@ -1870,7 +1853,6 @@ m32c_elf_relax_delete_bytes
   bfd_byte *contents;
   Elf_Internal_Rela *irel;
   Elf_Internal_Rela *irelend;
-  Elf_Internal_Rela *irelalign;
   bfd_vma toaddr;
   Elf_Internal_Sym *isym;
   Elf_Internal_Sym *isymend;
@@ -1883,9 +1865,6 @@ m32c_elf_relax_delete_bytes
 
   contents   = elf_section_data (sec)->this_hdr.contents;
 
-  /* The deletion must stop at the next ALIGN reloc for an aligment
-     power larger than the number of bytes we are deleting.  */
-  irelalign = NULL;
   toaddr = sec->size;
 
   irel = elf_section_data (sec)->relocs;
@@ -1951,12 +1930,23 @@ m32c_elf_relax_delete_bytes
 
   for (; isym < isymend; isym++, shndx = (shndx ? shndx + 1 : NULL))
     {
-
+      /* If the symbol is in the range of memory we just moved, we
+	 have to adjust its value.  */
       if ((int) isym->st_shndx == sec_shndx
 	  && isym->st_value > addr
 	  && isym->st_value < toaddr)
 	{
 	  isym->st_value -= count;
+	}
+      /* If the symbol *spans* the bytes we just deleted (i.e. it's
+	 *end* is in the moved bytes but it's *start* isn't), then we
+	 must adjust its size.  */
+      if ((int) isym->st_shndx == sec_shndx
+	    && isym->st_value < addr
+	  && isym->st_value + isym->st_size > addr
+	  && isym->st_value + isym->st_size < toaddr)
+	{
+	  isym->st_size -= count;
 	}
     }
 
@@ -1972,13 +1962,21 @@ m32c_elf_relax_delete_bytes
       struct elf_link_hash_entry * sym_hash = * sym_hashes;
 
       if (sym_hash &&
-	  (   sym_hash->root.type == bfd_link_hash_defined
+	  (sym_hash->root.type == bfd_link_hash_defined
 	   || sym_hash->root.type == bfd_link_hash_defweak)
-	  && sym_hash->root.u.def.section == sec
-	  && sym_hash->root.u.def.value > addr
-	  && sym_hash->root.u.def.value < toaddr)
+	  && sym_hash->root.u.def.section == sec)
 	{
-	  sym_hash->root.u.def.value -= count;
+	  if (sym_hash->root.u.def.value > addr
+	      && sym_hash->root.u.def.value < toaddr)
+	    {
+	      sym_hash->root.u.def.value -= count;
+	    }
+	  if (sym_hash->root.u.def.value < addr
+	      && sym_hash->root.u.def.value + sym_hash->size > addr
+	      && sym_hash->root.u.def.value + sym_hash->size < toaddr)
+	    {
+	      sym_hash->size -= count;
+	    }
 	}
     }
 
@@ -1999,7 +1997,7 @@ _bfd_m32c_elf_eh_frame_address_size (bfd *abfd, asection *sec ATTRIBUTE_UNUSED)
 #define ELF_ARCH		bfd_arch_m32c
 #define ELF_MACHINE_CODE	EM_M32C
 #define ELF_MACHINE_ALT1	EM_M32C_OLD
-#define ELF_MAXPAGESIZE		0x1000
+#define ELF_MAXPAGESIZE		0x100
 
 #if 0
 #define TARGET_BIG_SYM		bfd_elf32_m32c_vec

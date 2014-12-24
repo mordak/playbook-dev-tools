@@ -4,12 +4,8 @@ T_CPPFLAGS=-DTARGET_ALIAS=\"$(target_alias)\"
 STMP_FIXPROTO =
 STMP_FIXINC =
 
-CRTSTUFF_T_CFLAGS = -fno-omit-frame-pointer -fpic -DCRTSTUFFS_O
-TARGET_LIBGCC2_CFLAGS = -fexceptions
-
-MULTILIB_OPTIONS = fpic
-MULTILIB_DIRNAMES = pic
-MULTILIB_MATCHES = fpic=shared
+CRTSTUFF_T_CFLAGS = -fpic
+TARGET_LIBGCC2_CFLAGS = -fexceptions -fpic
 
 EXTRA_MULTILIB_PARTS = crtbegin.o crtend.o
 

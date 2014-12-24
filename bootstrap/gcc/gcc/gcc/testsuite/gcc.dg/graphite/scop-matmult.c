@@ -1,4 +1,4 @@
-/* { dg-options "-O2 -fgraphite -fdump-tree-graphite-all" } */
+/* { dg-require-effective-target size32plus } */
 
 float A[1000][1000], B[1000][1000], C[1000][1000];
 
@@ -16,5 +16,5 @@ void matmult (int n)
 
 /* This one fails because the number of iterations cannot be
    determined anymore for the outermost loop.  */
-/* { dg-final { scan-tree-dump-times "number of SCoPs: 1" 1 "graphite" { xfail *-*-* } } } */ 
+/* { dg-final { scan-tree-dump-times "number of SCoPs: 1" 1 "graphite" } } */
 /* { dg-final { cleanup-tree-dump "graphite" } } */

@@ -1,5 +1,5 @@
 /* Target definitions for GCC for Intel 80386 using ELF
-   Copyright (C) 1988, 1991, 1995, 2000, 2001, 2002, 2007, 2008
+   Copyright (C) 1988, 1991, 1995, 2000, 2001, 2002, 2007, 2008, 2010
    Free Software Foundation, Inc.
 
    Derived from sysv4.h written by Ron Guilmette (rfg@netcom.com).
@@ -63,7 +63,7 @@ along with GCC; see the file COPYING3.  If not see
       const unsigned char *limit = _ascii_bytes + (LENGTH);		\
       unsigned bytes_in_chunk = 0;					\
       for (; _ascii_bytes < limit; _ascii_bytes++)			\
-        {								\
+	{								\
 	  const unsigned char *p;					\
 	  if (bytes_in_chunk >= 64)					\
 	    {								\
@@ -85,15 +85,15 @@ along with GCC; see the file COPYING3.  If not see
 	  else								\
 	    {								\
 	      if (bytes_in_chunk == 0)					\
-		fprintf ((FILE), "\t.byte\t");				\
+		fputs (ASM_BYTE, (FILE));				\
 	      else							\
 		fputc (',', (FILE));					\
-	      fprintf ((FILE), "0x%02x", *_ascii_bytes);		\
+	      fprintf ((FILE), "0x%02x", *_ascii_bytes);			\
 	      bytes_in_chunk += 5;					\
 	    }								\
 	}								\
       if (bytes_in_chunk > 0)						\
-        fprintf ((FILE), "\n");						\
+	fputc ('\n', (FILE));						\
     }									\
   while (0)
 

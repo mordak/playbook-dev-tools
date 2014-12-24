@@ -34,7 +34,7 @@
 #include <parallel/tags.h>
 #include <parallel/settings.h>
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
 namespace __parallel
 {
@@ -52,7 +52,7 @@ namespace __parallel
 
   template<typename _IIter, typename _Tp, typename _Tag>
     _Tp
-    accumulate_switch(_IIter, _IIter, _Tp, _Tag);
+    __accumulate_switch(_IIter, _IIter, _Tp, _Tag);
 
   template<typename _IIter, typename _Tp, typename _BinaryOper>
     _Tp
@@ -61,24 +61,24 @@ namespace __parallel
   template<typename _IIter, typename _Tp, typename _BinaryOper>
     _Tp
     accumulate(_IIter, _IIter, _Tp, _BinaryOper,
-	       __gnu_parallel::sequential_tag);
+               __gnu_parallel::sequential_tag);
 
   template<typename _IIter, typename _Tp, typename _BinaryOper>
     _Tp
     accumulate(_IIter, _IIter, _Tp, _BinaryOper,
-	       __gnu_parallel::_Parallelism);
+               __gnu_parallel::_Parallelism);
 
   template<typename _IIter, typename _Tp, typename _BinaryOper,
-	   typename _Tag>
+           typename _Tag>
     _Tp
-    accumulate_switch(_IIter, _IIter, _Tp, _BinaryOper, _Tag);
+    __accumulate_switch(_IIter, _IIter, _Tp, _BinaryOper, _Tag);
 
   template<typename _RAIter, typename _Tp, typename _BinaryOper>
     _Tp
-    accumulate_switch(_RAIter, _RAIter, _Tp, _BinaryOper,
-		      random_access_iterator_tag,
-		      __gnu_parallel::_Parallelism parallelism
-		      = __gnu_parallel::parallel_unbalanced);
+    __accumulate_switch(_RAIter, _RAIter, _Tp, _BinaryOper,
+                      random_access_iterator_tag,
+                      __gnu_parallel::_Parallelism __parallelism
+                      = __gnu_parallel::parallel_unbalanced);
 
   template<typename _IIter, typename _OIter>
     _OIter
@@ -91,36 +91,36 @@ namespace __parallel
   template<typename _IIter, typename _OIter>
     _OIter
     adjacent_difference(_IIter, _IIter, _OIter,
-			__gnu_parallel::sequential_tag);
+                        __gnu_parallel::sequential_tag);
 
   template<typename _IIter, typename _OIter, typename _BinaryOper>
     _OIter
     adjacent_difference(_IIter, _IIter, _OIter, _BinaryOper, 
-			__gnu_parallel::sequential_tag);
+                        __gnu_parallel::sequential_tag);
 
   template<typename _IIter, typename _OIter>
     _OIter
     adjacent_difference(_IIter, _IIter, _OIter,
-			__gnu_parallel::_Parallelism);
+                        __gnu_parallel::_Parallelism);
 
   template<typename _IIter, typename _OIter, typename _BinaryOper>
     _OIter
     adjacent_difference(_IIter, _IIter, _OIter, _BinaryOper, 
-			__gnu_parallel::_Parallelism);
+                        __gnu_parallel::_Parallelism);
 
   template<typename _IIter, typename _OIter, typename _BinaryOper,
-	   typename _Tag1, typename _Tag2>
+           typename _Tag1, typename _Tag2>
     _OIter
-    adjacent_difference_switch(_IIter, _IIter, _OIter, _BinaryOper,
-			       _Tag1, _Tag2);
+    __adjacent_difference_switch(_IIter, _IIter, _OIter, _BinaryOper,
+                               _Tag1, _Tag2);
 
   template<typename _IIter, typename _OIter, typename _BinaryOper>
     _OIter
-    adjacent_difference_switch(_IIter, _IIter, _OIter, _BinaryOper, 
-			       random_access_iterator_tag, 
-			       random_access_iterator_tag, 
-			       __gnu_parallel::_Parallelism parallelism
-			       = __gnu_parallel::parallel_unbalanced);
+    __adjacent_difference_switch(_IIter, _IIter, _OIter, _BinaryOper, 
+                               random_access_iterator_tag, 
+                               random_access_iterator_tag, 
+                               __gnu_parallel::_Parallelism __parallelism
+                               = __gnu_parallel::parallel_unbalanced);
 
   template<typename _IIter1, typename _IIter2, typename _Tp>
     _Tp
@@ -129,46 +129,46 @@ namespace __parallel
   template<typename _IIter1, typename _IIter2, typename _Tp>
     _Tp
     inner_product(_IIter1, _IIter1, _IIter2, _Tp,
-		  __gnu_parallel::sequential_tag);
+                  __gnu_parallel::sequential_tag);
 
   template<typename _IIter1, typename _IIter2, typename _Tp>
     _Tp
     inner_product(_IIter1, _IIter1, _IIter2, _Tp,
-		  __gnu_parallel::_Parallelism);
+                  __gnu_parallel::_Parallelism);
 
   template<typename _IIter1, typename _IIter2, typename _Tp,
-	   typename _BinaryFunction1, typename _BinaryFunction2>
+           typename _BinaryFunction1, typename _BinaryFunction2>
     _Tp
     inner_product(_IIter1, _IIter1, _IIter2, _Tp,
-		  _BinaryFunction1, _BinaryFunction2);
+                  _BinaryFunction1, _BinaryFunction2);
 
   template<typename _IIter1, typename _IIter2, typename _Tp,
-	   typename _BinaryFunction1, typename _BinaryFunction2>
+           typename _BinaryFunction1, typename _BinaryFunction2>
     _Tp
     inner_product(_IIter1, _IIter1, _IIter2, _Tp, _BinaryFunction1,
-		  _BinaryFunction2, __gnu_parallel::sequential_tag);
+                  _BinaryFunction2, __gnu_parallel::sequential_tag);
 
   template<typename _IIter1, typename _IIter2, typename _Tp,
-	   typename BinaryFunction1, typename BinaryFunction2>
+           typename BinaryFunction1, typename BinaryFunction2>
     _Tp
     inner_product(_IIter1, _IIter1, _IIter2, _Tp, BinaryFunction1,
-		  BinaryFunction2, __gnu_parallel::_Parallelism);
+                  BinaryFunction2, __gnu_parallel::_Parallelism);
 
   template<typename _RAIter1, typename _RAIter2, typename _Tp,
-	   typename BinaryFunction1, typename BinaryFunction2>
+           typename BinaryFunction1, typename BinaryFunction2>
     _Tp
-    inner_product_switch(_RAIter1, _RAIter1, _RAIter2, _Tp, BinaryFunction1, 
-			 BinaryFunction2, random_access_iterator_tag, 
-			 random_access_iterator_tag, 
-			 __gnu_parallel::_Parallelism
-			 = __gnu_parallel::parallel_unbalanced);
+    __inner_product_switch(_RAIter1, _RAIter1, _RAIter2, _Tp, BinaryFunction1,
+                         BinaryFunction2, random_access_iterator_tag, 
+                         random_access_iterator_tag, 
+                         __gnu_parallel::_Parallelism
+                         = __gnu_parallel::parallel_unbalanced);
 
   template<typename _IIter1, typename _IIter2, typename _Tp,
-	   typename _BinaryFunction1, typename _BinaryFunction2,
-	   typename _Tag1, typename _Tag2>
+           typename _BinaryFunction1, typename _BinaryFunction2,
+           typename _Tag1, typename _Tag2>
     _Tp
-    inner_product_switch(_IIter1, _IIter1, _IIter2, _Tp, _BinaryFunction1, 
-			 _BinaryFunction2, _Tag1, _Tag2);
+    __inner_product_switch(_IIter1, _IIter1, _IIter2, _Tp, _BinaryFunction1, 
+                         _BinaryFunction2, _Tag1, _Tag2);
 
 
   template<typename _IIter, typename _OIter>
@@ -178,25 +178,25 @@ namespace __parallel
   template<typename _IIter, typename _OIter, typename _BinaryOper>
     _OIter
     partial_sum(_IIter, _IIter, _OIter, _BinaryOper,
-		__gnu_parallel::sequential_tag);
+                __gnu_parallel::sequential_tag);
 
   template<typename _IIter, typename _OIter>
     _OIter
-    partial_sum(_IIter, _IIter, _OIter result);
+    partial_sum(_IIter, _IIter, _OIter __result);
 
   template<typename _IIter, typename _OIter, typename _BinaryOper>
     _OIter
     partial_sum(_IIter, _IIter, _OIter, _BinaryOper);
 
   template<typename _IIter, typename _OIter, typename _BinaryOper,
-	   typename _Tag1, typename _Tag2>
+           typename _Tag1, typename _Tag2>
     _OIter
-    partial_sum_switch(_IIter, _IIter, _OIter, _BinaryOper, _Tag1, _Tag2);
+    __partial_sum_switch(_IIter, _IIter, _OIter, _BinaryOper, _Tag1, _Tag2);
 
   template<typename _IIter, typename _OIter, typename _BinaryOper>
     _OIter
-    partial_sum_switch(_IIter, _IIter, _OIter, _BinaryOper,
-		       random_access_iterator_tag, random_access_iterator_tag);
+    __partial_sum_switch(_IIter, _IIter, _OIter, _BinaryOper,
+                       random_access_iterator_tag, random_access_iterator_tag);
 } // end namespace
 } // end namespace
 

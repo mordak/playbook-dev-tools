@@ -30,7 +30,7 @@ int main ()
   /* check results:  */
   for (i = 0; i < N; i++)
     {
-      if (ia[i] != ib[i] & ic[i])
+      if (ia[i] != (ib[i] & ic[i]))
         abort ();
     }
 
@@ -38,5 +38,5 @@ int main ()
 }
 
 
-/* { dg-final { scan-tree-dump-times "vectorized 1 loops" 1 "vect" } } */
+/* { dg-final { scan-tree-dump-times "vectorized 1 loops" 1 "vect" { target { ! avr-*-* } } } } */
 /* { dg-final { cleanup-tree-dump "vect" } } */

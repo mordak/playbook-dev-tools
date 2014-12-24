@@ -1,6 +1,6 @@
 // Wrapper for underlying C-language localization -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -35,12 +35,14 @@
 #include <langinfo.h>
 #include <bits/c++locale_internal.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   template<>
     void
     __convert_to_v(const char* __s, float& __v, ios_base::iostate& __err, 
-		   const __c_locale& __cloc)
+		   const __c_locale& __cloc) throw()
     {
       char* __sanity;
       __v = __strtof_l(__s, &__sanity, __cloc);
@@ -67,7 +69,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   template<>
     void
     __convert_to_v(const char* __s, double& __v, ios_base::iostate& __err, 
-		   const __c_locale& __cloc)
+		   const __c_locale& __cloc) throw()
     {
       char* __sanity;
       __v = __strtod_l(__s, &__sanity, __cloc);
@@ -94,7 +96,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   template<>
     void
     __convert_to_v(const char* __s, long double& __v, ios_base::iostate& __err,
-		   const __c_locale& __cloc)
+		   const __c_locale& __cloc) throw()
     {
       char* __sanity;
 #if __GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ > 2)
@@ -133,10 +135,10 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       {
 	// This named locale is not supported by the underlying OS.
 	__throw_runtime_error(__N("locale::facet::_S_create_c_locale "
-			      "name not valid"));
+				  "name not valid"));
       }
   }
-  
+
   void
   locale::facet::_S_destroy_c_locale(__c_locale& __cloc)
   {
@@ -145,12 +147,36 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   }
 
   __c_locale
-  locale::facet::_S_clone_c_locale(__c_locale& __cloc)
+  locale::facet::_S_clone_c_locale(__c_locale& __cloc) throw()
   { return __duplocale(__cloc); }
 
-_GLIBCXX_END_NAMESPACE
+  __c_locale
+  locale::facet::_S_lc_ctype_c_locale(__c_locale __cloc, const char* __s)
+  {
+    __c_locale __dup = __duplocale(__cloc);
+    if (__dup == __c_locale(0))
+      __throw_runtime_error(__N("locale::facet::_S_lc_ctype_c_locale "
+				"duplocale error"));
+#if __GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ > 2)
+    __c_locale __changed = __newlocale(LC_CTYPE_MASK, __s, __dup);
+#else
+    __c_locale __changed = __newlocale(1 << LC_CTYPE, __s, __dup);
+#endif
+    if (__changed == __c_locale(0))
+      {
+	__freelocale(__dup);
+	__throw_runtime_error(__N("locale::facet::_S_lc_ctype_c_locale "
+				  "newlocale error"));
+      }
+    return __changed;
+  }
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
+
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   const char* const category_names[6 + _GLIBCXX_NUM_CATEGORIES] =
     {
@@ -168,13 +194,17 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       "LC_IDENTIFICATION" 
     };
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   const char* const* const locale::_S_categories = __gnu_cxx::category_names;
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 // XXX GLIBCXX_ABI Deprecated
 #ifdef _GLIBCXX_LONG_DOUBLE_COMPAT

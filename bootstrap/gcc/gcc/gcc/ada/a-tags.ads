@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- This specification is derived from the Ada Reference Manual for use with --
 -- GNAT. The copyright notice above, and the license provisions that follow --
@@ -75,6 +75,9 @@ package Ada.Tags is
    function Interface_Ancestor_Tags (T : Tag) return Tag_Array;
    pragma Ada_05 (Interface_Ancestor_Tags);
 
+   function Type_Is_Abstract (T : Tag) return Boolean;
+   pragma Ada_2012 (Type_Is_Abstract);
+
    Tag_Error : exception;
 
 private
@@ -101,7 +104,9 @@ private
    --                                    +-------------------+
    --                                    |   hash table link |
    --                                    +-------------------+
-   --                                    | remotely callable |
+   --                                    |   transportable   |
+   --                                    +-------------------+
+   --                                    |  type_is_abstract |
    --                                    +-------------------+
    --                                    | rec ctrler offset |
    --                                    +-------------------+
@@ -115,7 +120,7 @@ private
    --         +------------------+       +-------------------+   +------------+
    --         |table of          |
    --         :   entry          :
-   --         |      indices     |
+   --         |      indexes     |
    --         +------------------+
 
    --  Structure of the GNAT Secondary Dispatch Table
@@ -279,6 +284,9 @@ private
       --  Used to check RM E.4(18), set for types that satisfy the requirements
       --  for being used in remote calls as actuals for classwide formals or as
       --  return values for classwide functions.
+
+      Type_Is_Abstract : Boolean;
+      --  True if the type is abstract (Ada 2012: AI05-0173)
 
       RC_Offset : SSE.Storage_Offset;
       --  Controller Offset: Used to give support to tagged controlled objects

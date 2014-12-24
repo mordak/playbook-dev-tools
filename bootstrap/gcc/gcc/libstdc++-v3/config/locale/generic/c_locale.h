@@ -1,6 +1,6 @@
 // Wrapper for underlying C-language localization -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2009
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -23,9 +23,9 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file c++locale.h
+/** @file bits/c++locale.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{locale}
  */
 
 //
@@ -40,11 +40,12 @@
 #pragma GCC system_header
 
 #include <clocale>
-#include <cstddef>
 
 #define _GLIBCXX_NUM_CATEGORIES 0
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   typedef int*			__c_locale;
 
@@ -57,8 +58,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 		   const int __size __attribute__((__unused__)),
 		   const char* __fmt, ...)
   {
-    char* __old = std::setlocale(LC_NUMERIC, NULL);
-    char* __sav = NULL;
+    char* __old = std::setlocale(LC_NUMERIC, 0);
+    char* __sav = 0;
     if (__builtin_strcmp(__old, "C"))
       {
 	const size_t __len = __builtin_strlen(__old) + 1;
@@ -86,6 +87,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     return __ret;
   }
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif

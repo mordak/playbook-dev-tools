@@ -70,10 +70,9 @@
    or a CONST containing one of them.  If -mfp-in-toc (the default),
    we also do this for floating-point constants.  We actually can only
    do this if the FP formats of the target and host machines are the
-   same, but we can't check that since not every file that uses
-   GO_IF_LEGITIMATE_ADDRESS_P includes real.h.  We also do this when
-   we can write the entry into the TOC and the entry is not larger
-   than a TOC entry.  */
+   same, but we can't check that since not every file that uses these
+   target macros includes real.h.  We also do this when we can write the
+   entry into the TOC and the entry is not larger than a TOC entry.  */
 
 #define ASM_OUTPUT_SPECIAL_POOL_ENTRY_P(X, MODE)			\
   (TARGET_TOC								\
@@ -191,7 +190,7 @@
   putc ('.', FILE);						\
   RS6000_OUTPUT_BASENAME (FILE, buffer);			\
   fputs (":\n", FILE);						\
-  if (write_symbols != NO_DEBUG)				\
+  if (write_symbols != NO_DEBUG && !DECL_IGNORED_P (DECL))	\
     xcoffout_declare_function (FILE, DECL, buffer);		\
 }
 

@@ -24,8 +24,6 @@ gnatfind        ^ GNAT FIND
 Gnatfind        ^ GNAT FIND
 gnatkr          ^ GNAT KRUNCH
 Gnatkr          ^ GNAT KRUNCH
-gnatlbr         ^ GNAT LIBRARY
-Gnatlbr         ^ GNAT LIBRARY
 gnatlink        ^ GNAT LINK
 Gnatlink        ^ GNAT LINK
 gnatls          ^ GNAT LIST
@@ -52,18 +50,22 @@ gcc -c          ^ GNAT COMPILE
 -gnata          ^ /CHECKS=ASSERTIONS
 -gnatA          ^ /NO_GNAT_ADC
 -gnatb          ^ /REPORT_ERRORS=BRIEF
+-gnatB          ^ /ASSUME_VALID
 -gnatc          ^ /NOLOAD
+-gnatct         ^ /NOLOAD /TREE_OUTPUT
 -gnatdc         ^ /TRACE_UNITS
 -gnatdO         ^ /REPORT_ERRORS=IMMEDIATE
 -gnatC          ^ /COMPRESS_NAMES
 -gnatDG         ^ /XDEBUG /EXPAND_SOURCEA
 -gnatD          ^ /XDEBUG
 -gnatec         ^ /CONFIGURATION_PRAGMAS_FILE
+-gnateE         ^ /EXTRA_EXCEPTION_INFORMATION
 -gnateD         ^ /SYMBOL_PREPROCESSING
 -gnatef         ^ /FULL_PATH_IN_BRIEF_MESSAGES
 -gnateG         ^ /GENERATE_PROCESSED_SOURCE
 -gnatem         ^ /MAPPING_FILE
 -gnatep         ^ /DATA_PREPROCESSING
+-gnateS         ^ /SCO_OUTPUT
 -gnatE          ^ /CHECKS=ELABORATION
 -gnatf          ^ /REPORT_ERRORS=FULL
 -gnatF          ^ /UPPERCASE_EXTERNALS
@@ -82,6 +84,7 @@ gcc -c          ^ GNAT COMPILE
 -gnatN          ^ /INLINE=FULL
 -gnato          ^ /CHECKS=OVERFLOW
 -gnatp          ^ /CHECKS=SUPPRESS_ALL
+-gnat-p         ^ /CHECKS=UNSUPPRESS_ALL
 -gnatP          ^ /POLLING
 -gnatR          ^ /REPRESENTATION_INFO
 -gnatR0         ^ /REPRESENTATION_INFO=NONE
@@ -136,6 +139,8 @@ gcc -c          ^ GNAT COMPILE
 -gnatwG         ^ /WARNINGS=NOUNRECOGNIZED_PRAGMAS
 -gnatwh         ^ /WARNINGS=HIDING
 -gnatwH         ^ /WARNINGS=NOHIDING
+-gnatw.h        ^ /WARNINGS=AVOIDGAPS
+-gnatw.H        ^ /WARNINGS=NOAVOIDGAPS
 -gnatwi         ^ /WARNINGS=IMPLEMENTATION
 -gnatwI         ^ /WARNINGS=NOIMPLEMENTATION
 -gnatwj         ^ /WARNINGS=OBSOLESCENT
@@ -146,6 +151,8 @@ gcc -c          ^ GNAT COMPILE
 -gnatwL         ^ /WARNINGS=NOELABORATION
 -gnatwm         ^ /WARNINGS=MODIFIED_UNREF
 -gnatwM         ^ /WARNINGS=NOMODIFIED_UNREF
+-gnatw.m        ^ /WARNINGS=SUSPICIOUS_MODULUES
+-gnatw.M        ^ /WARNINGS=NOSUSPICIOUS_MODULUES
 -gnatwn         ^ /WARNINGS=NORMAL
 -gnatwo         ^ /WARNINGS=OVERLAYS
 -gnatwO         ^ /WARNINGS=NOOVERLAYS
@@ -155,6 +162,8 @@ gcc -c          ^ GNAT COMPILE
 -gnatwP         ^ /WARNINGS=NOINEFFECTIVE_INLINE
 -gnatw.p        ^ /WARNINGS=PARAMETER_ORDER
 -gnatw.P        ^ /WARNINGS=NO_PARAMETER_ORDER
+-gnatw.h        ^ /WARNINGS=OVERRIDING_SIZE
+-gnatw.H        ^ /WARNINGS=NOOVERRIDING_SIZE
 -gnatwq         ^ /WARNINGS=MISSING_PARENS
 -gnatwQ         ^ /WARNINGS=NOMISSING_PARENS
 -gnatwr         ^ /WARNINGS=REDUNDANT
@@ -164,6 +173,8 @@ gcc -c          ^ GNAT COMPILE
 -gnatwT         ^ /WARNINGS=NODELETED_CODE
 -gnatwu         ^ /WARNINGS=UNUSED
 -gnatwU         ^ /WARNINGS=NOUNUSED
+-gnatw.u        ^ /WARNINGS=UNORDERED_ENUMERATIONS
+-gnatw.U        ^ /WARNINGS=NOUNORDERED_ENUMERATIONS
 -gnatwv         ^ /WARNINGS=VARIABLES_UNINITIALIZED
 -gnatwV         ^ /WARNINGS=NOVARIABLES_UNINITIALIZED
 -gnatww         ^ /WARNINGS=LOWBOUND_ASSUMED
@@ -181,6 +192,7 @@ gcc -c          ^ GNAT COMPILE
 -gnatW8         ^ /WIDE_CHARACTER_ENCODING=UTF8
 -gnatW?         ^ /WIDE_CHARACTER_ENCODING=?
 -gnaty          ^ /STYLE_CHECKS
+-gnatyO         ^ /STYLE_CHECKS=OVERRIDING_INDICATORS
 -gnatyy         ^ /STYLE_CHECKS=ALL_BUILTIN
 -gnatZ          ^ /ZERO_COST_EXCEPTIONS
 -gnatzc         ^ /DISTRIBUTION_STUBS=CALLER
@@ -188,6 +200,9 @@ gcc -c          ^ GNAT COMPILE
 -gnat83         ^ /83
 -gnat95         ^ /95
 -gnat05         ^ /05
+-gnat2005       ^ /2005
+-gnat12         ^ /12
+-gnat2012       ^ /2012
 -gnatx          ^ /XREF=SUPPRESS
 -gnatX          ^ /EXTENSIONS_ALLOWED
 --RTS           ^ /RUNTIME_SYSTEM
@@ -211,3 +226,5 @@ stderr          ^ SYS$ERROR
 -O1             ^ /OPTIMIZE=SOME
 -O2             ^ /OPTIMIZE=ALL
 -O3             ^ /OPTIMIZE=INLINING
+-H32            ^ /32_MALLOC
+-H64            ^ /64_MALLOC

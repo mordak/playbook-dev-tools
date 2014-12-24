@@ -96,10 +96,10 @@ public class Main
   boolean force;
 
   // Map class names to class wrappers.
-  HashMap classMap = new HashMap();
+  HashMap<String,ClassWrapper> classMap = new HashMap<String,ClassWrapper>();
 
   // Map class names to lists of Text objects.
-  HashMap textMap = new HashMap();
+  HashMap<String,ArrayList<Text>> textMap = new HashMap<String,ArrayList<Text>>();
 
   void readCommandFile(String textFileName) throws OptionException
   {
@@ -114,7 +114,7 @@ public class Main
       }
     BufferedReader reader = new BufferedReader(new InputStreamReader(fis));
     String currentClass = null;
-    ArrayList currentValues = null;
+    ArrayList<Text> currentValues = null;
     while (true)
       {
         String line;
@@ -142,7 +142,7 @@ public class Main
                 textMap.put(currentClass, currentValues);
               }
             currentClass = value;
-            currentValues = new ArrayList();
+            currentValues = new ArrayList<Text>();
             continue;
           }
         if (currentClass == null)
@@ -165,7 +165,7 @@ public class Main
       }
   }
 
-  void scanDirectory(File dir, final HashSet results)
+  void scanDirectory(File dir, final HashSet<Object> results)
   {
     File[] files = dir.listFiles(new FileFilter()
     {
@@ -248,7 +248,7 @@ public class Main
       {
         if (cniOrJniSeen && cni)
           throw new OptionException("only one of -jni or -cni may be used");
-	cniOrJniSeen = true;
+        cniOrJniSeen = true;
         cni = false;
       }
     });
@@ -258,7 +258,7 @@ public class Main
       {
         if (cniOrJniSeen && ! cni)
           throw new OptionException("only one of -jni or -cni may be used");
-	cniOrJniSeen = true;
+        cniOrJniSeen = true;
         cni = true;
       }
     });
@@ -317,15 +317,15 @@ public class Main
     return result;
   }
 
-  private void writeHeaders(HashMap klasses, Printer printer)
+  private void writeHeaders(HashMap<File,ClassWrapper> klasses, Printer printer)
       throws IOException
   {
-    Iterator i = klasses.entrySet().iterator();
+    Iterator<Map.Entry<File,ClassWrapper>> i = klasses.entrySet().iterator();
     while (i.hasNext())
       {
-	Map.Entry e = (Map.Entry) i.next();
-	File file = (File) e.getKey();
-        ClassWrapper klass = (ClassWrapper) e.getValue();
+        Map.Entry<File,ClassWrapper> e = i.next();
+        File file = e.getKey();
+        ClassWrapper klass = e.getValue();
         if (verbose)
           System.err.println("[writing " + klass + " as " + file + "]");
         printer.printClass(file, klass);
@@ -368,7 +368,7 @@ public class Main
     // First we load all of the files. That way if
     // there are references between the files we will
     // be loading the set that the user asked for.
-    HashSet klasses = new HashSet();
+    HashSet<Object> klasses = new HashSet<Object>();
     if (allDirectory != null)
       scanDirectory(new File(allDirectory), klasses);
     // Add the command-line arguments. We use the type of
@@ -385,22 +385,22 @@ public class Main
           }
       }
 
-    Iterator i = klasses.iterator();
-    HashMap results = new HashMap();
+    Iterator<Object> i = klasses.iterator();
+    HashMap<File,ClassWrapper> results = new HashMap<File,ClassWrapper>();
     while (i.hasNext())
       {
         // Let user specify either kind of class name or a
         // file name.
         Object item = i.next();
         ClassWrapper klass;
-	File filename;
+        File filename;
         if (item instanceof File)
           {
             // Load class from file.
             if (verbose)
               System.err.println("[reading file " + item + "]");
             klass = getClass((File) item);
-	    filename = new File(klass.name);
+            filename = new File(klass.name);
           }
         else
           {
@@ -408,9 +408,9 @@ public class Main
             String className = ((String) item).replace('.', '/');
             if (verbose)
               System.err.println("[reading class " + className + "]");
-	    // Use the name the user specified, even if it is
-	    // different from the ultimate class name.
-	    filename = new File(className);
+            // Use the name the user specified, even if it is
+            // different from the ultimate class name.
+            filename = new File(className);
             klass = getClass(className);
           }
         results.put(filename, klass);
@@ -419,9 +419,9 @@ public class Main
     writeHeaders(results, printer);
   }
 
-  public ArrayList getClassTextList(String name)
+  public ArrayList<Text> getClassTextList(String name)
   {
-    return (ArrayList) textMap.get(name);
+    return textMap.get(name);
   }
 
   private ClassWrapper readClass(InputStream is) throws IOException
@@ -452,7 +452,7 @@ public class Main
         URL url = loader.findResource(resource);
         if (url == null)
           throw new IOException("can't find class file " + resource
-				+ " in " + loader);
+                                + " in " + loader);
         InputStream is = url.openStream();
         ClassWrapper result = readClass(is);
         classMap.put(name, result);

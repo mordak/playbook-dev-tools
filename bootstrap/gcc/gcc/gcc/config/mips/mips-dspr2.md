@@ -1,4 +1,74 @@
+;; Copyright (C) 2007, 2010 Free Software Foundation, Inc.
+;;
+;; This file is part of GCC.
+;;
+;; GCC is free software; you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation; either version 3, or (at your option)
+;; any later version.
+;;
+;; GCC is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+;;
+;; You should have received a copy of the GNU General Public License
+;; along with GCC; see the file COPYING3.  If not see
+;; <http://www.gnu.org/licenses/>.
+;;
 ; MIPS DSP ASE REV 2 Revision 0.02 11/24/2006
+
+(define_c_enum "unspec" [
+  UNSPEC_ABSQ_S_QB
+  UNSPEC_ADDU_PH
+  UNSPEC_ADDU_S_PH
+  UNSPEC_ADDUH_QB
+  UNSPEC_ADDUH_R_QB
+  UNSPEC_APPEND
+  UNSPEC_BALIGN
+  UNSPEC_CMPGDU_EQ_QB
+  UNSPEC_CMPGDU_LT_QB
+  UNSPEC_CMPGDU_LE_QB
+  UNSPEC_DPA_W_PH
+  UNSPEC_DPS_W_PH
+  UNSPEC_MADD
+  UNSPEC_MADDU
+  UNSPEC_MSUB
+  UNSPEC_MSUBU
+  UNSPEC_MUL_PH
+  UNSPEC_MUL_S_PH
+  UNSPEC_MULQ_RS_W
+  UNSPEC_MULQ_S_PH
+  UNSPEC_MULQ_S_W
+  UNSPEC_MULSA_W_PH
+  UNSPEC_MULT
+  UNSPEC_MULTU
+  UNSPEC_PRECR_QB_PH
+  UNSPEC_PRECR_SRA_PH_W
+  UNSPEC_PRECR_SRA_R_PH_W
+  UNSPEC_PREPEND
+  UNSPEC_SHRA_QB
+  UNSPEC_SHRA_R_QB
+  UNSPEC_SHRL_PH
+  UNSPEC_SUBU_PH
+  UNSPEC_SUBU_S_PH
+  UNSPEC_SUBUH_QB
+  UNSPEC_SUBUH_R_QB
+  UNSPEC_ADDQH_PH
+  UNSPEC_ADDQH_R_PH
+  UNSPEC_ADDQH_W
+  UNSPEC_ADDQH_R_W
+  UNSPEC_SUBQH_PH
+  UNSPEC_SUBQH_R_PH
+  UNSPEC_SUBQH_W
+  UNSPEC_SUBQH_R_W
+  UNSPEC_DPAX_W_PH
+  UNSPEC_DPSX_W_PH
+  UNSPEC_DPAQX_S_W_PH
+  UNSPEC_DPAQX_SA_W_PH
+  UNSPEC_DPSQX_S_W_PH
+  UNSPEC_DPSQX_SA_W_PH
+])
 
 (define_insn "mips_absq_s_qb"
   [(parallel
@@ -154,22 +224,6 @@
   [(set_attr "type"	"imadd")
    (set_attr "mode"	"SI")])
 
-(define_expand "mips_madd<u>"
-  [(set (match_operand:DI 0 "register_operand")
-	(plus:DI
-	 (mult:DI (any_extend:DI (match_operand:SI 2 "register_operand"))
-		  (any_extend:DI (match_operand:SI 3 "register_operand")))
-	 (match_operand:DI 1 "register_operand")))]
-  "ISA_HAS_DSPR2 && !TARGET_64BIT")
-
-(define_expand "mips_msub<u>"
-  [(set (match_operand:DI 0 "register_operand")
-	(minus:DI
-	 (match_operand:DI 1 "register_operand")
-	 (mult:DI (any_extend:DI (match_operand:SI 2 "register_operand"))
-		  (any_extend:DI (match_operand:SI 3 "register_operand")))))]
-  "ISA_HAS_DSPR2 && !TARGET_64BIT")
-
 (define_insn "mulv2hi3"
   [(parallel
     [(set (match_operand:V2HI 0 "register_operand" "=d")
@@ -248,26 +302,6 @@
   "ISA_HAS_DSPR2 && !TARGET_64BIT"
   "mulsa.w.ph\t%q0,%z2,%z3"
   [(set_attr "type"	"imadd")
-   (set_attr "mode"	"SI")])
-
-(define_insn "mips_mult"
-  [(set (match_operand:DI 0 "register_operand" "=a")
-	(mult:DI
-	 (sign_extend:DI (match_operand:SI 1 "register_operand" "d"))
-	 (sign_extend:DI (match_operand:SI 2 "register_operand" "d"))))]
-  "ISA_HAS_DSPR2 && !TARGET_64BIT"
-  "mult\t%q0,%1,%2"
-  [(set_attr "type"	"imul")
-   (set_attr "mode"	"SI")])
-
-(define_insn "mips_multu"
-  [(set (match_operand:DI 0 "register_operand" "=a")
-	(mult:DI
-	 (zero_extend:DI (match_operand:SI 1 "register_operand" "d"))
-	 (zero_extend:DI (match_operand:SI 2 "register_operand" "d"))))]
-  "ISA_HAS_DSPR2 && !TARGET_64BIT"
-  "multu\t%q0,%1,%2"
-  [(set_attr "type"	"imul")
    (set_attr "mode"	"SI")])
 
 (define_insn "mips_precr_qb_ph"

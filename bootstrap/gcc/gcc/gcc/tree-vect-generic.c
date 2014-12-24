@@ -1,18 +1,19 @@
 /* Lower vector operations to scalar operations.
-   Copyright (C) 2004, 2005, 2006, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
-   
+
 GCC is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
 Free Software Foundation; either version 3, or (at your option) any
 later version.
-   
+
 GCC is distributed in the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
 FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 for more details.
-   
+
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING3.  If not see
 <http://www.gnu.org/licenses/>.  */
@@ -22,12 +23,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "coretypes.h"
 #include "tree.h"
 #include "tm.h"
-#include "rtl.h"
-#include "expr.h"
-#include "insn-codes.h"
-#include "diagnostic.h"
-#include "optabs.h"
-#include "machmode.h"
 #include "langhooks.h"
 #include "tree-flow.h"
 #include "gimple.h"
@@ -36,6 +31,9 @@ along with GCC; see the file COPYING3.  If not see
 #include "flags.h"
 #include "ggc.h"
 
+/* Need to include rtl.h, expr.h, etc. for optabs.  */
+#include "expr.h"
+#include "optabs.h"
 
 /* Build a constant of type TYPE, made of VALUE's bits replicated
    every TYPE_SIZE (INNER_TYPE) bits to fit TYPE's precision.  */
@@ -286,6 +284,55 @@ expand_vector_addition (gimple_stmt_iterator *gsi,
 				    a, b, code);
 }
 
+/* Check if vector VEC consists of all the equal elements and
+   that the number of elements corresponds to the type of VEC.
+   The function returns first element of the vector
+   or NULL_TREE if the vector is not uniform.  */
+static tree
+uniform_vector_p (tree vec)
+{
+  tree first, t, els;
+  unsigned i;
+
+  if (vec == NULL_TREE)
+    return NULL_TREE;
+
+  if (TREE_CODE (vec) == VECTOR_CST)
+    {
+      els = TREE_VECTOR_CST_ELTS (vec);
+      first = TREE_VALUE (els);
+      els = TREE_CHAIN (els);
+
+      for (t = els; t; t = TREE_CHAIN (t))
+	if (!operand_equal_p (first, TREE_VALUE (t), 0))
+	  return NULL_TREE;
+
+      return first;
+    }
+
+  else if (TREE_CODE (vec) == CONSTRUCTOR)
+    {
+      first = error_mark_node;
+
+      FOR_EACH_CONSTRUCTOR_VALUE (CONSTRUCTOR_ELTS (vec), i, t)
+        {
+          if (i == 0)
+            {
+              first = t;
+              continue;
+            }
+	  if (!operand_equal_p (first, t, 0))
+	    return NULL_TREE;
+        }
+      if (i != TYPE_VECTOR_SUBPARTS (TREE_TYPE (vec)))
+	return NULL_TREE;
+      
+      return first;
+    }
+  
+  return NULL_TREE;
+}
+
 static tree
 expand_vector_operation (gimple_stmt_iterator *gsi, tree type, tree compute_type,
 			 gimple assign, enum tree_code code)
@@ -370,7 +417,7 @@ type_for_widest_vector_mode (enum machine_mode inner_mode, optab op, int satp)
   for (; mode != VOIDmode; mode = GET_MODE_WIDER_MODE (mode))
     if (GET_MODE_INNER (mode) == inner_mode
         && GET_MODE_NUNITS (mode) > best_nunits
-	&& optab_handler (op, mode)->insn_code != CODE_FOR_nothing)
+	&& optab_handler (op, mode) != CODE_FOR_nothing)
       best_mode = mode, best_nunits = GET_MODE_NUNITS (mode);
 
   if (best_mode == VOIDmode)
@@ -394,7 +441,7 @@ expand_vector_operations_1 (gimple_stmt_iterator *gsi)
   tree lhs, rhs1, rhs2 = NULL, type, compute_type;
   enum tree_code code;
   enum machine_mode compute_mode;
-  optab op;
+  optab op = NULL;
   enum gimple_rhs_class rhs_class;
   tree new_rhs;
 
@@ -416,12 +463,12 @@ expand_vector_operations_1 (gimple_stmt_iterator *gsi)
   if (TREE_CODE (type) != VECTOR_TYPE)
     return;
 
-  if (code == NOP_EXPR 
+  if (code == NOP_EXPR
       || code == FLOAT_EXPR
       || code == FIX_TRUNC_EXPR
       || code == VIEW_CONVERT_EXPR)
     return;
-  
+
   gcc_assert (code != CONVERT_EXPR);
 
   /* The signedness is determined from input argument.  */
@@ -431,29 +478,71 @@ expand_vector_operations_1 (gimple_stmt_iterator *gsi)
 
   /* Choose between vector shift/rotate by vector and vector shift/rotate by
      scalar */
-  if (code == LSHIFT_EXPR 
-      || code == RSHIFT_EXPR 
+  if (code == LSHIFT_EXPR
+      || code == RSHIFT_EXPR
       || code == LROTATE_EXPR
       || code == RROTATE_EXPR)
     {
-      /* If the 2nd argument is vector, we need a vector/vector shift */
+      bool vector_scalar_shift;
+      op = optab_for_tree_code (code, type, optab_scalar);
+      
+      /* Vector/Scalar shift is supported.  */
+      vector_scalar_shift = (op && (optab_handler (op, TYPE_MODE (type)) 
+				    != CODE_FOR_nothing));
+
+      /* If the 2nd argument is vector, we need a vector/vector shift.
+         Except all the elements in the second vector are the same.  */
       if (VECTOR_MODE_P (TYPE_MODE (TREE_TYPE (rhs2))))
-	op = optab_for_tree_code (code, type, optab_vector);
-      else
+        {
+          tree first;
+          gimple def_stmt;
+
+          /* Check whether we have vector <op> {x,x,x,x} where x
+             could be a scalar variable or a constant. Transform
+             vector <op> {x,x,x,x} ==> vector <op> scalar.  */
+          if (vector_scalar_shift 
+              && ((TREE_CODE (rhs2) == VECTOR_CST
+		   && (first = uniform_vector_p (rhs2)) != NULL_TREE)
+		  || (TREE_CODE (rhs2) == SSA_NAME 
+		      && (def_stmt = SSA_NAME_DEF_STMT (rhs2))
+		      && gimple_assign_single_p (def_stmt)
+		      && (first = uniform_vector_p
+			    (gimple_assign_rhs1 (def_stmt))) != NULL_TREE)))
+            {
+              gimple_assign_set_rhs2 (stmt, first);
+              update_stmt (stmt);
+              rhs2 = first;
+            }
+          else
+            op = optab_for_tree_code (code, type, optab_vector);
+        }
+    
+      /* Try for a vector/scalar shift, and if we don't have one, see if we
+         have a vector/vector shift */
+      else if (!vector_scalar_shift)
 	{
-	  /* Try for a vector/scalar shift, and if we don't have one, see if we
-	     have a vector/vector shift */
-	  op = optab_for_tree_code (code, type, optab_scalar);
-	  if (!op
-	      || (op->handlers[(int) TYPE_MODE (type)].insn_code
-		  == CODE_FOR_nothing))
-	    op = optab_for_tree_code (code, type, optab_vector);
+	  op = optab_for_tree_code (code, type, optab_vector);
+
+	  if (op && (optab_handler (op, TYPE_MODE (type)) 
+		     != CODE_FOR_nothing))
+	    {
+	      /* Transform vector <op> scalar => vector <op> {x,x,x,x}.  */
+	      int n_parts = TYPE_VECTOR_SUBPARTS (type);
+	      int part_size = tree_low_cst (TYPE_SIZE (TREE_TYPE (type)), 1);
+	      tree part_type = lang_hooks.types.type_for_size (part_size, 1);
+	      tree vect_type = build_vector_type (part_type, n_parts);
+
+	      rhs2 = fold_convert (part_type, rhs2);
+	      rhs2 = build_vector_from_val (vect_type, rhs2);
+	      gimple_assign_set_rhs2 (stmt, rhs2);
+	      update_stmt (stmt);
+	    }
 	}
     }
   else
     op = optab_for_tree_code (code, type, optab_default);
 
-  /* For widening/narrowing vector operations, the relevant type is of the 
+  /* For widening/narrowing vector operations, the relevant type is of the
      arguments, not the widened result.  VEC_UNPACK_FLOAT_*_EXPR is
      calculated in the same way above.  */
   if (code == WIDEN_SUM_EXPR
@@ -500,7 +589,7 @@ expand_vector_operations_1 (gimple_stmt_iterator *gsi)
 	   || GET_MODE_CLASS (compute_mode) == MODE_VECTOR_ACCUM
 	   || GET_MODE_CLASS (compute_mode) == MODE_VECTOR_UACCUM)
           && op != NULL
-	  && optab_handler (op, compute_mode)->insn_code != CODE_FOR_nothing)
+	  && optab_handler (op, compute_mode) != CODE_FOR_nothing)
 	return;
       else
 	/* There is no operation in hardware, so fall back to scalars.  */
@@ -517,8 +606,7 @@ expand_vector_operations_1 (gimple_stmt_iterator *gsi)
      way to do it is change expand_vector_operation and its callees to
      return a tree_code, RHS1 and RHS2 instead of a tree. */
   gimple_assign_set_rhs_from_tree (gsi, new_rhs);
-
-  gimple_set_modified (gsi_stmt (*gsi), true);
+  update_stmt (gsi_stmt (*gsi));
 }
 
 /* Use this to lower vector operations introduced by the vectorizer,
@@ -535,19 +623,27 @@ expand_vector_operations (void)
 {
   gimple_stmt_iterator gsi;
   basic_block bb;
+  bool cfg_changed = false;
 
   FOR_EACH_BB (bb)
     {
       for (gsi = gsi_start_bb (bb); !gsi_end_p (gsi); gsi_next (&gsi))
 	{
 	  expand_vector_operations_1 (&gsi);
-	  update_stmt_if_modified (gsi_stmt (gsi));
+	  /* ???  If we do not cleanup EH then we will ICE in
+	     verification.  But in reality we have created wrong-code
+	     as we did not properly transition EH info and edges to
+	     the piecewise computations.  */
+	  if (maybe_clean_eh_stmt (gsi_stmt (gsi))
+	      && gimple_purge_dead_eh_edges (bb))
+	    cfg_changed = true;
 	}
     }
-  return 0;
+
+  return cfg_changed ? TODO_cleanup_cfg : 0;
 }
 
-struct gimple_opt_pass pass_lower_vector = 
+struct gimple_opt_pass pass_lower_vector =
 {
  {
   GIMPLE_PASS,
@@ -557,17 +653,18 @@ struct gimple_opt_pass pass_lower_vector =
   NULL,					/* sub */
   NULL,					/* next */
   0,					/* static_pass_number */
-  0,					/* tv_id */
+  TV_NONE,				/* tv_id */
   PROP_cfg,				/* properties_required */
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_dump_func | TODO_ggc_collect
-    | TODO_verify_stmts			/* todo_flags_finish */
+  TODO_dump_func | TODO_update_ssa	/* todo_flags_finish */
+    | TODO_verify_ssa
+    | TODO_verify_stmts | TODO_verify_flow
  }
 };
 
-struct gimple_opt_pass pass_lower_vector_ssa = 
+struct gimple_opt_pass pass_lower_vector_ssa =
 {
  {
   GIMPLE_PASS,
@@ -577,7 +674,7 @@ struct gimple_opt_pass pass_lower_vector_ssa =
   NULL,					/* sub */
   NULL,					/* next */
   0,					/* static_pass_number */
-  0,					/* tv_id */
+  TV_NONE,				/* tv_id */
   PROP_cfg,				/* properties_required */
   0,					/* properties_provided */
   0,					/* properties_destroyed */

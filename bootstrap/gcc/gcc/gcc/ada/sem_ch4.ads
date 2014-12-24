@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2007, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -30,16 +30,19 @@ package Sem_Ch4  is
    procedure Analyze_Allocator                          (N : Node_Id);
    procedure Analyze_Arithmetic_Op                      (N : Node_Id);
    procedure Analyze_Call                               (N : Node_Id);
+   procedure Analyze_Case_Expression                    (N : Node_Id);
    procedure Analyze_Comparison_Op                      (N : Node_Id);
    procedure Analyze_Concatenation                      (N : Node_Id);
    procedure Analyze_Conditional_Expression             (N : Node_Id);
    procedure Analyze_Equality_Op                        (N : Node_Id);
    procedure Analyze_Explicit_Dereference               (N : Node_Id);
+   procedure Analyze_Expression_With_Actions            (N : Node_Id);
    procedure Analyze_Logical_Op                         (N : Node_Id);
    procedure Analyze_Membership_Op                      (N : Node_Id);
    procedure Analyze_Negation                           (N : Node_Id);
    procedure Analyze_Null                               (N : Node_Id);
    procedure Analyze_Qualified_Expression               (N : Node_Id);
+   procedure Analyze_Quantified_Expression              (N : Node_Id);
    procedure Analyze_Range                              (N : Node_Id);
    procedure Analyze_Reference                          (N : Node_Id);
    procedure Analyze_Selected_Component                 (N : Node_Id);
@@ -58,6 +61,6 @@ package Sem_Ch4  is
    --    c) A conversion
    --    d) A slice
    --  The resolution of the construct requires some semantic information
-   --  on the prefix and the indices.
+   --  on the prefix and the indexes.
 
 end Sem_Ch4;

@@ -1,18 +1,18 @@
-/* Test whether using target specific options, we can generate SSE5 code.  */
+/* Test whether using target specific options, we can generate FMA4 code.  */
 /* { dg-do compile } */
 /* { dg-options "-O2 -march=k8 -mfpmath=sse -msse2" } */
 
 extern void exit (int);
 
-#ifdef __SSE5__
-#warning "__SSE5__ should not be defined before #pragma GCC target."
+#ifdef __FMA4__
+#warning "__FMA4__ should not be defined before #pragma GCC target."
 #endif
 
 #pragma GCC push_options
-#pragma GCC target ("sse5,fused-madd")
+#pragma GCC target ("fma4")
 
-#ifndef __SSE5__
-#warning "__SSE5__ should have be defined after #pragma GCC target."
+#ifndef __FMA4__
+#warning "__FMA4__ should have be defined after #pragma GCC target."
 #endif
 
 float
@@ -22,8 +22,8 @@ flt_mul_add (float a, float b, float c)
 }
 
 #pragma GCC pop_options
-#ifdef __SSE5__
-#warning "__SSE5__ should not be defined after #pragma GCC pop target."
+#ifdef __FMA4__
+#warning "__FMA4__ should not be defined after #pragma GCC pop target."
 #endif
 
 double
@@ -32,5 +32,5 @@ dbl_mul_add (double a, double b, double c)
   return (a * b) + c;
 }
 
-/* { dg-final { scan-assembler "fmaddss" } } */
+/* { dg-final { scan-assembler "vfmaddss" } } */
 /* { dg-final { scan-assembler "addsd" } } */

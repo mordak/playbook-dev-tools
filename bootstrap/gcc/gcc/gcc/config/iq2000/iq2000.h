@@ -1,6 +1,6 @@
 /* Definitions of target machine for GNU compiler.  
    Vitesse IQ2000 processors
-   Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008
+   Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
 
    This file is part of GCC.
@@ -21,16 +21,16 @@
 
 /* Driver configuration.  */
 
-#undef  SWITCH_TAKES_ARG
-#define SWITCH_TAKES_ARG(CHAR)						\
-  (DEFAULT_SWITCH_TAKES_ARG (CHAR) || (CHAR) == 'G')
-
-/* The svr4.h LIB_SPEC with -leval and --*group tacked on */
+/* A generic LIB_SPEC with -leval and --*group tacked on.  */
 #undef  LIB_SPEC
 #define LIB_SPEC "%{!shared:%{!symbolic:--start-group -lc -leval -lgcc --end-group}}"
 
 #undef STARTFILE_SPEC
 #undef ENDFILE_SPEC
+
+#undef  LINK_SPEC
+#define LINK_SPEC "%{h*} %{v:-V} \
+		   %{static:-Bstatic} %{shared:-shared} %{symbolic:-Bsymbolic}"
 
 
 /* Run-time target specifications.  */
@@ -72,17 +72,12 @@
 #ifndef TARGET_VERSION
 #define TARGET_VERSION TARGET_VERSION_INTERNAL (stderr)
 #endif
-
-#define OVERRIDE_OPTIONS override_options ()
-
-#define CAN_DEBUG_WITHOUT_FP
 
 /* Storage Layout.  */
 
 #define BITS_BIG_ENDIAN 		0
 #define BYTES_BIG_ENDIAN 		1 
 #define WORDS_BIG_ENDIAN 		1
-#define LIBGCC2_WORDS_BIG_ENDIAN	1
 #define BITS_PER_WORD 			32
 #define MAX_BITS_PER_WORD 		64
 #define UNITS_PER_WORD 			4
@@ -141,6 +136,18 @@
 #define DOUBLE_TYPE_SIZE 	64
 #define LONG_DOUBLE_TYPE_SIZE	64
 #define DEFAULT_SIGNED_CHAR	1
+
+#undef  SIZE_TYPE
+#define SIZE_TYPE "unsigned int"
+
+#undef  PTRDIFF_TYPE
+#define PTRDIFF_TYPE "int"
+
+#undef  WCHAR_TYPE
+#define WCHAR_TYPE "long int"
+
+#undef  WCHAR_TYPE_SIZE
+#define WCHAR_TYPE_SIZE BITS_PER_WORD
 
 
 /* Register Basics.  */
@@ -228,12 +235,6 @@ enum reg_class
 
 #define INDEX_REG_CLASS NO_REGS
 
-#define REG_CLASS_FROM_LETTER(C) \
-  ((C) == 'd' ? GR_REGS :        \
-   (C) == 'b' ? ALL_REGS :       \
-   (C) == 'y' ? GR_REGS :        \
-   NO_REGS)
-
 #define REGNO_OK_FOR_INDEX_P(regno)	0
 
 #define PREFERRED_RELOAD_CLASS(X,CLASS)				\
@@ -247,57 +248,8 @@ enum reg_class
 	 ? (GR_REGS)						\
 	 : (CLASS))))
 
-#define SMALL_REGISTER_CLASSES 0
-
 #define CLASS_MAX_NREGS(CLASS, MODE)    \
   ((GET_MODE_SIZE (MODE) + UNITS_PER_WORD - 1) / UNITS_PER_WORD)
-
-/* For IQ2000:
-
-   `I'	is used for the range of constants an arithmetic insn can
-	actually contain (16-bits signed integers).
-
-   `J'	is used for the range which is just zero (i.e., $r0).
-
-   `K'	is used for the range of constants a logical insn can actually
-	contain (16-bit zero-extended integers).
-
-   `L'	is used for the range of constants that be loaded with lui
-	(i.e., the bottom 16 bits are zero).
-
-   `M'	is used for the range of constants that take two words to load
-	(i.e., not matched by `I', `K', and `L').
-
-   `N'	is used for constants 0xffffnnnn or 0xnnnnffff
-
-   `O'	is a 5-bit zero-extended integer.  */
-
-#define CONST_OK_FOR_LETTER_P(VALUE, C)					\
-  ((C) == 'I' ? ((unsigned HOST_WIDE_INT) ((VALUE) + 0x8000) < 0x10000)	\
-   : (C) == 'J' ? ((VALUE) == 0)					\
-   : (C) == 'K' ? ((unsigned HOST_WIDE_INT) (VALUE) < 0x10000)		\
-   : (C) == 'L' ? (((VALUE) & 0x0000ffff) == 0				\
-		   && (((VALUE) & ~2147483647) == 0			\
-		       || ((VALUE) & ~2147483647) == ~2147483647))	\
-   : (C) == 'M' ? ((((VALUE) & ~0x0000ffff) != 0)			\
-		   && (((VALUE) & ~0x0000ffff) != ~0x0000ffff)		\
-		   && (((VALUE) & 0x0000ffff) != 0			\
-		       || (((VALUE) & ~2147483647) != 0			\
-			   && ((VALUE) & ~2147483647) != ~2147483647)))	\
-   : (C) == 'N' ? ((((VALUE) & 0xffff) == 0xffff)			\
-		   || (((VALUE) & 0xffff0000) == 0xffff0000))		\
-   : (C) == 'O' ? ((unsigned HOST_WIDE_INT) ((VALUE) + 0x20) < 0x40)	\
-   : 0)
-
-#define CONST_DOUBLE_OK_FOR_LETTER_P(VALUE, C)				\
-  ((C) == 'G'								\
-   && (VALUE) == CONST0_RTX (GET_MODE (VALUE)))
-
-/* `R' is for memory references which take 1 word for the instruction.  */
-
-#define EXTRA_CONSTRAINT(OP,CODE)					\
-  (((CODE) == 'R')	  ? simple_memory_operand (OP, GET_MODE (OP))	\
-   : FALSE)
 
 
 /* Basic Stack Layout.  */
@@ -345,8 +297,6 @@ enum reg_class
 
 /* Eliminating the Frame Pointer and the Arg Pointer.  */
 
-#define FRAME_POINTER_REQUIRED 0
-
 #define ELIMINABLE_REGS							\
 {{ ARG_POINTER_REGNUM,   STACK_POINTER_REGNUM},				\
  { ARG_POINTER_REGNUM,   HARD_FRAME_POINTER_REGNUM},			\
@@ -355,17 +305,6 @@ enum reg_class
  { RETURN_ADDRESS_POINTER_REGNUM, GP_REG_FIRST + 31},			\
  { FRAME_POINTER_REGNUM, STACK_POINTER_REGNUM},				\
  { FRAME_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM}}
-
-
-/* We can always eliminate to the frame pointer.  We can eliminate to the 
-   stack pointer unless a frame pointer is needed.  */
-
-#define CAN_ELIMINATE(FROM, TO)						\
-  (((FROM) == RETURN_ADDRESS_POINTER_REGNUM && (! leaf_function_p ()	\
-   || (TO == GP_REG_FIRST + 31 && leaf_function_p)))   			\
-  || ((FROM) != RETURN_ADDRESS_POINTER_REGNUM				\
-   && ((TO) == HARD_FRAME_POINTER_REGNUM 				\
-   || ((TO) == STACK_POINTER_REGNUM && ! frame_pointer_needed))))
 
 #define INITIAL_ELIMINATION_OFFSET(FROM, TO, OFFSET)			 \
         (OFFSET) = iq2000_initial_elimination_offset ((FROM), (TO))
@@ -380,13 +319,8 @@ enum reg_class
 
 #define OUTGOING_REG_PARM_STACK_SPACE(FNTYPE) 1
 
-#define RETURN_POPS_ARGS(FUNDECL,FUNTYPE,SIZE) 0
-
 
 /* Function Arguments in Registers.  */
-
-#define FUNCTION_ARG(CUM, MODE, TYPE, NAMED) \
-  function_arg (& CUM, MODE, TYPE, NAMED)
 
 #define MAX_ARGS_IN_REGISTERS 8
 
@@ -409,9 +343,6 @@ typedef struct iq2000_args
 #define INIT_CUMULATIVE_ARGS(CUM, FNTYPE, LIBNAME, INDIRECT, N_NAMED_ARGS) \
   init_cumulative_args (& CUM, FNTYPE, LIBNAME)				\
 
-#define FUNCTION_ARG_ADVANCE(CUM, MODE, TYPE, NAMED)			\
-  function_arg_advance (& CUM, MODE, TYPE, NAMED)
-
 #define FUNCTION_ARG_PADDING(MODE, TYPE)				\
   (! BYTES_BIG_ENDIAN							\
    ? upward								\
@@ -422,33 +353,13 @@ typedef struct iq2000_args
 	  && (GET_MODE_CLASS (MODE) == MODE_INT)))			\
       ? downward : upward))
 
-#define FUNCTION_ARG_BOUNDARY(MODE, TYPE)				\
-  (((TYPE) != 0)							\
-	? ((TYPE_ALIGN(TYPE) <= PARM_BOUNDARY)				\
-		? PARM_BOUNDARY						\
-		: TYPE_ALIGN(TYPE))					\
-	: ((GET_MODE_ALIGNMENT(MODE) <= PARM_BOUNDARY)			\
-		? PARM_BOUNDARY						\
-		: GET_MODE_ALIGNMENT(MODE)))
-
 #define FUNCTION_ARG_REGNO_P(N)						\
   (((N) >= GP_ARG_FIRST && (N) <= GP_ARG_LAST))			
 
 
-/* How Scalar Function Values are Returned.  */
-
-#define FUNCTION_VALUE(VALTYPE, FUNC)	iq2000_function_value (VALTYPE, FUNC)
-
-#define LIBCALL_VALUE(MODE)				\
-  gen_rtx_REG (((GET_MODE_CLASS (MODE) != MODE_INT	\
-		 || GET_MODE_SIZE (MODE) >= 4)		\
-		? (MODE)				\
-		: SImode),				\
-	       GP_RETURN)
-
 /* On the IQ2000, R2 and R3 are the only register thus used.  */
 
-#define FUNCTION_VALUE_REGNO_P(N) ((N) == GP_RETURN)
+#define FUNCTION_VALUE_REGNO_P(N) iq2000_function_value_regno_p (N)
 
 
 /* How Large Values are Returned.  */
@@ -482,43 +393,9 @@ typedef struct iq2000_args
 
 /* Trampolines for Nested Functions.  */
 
-/* A C statement to output, on the stream FILE, assembler code for a
-   block of data that contains the constant parts of a trampoline.
-   This code should not include a label--the label is taken care of
-   automatically.  */
-
-#define TRAMPOLINE_TEMPLATE(STREAM)					 \
-{									 \
-  fprintf (STREAM, "\t.word\t0x03e00821\t\t# move   $1,$31\n");		\
-  fprintf (STREAM, "\t.word\t0x04110001\t\t# bgezal $0,.+8\n");		\
-  fprintf (STREAM, "\t.word\t0x00000000\t\t# nop\n");			\
-  if (Pmode == DImode)							\
-    {									\
-      fprintf (STREAM, "\t.word\t0xdfe30014\t\t# ld     $3,20($31)\n");	\
-      fprintf (STREAM, "\t.word\t0xdfe2001c\t\t# ld     $2,28($31)\n");	\
-    }									\
-  else									\
-    {									\
-      fprintf (STREAM, "\t.word\t0x8fe30014\t\t# lw     $3,20($31)\n");	\
-      fprintf (STREAM, "\t.word\t0x8fe20018\t\t# lw     $2,24($31)\n");	\
-    }									\
-  fprintf (STREAM, "\t.word\t0x0060c821\t\t# move   $25,$3 (abicalls)\n"); \
-  fprintf (STREAM, "\t.word\t0x00600008\t\t# jr     $3\n");		\
-  fprintf (STREAM, "\t.word\t0x0020f821\t\t# move   $31,$1\n");		\
-  fprintf (STREAM, "\t.word\t0x00000000\t\t# <function address>\n"); \
-  fprintf (STREAM, "\t.word\t0x00000000\t\t# <static chain value>\n"); \
-}
-
-#define TRAMPOLINE_SIZE (40)
-
-#define TRAMPOLINE_ALIGNMENT 32
-
-#define INITIALIZE_TRAMPOLINE(ADDR, FUNC, CHAIN)			    \
-{									    \
-  rtx addr = ADDR;							    \
-    emit_move_insn (gen_rtx_MEM (SImode, plus_constant (addr, 32)), FUNC); \
-    emit_move_insn (gen_rtx_MEM (SImode, plus_constant (addr, 36)), CHAIN);\
-}
+#define TRAMPOLINE_CODE_SIZE  (8*4)
+#define TRAMPOLINE_SIZE       (TRAMPOLINE_CODE_SIZE + 2*GET_MODE_SIZE (Pmode))
+#define TRAMPOLINE_ALIGNMENT  GET_MODE_ALIGNMENT (Pmode)
 
 
 /* Addressing Modes.  */
@@ -530,89 +407,7 @@ typedef struct iq2000_args
 
 #define MAX_REGS_PER_ADDRESS 1
 
-#ifdef REG_OK_STRICT
-#define GO_IF_LEGITIMATE_ADDRESS(MODE, X, ADDR)		\
-  {							\
-    if (iq2000_legitimate_address_p (MODE, X, 1))	\
-      goto ADDR;					\
-  }
-#else
-#define GO_IF_LEGITIMATE_ADDRESS(MODE, X, ADDR)		\
-  {							\
-    if (iq2000_legitimate_address_p (MODE, X, 0))	\
-      goto ADDR;					\
-  }
-#endif
-
 #define REG_OK_FOR_INDEX_P(X) 0
-
-
-/* For the IQ2000, transform:
-
-	memory(X + <large int>)
-   into:
-	Y = <large int> & ~0x7fff;
-	Z = X + Y
-	memory (Z + (<large int> & 0x7fff));
-*/
-
-#define LEGITIMIZE_ADDRESS(X,OLDX,MODE,WIN)				\
-{									\
-  rtx xinsn = (X);							\
-									\
-  if (TARGET_DEBUG_B_MODE)						\
-    {									\
-      GO_PRINTF ("\n========== LEGITIMIZE_ADDRESS\n");			\
-      GO_DEBUG_RTX (xinsn);						\
-    }									\
-									\
-  if (iq2000_check_split (X, MODE))		\
-    {									\
-      X = gen_rtx_LO_SUM (Pmode,					\
-			  copy_to_mode_reg (Pmode,			\
-					    gen_rtx_HIGH (Pmode, X)),	\
-			  X);						\
-      goto WIN;								\
-    }									\
-									\
-  if (GET_CODE (xinsn) == PLUS)						\
-    {									\
-      rtx xplus0 = XEXP (xinsn, 0);					\
-      rtx xplus1 = XEXP (xinsn, 1);					\
-      enum rtx_code code0 = GET_CODE (xplus0);				\
-      enum rtx_code code1 = GET_CODE (xplus1);				\
-									\
-      if (code0 != REG && code1 == REG)					\
-	{								\
-	  xplus0 = XEXP (xinsn, 1);					\
-	  xplus1 = XEXP (xinsn, 0);					\
-	  code0 = GET_CODE (xplus0);					\
-	  code1 = GET_CODE (xplus1);					\
-	}								\
-									\
-      if (code0 == REG && REG_MODE_OK_FOR_BASE_P (xplus0, MODE)		\
-	  && code1 == CONST_INT && !SMALL_INT (xplus1))			\
-	{								\
-	  rtx int_reg = gen_reg_rtx (Pmode);				\
-	  rtx ptr_reg = gen_reg_rtx (Pmode);				\
-									\
-	  emit_move_insn (int_reg,					\
-			  GEN_INT (INTVAL (xplus1) & ~ 0x7fff));	\
-									\
-	  emit_insn (gen_rtx_SET (VOIDmode,				\
-				  ptr_reg,				\
-				  gen_rtx_PLUS (Pmode, xplus0, int_reg))); \
-									\
-	  X = plus_constant (ptr_reg, INTVAL (xplus1) & 0x7fff);	\
-	  goto WIN;							\
-	}								\
-    }									\
-									\
-  if (TARGET_DEBUG_B_MODE)						\
-    GO_PRINTF ("LEGITIMIZE_ADDRESS could not fix.\n");			\
-}
-
-#define GO_IF_MODE_DEPENDENT_ADDRESS(ADDR,LABEL) {}
 
 #define LEGITIMATE_CONSTANT_P(X) (1)
 
@@ -668,7 +463,7 @@ typedef struct iq2000_args
  "%8",   "%9",   "%10",  "%11",  "%12",  "%13",  "%14",  "%15",		\
  "%16",  "%17",  "%18",  "%19",  "%20",  "%21",  "%22",  "%23",		\
  "%24",  "%25",  "%26",  "%27",  "%28",  "%29",  "%30",  "%31",  "%rap"	\
-};
+}
 
 #define ADDITIONAL_REGISTER_NAMES					\
 {									\
@@ -712,13 +507,6 @@ typedef struct iq2000_args
 
 #define FINAL_PRESCAN_INSN(INSN, OPVEC, NOPERANDS)			\
   final_prescan_insn (INSN, OPVEC, NOPERANDS)
-
-/* See iq2000.c for the IQ2000 specific codes.  */
-#define PRINT_OPERAND(FILE, X, CODE) print_operand (FILE, X, CODE)
-
-#define PRINT_OPERAND_PUNCT_VALID_P(CODE) iq2000_print_operand_punct[CODE]
-
-#define PRINT_OPERAND_ADDRESS(FILE, ADDR) print_operand_address (FILE, ADDR)
 
 #define DBR_OUTPUT_SEQEND(STREAM)					\
 do									\
@@ -998,7 +786,7 @@ enum processor_type
   (((regno) >= FIRST_PSEUDO_REGISTER) || (BASE_REG_P ((regno), (mode))))
 
 #define REGNO_MODE_OK_FOR_BASE_P(regno, mode) \
-  GP_REG_OR_PSEUDO_STRICT_P ((regno), (mode))
+  GP_REG_OR_PSEUDO_STRICT_P ((int) (regno), (mode))
 
 /* The macros REG_OK_FOR..._P assume that the arg is a REG rtx
    and check its validity for a certain class.
@@ -1062,21 +850,11 @@ enum processor_type
 #define SDATA_SECTION_ASM_OP	"\t.sdata"	/* Small data.  */
 
 
-/* List of all IQ2000 punctuation characters used by print_operand.  */
-extern char iq2000_print_operand_punct[256];
-
 /* The target cpu for optimization and scheduling.  */
 extern enum processor_type iq2000_tune;
 
 /* Which instruction set architecture to use.  */
 extern int iq2000_isa;
-
-/* Cached operands, and operator to compare for use in set/branch/trap
-   on condition codes.  */
-extern rtx branch_cmp[2];
-
-/* What type of branch to use.  */
-extern enum cmp_type branch_type;
 
 enum iq2000_builtins
 {

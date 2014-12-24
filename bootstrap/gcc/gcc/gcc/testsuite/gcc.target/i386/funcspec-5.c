@@ -5,7 +5,7 @@
 
 extern void test_abm (void)			__attribute__((__target__("abm")));
 extern void test_aes (void)			__attribute__((__target__("aes")));
-extern void test_fused_madd (void)		__attribute__((__target__("fused-madd")));
+extern void test_bmi (void)			__attribute__((__target__("bmi")));
 extern void test_mmx (void)			__attribute__((__target__("mmx")));
 extern void test_pclmul (void)			__attribute__((__target__("pclmul")));
 extern void test_popcnt (void)			__attribute__((__target__("popcnt")));
@@ -17,12 +17,13 @@ extern void test_sse4 (void)			__attribute__((__target__("sse4")));
 extern void test_sse4_1 (void)			__attribute__((__target__("sse4.1")));
 extern void test_sse4_2 (void)			__attribute__((__target__("sse4.2")));
 extern void test_sse4a (void)			__attribute__((__target__("sse4a")));
-extern void test_sse5 (void)			__attribute__((__target__("sse5")));
+extern void test_fma4 (void)			__attribute__((__target__("fma4")));
 extern void test_ssse3 (void)			__attribute__((__target__("ssse3")));
+extern void test_tbm (void)			__attribute__((__target__("tbm")));
 
 extern void test_no_abm (void)			__attribute__((__target__("no-abm")));
 extern void test_no_aes (void)			__attribute__((__target__("no-aes")));
-extern void test_no_fused_madd (void)		__attribute__((__target__("no-fused-madd")));
+extern void test_no_bmi (void)			__attribute__((__target__("no-bmi")));
 extern void test_no_mmx (void)			__attribute__((__target__("no-mmx")));
 extern void test_no_pclmul (void)		__attribute__((__target__("no-pclmul")));
 extern void test_no_popcnt (void)		__attribute__((__target__("no-popcnt")));
@@ -34,8 +35,9 @@ extern void test_no_sse4 (void)			__attribute__((__target__("no-sse4")));
 extern void test_no_sse4_1 (void)		__attribute__((__target__("no-sse4.1")));
 extern void test_no_sse4_2 (void)		__attribute__((__target__("no-sse4.2")));
 extern void test_no_sse4a (void)		__attribute__((__target__("no-sse4a")));
-extern void test_no_sse5 (void)			__attribute__((__target__("no-sse5")));
+extern void test_no_fma4 (void)			__attribute__((__target__("no-fma4")));
 extern void test_no_ssse3 (void)		__attribute__((__target__("no-ssse3")));
+extern void test_no_tbm (void)			__attribute__((__target__("no-tbm")));
 
 extern void test_arch_i386 (void)		__attribute__((__target__("arch=i386")));
 extern void test_arch_i486 (void)		__attribute__((__target__("arch=i486")));

@@ -16,5 +16,8 @@ end module m
 use m
 implicit none
 intrinsic cos
-call sub(cos) ! { dg-error "Type/rank mismatch in argument" }
+call sub(cos) ! { dg-error "wrong number of arguments" }
 end
+
+! { dg-final { cleanup-modules "m" } }
+

@@ -1,6 +1,6 @@
 /* Generic partial redundancy elimination with lazy code motion support.
-   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008
-   Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008,
+   2010, 2011 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -57,13 +57,13 @@ along with GCC; see the file COPYING3.  If not see
 #include "regs.h"
 #include "hard-reg-set.h"
 #include "flags.h"
-#include "real.h"
 #include "insn-config.h"
 #include "recog.h"
 #include "basic-block.h"
 #include "output.h"
 #include "tm_p.h"
 #include "function.h"
+#include "sbitmap.h"
 
 /* We want target macros for the mode switching code to be able to refer
    to instruction attribute values.  */
@@ -451,6 +451,8 @@ pre_edge_lcm (int n_exprs, sbitmap *transp,
 
   *insert = sbitmap_vector_alloc (num_edges, n_exprs);
   *del = sbitmap_vector_alloc (last_basic_block, n_exprs);
+  sbitmap_vector_zero (*insert, num_edges);
+  sbitmap_vector_zero (*del, last_basic_block);
   compute_insert_delete (edge_list, antloc, later, laterin, *insert, *del);
 
   sbitmap_vector_free (laterin);
@@ -483,7 +485,7 @@ compute_available (sbitmap *avloc, sbitmap *kill, sbitmap *avout,
   /* Allocate a worklist array/queue.  Entries are only added to the
      list if they were not already on the list.  So the size is
      bounded by the number of basic blocks.  */
-  qin = qout = worklist = 
+  qin = qout = worklist =
     XNEWVEC (basic_block, n_basic_blocks - NUM_FIXED_BLOCKS);
 
   /* We want a maximal solution.  */

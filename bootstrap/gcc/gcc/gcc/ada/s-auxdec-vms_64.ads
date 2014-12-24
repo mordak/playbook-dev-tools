@@ -72,6 +72,14 @@ package System.Aux_DEC is
    type Integer_64 is range -2 ** (64 - 1) .. +2 ** (64 - 1) - 1;
    for Integer_64'Size use 64;
 
+   type Integer_8_Array  is array (Integer range <>) of Integer_8;
+   type Integer_16_Array is array (Integer range <>) of Integer_16;
+   type Integer_32_Array is array (Integer range <>) of Integer_32;
+   type Integer_64_Array is array (Integer range <>) of Integer_64;
+   --  These array types are not in all versions of DEC System, and in fact it
+   --  is not quite clear why they are in some and not others, but since they
+   --  definitely appear in some versions, we include them unconditionally.
+
    type Largest_Integer is range Min_Int .. Max_Int;
 
    type AST_Handler is private;
@@ -104,6 +112,9 @@ package System.Aux_DEC is
    function "-" (Left : Address; Right : Address) return Integer;
    function "-" (Left : Address; Right : Integer) return Address;
 
+   pragma Import (Intrinsic, "+");
+   pragma Import (Intrinsic, "-");
+
    generic
       type Target is private;
    function Fetch_From_Address (A : Address) return Target;
@@ -115,6 +126,7 @@ package System.Aux_DEC is
    --  Floating point type declarations for VAX floating point data types
 
    pragma Warnings (Off);
+   --  ??? needs comment
 
    type F_Float is digits 6;
    pragma Float_Representation (VAX_Float, F_Float);
@@ -218,16 +230,16 @@ package System.Aux_DEC is
    type Unsigned_Quadword_Array is
       array (Integer range <>) of Unsigned_Quadword;
 
-   function To_Address      (X : Integer)           return Address;
+   function To_Address      (X : Integer)           return Short_Address;
    pragma Pure_Function (To_Address);
 
-   function To_Address_Long (X : Unsigned_Longword) return Address;
+   function To_Address_Long (X : Unsigned_Longword) return Short_Address;
    pragma Pure_Function (To_Address_Long);
 
-   function To_Integer      (X : Address)           return Integer;
+   function To_Integer      (X : Short_Address)     return Integer;
 
-   function To_Unsigned_Longword (X : Address)     return Unsigned_Longword;
-   function To_Unsigned_Longword (X : AST_Handler) return Unsigned_Longword;
+   function To_Unsigned_Longword (X : Short_Address) return Unsigned_Longword;
+   function To_Unsigned_Longword (X : AST_Handler)   return Unsigned_Longword;
 
    --  Conventional names for static subtypes of type UNSIGNED_LONGWORD
 
@@ -452,12 +464,10 @@ private
    --  them intrinsic, since the backend can handle them, but the front
    --  end is not prepared to deal with them, so at least inline them.
 
-   pragma Inline_Always ("+");
-   pragma Inline_Always ("-");
-   pragma Inline_Always ("not");
-   pragma Inline_Always ("and");
-   pragma Inline_Always ("or");
-   pragma Inline_Always ("xor");
+   pragma Import (Intrinsic, "not");
+   pragma Import (Intrinsic, "and");
+   pragma Import (Intrinsic, "or");
+   pragma Import (Intrinsic, "xor");
 
    --  Other inlined subprograms
 
@@ -569,6 +579,13 @@ private
       Mechanism       => (Reference, Value, Value, Reference, Reference));
    pragma Inline_Always (Or_Atomic);
 
+   --  Inline the VAX Queue Functions
+
+   pragma Inline_Always (Insqhi);
+   pragma Inline_Always (Remqhi);
+   pragma Inline_Always (Insqti);
+   pragma Inline_Always (Remqti);
+
    --  Provide proper unchecked conversion definitions for transfer
    --  functions. Note that we need this level of indirection because
    --  the formal parameter name is X and not Source (and this is indeed
@@ -640,31 +657,31 @@ private
    --  want warnings when we compile on such systems.
 
    function To_Address_A is new
-     Ada.Unchecked_Conversion (Integer, Address);
+     Ada.Unchecked_Conversion (Integer, Short_Address);
    pragma Pure_Function (To_Address_A);
 
-   function To_Address (X : Integer) return Address
+   function To_Address (X : Integer) return Short_Address
      renames To_Address_A;
    pragma Pure_Function (To_Address);
 
    function To_Address_Long_A is new
-     Ada.Unchecked_Conversion (Unsigned_Longword, Address);
+     Ada.Unchecked_Conversion (Unsigned_Longword, Short_Address);
    pragma Pure_Function (To_Address_Long_A);
 
-   function To_Address_Long (X : Unsigned_Longword) return Address
+   function To_Address_Long (X : Unsigned_Longword) return Short_Address
      renames To_Address_Long_A;
    pragma Pure_Function (To_Address_Long);
 
    function To_Integer_A is new
-     Ada.Unchecked_Conversion (Address, Integer);
+     Ada.Unchecked_Conversion (Short_Address, Integer);
 
-   function To_Integer (X : Address) return Integer
+   function To_Integer (X : Short_Address) return Integer
      renames To_Integer_A;
 
    function To_Unsigned_Longword_A is new
-     Ada.Unchecked_Conversion (Address, Unsigned_Longword);
+     Ada.Unchecked_Conversion (Short_Address, Unsigned_Longword);
 
-   function To_Unsigned_Longword (X : Address) return Unsigned_Longword
+   function To_Unsigned_Longword (X : Short_Address) return Unsigned_Longword
      renames To_Unsigned_Longword_A;
 
    function To_Unsigned_Longword_A is new

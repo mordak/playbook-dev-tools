@@ -1,5 +1,6 @@
 /* SSA Jump Threading
-   Copyright (C) 2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+   Copyright (C) 2005, 2006, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Jeff Law  <law@redhat.com>
 
 This file is part of GCC.
@@ -24,20 +25,14 @@ along with GCC; see the file COPYING3.  If not see
 #include "tm.h"
 #include "tree.h"
 #include "flags.h"
-#include "rtl.h"
 #include "tm_p.h"
-#include "ggc.h"
 #include "basic-block.h"
 #include "cfgloop.h"
 #include "output.h"
-#include "expr.h"
 #include "function.h"
-#include "diagnostic.h"
 #include "timevar.h"
 #include "tree-dump.h"
 #include "tree-flow.h"
-#include "domwalk.h"
-#include "real.h"
 #include "tree-pass.h"
 #include "tree-ssa-propagate.h"
 #include "langhooks.h"
@@ -48,6 +43,35 @@ along with GCC; see the file COPYING3.  If not see
    holds the number of statements currently seen that we'll have
    to copy as part of the jump threading process.  */
 static int stmt_count;
+
+/* Array to record value-handles per SSA_NAME.  */
+VEC(tree,heap) *ssa_name_values;
+
+/* Set the value for the SSA name NAME to VALUE.  */
+
+void
+set_ssa_name_value (tree name, tree value)
+{
+  if (SSA_NAME_VERSION (name) >= VEC_length (tree, ssa_name_values))
+    VEC_safe_grow_cleared (tree, heap, ssa_name_values,
+			   SSA_NAME_VERSION (name) + 1);
+  VEC_replace (tree, ssa_name_values, SSA_NAME_VERSION (name), value);
+}
+
+/* Initialize the per SSA_NAME value-handles array.  Returns it.  */
+void
+threadedge_initialize_values (void)
+{
+  gcc_assert (ssa_name_values == NULL);
+  ssa_name_values = VEC_alloc(tree, heap, num_ssa_names);
+}
+
+/* Free the per SSA_NAME value-handle array.  */
+void
+threadedge_finalize_values (void)
+{
+  VEC_free(tree, heap, ssa_name_values);
+}
 
 /* Return TRUE if we may be able to thread an incoming edge into
    BB to an outgoing edge from BB.  Return FALSE otherwise.  */
@@ -126,7 +150,7 @@ remove_temporary_equivalences (VEC(tree, heap) **stack)
 	break;
 
       prev_value = VEC_pop (tree, *stack);
-      SSA_NAME_VALUE (dest) = prev_value;
+      set_ssa_name_value (dest, prev_value);
     }
 }
 
@@ -145,14 +169,14 @@ record_temporary_equivalence (tree x, tree y, VEC(tree, heap) **stack)
       y = tmp ? tmp : y;
     }
 
-  SSA_NAME_VALUE (x) = y;
+  set_ssa_name_value (x, y);
   VEC_reserve (tree, heap, *stack, 2);
   VEC_quick_push (tree, *stack, prev_x);
   VEC_quick_push (tree, *stack, x);
 }
 
 /* Record temporary equivalences created by PHIs at the target of the
-   edge E.  Record unwind information for the equivalences onto STACK. 
+   edge E.  Record unwind information for the equivalences onto STACK.
 
    If a PHI which prevents threading is encountered, then return FALSE
    indicating we should not thread this edge, else return TRUE.  */
@@ -171,7 +195,7 @@ record_temporary_equivalences_from_phis (edge e, VEC(tree, heap) **stack)
       tree src = PHI_ARG_DEF_FROM_EDGE (phi, e);
       tree dst = gimple_phi_result (phi);
 
-      /* If the desired argument is not the same as this PHI's result 
+      /* If the desired argument is not the same as this PHI's result
 	 and it is set by a PHI in E->dest, then we can not thread
 	 through E->dest.  */
       if (src != dst
@@ -219,14 +243,14 @@ fold_assignment_stmt (gimple stmt)
 
         return fold (rhs);
       }
-      break;
+
     case GIMPLE_UNARY_RHS:
       {
         tree lhs = gimple_assign_lhs (stmt);
         tree op0 = gimple_assign_rhs1 (stmt);
         return fold_unary (subcode, TREE_TYPE (lhs), op0);
       }
-      break;
+
     case GIMPLE_BINARY_RHS:
       {
         tree lhs = gimple_assign_lhs (stmt);
@@ -234,7 +258,16 @@ fold_assignment_stmt (gimple stmt)
         tree op1 = gimple_assign_rhs2 (stmt);
         return fold_binary (subcode, TREE_TYPE (lhs), op0, op1);
       }
-      break;
+
+    case GIMPLE_TERNARY_RHS:
+      {
+        tree lhs = gimple_assign_lhs (stmt);
+        tree op0 = gimple_assign_rhs1 (stmt);
+        tree op1 = gimple_assign_rhs2 (stmt);
+        tree op2 = gimple_assign_rhs3 (stmt);
+        return fold_ternary (subcode, TREE_TYPE (lhs), op0, op1, op2);
+      }
+
     default:
       gcc_unreachable ();
     }
@@ -246,7 +279,7 @@ fold_assignment_stmt (gimple stmt)
    Record unwind information for temporary equivalences onto STACK.
 
    Use SIMPLIFY (a pointer to a callback function) to further simplify
-   statements using pass specific information. 
+   statements using pass specific information.
 
    We might consider marking just those statements which ultimately
    feed the COND_EXPR.  It's not clear if the overhead of bookkeeping
@@ -280,7 +313,9 @@ record_temporary_equivalences_from_stmts_at_dest (edge e,
       stmt = gsi_stmt (gsi);
 
       /* Ignore empty statements and labels.  */
-      if (gimple_code (stmt) == GIMPLE_NOP || gimple_code (stmt) == GIMPLE_LABEL)
+      if (gimple_code (stmt) == GIMPLE_NOP
+	  || gimple_code (stmt) == GIMPLE_LABEL
+	  || is_gimple_debug (stmt))
 	continue;
 
       /* If the statement has volatile operands, then we assume we
@@ -342,7 +377,7 @@ record_temporary_equivalences_from_stmts_at_dest (edge e,
       /* At this point we have a statement which assigns an RHS to an
 	 SSA_VAR on the LHS.  We want to try and simplify this statement
 	 to expose more context sensitive equivalences which in turn may
-	 allow us to simplify the condition at the end of the loop. 
+	 allow us to simplify the condition at the end of the loop.
 
 	 Handle simple copy operations as well as implied copies from
 	 ASSERT_EXPRs.  */
@@ -390,7 +425,7 @@ record_temporary_equivalences_from_stmts_at_dest (edge e,
               || (TREE_CODE (cached_lhs) != SSA_NAME
                   && !is_gimple_min_invariant (cached_lhs)))
             cached_lhs = (*simplify) (stmt, stmt);
-          
+
 	  /* Restore the statement's original uses/defs.  */
 	  i = 0;
 	  FOR_EACH_SSA_USE_OPERAND (use_p, stmt, iter, SSA_OP_USE | SSA_OP_VUSE)
@@ -549,7 +584,7 @@ simplify_control_stmt_condition (edge e,
 }
 
 /* We are exiting E->src, see if E->dest ends with a conditional
-   jump which has a known value when reached via E. 
+   jump which has a known value when reached via E.
 
    Special care is necessary if E is a back edge in the CFG as we
    may have already recorded equivalences for E->dest into our
@@ -562,14 +597,14 @@ simplify_control_stmt_condition (edge e,
    end with a conditional which is either always true or always
    false when reached via the loop backedge.  Thus we do not want
    to blindly disable threading across a loop backedge.
- 
+
    DUMMY_COND is a shared cond_expr used by condition simplification as scratch,
    to avoid allocating memory.
- 
+
    HANDLE_DOMINATING_ASSERTS is true if we should try to replace operands of
    the simplified condition with left-hand sides of ASSERT_EXPRs they are
    used in.
- 
+
    STACK is used to undo temporary equivalences created during the walk of
    E->dest.
 
@@ -604,7 +639,7 @@ thread_across_edge (gimple dummy_cond,
 	    goto fail;
 	}
     }
-     
+
   stmt_count = 0;
 
   /* PHIs create temporary equivalences.  */

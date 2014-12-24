@@ -1,6 +1,6 @@
 // 2002-01-23  Loren J. Rittle <rittle@labs.mot.com> <ljrittle@acm.org>
 //
-// Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2009
+// Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -33,8 +33,6 @@
 #include <cstdlib>
 #include <pthread.h>
 
-using namespace std;
-
 const int thread_cycles = 10;
 const int thread_pairs = 10;
 const unsigned max_size = 100;
@@ -42,12 +40,14 @@ const int iters = 10000;
 
 class task_queue
 {
+  typedef std::list<int> list_type;
+
 public:
   task_queue ()
   {
-    pthread_mutex_init (&fooLock, NULL);
-    pthread_cond_init (&fooCond1, NULL);
-    pthread_cond_init (&fooCond2, NULL);
+    pthread_mutex_init (&fooLock, 0);
+    pthread_cond_init (&fooCond1, 0);
+    pthread_cond_init (&fooCond2, 0);
   }
   ~task_queue ()
   {
@@ -55,14 +55,15 @@ public:
     pthread_cond_destroy (&fooCond1);
     pthread_cond_destroy (&fooCond2);
   }
-  list<int> foo;
-  pthread_mutex_t fooLock;
-  pthread_cond_t fooCond1;
-  pthread_cond_t fooCond2;
+
+  list_type		foo;
+  pthread_mutex_t 	fooLock;
+  pthread_cond_t 	fooCond1;
+  pthread_cond_t 	fooCond2;
 };
 
 void*
-produce (void* t)
+produce(void* t)
 {
   task_queue& tq = *(static_cast<task_queue*> (t));
   int num = 0;
@@ -79,7 +80,7 @@ produce (void* t)
 }
 
 void*
-consume (void* t)
+consume(void* t)
 {
   task_queue& tq = *(static_cast<task_queue*> (t));
   int num = 0;
@@ -98,7 +99,7 @@ consume (void* t)
 }
 
 int
-main ()
+main()
 {
   pthread_t prod[thread_pairs];
   pthread_t cons[thread_pairs];
@@ -114,14 +115,14 @@ main ()
       for (int i = 0; i < thread_pairs; i++)
 	{
 	  tq[i] = new task_queue;
-	  pthread_create (&prod[i], NULL, produce, static_cast<void*> (tq[i]));
-	  pthread_create (&cons[i], NULL, consume, static_cast<void*> (tq[i]));
+	  pthread_create (&prod[i], 0, produce, static_cast<void*> (tq[i]));
+	  pthread_create (&cons[i], 0, consume, static_cast<void*> (tq[i]));
 	}
 
       for (int i = 0; i < thread_pairs; i++)
 	{
-	  pthread_join (prod[i], NULL);
-	  pthread_join (cons[i], NULL);
+	  pthread_join (prod[i], 0);
+	  pthread_join (cons[i], 0);
 	  delete tq[i];
 	}
     }

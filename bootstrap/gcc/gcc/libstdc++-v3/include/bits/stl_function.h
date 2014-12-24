@@ -1,6 +1,6 @@
 // Functor implementations -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2009
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2009, 2010, 2011
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -49,15 +49,17 @@
  * purpose.  It is provided "as is" without express or implied warranty.
  */
 
-/** @file stl_function.h
+/** @file bits/stl_function.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{functional}
  */
 
 #ifndef _STL_FUNCTION_H
 #define _STL_FUNCTION_H 1
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   // 20.3.1 base classes
   /** @defgroup functors Function Objects
@@ -68,7 +70,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
    *  templates and used in place of a function pointer.  Not only is the
    *  resulting expressiveness of the library increased, but the generated
    *  code can be more efficient than what you might write by hand.  When we
-   *  refer to "functors," then, generally we include function pointers in
+   *  refer to @a functors, then, generally we include function pointers in
    *  the description as well.
    *
    *  Often, functors are only created as temporaries passed to algorithm
@@ -99,10 +101,11 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   template<typename _Arg, typename _Result>
     struct unary_function
     {
-      typedef _Arg argument_type;   ///< @c argument_type is the type of the
-                                    ///     argument (no surprises here)
+      /// @c argument_type is the type of the argument
+      typedef _Arg 	argument_type;   
 
-      typedef _Result result_type;  ///< @c result_type is the return type
+      /// @c result_type is the return type
+      typedef _Result 	result_type;  
     };
 
   /**
@@ -111,11 +114,14 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   template<typename _Arg1, typename _Arg2, typename _Result>
     struct binary_function
     {
-      typedef _Arg1 first_argument_type;   ///< the type of the first argument
-                                           ///  (no surprises here)
+      /// @c first_argument_type is the type of the first argument
+      typedef _Arg1 	first_argument_type; 
 
-      typedef _Arg2 second_argument_type;  ///< the type of the second argument
-      typedef _Result result_type;         ///< type of the return type
+      /// @c second_argument_type is the type of the second argument
+      typedef _Arg2 	second_argument_type;
+
+      /// @c result_type is the return type
+      typedef _Result 	result_type;
     };
   /** @}  */
 
@@ -333,7 +339,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
    *  std::find_if (v.begin(), v.end(), not1(IntGreaterThanThree()));
    *  \endcode
    *  The call to @c find_if will locate the first index (i) of @c v for which
-   *  "!(v[i] > 3)" is true.
+   *  <code>!(v[i] > 3)</code> is true.
    *
    *  The not1/unary_negate combination works on predicates taking a single
    *  argument.  The not2/binary_negate combination works on predicates which
@@ -487,6 +493,18 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       const typename _Pair::first_type&
       operator()(const _Pair& __x) const
       { return __x.first; }
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+      template<typename _Pair2>
+        typename _Pair2::first_type&
+        operator()(_Pair2& __x) const
+        { return __x.first; }
+
+      template<typename _Pair2>
+        const typename _Pair2::first_type&
+        operator()(const _Pair2& __x) const
+        { return __x.first; }
+#endif
     };
 
   template<typename _Pair>
@@ -706,9 +724,10 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
   /** @}  */
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
-#if !defined(__GXX_EXPERIMENTAL_CXX0X__) || _GLIBCXX_DEPRECATED
+#if !defined(__GXX_EXPERIMENTAL_CXX0X__) || _GLIBCXX_USE_DEPRECATED
 # include <backward/binders.h>
 #endif
 

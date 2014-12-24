@@ -1,6 +1,7 @@
 /* List management for the GCC expander.
    Copyright (C) 1987, 1988, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2003, 2004, 2005, 2006, 2007, 2008 Free Software Foundation, Inc.
+   1999, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -22,7 +23,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "system.h"
 #include "coretypes.h"
 #include "tm.h"
-#include "toplev.h"
+#include "diagnostic-core.h"
 #include "rtl.h"
 #include "ggc.h"
 
@@ -50,12 +51,12 @@ free_list (rtx *listp, rtx *unused_listp)
 
   gcc_assert (unused_listp != &unused_insn_list
 	      || GET_CODE (prev_link) == INSN_LIST);
-  
+
   while (link)
     {
       gcc_assert (unused_listp != &unused_insn_list
 		  || GET_CODE (prev_link) == INSN_LIST);
-  
+
       prev_link = link;
       link = XEXP (link, 1);
     }
@@ -140,7 +141,7 @@ alloc_EXPR_LIST (int kind, rtx val, rtx next)
       PUT_REG_NOTE_KIND (r, kind);
     }
   else
-    r = gen_rtx_EXPR_LIST (kind, val, next);
+    r = gen_rtx_EXPR_LIST ((enum machine_mode) kind, val, next);
 
   return r;
 }

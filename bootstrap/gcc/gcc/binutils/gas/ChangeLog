@@ -1,1461 +1,1704 @@
-2009-01-14  Jakub Jelinek  <jakub@redhat.com>
+2011-11-15  Maciej W. Rozycki  <macro@codesourcery.com>
 
-	* Makefile.am (ehopt.o): Add struc-symbol.h.
-	* Makefile.in: Regenerated.
-	* ehopt.c: Include struc-symbol.h.
-	(check_eh_frame): For very small O_constant DW_CFA_advance_loc4
-	create correct DW_CFA_advance_loc.  Handle O_subtract only
-	for code alignment factor 1, otherwise handle O_divide or
-	O_right_shift of O_subtract and O_constant.
-	(eh_frame_estimate_size_before_relax): Always divide by ca.
-	(eh_frame_convert_frag): Likewise.
+	Apply mainline patches
+	2011-11-15  Maciej W. Rozycki  <macro@codesourcery.com>
+	* write.c (dump_section_relocs): Don't convert PC-relative relocs
+	that have an in-place addend narrower than the addresses used.
 
-2009-01-14  John David Anglin  <dave.anglin@nrc-cnrc.gc.ca>
+2011-11-14  Maciej W. Rozycki  <macro@codesourcery.com>
 
-	* dw2gencfi.c (output_cfi_insn): Scale DW_CFA_advance_loc1,
-	DW_CFA_advance_loc2 and DW_CFA_advance_loc4 outputs.
+	Apply mainline patches
+	2011-11-14  Maciej W. Rozycki  <macro@codesourcery.com>
+	* config/tc-mips.c (can_swap_branch_p): Exclude microMIPS
+	variant frags too.
 
-2009-01-08  Adam Nemet  <anemet@caviumnetworks.com>
+2011-11-07  Matthew Gretton-Dann  <matthew.gretton-dann@arm.com>
 
-	* config/tc-mips.c (NO_ISA_COP): New macro.
-	(COP_INSN): New macro.
-	(is_opcode_valid): Use them.
-	(macro) <ld_st>: Use them.  Don't accept coprocessor load store
-	insns based on the ISA if CPU is NO_ISA_COP.
-	<copz>: Likewise for coprocessor operations.
+	Apply mainline patches
+	2011-11-07  Matthew Gretton-Dann  <matthew.gretton-dann@arm.com>
+	* config/tc-arm.c (arm_cpus): Add cortex-a7 entry.
+	* doc/c-arm.texi (ARM Options): Add cortex-a7 to list of accepted
+	CPUs.
 
-2008-10-09  Eric Botcazou  <ebotcazou@adacore.com>
+2011-10-25  Alan Modra  <amodra@gmail.com>
 
-	* dw2gencfi.c (cfi_finish): Deal with md_fix_up_eh_frame.
-	* config/tc-i386.h (md_fix_up_eh_frame): Define on Solaris.
-	(i386_solaris_fix_up_eh_frame): Declare.
-	* config/tc-i386.c (i386_solaris_fix_up_eh_frame): New function.
+	Apply mainline patches
+	2011-10-13  Alan Modra  <amodra@gmail.com>
+	* as.c (main): Define .gasversion. rather than __GAS_VERSION__.
+	* frags.h (bss_address_frag): Delete
+	(predefined_address_frag): New.
+	* frags.c (frag_init): Init predefined_address_frag.  Delete ref
+	to bss_address_frag.
+	* symbols.c (S_CAN_BE_REDEFINED): New function.
+	* symbols.h (S_CAN_BE_REDEFINED): Declare.
+	* read.c (assign_symbol): Use S_CAN_BE_REDEFINED.
 
-2008-09-29  Nick Clifton  <nickc@redhat.com>
+	2011-10-12  Alan Modra  <amodra@gmail.com>
+	* symbols.c (local_symbol_make): Make global.
+	* symbols.h (local_symbol_make): Declare.
+	* as.c (main): Define __GAS_VERSION__.
 
-	PR 6878
-	* app.c (do_scrub_chars): Only issue warnings about tick
-	characters detected in symbol strings if hex ticks are supported.
+2011-09-22  Tristan Gingold  <gingold@adacore.com>
 
-2008-09-29  Nick Clifton  <nickc@redhat.com>
+	* NEWS: Add marker for 2.22.
 
-	* dw2gencfi.c (output_cfi_insn): Fix typo in invocation of
-	tc_cfi_emit_pcrel_expr macro.
+2011-09-21  David S. Miller  <davem@davemloft.net>
 
-2008-09-28  Daniel Jacobowitz  <dan@codesourcery.com>
+	* config/tc-sparc.c (hwcap_allowed): New.
+	(struct sparc_arch): New field 'hwcap_allowed' containing a bitmask
+	of F_FOO flags which are enabled by the particular arch setting.
+	Add new options that provide explicit access to new instructions.
+	(md_parse_option): Only bump max_architecture if the requested one
+	is larger, or this is the first explicit request.
+	(get_hwcap_name): New function.
+	(sparc_ip): Validate that hwcaps used by an instruction have actually
+	been enabled.
+	* doc/c-sparc.texi: Document new sparc options.
 
-	* NEWS: Mention .cfi_val_encoded_addr.
+2011-09-21  David S. Miller  <davem@davemloft.net>
 
-2008-09-26  Eric Botcazou  <ebotcazou@adacore.com>
+	* config/tc-sparc.c (hwcap_seen): New bitmask, defined when
+	not TE_SOLARIS.
+	(sparc_ip): When not TE_SOLARIS, accumulate hwcap bits from
+	sparc_opcode->flags of instruction into hwcap_seen.
+	(sparc_md_end): Create Tag_GNU_Sparc_HWCAPS attribute if
+	hwcap_seen is non-zero and not TE_SOLARIS.
 
-	* Makefile.am (TARG_ENV_HFILES): Add config/te-solaris.h.
-	* Makefile.in (TARG_ENV_HFILES): Likewise.
-	* configure.tgt (Solaris targets): Set em=solaris.
-	* config/te-solaris.h: New file.
+2011-09-19  Tristan Gingold  <gingold@adacore.com>
 
-2008-09-25  Richard Henderson  <rth@redhat.com>
+	* config/tc-alpha.c (insert_operand): Call as_bad_value_out_of_range
+	instead of as_warn_out_of_range.
 
-	* dw2gencfi.c (DWARF2_ADDR_SIZE): Provide default.
-	(struct cfi_insn_data): Add ea member.
-	(CFI_val_encoded_addr, dot_cfi_val_encoded_addr): New.
-	(output_cfi_insn): Handle CFI_val_encoded_addr.
-	(select_cie_for_fde): Don't match CFI_val_encoded_addr.
-	* doc/as.texinfo (.cfi_val_encoded_addr): Document.
+2011-09-08  Mark Fortescue <mark@mtfhpc.demon.co.uk>
 
-2008-09-25  Alan Modra  <amodra@bigpond.net.au>
+	* config/tc-sparc.c (sparc_ip): Handle 'i' + r<0..31>
+	in addition to 'i' + [goli]<0..7>.
 
-	PR 6913
-	* listing.c (print_options): Don't call fprintf without format string.
+2011-09-08  Joern Rennecke <joern.rennecke@embecosm.com>
 
-2008-09-19  Alan Modra  <amodra@bigpond.net.au>
+	* cgen.c (gas_cgen_pcrel_r_type): New function.
+	(gas_cgen_tc_gen_reloc): Check for GAS_CGEN_PCREL_R_TYPE.
+	* cgen.h (gas_cgen_pcrel_r_type): Declare.
 
-	* write.c (md_register_arithmetic): Define.
-	(fixup_segment): Pass segment to TC_FORCE_RELOCATION_SUB_ABS,
-	TC_FORCE_RELOCATION_SUB_LOCAL, TC_VALIDATE_FIX_SUB invocations.
-	Modify error message when registers involved.
-	(TC_FORCE_RELOCATION_SUB_ABS): Heed md_register_arithmetic.
-	(TC_FORCE_RELOCATION_SUB_LOCAL, TC_VALIDATE_FIX_SUB): Likewise.
-	* config/tc-frv.h (TC_FORCE_RELOCATION_SUB_LOCAL): Likewise.
-	* config/tc-hppa.h (TC_FORCE_RELOCATION_SUB_LOCAL): Likewise.
-	* config/tc-mn10300.h (TC_VALIDATE_FIX_SUB): Likewise.
-	* config/tc-sh.h (TC_FORCE_RELOCATION_SUB_ABS): Likewise.
-	(TC_FORCE_RELOCATION_SUB_LOCAL, TC_VALIDATE_FIX_SUB): Likewise.
-	* config/tc-sh64.h (TC_VALIDATE_FIX_SUB): Likewise.
-	* config/tc-xtensa.h (TC_VALIDATE_FIX_SUB): Likewise.
-	* doc/internals.texi (TC_FORCE_RELOCATION_SUB_ABS,
-	TC_FORCE_RELOCATION_SUB_LOCAL, TC_VALIDATE_FIX_SUB): Show new param.
+2011-09-08  Richard Sandiford  <rdsandiford@googlemail.com>
 
-2008-09-15  Alan Modra  <amodra@bigpond.net.au>
+	PR gas/13167
+	* dwarf2dbg.c (dwarf2_flush_pending_lines): Use symbol_temp_new_now.
 
-	* write.c (install_reloc): Correct EMIT_SECTION_SYMBOLS test.
+2011-09-05  Richard Sandiford  <rdsandiford@googlemail.com>
 
-2008-09-15  Alan Modra  <amodra@bigpond.net.au>
+	PR gas/13024
+	* dwarf2dbg.c (pending_lines, pending_lines_tail): New variables.
+	(dwarf2_gen_line_info_1): Delete.
+	(dwarf2_push_line, dwarf2_flush_pending_lines): New functions.
+	(dwarf2_gen_line_info, dwarf2_emit_label): Use them.
+	(dwarf2_consume_line_info): Call dwarf2_flush_pending_lines.
+	(dwarf2_directive_loc): Push previous .locs instead of generating
+	them immediately.
 
-	* config/tc-frv.c (md_apply_fix): Use abs_section_sym for
-	relocs with no symbol.
-	* config/tc-mmix.c (md_assemble): Mark fake symbol on
-	BFD_RELOC_MMIX_BASE_PLUS_OFFSET as OK for use by relocs.
-	(mmix_md_end): Likewise mark mmix reg contents section symbol.
+2011-08-26  Nick Clifton  <nickc@redhat.com>
 
-2008-09-09  Alan Modra  <amodra@bigpond.net.au>
+	* po/es.po: Updated Spanish translation.
 
-	* Makefile.am: Run "make dep-am".
-	* Makefile.in: Regenerate.
-	* po/gas.pot: Regenerate.
+2011-08-26  Tristan Gingold  <gingold@adacore.com>
 
-2008-09-08  Tristan Gingold  <gingold@adacore.com>
+	* config/tc-alpha.c (s_alpha_linkage): Simplify.  Add comments.
 
-	* NEWS: Add a marker for the 2.19 features.
+2011-08-26  Tristan Gingold  <gingold@adacore.com>
 
-2008-09-07  John David Anglin  <dave.anglin@nrc-cnrc.gc.ca>
+	* config/tc-alpha.c (add_to_link_pool): Improve comment.
+	(s_alpha_fp_save): Fix indentation.
 
-	* config/tc-hppa.h (DIFF_EXPR_OK): Define for SOM target.  Revise
-	comment regarding use of difference expressions.
-	(TC_FORCE_RELOCATION_SUB_LOCAL): Define to 1.
+2011-08-19  Nick Clifton  <nickc@redhat.com>
 
-	* dw2gencfi.c (CFI_DIFF_EXPR_OK): Define if not defined.
-	(dot_cfi_personality): Use CFI_DIFF_EXPR_OK instead of DIFF_EXPR_OK.
-	(dot_cfi_lsda, output_cie, output_fde): Likewise.
-	* config/tc-hppa.h (CFI_DIFF_EXPR_OK): Define.
+	* doc/as.texinfo: Include c-xstormy16.texi.
 
-2008-09-06  Richard Sandiford  <rdsandiford@googlemail.com>
+2011-08-18  Alan Modra  <amodra@gmail.com>
 
-	* config/tc-mips.h (DWARF2_FDE_RELOC_SIZE): Define.
+	* write.c (resolve_reloc_expr_symbols): Convert local symbols
+	on relocs to section+offset.
+	(get_frag_for_reloc): New function.
+	(write_relocs): Merge sort fixup relocs with those from .reloc
+	directives.
 
-2008-09-03  Nick Clifton  <nickc@redhat.com>
+2011-08-10  Maciej W. Rozycki  <macro@codesourcery.com>
 
-	* config/tc-i386.c (pe_lcomm_internal): New function.  Allows the
-	alignment field of the .lcomm directive to be optional.
-	(pe_lcomm): New function.  Pass pe_lcomm_internal to
-	s_comm_internal.
-	(md_pseudo_table): Implement .lcomm directive for COFF based
-	targets.
-	* doc/c-i386.texi (i386-Directives): New node.  Used to document
-	the .lcomm directive.
-	
-2008-08-30  John David Anglin  <dave.anglin@nrc-cnrc.gc.ca>
+	* config/tc-mips.c (can_swap_branch_p): Update the comment on
+	MIPS16 fixups.
 
-	* config/tc-hppa.h: Don't define DWARF2_EH_FRAME_READ_ONLY on Linux
-	and NetBSD.
+2011-08-09  Chao-ying Fu  <fu@mips.com>
+            Daniel Jacobowitz  <dan@codesourcery.com>
 
-2008-08-29  Eric B. Weddington  <eric.weddington@atmel.com>
+	* config/tc-mips.c (mips_cpu_info_table): Add "m14k" and
+	"m14kc".
+	* doc/c-mips.texi (MIPS architecture options): Add "m14k" and
+	"m14kc" to the list of -march options.
 
-	* config/tc-avr.c (mcu_types): Add atmega16u4.
-	* doc/c-avr.texi: Likewise.
+2011-08-09  Chao-ying Fu  <fu@mips.com>
+            Maciej W. Rozycki  <macro@codesourcery.com>
 
-2008-08-28  H.J. Lu  <hongjiu.lu@intel.com>
+	* config/tc-mips.c (mips_set_options): Add ase_mcu.
+	(mips_opts): Initialise ase_mcu to -1.
+	(ISA_SUPPORTS_MCU_ASE): New macro.
+	(MIPS_CPU_ASE_MCU): Likewise.
+	(is_opcode_valid): Handle MCU.
+	(macro_build, macro): Likewise.
+	(validate_mips_insn, validate_micromips_insn): Likewise.
+	(mips_ip): Likewise.
+	(options): Add OPTION_MCU and OPTION_NO_MCU.
+	(md_longopts): Add mmcu and mno-mcu.
+	(md_parse_option): Handle OPTION_MCU and OPTION_NO_MCU.
+	(mips_after_parse_args): Handle MCU.
+	(s_mipsset): Likewise.
+	(md_show_usage): Handle MCU options.
 
-	* config/tc-ia64.c (CR_IIB0): New.
-	(CR_IIB1): Likewise.
-	(cr): Add cr.iib0 and cr.iib1.
-	(specify_resource): Handle IA64_RS_CR_IIB and CR_IIB0/CR_IIB1.
+	* doc/as.texinfo: Document -mmcu and -mno-mcu options.
+	* doc/c-mips.texi: Likewise, and document ".set mcu" and
+	".set nomcu" directives.
 
-2008-08-28  Jan Beulich  <jbeulich@novell.com>
+2011-08-09  Maciej W. Rozycki  <macro@codesourcery.com>
 
-	* config/tc-i386.c (md_assemble): Force number of displacement
-	operands to zero when processing string instruction.
-	(i386_index_check): Special-case string instruction operands. Don't
-	fudge address prefix if there already was a memory operand. Fix
-	error message to correctly reflect the addressing mode used.
-	(i386_att_operand): Fix comment.
-	(i386_intel_operand): Snapshot, clear, and restore base and index
-	reg for each operand processed. Increment count of memory operands
-	later.
-
-2008-08-27  John David Anglin  <dave.anglin@nrc-cnrc.gc.ca>
-
-	* config/tc-hppa.c (is_SB_relative): New macro.
-	(fix_new_hppa): Remove $segrel$ marker.
-	(cons_fix_new_hppa): Set reloc type R_PARISC_SEGREL32 if expression is
-	segment relative.
-	* config/tc-hppa.h (tc_frob_symbol): Check for $segrel$.
-
-2008-08-27  Jan Beulich  <jbeulich@novell.com>
-
-	* config/tc-i386.c (check_string): Use register_prefix for error
-	message.
-	(process_operands): Likewise.
-
-2008-08-26  Mark Mitchell  <mark@codesourcery.com>
-
-	* c-arm.texi: Add tutorial on ARM unwinding pseudo ops.
-
-2008-08-26  Jie Zhang  <jie.zhang@analog.com>
-
-	* config/bfin-parse.y (check_macfunc_option): Fix instruction
-	mode checking.
-	(asm_1): Check mode for 16-bit multiply instructions.
-
-2008-08-24  Alan Modra  <amodra@bigpond.net.au>
-
-	* configure.in: Update a number of obsolete autoconf macros.
-	* configure: Regenerate.
-	* aclocal.m4: Regenerate.
-
-2008-08-22  Nick Clifton  <nickc@redhat.com>
-
-	* config/tc-mcore.c (md_assemble): Increase length of name array
-	to include terminating NUL.
-
-2008-08-22  Jie Zhang  <jie.zhang@analog.com>
-
-	* config/bfin-lex.l (NUMBER): Protect special `.'.
-
-2008-08-22  Alan Modra  <amodra@bigpond.net.au>
-
-	* symbols.c (symbol_clone): Ensure clones are not external.
-
-2008-08-22  Alan Modra  <amodra@bigpond.net.au>
-
-	* config/tc-hppa.c (md_begin): Set BSF_KEEP for "dummy_symbol".
-
-2008-08-21  Richard Henderson  <rth@redhat.com>
-
-	* dw2gencfi.c (DWARF2_FDE_RELOC_SIZE): New.
-	(output_cie, output_fde): Use it.
-	(DWARF2_EH_FRAME_READ_ONLY): New.
-	(cfi_finish): Use it.
-
-	* config/tc-hppa.h (DWARF2_FDE_RELOC_SIZE): Set to 8 for 64-bit.
-	(DWARF2_CIE_DATA_ALIGNMENT): Change sign.
-	(DWARF2_EH_FRAME_READ_ONLY): New.
-	* config/tc-hppa.c (tc_gen_reloc): Generate pc-relative relocations
-	from the results of DIFF_EXPR_OK manipulation.
-
-2008-08-21  Sterling Augustine  <sterling@tensilica.com>
-
-	* config/xtensa-istack.h (MAX_INSN_ARGS): Increase to 64.
-
-2008-08-20  Bob Wilson  <bob.wilson@acm.org>
-
-	* config/tc-xtensa.c (O_tlsfunc, O_tlsarg, O_tlscall): Define.
-	(O_tpoff, O_dtpoff): Define.
-	(suffix_relocs): Add entries for TLS suffixes.
-	(xtensa_elf_cons): Check for invalid use of TLS relocations.
-	(map_operator_to_reloc): Add is_literal parameter and use it to
-	control translating TLS instruction relocations to the corresponding
-	literal relocations.
-	(xg_valid_literal_expression): Allow TLS operators.
-	(xg_build_to_insn): Copy TLS operators from pseudo-instruction
-	operands to generated literals.
-	(xg_assemble_literal): Handle TLS operators.  Update call to
-	map_operator_to_reloc.
-	(md_assemble): Handle CALLXn.TLS pseudo-instruction.
-	(md_apply_fix): Handle TLS relocations.
-	(emit_single_op): Handle TLS operators.
-	(convert_frag_immed): Update call to map_operator_to_reloc.
-	(vinsn_to_insnbuf): Emit relocations for TLS-related instructions.
-	* config/xtensa-istack.h (tinsn_struct): Add tls_reloc field.
-	* config/xtensa-relax.c (append_literal_op): Add src_op parameter
-	to initialize the op_data field of the BuildOp.
-	(build_transition): Use it here to record the source operand
-	corresponding to a generated literal.
-	* config/xtensa-relax.h (build_op): Comment op_data use for literals.
-
-2008-08-20  H.J. Lu  <hongjiu.lu@intel.com>
-
-	AVX Programming Reference (August, 2008)
-	* config/tc-i386.c (CPU_FLAGS_AES_MATCH): New.
-	(CPU_FLAGS_AVX_MATCH): Likewise.
-	(CPU_FLAGS_32BIT_MATCH): Updated.
-	(cpu_flags_match): Likewise.
-
-2008-08-20  Alan Modra  <amodra@bigpond.net.au>
-
-	PR 6848
-	* write.c (install_reloc): Check that reloc symbols have been
-	written.
-	(set_symtab): Mark symbols with BSF_KEEP.
-
-2008-08-18  H.J. Lu  <hongjiu.lu@intel.com>
-
-	* config/tc-i386.c (i386_align_code): Fix a comment typo.
-
-2008-08-15  Alan Modra  <amodra@bigpond.net.au>
-
-	PR 6526
-	* configure.in: Invoke AC_USE_SYSTEM_EXTENSIONS.
-	* Makefile.in: Regenerate.
-	* aclocal.m4: Regenerate.
-	* config.in: Regenerate.
-	* configure: Regenerate.
-	* doc/Makefile.in: Regenerate.
-
-2008-08-14  Alan Modra  <amodra@bigpond.net.au>
-
-	* config/tc-tic4x.c (tic4x_operands_parse): Make static.
-
-2008-08-13  Ben Elliston  <bje@au.ibm.com>
-
-	* doc/as.texinfo (Align): Document the PowerPC behaviour.
-
-2008-08-13  Alan Modra  <amodra@bigpond.net.au>
-
-	* as.c, as.h, ecoff.c, hash.c, macro.c, symbols.c, config/obj-evax.c,
-	config/obj-som.c, config/tc-alpha.c, config/tc-arm.c, config/tc-bfin.c,
-	config/tc-bfin.h, config/tc-crx.c, config/tc-frv.c, config/tc-frv.h,
-	config/tc-hppa.h, config/tc-i386.c, config/tc-i860.c, config/tc-i960.h,
-	config/tc-ia64.c, config/tc-ia64.h, config/tc-m32c.c, config/tc-m32c.h,
-	config/tc-m68k.c, config/tc-maxq.c, config/tc-s390.c, config/tc-s390.h,
-	config/tc-sparc.c, config/tc-sparc.h, config/tc-spu.c, config/tc-spu.h,
-	config/tc-tic4x.c, config/tc-tic4x.h, config/tc-tic54x.c,
-	config/tc-tic54x.h, config/tc-vax.c, doc/internals.texi: Banish PARAMS
-	and PTR.  Convert to ISO C.  Delete unnecessary forward declarations.
-
-2008-08-12  Alan Modra  <amodra@bigpond.net.au>
-
-	* config/tc-arm.c (s_unreq): Adjust hash_delete call.
-	* config/tc-ia64.c (dot_rot): Likewise.
-
-2008-08-11  Alan Modra  <amodra@bigpond.net.au>
-
-	PR 6575
-	* hash.c: Expand PTR to void *.
-	(hash_delete): Add "freeme" parameter.  Call obstack_free.
-	* hash.h: Expand PTR to void *.
-	(hash_delete): Update prototype.
-	* macro.c (macro_expand_body): hash_delete LOCALs from formal_hash.
-	* config/tc-tic54x.c (tic54x_remove_local_label): Update hash_delete
-	call.
-	(subsym_substitute): Likewise.
-	* doc/internals.texi (hash_delete): Update.
-
-2008-08-08  Anatoly Sokolov  <aesok@post.ru>
-
-	* config/tc-avr.c (mcu_types): Add avr25, avr31, avr35, and avr51
-	architectures. Reorganize list to put mcu types in correct
-	architectures and to order list same as in GCC. Use new ISA
-	definitions in include/opcode/avr.h.
-	* doc/c-avr.texi: Add avr25, avr31, avr35, and avr51 architecture
-	descriptions. Reorganize descriptions to put mcu types in correct
-	architectures and to order lists same as in GCC.
-
-2008-08-08  Richard Sandiford  <rdsandiford@googlemail.com>
-	    Daniel Jacobowitz  <dan@codesourcery.com>
-
-	* config/tc-mips.c (OPTION_CALL_NONPIC): New macro.
-	(OPTION_NON_SHARED, OPTION_XGOT, OPTION_MABI, OPTION_32)
-	(OPTION_N32, OPTION_64, OPTION_MDEBUG, OPTION_NO_MDEBUG)
-	(OPTION_PDR, OPTION_NO_PDR, OPTION_MVXWORKS_PIC): Bump by 1.
-	(md_longopts): Add -call_nonpic.
-	(md_parse_option): Handle OPTION_CALL_NONPIC.
-	(md_show_usage): Add -call_nonpic.
-
-2008-08-08  Sterling Augustine  <sterling@tensilica.com>
-
-	* config/tc-xtensa.c (exclude_section_from_property_tables): New.
-	(xtensa_create_property_segments): Use it.
-	(xtensa_create_xproperty_segments): Likewise.
-
-2008-08-08  Alan Modra  <amodra@bigpond.net.au>
-
-	* doc/internals.texi (DWARF2_FORMAT): Update for 2008-08-04 change.
-
-2008-08-06  Richard Sandiford  <rdsandiford@googlemail.com>
-
-	* config/tc-mips.c (mips16_reloc_p, got16_reloc_p, hi16_reloc_p)
-	(lo16_reloc_p): New functions.
-	(reloc_needs_lo_p): Use hi16_reloc_p and got16_reloc_p to
-	generalize relocation checks.
-	(matching_lo_reloc): New function.
-	(fixup_has_matching_lo_p): Use it.
-	(mips16_mark_labels): Don't clobber a symbol's visibility.
-	(append_insn): Use hi16_reloc_p and lo16_reloc_p.
-	(mips16_ip): Handle BFD_RELOC_MIPS16_GOT16 and BFD_RELOC_MIPS16_CALL16.
-	(md_apply_fix): Likewise.
-	(mips16_percent_op): Add %got and %call16.
-	(mips_frob_file): Use got16_reloc_p to generalize relocation checks.
-	Use matching_lo_reloc.
-	(mips_force_relocation): Use hi16_reloc_p and lo16_reloc_p to
-	generalize relocation checks.
-	(mips_fix_adjustable): Use lo16_reloc_p to generalize relocation
+	* config/tc-mips.c (gpr_mod_mask): Remove INSN2_MOD_GPR_MB,
+	INSN2_MOD_GPR_MC, INSN2_MOD_GPR_ME, INSN2_MOD_GPR_MG,
+	INSN2_MOD_GPR_MHI, INSN2_MOD_GPR_MJ, INSN2_MOD_GPR_MM,
+	INSN2_MOD_GPR_MN, INSN2_MOD_GPR_MP and INSN2_MOD_GPR_MQ opcode
+	register use checks.
+	(gpr_read_mask): Add INSN2_READ_GPR_MC, INSN2_READ_GPR_ME
+	INSN2_READ_GPR_MG, INSN2_READ_GPR_MJ, INSN2_READ_GPR_MMN,
+	INSN2_READ_GPR_MP and INSN2_READ_GPR_MQ opcode register use
 	checks.
+	(gpr_write_mask): Replace INSN2_WRITE_GPR_S opcode register
+	use flag with INSN_WRITE_GPR_S.  Add INSN2_WRITE_GPR_MB,
+	INSN2_WRITE_GPR_MHI, INSN2_WRITE_GPR_MJ and INSN2_WRITE_GPR_MP
+	opcode register use checks.
+	(can_swap_branch_p): Enable microMIPS branch swapping.
+	(append_insn): Likewise.
 
-2008-08-06  DJ Delorie  <dj@redhat.com>
+2011-08-09  Maciej W. Rozycki  <macro@codesourcery.com>
 
-	* NEWS: Mention these changes.
+	* config/tc-mips.c (RELAX_MICROMIPS_ENCODE): Remove forced 16-bit
+	branch size information.
+	(RELAX_MICROMIPS_U16BIT): Remove macro.
+	(RELAX_MICROMIPS_UNCOND): Adjust accordingly.
+	(RELAX_MICROMIPS_COMPACT, RELAX_MICROMIPS_LINK): Likewise.
+	(RELAX_MICROMIPS_RELAX32): Likewise.
+	(RELAX_MICROMIPS_TOOFAR16): Likewise.
+	(RELAX_MICROMIPS_MARK_TOOFAR16): Likewise.
+	(RELAX_MICROMIPS_CLEAR_TOOFAR16): Likewise.
+	(RELAX_MICROMIPS_TOOFAR32): Likewise.
+	(RELAX_MICROMIPS_MARK_TOOFAR32): Likewise.
+	(RELAX_MICROMIPS_CLEAR_TOOFAR32): Likewise.
+	(append_insn): Always check forced_insn_length for microMIPS
+	relaxation.  Adjust code for the removal of
+	RELAX_MICROMIPS_U16BIT.
+	(mips_ip) <'D', 'E'>: If forced_insn_length, then emit the
+	relocation straight away.
+	(relaxed_micromips_16bit_branch_length): Adjust code for the
+	removal of RELAX_MICROMIPS_U16BIT.
 
-	* config/tc-h8300.h (H_TICK_HEX): Define.
-	* config/tc-h8300.c (OPTION_H_TICK_HEX): New.
-	(md_longopts): Add "-h-tick-hex".
-	(md_parse_option): Support it.
-	* doc/c-h8300.texi (H8/300 Options): Document it.
-	* doc/as.texinfo (Overview): Likewise.
+2011-08-08  Tristan Gingold  <gingold@adacore.com>
 
-	* config/tc-sh.h (H_TICK_HEX): Define.
-	* config/tc-sh.c (OPTION_H_TICK_HEX): New.
-	(md_longopts): Add "-h-tick-hex".
-	(md_parse_option): Support it.
-	* doc/c-sh.texi (SH Options): Document it.
-	* doc/c-sh64.texi (SH64 Options): Document it.
-	* doc/as.texinfo (Overview): Likewise.
+	* config/obj-macho.c (obj_mach_o_section): New function.
+	(struct known_section): New type.
+	(known_sections): Declare.
+	(obj_mach_o_known_section): New function.
+	(obj_mach_o_common_parse): Ditto.
+	(obj_mach_o_comm): Ditto.
+	(obj_mach_o_subsections_via_symbols): Ditto.
+	(mach_o_pseudo_table): Add new pseudos.
 
-2008-08-05  Alan Modra  <amodra@bigpond.net.au>
+2011-08-06  Richard Henderson  <rth@redhat.com>
 
-	PR gas/6656
-	* dwarf2dbg.c (dwarf2_directive_file): Disable gas generated
-	debug info if we see compiler generated debug info.
-	(dwarf2_directive_loc): Likewise.  Remove redundant debug_type test.
+	* dw2gencfi.c (all_fde_data): Export.
+	* dw2gencfi.h (all_fde_data): Declare.
+	* config/tc-alpha.c (alpha_elf_md_end): Don't convert legacy unwind
+	info to cfi unwind info if the user already has supplied some.
 
-2008-08-04  Alan Modra  <amodra@bigpond.net.au>
+2011-08-06  Richard Sandiford  <rdsandiford@googlemail.com>
 
-	* dwarf2dbg.c: Remove superfluous forward function declarations.
-	(DWARF2_FORMAT): Add section arg.
-	(out_header): New function, split out from..
-	(out_debug_line): ..here.
-	(out_debug_aranges): Use out_header.
-	(out_debug_abbrev): Add info_seg and line_seg args.  Use
-	DW_FORM_data8 (for DW_AT_stmt_list) if line_seg is 64-bit.
-	(out_debug_info): Use out_header.  Output 8 byte DW_AT_stmt_list
-	if line_seg is 64-bit.
-	(dwarf2_finish): Adjust out_debug_abbrev call.
-	* config/tc-mips.h (DWARF2_FORMAT, mips_dwarf2_format): Add sec arg.
-	* config/tc-mips.c (mips_dwarf2_format): Likewise.
+	* config/tc-mips.c (emit_nop): Delete.
+	(get_delay_slot_nop): New function.
+	(nops_for_insn_or_target): Use it.
+	(append_insn): Likewise.  When avoiding hazards, call add_fixed_insn
+	and insert_into_history directly.
 
-2008-08-04  Alan Modra  <amodra@bigpond.net.au>
+2011-08-06  Richard Sandiford  <rdsandiford@googlemail.com>
 
-	* Makefile.am (POTFILES.in): Set LC_ALL=C.
-	* Makefile.in: Regenerate.
-	* po/POTFILES.in: Regenerate.
+	* config/tc-mips.c (delayed_branch_p, compact_branch_p)
+	(uncond_branch_p, branch_likely_p): New functions.
+	(insns_between, nops_for_insn_or_target, append_insn)
+	(macro_start): Use them.
+	(get_append_method): Likewise.  Remove redundant test.
 
-2008-08-01  Peter Bergner  <bergner@vnet.ibm.com>
+2011-08-05  David S. Miller  <davem@davemloft.net>
 
-	* config/tc-ppc.c (parse_cpu): Rename altivec_or_spe to retain_flags.
-	Handle -mvsx and -mpower7.
-	(md_show_usage): Document -mpower7 and -mvsx.
-	* doc/as.texinfo (Target PowerPC): Document -mvsx.
-	* doc/c-ppc.texi (PowerPC-Opts): Document -mvsx and -mpower7.
+	* config/tc-sparc.c (v9a_asr_table): Add "cps".
+	(sparc_ip): Handle '4', '5' and '(' format codes.
 
-2008-07-31  Peter Bergner  <bergner@vnet.ibm.com>
+2011-08-04  H.J. Lu  <hongjiu.lu@intel.com>
 
-	* config/tc-ppc.c (parse_cpu) <power6>: Accept Altivec instructions.
-	<cell>: Likewise.
+	PR gas/13056
+	* output-file.c (output_file_close): Call bfd_cache_close_all
+	on error.
 
-2008-07-30  Michael J. Eager  <eager@eagercon.com>
+	* write.c (write_object_file): Revert the last change.
 
-	* config/tc-ppc.c (parse_cpu): Separate handling of -m403/405.
-	(md_show_usage): Likewise.
+2011-08-04  Alan Modra  <amodra@gmail.com>
 
-2008-07-30  Alan Modra  <amodra@bigpond.net.au>
+	* write.c (write_object_file): Call set_symtab even if we had
+	errors.
 
-	* messages.c, symbols.c, write.c: Silence gcc warnings.
+2011-08-04  Tristan Gingold  <gingold@adacore.com>
 
-2008-07-28  Ineiev  <ineiev@yahoo.co.uk>
+	* config/obj-elf.c (obj_elf_section): Do not free name.
 
-	* config/tc-i386.c (operand_type_check): Warning fix.
+2011-08-03  James Greenhalgh  <james.greenhalgh@arm.com>
 
-2008-07-26  Michael Eager <eager@eagercon.com>
+	* config/tc-arm.c (do_t_strexbh): New.
+	(insns): Update accordingly.
 
-	* doc/as.texinfo: Add description of single-precision attribute.
+2011-08-01  H.J. Lu  <hongjiu.lu@intel.com>
 
-2008-07-24  Jie Zhang  <jie.zhang@analog.com>
+	PR ld/13048
+	* config/tc-i386.c (handle_quad): Removed.
+	(md_pseudo_table): Remove "quad".
+	(tc_gen_reloc): Don't check BFD_RELOC_64 for disallow_64bit_reloc.
+	(x86_dwarf2_addr_size): New.
 
-	* config/bfin-parse.y (asm_1): Error if plain symbol is used
-	as load/store offset.
+	* config/tc-i386.h (x86_dwarf2_addr_size): New.
+	(DWARF2_ADDR_SIZE): Likewise.
 
-2008-07-22  Chao-ying Fu  <fu@mips.com>
+2011-08-01  Nick Clifton  <nickc@redhat.com>
 
-	* config/tc-mips.c (mips_ip): Reset s to argsStart.
+	PR ld/12974
+	* config/tc-arm.c (literal_pool): Add locs field.
+	(add_to_lit_pool): Initialise the locs entry for the new literal.
+	(s_ltorg): Generate a DWARF2 line number entry for each emitted
+	literal pool entry.
 
-2008-07-22  Jie Zhang  <jie.zhang@analog.com>
+2011-08-01  Tristan Gingold  <gingold@adacore.com>
 
-	* config/tc-bfin.c (bfin_gen_loop): Remove loop symbol.
+	* write.c (write_relocs): Fix -Wshadow in DEBUG3 and DEBUG4.
 
-2008-07-21  DJ Delorie  <dj@redhat.com>
+2011-08-01  Tristan Gingold  <gingold@adacore.com>
 
-	* config/tc-h8300.c (fix_operand_size): Use the default size
-	specified by the .lbranch/.sbranch pseudos.
+	* frags.c (frag_grow): Simplify the code.
 
-2008-07-18  DJ Delorie  <dj@redhat.com>
+2011-07-30  Richard Sandiford  <rdsandiford@googlemail.com>
 
-	* config/tc-m32c.h (H_TICK_HEX): Define.
-	* config/tc-m32c.c (OPTION_H_TICK_HEX): Define.
-	(md_longopts): Add support for it.
-	(md_parse_option): Likewise.
-	* doc/as.texinfo (Overview): Add new m32c options.
-	* doc/c-m32c.texi (M32C-Modifiers): Likewise
+	* config/tc-mips.c (nops_for_vr4130): Revert previous commit.
 
-	* as.h: (enable_h_tick_hex): New.
-	* app.c (enable_h_tick_hex): New.
-	(LEX_IS_H): New.
-	(do_scrub_begin): Mark 'H' and 'h' as special if enable_h_tick_hex.
-	(do_scrub_chars): If enable_h_tick_hex and 'h', check for H'00
-	style hex constants and convert the input stream to 0x00 style.
-	(do_scrub_chars): If a 'X style character constant is found after
-	a symbol character (like you're or X'00), warn the user.
+2011-07-29  Maciej W. Rozycki  <macro@codesourcery.com>
 
-2008-07-10  Richard Sandiford  <rdsandiford@googlemail.com>
-
-	* config/tc-mips.c (mips16_mark_labels): Use ELF_ST_SET_MIPS16.
-	(mips_fix_adjustable): Likewise.
-	(mips_frob_file_after_relocs): Likewise.
-
-2008-07-08  Nathan Sidwell  <nathan@codesourcery.com>
-
-	* config/tc-m68k.c (m68k_set_cpu, m68k_set_arch): Don't complain
-	about overriding an earlier setting.
-
-2008-07-07  Adam Nemet  <anemet@caviumnetworks.com>
-
-	* config/tc-mips.c (NO_ISA_COP): New macro.
-	(COP_INSN): New macro.
-	(is_opcode_valid): Use them.
-	(macro) <ld_st>: Use them.  Don't accept coprocessor load store
-	insns based on the ISA if CPU is NO_ISA_COP.
-	<copz>: Likewise for coprocessor operations.
-
-2008-07-07  Paul Brook  <paul@codesourcery.com>
-
-	* config/tc-arm.c (arm_fix_adjustable): Don't adjust MOVW/MOVT
+	* config/tc-mips.c: Adjust comments throughout.
+	(reglist_lookup): Reshape code.
+	(jmp_reloc_p, jalr_reloc_p): Reformat.
+	(got16_reloc_p, hi16_reloc_p, lo16_reloc_p): Handle microMIPS
 	relocations.
+	(gpr_mod_mask): Remove unused variable.
+	(gpr_read_mask, gpr_write_mask): Reshape code.
+	(fpr_read_mask, fpr_write_mask): Likewise.
+	(nops_for_vr4130): Ensure non-microMIPS mode.
+	(can_swap_branch_p): Correct pinfo2 reference.  Reshape code.
+	(append_insn): Skip Loongson 2F workaround in MIPS16 mode.  Use
+	the outermost operator of a compound relocation to determines
+	the relocated field.  Fix formatting.
+	(md_convert_frag): Reshape code.
 
-2008-07-07  Ralf CorsÃ©pius  <ralf.corsepius@rtems.org>
+2011-07-29  Tristan Gingold  <gingold@adacore.com>
 
-	* configure.tgt: Add bfin-*-rtems*.
+	* frags.c (frag_var_init): New function.
+	(frag_var): Call frag_var_init to initialize.
+	(frag_variant): Ditto.
 
-2008-07-04  Alan Modra  <amodra@bigpond.net.au>
+2011-07-27  Nathan Sidwell  <nathan@codesourcery.com>
 
-	* config/tc-spu.c (md_apply_fix): Handle fully resolved
-	BFD_RELOC_32_PCREL, BFD_RELOC_SPU_HI16 and BFD_RELOC_SPU_LO16.
+	* dwarf2dbg.c (out_debug_line): Ignore non-normal segments, with a
+	warning.
+	* doc/as.texinfo (Offset): Document .offset directive.
 
-2008-06-25  Peter Bergner  <bergner@vnet.ibm.com>
+2011-07-27  Tristan Gingold  <gingold@adacore.com>
 
-	* config/tc-ppc.c (parse_cpu): Handle -m464.
-	(md_show_usage): Likewise.
+	* frags.c (frag_grow): Revert previous patch.
 
-2008-06-24  Eric B. Weddington  <eric.weddington@atmel.com>
+2011-07-26  Kazuhiro Inaoka  <kazuhiro.inaoka.ud@renesas.com>
 
-	Add support for ATtiny13A.
-	* config/tc-avr.c (mcu_types): Add attiny13a.
-	* doc/c-avr.texi: Likewise.
+	* config/tc-rx.c (md_convert_frag): Fix encoding of beq.a
+	synthetic instruction.
 
-2008-06-24  Bob Wilson  <bob.wilson@acm.org>
-	    Alan Modra  <amodra@bigpond.net.au>
+2011-07-25  Tristan Gingold  <gingold@adacore.com>
 
-	* write.c (relax_segment <rs_org>): Include current stretch
-	value when calculating whether .org is backwards.
+	* frags.c (frag_grow): Simplify the code.
 
-2008-06-17  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+2011-07-24  Maciej W. Rozycki  <macro@codesourcery.com>
+            Chao-ying Fu  <fu@mips.com>
+	    Richard Sandiford  <rdsandiford@googlemail.com>
 
-	* configure: Regenerate.
+	* config/tc-mips.h (mips_segment_info): Add one bit for
+	microMIPS.
+	(TC_LABEL_IS_LOCAL): New macro.
+	(mips_label_is_local): New prototype.
+	* config/tc-mips.c (S0, S7): New macros.
+	(emit_branch_likely_macro): New variable.
+	(mips_set_options): Add micromips.
+	(mips_opts): Initialise micromips to -1.
+	(file_ase_micromips): New variable.
+	(CPU_HAS_MICROMIPS): New macro.
+	(hilo_interlocks): Set for microMIPS too.
+	(gpr_interlocks): Likewise.
+	(cop_interlocks): Likewise.
+	(cop_mem_interlocks): Likewise.
+	(HAVE_CODE_COMPRESSION): New macro.
+	(micromips_op_hash): New variable.
+	(micromips_nop16_insn, micromips_nop32_insn): New variables.
+	(NOP_INSN): Handle microMIPS ASE.
+	(mips32_to_micromips_reg_b_map): New macro.
+	(mips32_to_micromips_reg_c_map): Likewise.
+	(mips32_to_micromips_reg_d_map): Likewise.
+	(mips32_to_micromips_reg_e_map): Likewise.
+	(mips32_to_micromips_reg_f_map): Likewise.
+	(mips32_to_micromips_reg_g_map): Likewise.
+	(mips32_to_micromips_reg_l_map): Likewise.
+	(mips32_to_micromips_reg_n_map): Likewise.
+	(mips32_to_micromips_reg_h_map): New variable.
+	(mips32_to_micromips_reg_m_map): Likewise.
+	(mips32_to_micromips_reg_q_map): Likewise.
+	(micromips_to_32_reg_h_map): New variable.
+	(micromips_to_32_reg_i_map): Likewise.
+	(micromips_to_32_reg_m_map): Likewise.
+	(micromips_to_32_reg_q_map): Likewise.
+	(micromips_to_32_reg_b_map): New macro.
+	(micromips_to_32_reg_c_map): Likewise.
+	(micromips_to_32_reg_d_map): Likewise.
+	(micromips_to_32_reg_e_map): Likewise.
+	(micromips_to_32_reg_f_map): Likewise.
+	(micromips_to_32_reg_g_map): Likewise.
+	(micromips_to_32_reg_l_map): Likewise.
+	(micromips_to_32_reg_n_map): Likewise.
+	(micromips_imm_b_map, micromips_imm_c_map): New macros.
+	(RELAX_DELAY_SLOT_16BIT): New macro.
+	(RELAX_DELAY_SLOT_SIZE_FIRST): Likewise.
+	(RELAX_DELAY_SLOT_SIZE_SECOND): Likewise.
+	(RELAX_MICROMIPS_ENCODE, RELAX_MICROMIPS_P): New macros.
+	(RELAX_MICROMIPS_TYPE, RELAX_MICROMIPS_AT): Likewise.
+	(RELAX_MICROMIPS_U16BIT, RELAX_MICROMIPS_UNCOND): Likewise.
+	(RELAX_MICROMIPS_COMPACT, RELAX_MICROMIPS_LINK): Likewise.
+	(RELAX_MICROMIPS_RELAX32, RELAX_MICROMIPS_TOOFAR16): Likewise.
+	(RELAX_MICROMIPS_MARK_TOOFAR16): Likewise.
+	(RELAX_MICROMIPS_CLEAR_TOOFAR16): Likewise.
+	(RELAX_MICROMIPS_TOOFAR32): Likewise.
+	(RELAX_MICROMIPS_MARK_TOOFAR32): Likewise.
+	(RELAX_MICROMIPS_CLEAR_TOOFAR32): Likewise.
+	(INSERT_OPERAND, EXTRACT_OPERAND): Handle microMIPS ASE.
+	(mips_macro_warning): Add delay_slot_16bit_p, delay_slot_32bit_p,
+	fsize and insns.
+	(mips_mark_labels): New function.
+	(mips16_small, mips16_ext): Remove variables, replacing with...
+	(forced_insn_size): ... this.
+	(append_insn, mips16_ip): Update accordingly.
+	(micromips_insn_length): New function.
+	(insn_length): Return the length of microMIPS instructions.
+	(mips_record_mips16_mode): Rename to...
+	(mips_record_compressed_mode): ... this.  Handle microMIPS ASE.
+	(install_insn): Handle microMIPS ASE.
+	(reglist_lookup): New function.
+	(is_size_valid, is_delay_slot_valid): Likewise.
+	(md_begin): Handle microMIPS ASE.
+	(md_assemble): Likewise.  Update for append_insn interface change.
+	(micromips_reloc_p): New function.
+	(got16_reloc_p): Handle microMIPS ASE.
+	(hi16_reloc_p): Likewise.
+	(lo16_reloc_p): Likewise.
+	(jmp_reloc_p): New function.
+	(jalr_reloc_p): Likewise.
+	(matching_lo_reloc): Handle microMIPS ASE.
+	(insn_uses_reg, reg_needs_delay): Likewise.
+	(mips_move_labels): Likewise.
+	(mips16_mark_labels): Rename to...
+	(mips_compressed_mark_labels): ... this.  Handle microMIPS ASE.
+	(gpr_mod_mask): New function.
+	(gpr_read_mask, gpr_write_mask): Handle microMIPS ASE.
+	(fpr_read_mask, fpr_write_mask): Likewise.
+	(insns_between, nops_for_vr4130, nops_for_insn): Likewise.
+	(fix_loongson2f_nop, fix_loongson2f_jump): Likewise.
+	(MICROMIPS_LABEL_CHAR): New macro.
+	(micromips_target_label, micromips_target_name): New variables.
+	(micromips_label_name, micromips_label_expr): New functions.
+	(micromips_label_inc, micromips_add_label): Likewise.
+	(mips_label_is_local): Likewise.
+	(micromips_map_reloc): Likewise.
+	(can_swap_branch_p): Handle microMIPS ASE.
+	(append_insn): Add expansionp argument.  Handle microMIPS ASE.
+	(start_noreorder, end_noreorder): Handle microMIPS ASE.
+	(macro_start, macro_warning, macro_end): Likewise.
+	(brk_fmt, cop12_fmt, jalr_fmt, lui_fmt): New variables.
+	(mem12_fmt, mfhl_fmt, shft_fmt, trap_fmt): Likewise.
+	(BRK_FMT, COP12_FMT, JALR_FMT, LUI_FMT): New macros.
+	(MEM12_FMT, MFHL_FMT, SHFT_FMT, TRAP_FMT): Likewise.
+	(macro_build): Handle microMIPS ASE.  Update for append_insn
+	interface change.
+	(mips16_macro_build): Update for append_insn interface change.
+	(macro_build_jalr): Handle microMIPS ASE.
+	(macro_build_lui): Likewise.  Simplify.
+	(load_register): Handle microMIPS ASE.
+	(load_address): Likewise.
+	(move_register): Likewise.
+	(macro_build_branch_likely): New function.
+	(macro_build_branch_ccl): Likewise.
+	(macro_build_branch_rs): Likewise.
+	(macro_build_branch_rsrt): Likewise.
+	(macro): Handle microMIPS ASE.
+	(validate_micromips_insn): New function.
+	(expr_const_in_range): Likewise.
+	(mips_ip): Handle microMIPS ASE.
+	(options): Add OPTION_MICROMIPS and OPTION_NO_MICROMIPS.
+	(md_longopts): Add mmicromips and mno-micromips.
+	(md_parse_option): Handle OPTION_MICROMIPS and
+	OPTION_NO_MICROMIPS.
+	(mips_after_parse_args): Handle microMIPS ASE.
+	(md_pcrel_from): Handle microMIPS relocations.
+	(mips_force_relocation): Likewise.
+	(md_apply_fix): Likewise.
+	(mips_align): Handle microMIPS ASE.
+	(s_mipsset): Likewise.
+	(s_cpload, s_cpsetup, s_cpreturn): Use relocation wrappers.
+	(s_dtprel_internal): Likewise.
+	(s_gpword, s_gpdword): Likewise.
+	(s_insn): Handle microMIPS ASE.
+	(s_mips_stab): Likewise.
+	(relaxed_micromips_32bit_branch_length): New function.
+	(relaxed_micromips_16bit_branch_length): New function.
+	(md_estimate_size_before_relax): Handle microMIPS ASE.
+	(mips_fix_adjustable): Likewise.
+	(tc_gen_reloc): Handle microMIPS relocations.
+	(mips_relax_frag): Handle microMIPS ASE.
+	(md_convert_frag): Likewise.
+	(mips_frob_file_after_relocs): Likewise.
+	(mips_elf_final_processing): Likewise.
+	(mips_nop_opcode): Likewise.
+	(mips_handle_align): Likewise.
+	(md_show_usage): Handle microMIPS options.
+	* symbols.c (TC_LABEL_IS_LOCAL): New macro.
+	(S_IS_LOCAL): Add a TC_LABEL_IS_LOCAL check.
 
-2008-06-17  Nick Clifton  <nickc@redhat.com>
+	* doc/as.texinfo (Target MIPS options): Add -mmicromips and
+	-mno-micromips.
+	(-mmicromips, -mno-micromips): New options.
+	* doc/c-mips.texi (-mmicromips, -mno-micromips): New options.
+	(MIPS ISA): Document .set micromips and .set nomicromips.
+	(MIPS insn): Update for microMIPS support.
 
-	* app.c (do_scrub_chars): Do not UNGET an EOF value.
+2011-07-24  Maciej W. Rozycki  <macro@codesourcery.com>
 
-2008-06-16  Hans-Peter Nilsson  <hp@bitrange.com>
+	* config/tc-mips.c (mips_ip): Make a copy of the instruction's
+	mnemonic and use it for further processing.
 
-	PR gas/6607
-	* config/tc-mmix.c (s_loc): Assume "negative" addresses belong to
-	text_section.  Do the "stepping backwards" test for text_section
-	using unsigned operands.
+2011-07-24  Maciej W. Rozycki  <macro@codesourcery.com>
 
-2008-06-13  Peter Bergner  <bergner@vnet.ibm.com>
+	* config/tc-mips.c (can_swap_branch_p): Adjust for the rename of
+	INSN_TRAP to INSN_NO_DELAY_SLOT.  Remove the check for INSN_SYNC
+	as well as explicit checks for ERET and DERET when scheduling
+	branch delay slots.
 
-	* config/tc-ppc.c (ppc_cpu): Use ppc_cpu_t typedef.
-	(ppc_insert_operand): Likewise.
-	(ppc_machine): Likewise.
-	* config/tc-ppc.h: #include "opcode/ppc.h"
-	(struct _ppc_fix_extra <ppc_cpu>): Use ppc_cpu_t typedef.
-	(ppc_cpu): Update extern decl.
+2011-07-22  H.J. Lu  <hongjiu.lu@intel.com>
 
-2008-06-12  Adam Nemet  <anemet@caviumnetworks.com>
+	* config/tc-i386.c (cpu_arch): Add k1om.
+	(i386_align_code): Handle PROCESSOR_K1OM.
+	(check_cpu_arch_compatible): Check EM_K1OM.
+	(i386_arch): Handle Intel K1OM.
+	(i386_mach): Return bfd_mach_k1om for Intel K1OM.
+	(i386_target_format): Return ELF_TARGET_K1OM_FORMAT for Intel
+	K1OM.
 
-	* config/tc-mips.c (validate_mips_insn): Handle field descriptors
-	+x, +X, +p, +P, +s, +S.
-	(mips_ip): Likewise.
+	* config/tc-i386.h (ELF_TARGET_K1OM_FORMAT): New.
+	(processor_type): Add PROCESSOR_K1OM.
 
-	* config/tc-mips.c (validate_mips_insn): Handle field descriptor +Q.
-	(mips_ip): Likewise.
-	(macro_build): Likewise.
-	(CPU_HAS_SEQ): New macro.
-	(macro2) <M_SEQ_I, M_SNE_I>: Use it.  Emit seq/sne and seqi/snei.
+	* doc/c-i386.texi: Document k1om.
 
-2008-06-09  Eric B. Weddington  <eric.weddington@atmel.com>
+2011-07-18  H.J. Lu  <hongjiu.lu@intel.com>
 
-	* config/tc-avr.c (mcu_types): Remove support for ATmega32HVB device.
-	* doc/c-avr.texi: Likewise.
+	* doc/c-i386.texi: Fix a typo.
 
-2008-06-04  Nick Clifton  <nickc@redhat.com>
+2011-07-06  Aurelien Jarno  <aurelien@aurel32.net>
 
-	* app.c (do_scrub_chars): Do not UNGET an EOF value.
+	* config/tc-mips.c (append_insn): delete prev_pinfo2 and pinfo2.
 
-2008-06-03  H.J. Lu  <hongjiu.lu@intel.com>
+2011-07-04  Richard Sandiford  <rdsandiford@googlemail.com>
 
-	* config/tc-i386.c (set_sse_check): New.
-	(md_pseudo_table): Add "sse_check".
+	* config/tc-mips.c (gpr_read_mask, gpr_write_mask): Fix handling
+	of register 0.
 
-2008-06-03  Paul Brook  <paul@codesourcery.com>
+2011-07-04  Maciej W. Rozycki  <macro@codesourcery.com>
 
-	* config/tc-arm.c (do_t_rbit): Populate both rm fields.
+	* config/tc-mips.c (append_insn): Make sure DWARF-2 location
+	information is properly adjusted for branches that get swapped.
 
-2008-05-30  Nick Clifton  <nickc@redhat.com>
+2011-07-03  Samuel Thibault  <samuel.thibault@gnu.org>
+	    Thomas Schwinge  <thomas@schwinge.name>
 
-	PR 5523
-	* config/tc-avr.c (avr_ldi_expression): Do not warn about unknown
-	relocs here.
+	PR binutils/12913
+	* config/obj-elf.c (obj_elf_type): Use ELFOSABI_GNU name instead of
+	ELFOSABI_LINUX alias.
+	* config/tc-ia64.c: Likewise.
 
-2008-05-29  Maxim Kuvyrkov  <maxim@codesourcery.com>
+2011-06-30  Paul Carroll  <pcarroll@codesourcery.com>
 
-	* config/tc-mips.c (mips_cpu_info_table): Move records for
-	ST Loongson-2E/2F processors to a better place.
+	* config/tc-arm.c (do_t_add_sub): Only allow LSL shifts of less
+	than 4 in Thumb mode.
 
-2008-05-23  H.J. Lu  <hongjiu.lu@intel.com>
+2011-06-30  Nick Clifton  <nickc@redhat.com>
 
-	PR gas/6518
-	* config/tc-i386.c (match_template): Report ambiguous operand
-	size, not invalid suffix when there is no match in Intel
-	syntax.
+	PR gas/12848
+	* config/tc-arm.c (BAD_RANGE): New error message define.
+	(md_apply_fix): Use it.
+	Fix range check for thumb branch instructions.
 
-2008-05-22  Paul Brook  <paul@codesourcery.com>
+2011-06-29  Richard Sandiford  <rdsandiford@googlemail.com>
 
-	* config/tc-arm.c (parse_cond): Covert to lowercase before matching.
+	* config/tc-mips.c (append_method): New enum.
+	(can_swap_branch_p, get_append_method): New functions.
+	(append_insn): Use get_append_method to decide how the instruction
+	should be added.
 
-2008-05-21  I-Jui Sung  <ijsung@gmail.com>
+2011-06-29  Richard Sandiford  <rdsandiford@googlemail.com>
 
-	* config/tc-arm.c (arm_cpus): Add Faraday ARMv4 and ARMv5TE
-	compatible cores: fa526, fa626, fa626te, fa726te.
-	* doc/c-arm.texi (ARM Opts): Add -mcpu={fa526, fa626, fa626te,
-	fa726te} options.
+	* config/tc-mips.c (append_insn): Remove bogus goto.
 
-2008-05-14  Alan Modra  <amodra@bigpond.net.au>
+2011-06-29  Richard Sandiford  <rdsandiford@googlemail.com>
 
-	* Makefile.am: Run "make dep-am".
-	* Makefile.in: Regenerate.
+	* config/tc-mips.c (append_insn): Always clear the history after an
+	unconditional branch.
+
+2011-06-29  Richard Sandiford  <rdsandiford@googlemail.com>
+
+	* config/tc-mips.c (find_altered_mips16_opcode): New function.
+	(append_insn): Use it.
+
+2011-06-29  Richard Sandiford  <rdsandiford@googlemail.com>
+
+	* config/tc-mips.c (insn_uses_reg): Delete.
+	(gpr_read_mask, gpr_write_mask): New functions.
+	(fpr_read_mask, fpr_write_mask): Likewise.
+	(insns_between, nops_for_vr4130, append_insn): Use them.
+
+2011-06-29  Richard Sandiford  <rdsandiford@googlemail.com>
+
+	* config/tc-mips.c (md_mips_end): Call mips_emit_delays.
+
+2011-06-29  Dave Martin  <dave.martin@linaro.org>
+
+	PR gas/12931
+	* config/tc-arm.c (mapping_state): When changing to ARM or THUMB
+	state set the minimum required alignment of the section.
+
+2011-06-29  Tristan Gingold  <gingold@adacore.com>
+
+	* config/tc-i386.c (i386_mach): Convert to ISO-C.
+	(md_begin, pe_directive_secrel, md_estimate_size_before_relax): Ditto.
+	(md_convert_frag, md_apply_fix, md_undefined_symbol): Ditto.
+	(md_section_align, tc_gen_reloc): Ditto.
+
+2011-06-28  Tristan Gingold  <gingold@adacore.com>
+
+	* config/tc-alpha.c (s_alpha_pdesc): Fix indentation. Do not
+	generate dummy fix.
+
+2011-06-28  Tristan Gingold  <gingold@adacore.com>
+
+	* config/tc-alpha.c (load_expression): Use alloca instead of xmalloc.
+	(emit_jsrjmp): Ditto.
+	(tc_gen_reloc): Ditto.
+
+2011-06-28  Tristan Gingold  <gingold@adacore.com>
+
+	* config/tc-alpha.c (alpha_evax_proc_hash): Remove.
+	(alpha_evax_proc_data): New variable.
+	(s_alpha_ent): Prevent nested function.  Remove has_insert call.
+	(s_alpha_pdesc): Do not call demand_empty_rest_of_line in case of
+	error.  Do not search in the hash table.  Check if match with .ent.
+	(s_alpha_name): Remove unused variable.
+	(md_begin): Remove initialization of alpha_evax_proc_hash.
+
+2011-06-27  Tristan Gingold  <gingold@adacore.com>
+
+	* config/tc-alpha.c (add_to_link_pool): Remove basesym parameter.
+	Locally declare basesym.  Add comments.  Do not set literal_pool_size.
+	(load_expression): Adjust call to add_to_link_pool.
+	(s_alpha_pdesc): Define pdesc symbol using dot.
+	Do not set literal_pool_size.
+	(s_alpha_end): Use NULL instead of 0.
+
+2011-06-27  Tristan Gingold  <gingold@adacore.com>
+
+	* config/obj-evax.c (evax_frob_file_before_adjust): Add comments.
+	Fix style.
+	* config/obj-evax.h (struct alpha_linkage_fixups): Remove seg
+	field.  Add comments.
+	(obj_symbol_type, object_headers, OBJ_SYMFIELD_TYPE): Remove
+
+2011-06-26  Richard Sandiford  <rdsandiford@googlemail.com>
+
+	* config/tc-mips.c (fix_24k_record_store_info): If the previous
+	instruction was a store, and the next instructions are unknown,
+	assume the worst.
+
+2011-06-25  Richard Sandiford  <rdsandiford@googlemail.com>
+
+	PR gas/12915
+	* config/tc-mips.c (nops_for_vr4130, nops_for_24k, nops_for_insn)
+	(nops_for_sequence, nops_for_insn_or_target): Add ignore parameters.
+	(mips_emit_delays, start_noreorder): Update accordingly.
+	(append_insn): Likewise.  Revert original fix for this PR
+	and use the ignore parameter instead.
+
+2011-06-24  Tristan Gingold  <gingold@adacore.com>
+
+	PR gas/11625
+	* config/obj-evax.c (evax_frob_symbol): Use as_bad instead of abort.
+
+2011-06-24  Tristan Gingold  <gingold@adacore.com>
+
+	* config/tc-alpha.c (add_to_link_pool): Remove useless offset
+	variable.  Fix style.
+
+2011-06-23  Richard Sandiford  <rdsandiford@googlemail.com>
+
+	PR gas/12915
+	* config/tc-mips.c (append_insn): Only consider hazards between the
+	pre-noreorder block and ip.
+
+2011-06-21  Sameera Deshpande  <sameera.deshpande@arm.com>
+
+	* config/tc-arm.c (vfp_conv): Add check on range of immediate operand
+	in vcvt instruction between floating-point and fixed-point.
+	(operand_parse_code): Add "OP_oI32z".
+	(parse_operands): OP_oI32z case added.
+
+2011-06-20  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* configure.tgt: Revert x32 change.
+
+2011-06-20  Nick Clifton  <nickc@redhat.com>
+
+	* doc/Makefile.am: (CPU_DOCS): Add c-xstormy16.texi.
 	* doc/Makefile.in: Regenerate.
+	* doc/all.texi: Set XSTORMY16.
+	* doc/c-xstormy16.texi: New file.
+
+2011-06-19  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* configure.tgt: Support x32.
+
+2011-06-15  Nick Clifton  <nickc@redhat.com>
+
+	* NEWS: Mention addition of TILEPRO and TIKE-Gx support.
+
+2011-06-14  Tristan Gingold  <gingold@adacore.com>
+
+	* config/tc-ppc.h (struct ppc_tc_sy): Complete comment on within.
+	(tc_new_dot_label): Define.
+	(ppc_new_dot_label): Declare.
+	* config/tc-ppc.c (ppc_frob_label): Set within target field.
+	(ppc_fix_adjustable): Use this field to adjust the reloc.
+	(ppc_new_dot_label): New function.
+
+2011-06-14  Alan Modra  <amodra@gmail.com>
+
 	* po/POTFILES.in: Regenerate.
 
-2008-05-09  Catherine Moore  <clm@codesourcery.com>
+2011-06-13  Walter Lee  <walt@tilera.com>
 
-	* config/tc-mips.c (mips_frob_file): Don't match MIPS16 relocs
-	with non-MIPS16 relocs.
-
-2008-05-09  Chao-ying Fu  <fu@mips.com>
-
-	* config/tc-mips.c (md_begin): Use strncmp to compare TARGET_OS, in
-	case that some characters append at the end of the name.
-	(mips_ip): Likewise.
-	(s_change_sec): Likewise.
-	(md_section_align): Likewise.
-
-2008-05-07  Bob Wilson  <bob.wilson@acm.org>
-
-	* config/tc-xtensa.c (xtensa_create_property_segments): Use
-	xtensa_make_property_section instead of xtensa_get_property_section.
-	(xtensa_create_xproperty_segments): Likewise.
-
-2008-05-02  H.J. Lu  <hongjiu.lu@intel.com>
-
-	* NEWS: Mention XSAVE, EPT and MOVBE.
-
-	* config/tc-i386.c (cpu_arch): Add .movbe and .ept.
-	(md_show_usage): Add .movbe and .ept.
-
-	* doc/c-i386.texi: Add movbe and ept to -march=.  Document
-	.movbe and .ept.
-
-2008-04-29  David S. Miller  <davem@davemloft.net>
-
-	* config/tc-sparc.c (v9a_asr_table): Fix order of softint entries.
-
-2008-04-28  Adam Nemet  <anemet@caviumnetworks.com>
-
-	* config/tc-mips.c (file_mips_soft_float, file_mips_single_float):
-	New statics.
-	(OPTION_ELF_BASE): Make room for new option macros.
-	(OPTION_SOFT_FLOAT, OPTION_HARD_FLOAT, OPTION_SINGLE_FLOAT,
-	OPTION_DOUBLE_FLOAT): New option macros.
-	(md_longopts): Add msoft-float, mhard-float, msingle-float and
-	mdouble-float.
-	(md_parse_option): Handle OPTION_SINGLE_FLOAT,
-	OPTION_DOUBLE_FLOAT, OPTION_SOFT_FLOAT and OPTION_HARD_FLOAT.
-	(md_show_usage): Add -msoft-float, -mhard-float, -msingle-float
-	and -mdouble-float.
-	(struct mips_set_options): New fields soft_float and single_float.
-	(mips_opts): Initialized them.  Add comment for each field
-	initializer.
-	(mips_after_parse_args): Set them based on file_mips_soft_float
-	and file_mips_single_float.
-	(s_mipsset): Add support for `.set softfloat', `.set hardfloat',
-	`.set singlefloat' and `.set doublefloat'.
-	(is_opcode_valid): New function to invoke OPCODE_IS_MEMBER.
-	Handle single-float and soft-float instructions here.
-	(macro_build, mips_ip): Use it instead of OPCODE_IS_MEMBER.
-	(is_opcode_valid_16): New function.
-	(mips16_ip): Use it instead of OPCODE_IS_MEMBER.
-	(macro) <M_LDC1_AB, M_SDC1_AB, M_L_DOB, M_L_DAB, M_S_DAB,
-	M_S_DOB>: Remove special-casing of r4650.
-	* doc/c-mips.texi (-march=): Add Octeon.
-	(MIPS Opts): Document -msoft-float and -mhard-float.  Document
-	-msingle-float and -mdouble-float.
-	(MIPS floating-point): New section.  Document `.set softfloat' and
-	`.set hardfloat'.  Document `.set singlefloat' and `.set
-	doublefloat'.
-
-2008-04-25  David S. Miller  <davem@davemloft.net>
-
-	* config/tc-sparc.c: Accept 'softint_clear' and 'softint_set'
-	%asr aliases.
-
-	* doc/c-sparc.texi: Consistently refer to architecture 'versions',
-	rather than occaisionally 'levels'.  Consistently refer to Sun's
-	UNIX variant as SunOS, every version of Solaris is also SunOS.
-	Document new 'softint_clear' and 'softint_set' aliases.  Clarify
-	which architecture versions support '%dcr', '%cq', and '%gl'. Add
-	section on 32-bit/64-bit opcode translations.
-
-2008-04-23  Mike Frysinger  <vapier@gentoo.org>
-
-	* Makefile.am (OBJ_FORMAT_CFILES): Add config/obj-fdpicelf.c.
-	(OBJ_FORMAT_HFILES): Add config/obj-fdpicelf.h.
-	(obj-fdpicelf.o): Define.
+	* Makefile.am (TARGET_CPU_CFILES): Add config/tc-tilegx.c and
+	config/tc-tilepro.c.
+	(TARGET_CPU_HFILES): Add config/tc-tilegx.h and
+	config/tc-tilepro.h.
 	* Makefile.in: Regenerate.
-	* configure.tgt: Set bfd_gas to yes when fmt is fdpicelf.
-	(bfin-*-*): Delete.
-	(bfin-*-linux-uclibc): New; set fmt to fdpicelf and em to linux.
-	(bfin-*-uclinux*): New; set fmt to elf and em to linux.
-	* config/obj-fdpicelf.c: New.
-	* config/obj-fdpicelf.h: Likewise.
-	* config/tc-bfin.c (bfin_flags, bfin_pic_flag): Set default based on
-	the OBJ_FDPIC_ELF define.
-	(OPTION_NOPIC): Define.
-	(md_longopts): Add mnopic and mno-fdpic.
-	(md_parse_option): Handle OPTION_NOPIC.
+	* configure.tgt (tilepro-*-*): New.
+	(tilegx-*-*): Likewise.
+	* config/tc-tilegx.c: New file.
+	* config/tc-tilegx.h: Likewise.
+	* config/tc-tilepro.h: Likewise.
+	* config/tc-tilepro.c: Likewise.
+	* doc/Makefile.am (CPU_DOCS): Add c-tilegx.texi and
+	c-tilepro.texi.
+	* doc/Makefile.in: Regenerate.
+	* doc/all.texi (TILEGX): Define.
+	(TILEPRO): Define.
+	* doc/as.texinfo: Add Tile-Gx and TILEPro documentation.  Include
+	c-tilegx.texi and c-tilepro.texi.
+	* doc/c-tilegx.texi: New.
+	* doc/c-tilepro.texi: New.
 
-2008-04-23  Paolo Bonzini  <bonzini@gnu.org>
+2011-06-13  Nick Clifton  <nickc@redhat.com>
 
-	* aclocal.m4: Regenerate.
-	* configure: Regenerate.
+	PR gas/12854
+	* config/tc-arm.c (do_shift): Do not allow shift operations at the
+	end of a register based shift insn.
+	(do_t_shift): Likewise.
 
-2008-04-23  David S. Miller  <davem@davemloft.net>
+2011-06-13  Nick Clifton  <nickc@redhat.com>
 
-	* config/tc-sparc.c (v9a_asr_table): Add missing
-	'stick' and 'stick_cmpr', and document ordering rules
-	of table.
-	(tc_gen_reloc): Accept BFD_RELOC_SPARC_PC22 and
-	BFD_RELOC_SPARC_PC10.
-	* doc/c-sparc.texi: New section on Sparc constants.
-	Add documentation for %stick and %stick_cmpr.
+	* config/tc-score.c (s3_my_get_expression): Delete unused local
+	variable 'seg'.
+	(s3_do_ldst_insn): Delete unused local variable 'strbak'.
+	(s3_do16_ldst_insn): Delete unused local variable 'temp'.
+	(s3_do_macro_bcmp): Zero inst_expand array.
+	(s3_do_macro_bcmpz): Likewise.
+	(s3_s_score_end): Delete unused local variable 'dot'.
+	(s3_gen_reloc): Delete unused local variables 'f', 's', and 'e'.
+	* config/tc-score7.c (s7_my_get_expression): Delete unused local
+	variable 'seg'.
+	(s7_do_ldst_insn): Delete unused local variable 'strbak'.
+	(s7_b32_relax_to_b16): Delete unused local variables 'r_old' and
+	'r_new'.
+	(s7_s_score_end): Delete unused local variable 'dot'.
+	(s7_relax_frag): Delete unused local variable 'relax_size'.
+	(s7_gen_reloc): Delete unused local variables 'f', 's', and 'e'.
 
-2008-04-22  David S. Miller  <davem@davemloft.net>
+2011-06-10  H.J. Lu  <hongjiu.lu@intel.com>
 
-	* config/obj-elf.c (obj_elf_section_type): Add prototype
-	before obj_elf_section_word and add 'warn' arg.
-	(obj_elf_section_word): Add type pointer arg, and if no #SECTION
-	is matched, try checking for #SECTION_TYPE.
-	(obj_elf_section): Adjust for new args.
-	(obj_elf_type_name): New function.
-	(obj_elf_type): Call it, and accept STT_foo number strings
-	in .type statements as output by SunPRO compiler.
+	AVX Programming Reference (June, 2011)
+	* config/tc-i386.c (i386_error): Add invalid_vsib_address and
+	unsupported_vector_index_register.
+	(cpu_arch): Add .avx2, .bmi2, .lzcnt and .invpcid.
+	(check_VecOperands): New.
+	(match_template): Call check_VecOperands.  Handle
+	invalid_vsib_address and unsupported_vector_index_register.
+	(build_modrm_byte): Support VecSIB.  Check register-only source
+	operand when two source operands are swapped.
+	(i386_index_check): Allow Xmm/Ymm index registers.
 
-2008-04-22  H.J. Lu  <hongjiu.lu@intel.com>
+	* doc/c-i386.texi: Document avx2/.avx2, bmi2/.bmi2, lzcnt/.lzcnt
+	and invpcid./invpcid.
 
-	* config/tc-i386.c (md_assemble): Don't check SSE instructions
-	if noavx is 0.
+2011-06-09  Nick Clifton  <nickc@redhat.com>
 
-2008-04-18  David S. Miller  <davem@davemloft.net>
+	PR gas/12861
+	* config/tc-cr16.c (tc_gen_reloc): Remove unused local variable
+	code.
+	(check_cinv_options): Remove unused local variables.  Make
+	function void.
+	(md_assemble): Remove unused local variable.
 
-	* doc/c-sparc.texi: Add syntax section.
+2011-06-09  James Greenhalgh  <james.greenhalgh@arm.com>
 
-2008-04-18  H.J. Lu  <hongjiu.lu@intel.com>
+	* config/tc-arm.c (do_ldrd): Warn in unpredictable cases.
 
-	* config/tc-i386.c (build_modrm_byte): Don't check FMA to swap
-	REG and NDS for instructions with immediate operand.
+2011-06-03  Arnaud Patard  <arnaud.patard@rtp-net.org>
 
-2008-04-18  H.J. Lu  <hongjiu.lu@intel.com>
+	PR gas/12698
+	* config/tc-arm.c (parse_psr): Set m_profile to false when
+	assembling for any architecture.
 
-	* config/tc-i386.c (build_modrm_byte): Swap REG and NDS for
-	FMA.
+2011-06-02  Jie Zhang jie@codesourcery.com
+	    Nathan Sidwell nathan@codesourcery.com
 
-2008-04-16  David S. Miller  <davem@davemloft.net>
+	* config/tc-arm.c (parse_address_main): Handle -0 offsets.
+	(encode_arm_addr_mode_2): Set default sign of zero here ...
+	(encode_arm_addr_mode_3): ... and here.
+	(encode_arm_cp_address): ... and here.
+	(md_apply_fix): Use default sign of zero here.
 
-	* config/tc-sparc.c (sparc_ip): Add support for gotdata mnemonics
-	and relocation generation.
+2011-06-02  Nick Clifton  <nickc@redhat.com>
+
+	* as.c: Fix spelling typo.
+	* read.c: Likewise.
+	* config/tc-ppc.c: Likewise.
+	* po/gas.pit: Regenerate.
+
+2011-05-31  Paul Brook  <paul@codesourcery.com>
+
+	* config/tc-arm.c (arm_cpus): Add Cortex-R5.
+	(arm_extensions): Allow idiv on ARMv7-R.
+	* doc/c-arm.text: Update idiv extension restrictions.
+
+2011-05-31  Paul Brook  <paul@codesourcery.com>
+
+	* config/tc-arm.c (arm_force_relocation): Resolve all pc-relative
+	loads.
+
+2011-05-31  Paul Brook  <paul@codesourcery.com>
+
+	* config/tc-arm.c (do_t_branch): Avoid relaxing branches to constant
+	addresses.
+
+2011-05-31  Paul Brook  <paul@codesourcery.com>
+	Nathan Sidwell  <nathan@codesourcery.com>
+
+	* config/tc-arm.c (fix_new_arm): Create an absolute symbol for
+	pc-relative fixes to constants.
+	* config/tc-arm.h (TC_FORCE_RELOCATATION_ABS): Define.
+
+2011-05-27  Nick Clifton  <nickc@redhat.com>
+
+	* config/tc-s390.c (md_begin): Remove unused variable dup_insn.
+
+2011-05-24  Andreas Krebbel  <Andreas.Krebbel@de.ibm.com>
+
+	* config/tc-s390.c (md_gather_operands): Fix check for floating
+	register pair operands.
+
+2011-05-24  Andreas Krebbel  <Andreas.Krebbel@de.ibm.com>
+
+	* config/tc-s390.c (md_gather_operands): Emit an error for odd
+	numbered registers used as register pair operand.
+
+2011-05-23  Nick Clifton  <nickc@redhat.com>
+
+	* config/tc-v850.h (TC_FX_SIZE_SLACK): Define.
+
+2011-05-20  Bernd Schmidt  <bernds@codesourcery.com>
+
+	* config/tc-tic6x.c (tic6x_operators): Add "pcr_offset".
+	(tic6x_parse_name): Handle it.
+	(tic6x_fix_new_exp): Handle O_pcr_offset.
+	(tic6x_fix_adjustable): Return 0 for the new relocs.
+	(md_apply_fix): Handle them.
 	(tc_gen_reloc): Likewise.
+	* config/tc-tic6x.h (tic6x_fix_info): Add a fix_subsy member.
 
-2008-04-15  Andrew Stubbs  <andrew.stubbs@st.com>
+2011-05-18  Nick Clifton  <nickc@redhat.com>
 
-	* config/tc-sh.c (md_apply_fix): Make sure BFD_RELOC_SH_PCRELIMM8BY4
-	relocations are properly aligned, and not negative.
+	PR gas/12754
+	* config/tc-tic30.c (ordinal_names): Allow translation of the
+	ordinal names.
 
-2008-04-15  Khem Raj  <kraj@mvista.com>
+2011-05-18  Nick Clifton  <nickc@redhat.com>
 
-	* doc/tc-arm.texi: Fix fnstart and fnend directive names.
-
-2008-04-14  Edmar Wienskoski  <edmar@freescale.com>
-
-	* config/tc-ppc.c (parse_cpu): Handle "e500mc".  Extend "e500" to
-	accept e500mc instructions.
-	(md_show_usage): Document -me500mc.
-
-2008-04-11  Nick Clifton  <nickc@redhat.com>
-
-	* listing.c (print_timestamp): Use localtime rather than
-	localtime_r since not all build environments provide the latter.
-
-2008-04-10  H.J. Lu  <hongjiu.lu@intel.com>
-
-	* NEWS: Mention -msse-check=[none|error|warning].
-
-	* config/tc-i386.c (sse_check): New.
-	(OPTION_MSSE_CHECK): Likewise.
-	(md_assemble): Check SSE instructions if needed.
-	(md_longopts): Add -msse-check.
-	(md_parse_option): Handle OPTION_MSSE_CHECK.
-	(md_show_usage): Show -msse-check=[none|error|warning].
-
-	* doc/c-i386.texi: Document -msse-check=[none|error|warning].
-
-2008-04-10  Santiago Urueña  <suruena@gmail.com>
-
-	* listing.c: Add -ag listing flag to show general information in
-	listings such as gas version, passed options, and time stamp.
-	(listing_general_info): New function.
-	(print_options): New function.
-	(print_single_option): New function.
-	(print_timestamp): New function.
-	(MAX_DATELEN): Define.
-	(listing_print): Add call to listing_general_info.
-	* listing.h (LISTING_GENERAL): Define.
-	(listing_print): Add new parameter.
-	* as.c (show_usage): Print new switch.
-	(parse_args): Parse new switch.
-	(main): Pass command line on to listing_print.
-	* NEWS: Mention this new feature.
-	* doc/as.texinfo: Document the new sub-option.
-
-2008-04-08  Alan Modra  <amodra@bigpond.net.au>
-
-	* dwarf2dbg.c (dwarf2_emit_insn): Simplify test before dwarf2_where
-	call.  Delete out of date comment.
-	(dwarf2_consume_line_info): Always clear dwarf2_loc_directive_seen.
-	(dwarf2_emit_label): Don't emit unless there has been a previous
-	.file or we are outputting assembler generated debug.
-	dwarf2_consume_line_info after emitting line info, not before.
-	(out_debug_info): Simplify files_in_use test.
-
-2008-04-07  H.J. Lu  <hongjiu.lu@intel.com>
-
-	* config/tc-i386.c (parse_real_register): Return AVX register
-	only if AVX is enabled.
-
-2008-04-07  Kaz Kojima  <kkojima@rr.iij4u.or.jp>
-
-	PR gas/6043
-	* config/tc-sh64.c (shmedia_md_pcrel_from_section): Use
-	md_pcrel_from_section for BFD_RELOC_64 and BFD_RELOC_64_PCREL.
-
-2008-04-04  Adrian Bunk  <bunk@stusta.de>
-	    Bob Wilson  <bob.wilson@acm.org>
-
-	* config/tc-xtensa.c (xg_apply_fix_value): Check return code from
-	call to decode_reloc.
-
-2008-04-04  H.J. Lu  <hongjiu.lu@intel.com>
-
-	* NEWS: Mention XSAVE.  Change CLMUL to PCLMUL.
-
-	* config/tc-i386.c (cpu_arch): Add .pclmul.
-	(md_show_usage): Replace clmul with pclmul.
-	* doc/c-i386.texi: Likewise.
-
-2008-04-03  H.J. Lu  <hongjiu.lu@intel.com>
-
-	* NEWS: Mention AES, CLMUL, AVX/FMA and -msse2avx.
-
-	* doc/c-i386.texi: Add avx, aes, clmul and fma to -march=.
-	Document -msse2avx, .avx, .aes, .clmul and .fma.
-
-	* config/tc-i386.c (YMMWORD_MNEM_SUFFIX): New.
-	(vex_prefix): Likewise.
-	(sse2avx): Likewise.
-	(CPU_FLAGS_ARCH_MATCH): Likewise.
-	(CPU_FLAGS_64BIT_MATCH): Likewise.
-	(CPU_FLAGS_32BIT_MATCH): Likewise.
-	(CPU_FLAGS_PERFECT_MATCH): Likewise.
-	(regymm): Likewise.
-	(vex_imm4): Likewise.
-	(fits_in_imm4): Likewise.
-	(build_vex_prefix): Likewise.
-	(VEX_check_operands): Likewise.
-	(bad_implicit_operand): Likewise.
-	(OPTION_MSSE2AVX): Likewise.
-	(T_YMMWORD): Likewise.
-	(_i386_insn): Add vex.
-	(cpu_arch): Add .avx, .aes, .clmul and .fma.
-	(cpu_flags_match): Changed to take a pointer to const template.
-	Enable encoding SSE instructions with VEX prefix for -msse2avx.
-	(match_mem_size): Also check ymmword.
-	(operand_type_match): Clear ymmword.
-	(md_begin): Allow '_' in mnemonic.
-	(type_names): Add OPERAND_TYPE_VEX_IMM4.
-	(process_immext): Update assert.
-	(md_assemble): Don't call process_immext if sse2avx and immext
-	are true.  Call build_vex_prefix if vex is true.
-	(parse_insn): Updated for cpu_flags_match.
-	(swap_operands): Handle 5 operands.
-	(match_template): Handle 5 operands. Updated for cpu_flags_match.
-	Check regymm.  Call VEX_check_operands. Handle YMMWORD_MNEM_SUFFIX.
-	(process_suffix): Handle YMMWORD_MNEM_SUFFIX.
-	(check_byte_reg): Check regymm.
-	(process_operands): Duplicate the destination register for
-	-msse2avx if needed.
-	(build_modrm_byte): Updated for instructions with VEX encoding.
-	(output_insn): Output VEX prefix if needed.
-	(md_longopts): Add msse2avx.
-	(md_parse_option): Handle OPTION_MSSE2AVX.
-	(md_show_usage): Add avx, aes, clmul, fma and -msse2avx.
-	(intel_e09): Support YMMWORD.
-	(intel_e11): Likewise.
-	(intel_get_token): Likewise.
-
-2008-03-28  Eric B. Weddington  <eric.weddington@atmel.com>
-
-	* config/tc-avr.c (mcu_types): Add attiny167.
-	* doc/c-avr.texi: Likewise.
-
-2008-03-28  Eric B. Weddington  <eric.weddington@atmel.com>
-
-	* config/tc-avr.c (mcu_types): Add atmega32u4.
-	* doc/c-avr.texi: Likewise.
-
-2008-03-28  Eric B. Weddington  <eric.weddington@atmel.com>
-
-	* config/tc-avr.c (mcu_types): Add atmega32c1.
-	* doc/c-avr.texi: Likewise.
-
-2008-03-28  Paul Brook  <paul@codesourcery.com>
-
-	* config/tc-arm.c (parse_neon_mov): Parse register before immediate
-	to avoid spurious symbols.
-
-2008-03-28  Nathan Sidwell  <nathan@codesourcery.com>
-
-	* config/tc-m68k.c (md_convert_frag_1): Replace as_fatal with
-	as_bad_where.
-
-2008-03-27  Eric B. Weddington  <eric.weddington@atmel.com>
-
-	* config/tc-avr.c (mcu_types): Add atmega32m1.
-	* doc/c-avr.texi: Likewise.
-
-2008-03-27  Ineiev  <ineiev@yahoo.co.uk>
-
-	* config/tc-arm.c (do_neon_cvt): Move variable declarations to
-	start of block.
-	(do_neon_ext): Fix sign of comparison.
-
-2008-03-26  Bernd Schmidt  <bernd.schmidt@analog.com>
-
-	From Jie Zhang  <jie.zhang@analog.com>
-	* config/bfin-parse.y (asm_1): Check AREGS in comparison
-	instructions. And call yyerror when comparing PREG with
-	DREG.
-	(check_macfunc_option): New.
-	(check_macfuncs): Check option by calling check_macfunc_option.
-	Fix comparison always true warnings.  Both scalar instructions
-	of vector instruction must share the same mode option.  Only allow
-	option mode at the end of the second instruction of the vector.
-	(asm_1): Check option by calling check_macfunc_option.
-
-	* config/bfin-parse.y (check_macfunc_option): Allow (IU)
-	option for multiply and multiply-accumulate to data register
-	instruction.
-	(check_macfuncs): Don't check if accumulator matches the data register
-	here.
-	(assign_macfunc): Check if accumulator matches the
-	data register in each rule that moves to the data
-	register.
-
-	* config/tc-bfin.c (bfin_start_line_hook): Localize the labels
-	generated for LOOP_BEGIN and LOOP_END instructions.
-	(bfin_gen_loop): Likewise.
-
-2008-03-19  Andreas Krebbel  <krebbel1@de.ibm.com>
-
-	* config/tc-s390.c (md_parse_option): z10 option added.
-
-2008-03-17  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
-
-	* aclocal.m4: Regenerate.
-	* configure: Likewise.
-	* Makefile.in: Likewise.
-	* doc/Makefile.in: Likewise.
-
-2008-03-17  Adrian Bunk  <bunk@stusta.de>
-
-	PR 5946
-	* config/tc-hppa.c (is_same_frag): Delete.
-
-2008-03-14  Sterling Augustine  <sterling@tensilica.com>
-
-	* config/tc-xtensa.h (xtensa_relax_statesE): Update comment for
-	RELAX_LOOP_END_ADD_NOP.
-
-2008-03-13  Evandro Menezes  <evandro@yahoo.com>
-
-	PR gas/5895
-	* read.c (s_mexit): Warn if attempting to exit a macro when not
-	inside a macro definition.
-
-2008-03-13  Alan Modra  <amodra@bigpond.net.au>
-
-	* Makefile.am: Run "make dep-am".
-	* Makefile.in: Regenerate.
+	* config/tc-arm.c (s_unreq): Reword warning message to make it
+	easier to translate.
+	* config/tc-ia64.c (md_show_usage): Add note for translators.
+	* configure.in (ALL_LINGUAS): Add "fi".
 	* configure: Regenerate.
 
-2008-03-09  Paul Brook  <paul@codesourcery.com>
+2011-05-18  Tristan Gingold  <gingold@adacore.com>
 
-	* config/tc-arm.c (arm_cpu_option_table): Add cortex-a9.
-	* doc/c-arm.texi: Add cortex-a9.
+	* config/tc-ppc.h (ppc_tc_sy): Reorder fields.
+	Put size into an union with dw.
+	(OBJ_COPY_SYMBOL_ATTRIBUTES): Adjust.
+	(ppc_xcoff_end): Declare.
+	(md_end): Define.
+	* config/tc-ppc.c: Add includes for xcoff.
+	(ppc_dwsect): New function.
+	(md_pseudo_table): Add dwsect.
+	(struct dw_subsection): New.
+	(dw_sections): New.
+	(ppc_change_debug_section): New function.
+	(ppc_xcoff_end): Ditto.
+	(ppc_function): Adjust for ppc_tc_sy.
+	(ppc_symbol_new_hook): Ditto.
+	(ppc_frob_symbol): Ditto.
+	(ppc_frob_section): Do not set vma for debug sections.
+	(ppc_fix_adjustable): Return true for debug sections.
+	* config/obj-coff.c: Add includes for xcoff.
+	(coff_frob_section): Handle dwarf section.
 
-2008-03-09  Paul Brook  <paul@codesourcery.com>
+2011-05-17  Nick Clifton  <nickc@redhat.com>
 
-	* config/tc-arm.c (fpu_vfp_ext_d32): New vairable.
-	(parse_vfp_reg_list, encode_arm_vfp_reg): Use it.
-	(arm_option_cpu_value): Add vfpv3-d16, vfpv2 and vfpv3.
-	(aeabi_set_public_attributes): Handle Tag_VFP_arch=VFPV3-D16.
-	* doc/c-arm.texi: Document new ARM FPU variants.
+	* po/fi.po: New Finnish translation.
+	* po/fr.po: Updated French translation.
 
-2008-03-07  Paul Brook  <paul@codesourcery.com>
+	* config/tc-m32r.c (md_show_usage): Fix typos in descriptions.
+	* config/tc-mt.c (md_assemble): Fix typos in warning messages.
+	* cond.c (s_else): Fix typos in error messages.
+	* config/tc-pj.c (md_assemble): Fix typo in error message.
 
-	* config/tc-arm.c (md_apply_fix): Use correct offset range.
+2011-05-16  Hans-Peter Nilsson  <hp@axis.com>
 
-2008-03-07  Alan Modra  <amodra@bigpond.net.au>
+	* config/tc-cris.c (md_parse_option) <OPTION_PIC>: Error if not
+	emitting ELF object.
+	(md_show_usage): Only mention --pic if the assembler can generate
+	ELF objects.
+	* doc/c-cris.texi (CRIS-Opt): Mention that generating ELF is a
+	prerequisite for --pic being a valid option.
 
-	* config/tc-ppc.c (ppc_setup_opcodes): Tidy.  Add code to test
-	for strict ordering of powerpc_opcodes, but disable for now.
+2011-05-13  Frederic Marchal  <fmarchal@perso.be>
 
-2008-03-04  Paul Brook  <paul@codesourcery.com>
+	PR gas/12755
+	* config/tc-v850.c (parse_register_list): Correct error string.
 
-	* config/tc-arm.c (arm_ext_barrier, arm_ext_msr): New.
-	(arm_ext_v7m): Rename...
-	(arm_ext_m): ... to this.  Include v6-M.
-	(do_t_add_sub): Allow narrow low-reg non flag setting adds.
-	(do_t_mrs, do_t_msr, aeabi_set_public_attributes): Use arm_ext_m.
-	(md_assemble): Allow wide msr instructions.
-	(insns): Add classifications for v6-m instructions.
-	(arm_cpu_option_table): Add cortex-m1.
-	(arm_arch_option_table): Add armv6-m.
-	(cpu_arch): Add ARM_ARCH_V6M.  Fix numbering of other v6 variants.
+2011-05-12  Quentin Neill  <quentin.neill@amd.com>
 
-2008-03-03  Sterling Augustine  <sterling@tensilica.com>
-	    Bob Wilson  <bob.wilson@acm.org>
+	* config/tc-i386.c (cpu_arch): Rename PROCESSOR_BDVER1 to PROCESSOR_BD.
+	(i386_align_code): Ditto
 
-	* config/tc-xtensa.c (xtensa_num_pipe_stages): New.
-	(md_begin): Initialize it.
-	(resources_conflict): Use it.
+2011-05-12  Matthew Gretton-Dann  <matthew.gretton-dann@arm.com>
 
-2008-03-03  Sterling Augustine  <sterling@tensilica.com>
+	PR gas/12715
+	* config/tc-arm.c (parse_big_immediate):  Fix parsing of 64-bit
+	immediates on 32-bit hosts.
 
-	* config/tc-xtensa.h (RELAX_XTENSA_NONE): New.
+2011-05-10  Quentin Neill  <quentin.neill@amd.com>
 
-2008-03-03  Denys Vlasenko <vda.linux@googlemail.com>
-	    H.J. Lu  <hongjiu.lu@intel.com>
+	* config/tc-i386.c (cpu_arch): Add bdver2 and rename
+	PROCESSOR_BDVER1 to PROCESSOR_BDVER.
+	(i386_align_code): Rename PROCESSOR_BDVER1.
+	(processor_type): Ditto.
+	* doc/c-i386.texi: Add bdver2.
 
-	PR gas/5543
-	* read.c (pseudo_set): Don't allow global register symbol.
+2011-05-10  Alan Modra  <amodra@gmail.com>
 
-	* symbols.c (S_SET_EXTERNAL): Don't allow register symbol
-	global.
+	* dw2gencfi.c (tc_cfi_endproc): Avoid "set but not used" error.
 
-2008-03-03  H.J. Lu  <hongjiu.lu@intel.com>
+2011-05-09  Paul Brook  <paul@codesourcery.com>
 
-	PR gas/5543
-	* write.c (write_object_file): Don't allow symbols which were
-	equated to register.  Stop if there is an error.
+	* config/tc-tic6x.c (streq): Define.
+	(tic6x_get_unwind): New.
+	(s_tic6x_cantunwind, s_tic6x_handlerdata, s_tic6x_endp,
+	s_tic6x_personalityindex, s_tic6x_personality): New functions.
+	(md_pseudo_table): Add "endp", "handlerdata", "personalityindex",
+	"personality" and "cantunwind".
+	(tic6x_regname_to_dw2regnum, tic6x_frame_initial_instructions,
+	tic6x_start_unwind_section, tic6x_unwind_frame_regs,
+	tic6x_pop_rts_offset_little, tic6x_pop_rts_offset_big,
+	tic6x_unwind_reg_from_dwarf, tic6x_flush_unwind_word,
+	tic6x_unwind_byte, tic6x_unwind_2byte, tic6x_unwind_uleb,
+	tic6x_cfi_startproc, output_exidx_entry, tic6x_output_unwinding,
+	tic6x_cfi_endproc): New.
+	* config/tc-tic6x.h (TIC6X_NUM_UNWIND_REGS): Define.
+	(tic6x_unwind_info): New.
+	(tic6x_segment_info_type): Add marked_pr_dependency, unwind and
+	text_unwind.
+	(TARGET_USE_CFIPOP, tc_regname_to_dw2regnum,
+	tc_cfi_frame_initial_instructions, DWARF2_DEFAULT_RETURN_COLUMN,
+	DWARF2_CIE_DATA_ALIGNMENT, tc_cfi_startproc, tc_cfi_endproc,
+	tc_cfi_section_name): Define.
+	* doc/c-tic6x.texi: Document new unwinding directives.
+	* dw2gencfi.c (tc_cfi_startproc, tc_cfi_endproc): Add default
+	definitions.
+	(cfi_insn_data, fde_entry, CFI_adjust_cfa_offset, CFI_return_column,
+	CFI_rel_offset, CFI_escape, CFI_signal_frame, CFI_val_encoded_addr):
+	Move to dw2gencfi.h.
+	(CFI_EMIT_target): Define.
+	(dot_cfi_sections): Check tc_cfi_section_name.
+	(dot_cfi_startproc): Use tc_cfi_startproc.
+	(dot_cfi_endproc): Use tc_cfi_endproc.
+	* dw2gencfi.h (cfi_insn_data, fde_entry, CFI_adjust_cfa_offset,
+	CFI_return_column, CFI_rel_offset, CFI_escape, CFI_signal_frame,
+	CFI_val_encoded_addr):  Move to here from dw2gencfi.c.
 
-2008-03-01  Alan Modra  <amodra@bigpond.net.au>
+2011-05-07  Alan Modra  <amodra@gmail.com>
 
-	* config/tc-ppc.h (struct _ppc_fix_extra): New.
-	(ppc_cpu): Declare.
-	(TC_FIX_TYPE, TC_INIT_FIX_DATA): Define.
-	* config/tc-ppc.c (ppu_cpu): Make global.
-	(ppc_insert_operand): Add ppu_cpu parameter.
-	(md_assemble): Adjust for above change.
-	(md_apply_fix): Pass tc_fix_data.ppc_cpu to ppc_insert_operand.
+	* dw2gencfi.c (CUR_SEG, SET_CUR_SEG, HANDLED, SET_HANDLED): Define.
+	Use throughout in place of #if SUPPORT_FRAME_LINKONCE.
+	(struct fde_entry): Rename cseg to cur_seg.
+	(cfi_change_reg_numbers): Remove ATTRIBUTE_UNUSED.
+	(get_cfi_seg): Likewise.  Use if (SUPPORT_FRAME_LINKONCE) rather
+	that #if SUPPORT_FRAME_LINKONCE.
+	(cfi_finish): Likewise.
 
-2008-02-22  Nick Clifton  <nickc@redhat.com>
+2011-05-06  Tristan Gingold  <gingold@adacore.com>
 
-	* config/tc-arm.c (do_bx): Only test EF_ARM_EABI_VERSION on ELF
-	targeted ARM ports, otherwise just skip generating the reloc.
+	* read.c (s_comm_internal): Remove code for OBJ_VMS.
+	(s_data): Ditto.
+	(s_text): Ditto.
+	* write.c (write_object_file): Ditto.
+	* symbols.c (define_sym_at_dot): Ditto.
+	(colon): Ditto.
 
-2008-02-18  H.J. Lu  <hongjiu.lu@intel.com>
+2011-05-05  Alan Modra  <amodra@gmail.com>
 
-	* doc/c-i386.texi: Update -march= and .arch.
+	* dw2gencfi.c (SUPPORT_FRAME_LINKONCE): Define.  Use throughout
+	file to conditionally compile code added 2011-04-26.
+	(cfi_change_reg_numbers): Add ATTRIBUTE_UNUSED on params only used
+	when SUPPORT_FRAME_LINKONCE.
+	(get_cfi_seg): Likewise.  Reintroduce old code for when not
+	SUPPORT_FRAME_LINKONCE.
+	(cfi_finish): Move get_cfi_seg calls out of loop when not
+	SUPPORT_FRAME_LINKONCE.  Avoid unused var warning.
 
-2008-02-18  Nick Clifton  <nickc@redhat.com>
+2011-05-03  Paul Brook  <paul@codesourcery.com>
 
-	* config/tc-mn10300.c (has_known_symbol_location): New function.
-	Do not regard weak symbols as having a known location.
-	(md_estimate_size_before_relax): Use new function.
-	(md_pcrel_from): Do not compute a pcrel against a weak symbol.
+	* config/tc-tic6x.c (s_ehtype): New function.
+	(md_pseudo_table): Add "ehtype".
+	(tic6x_fix_adjustable, md_apply_fix): BFD_RELOC_C6000_EHTYPE.
+	* doc/c-tic6x.texi: Document .ehtype directive.
 
-2008-02-18  Jan Beulich  <jbeulich@novell.com>
+2011-04-26  Kai Tietz  <ktietz@redhat.com>
 
-	* config/tc-i386.c (match_template): Disallow 'l' suffix when
-	currently selected CPU has no 32-bit support.
-	(parse_real_register): Do not return registers not available on
-	currently selected CPU.
+	* dw2gencfi.c (dwcfi_seg_list): New struct.
+	(dwcfi_hash): New static hash variable.
+	(get_debugseg_name): New.
+	(alloc_debugseg_item): New.
+	(make_debug_seg): New.
+	(dwcfi_hash_insert): New.
+	(dwcfi_hash_find): New.
+	(dwcfi_hash_find_or_make): New.
+	(cfi_insn_data): New member cur_seg.
+	(cie_entry): Likewise.
+	(fde_entry): New cseg and handled members.
+	(alloc_fde_entry): Initialize cseg member.
+	(alloc_cfi_insn_data): Initialize cur_seg member.
+	(dot_cfi_sections): Compare for beginning of
+	section names via strncmp.
+	(get_cfi_seg): New.
+	(cfi_finish): Treat link-once sections.
+	(is_now_linkonce_segment): New local helper.
+	(output_cie): Ignore cie entries not member of current
+	segment.
+	(output_fde): Likewise.
+	(select_cie_for_fde): Likewise.
+	(cfi_change_reg_numbers): Add new argument for current segment
+	and ignore insn elements, if not part of current segment.
+	* ehopt.c (get_cie_info): Use strncmp for
+	section name matching.
+	(heck_eh_frame): Likewise.
 
-2008-02-16  H.J. Lu  <hongjiu.lu@intel.com>
+2011-04-20  Catherine Moore  <clm@codesourcery.com>
+            David Ung <davidu@mips.com>
 
-	* config/tc-i386.c (process_immext): Fix format.
+	* config/mips.c (mips_cl_insn): Add new field complete_p.
+	(create_insn): Initialize complete_p to zero.
+	(BASE_REG_EQ): New.
+	(fix_24k_align_to): New.
+	(fix_24k_store_info): Declare.
+	(fix_24k_sort): New.
+	(fix_24k_record_store_info): New.
+	(nops_for_24k): New.
+	(nops_for_insn): Call nops_for_24k.
+	(append_insn): Move O_constant expression handling.
 
-2008-02-16  H.J. Lu  <hongjiu.lu@intel.com>
+2011-04-20  Alan Modra  <amodra@gmail.com>
 
-	* config/tc-i386.c (inoutportreg): New.
-	(process_immext): New.
-	(md_assemble): Use it.
-	(update_imm): Use imm16 and imm32s.
-	(i386_att_operand): Use inoutportreg.
+	* hash.c (set_gas_hash_table_size): Use bfd_hash_set_default_size.
+	(hash_new_sized): New function, split out from..
+	(hash_new): ..here.
 
-2008-02-14  H.J. Lu  <hongjiu.lu@intel.com>
+2011-04-19  Nick Clifton  <nickc@redhat.com>
 
-	* config/tc-i386.c (operand_type_all_zero): New.
-	(operand_type_set): Likewise.
-	(operand_type_equal): Likewise.
-	(cpu_flags_all_zero): Likewise.
-	(cpu_flags_set): Likewise.
-	(cpu_flags_equal): Likewise.
-	(UINTS_ALL_ZERO): Removed.
-	(UINTS_SET): Likewise.
-	(UINTS_CLEAR): Likewise.
-	(UINTS_EQUAL): Likewise.
-	(cpu_flags_match): Updated.
-	(smallest_imm_type): Likewise.
-	(set_cpu_arch): Likewise.
-	(md_assemble): Likewise.
-	(optimize_imm): Likewise.
-	(match_template): Likewise.
-	(process_suffix): Likewise.
-	(update_imm): Likewise.
-	(process_drex): Likewise.
-	(process_operands): Likewise.
-	(build_modrm_byte): Likewise.
-	(i386_immediate): Likewise.
-	(i386_displacement): Likewise.
-	(i386_att_operand): Likewise.
-	(parse_real_register): Likewise.
+	* config/tc-arm.c (v7m_psrs): Revert previous delta.
+
+2011-04-18  Julian Brown  <julian@codesourcery.com>
+	    Nick Clifton  <nickc@redhat.com>
+
+	* config/tc-arm.c (parse_psr): Use selected_cpu not cpu_variant to
+	detect M-profile targets.
+	(do_t_swi): Exclude v7 and higher variants from arm_ext_os test.
+	(v7m_psrs): Fix typo: basepri_max should be basepri_mask.
+
+2011-04-14  Andreas Krebbel  <Andreas.Krebbel@de.ibm.com>
+
+	* config/tc-s390.c (s390_machine): New prototype.
+	(md_pseudo_table): New pseudo-op .machine.
+	(s390_opcode_hash): Initialize to NULL.
+	(s390_parse_cpu): New function.
+	(md_parse_option): Use s390_parse_cpu.
+	(s390_setup_opcodes): New function.
+	(md_begin): Use s390_setup_opcodes.
+	(s390_machine): New hook handling the new .machine pseudo.
+
+	* doc/c-s390.texi: Document the new pseudo op .machine.
+
+2011-04-12  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* config/tc-i386.c (i386_mach): Start error message with lower
+	case.
+	(md_begin): Likewise.
 	(md_parse_option): Likewise.
 	(i386_target_format): Likewise.
+	(check_byte_reg): Likewise.
+	(check_long_reg): Likewise.
+	(check_qword_reg): Likewise.
+	(check_word_reg): Likewise.
 
-2008-02-14  Dimitry Andric  <dimitry@andric.com>
+2011-04-12  Nick Clifton  <nickc@redhat.com>
 
-	PR gas/5712
-	* config/tc-arm.c (s_arm_unwind_save): Advance the input line
-	pointer past the comma after parsing a floating point register
-	name.
+	PR gas/12532
+	* config/tc-arm.c (relax_branch): Do not relax branches to
+	preemptable global symbols.
 
-2008-02-14  Hakan Ardo  <hakan@debian.org>
+2011-04-11  Julian Brown  <julian@codesourcery.com>
 
-	PR gas/2626
-	* config/tc-avr.c (mcu_types): Change the ISA tyoe of the attiny26
-	to AVR_ISA_2xxe.
-	(avr_operand): Disallow post-increment addressing in the lpm
-	instruction for the attiny26.
+	* config/tc-arm.c (parse_psr): Add LHS argument. Improve support
+	for *APSR bitmasks.
+	(operand_parse_code): Replace OP_PSR with OP_wPSR and OP_rPSR.
+	Remove OP_RVC_PSR.
+	(parse_operands): Likewise.
+	(do_mrs): Tweak error message for constraint.
+	(do_t_mrs): Update constraints for changes to APSR support.
+	(do_t_msr): Likewise. Don't set PSR_f flag here.
+	(psrs): Remove "g", "nzcvq", "nzcvqg".
+	(insns): Tweak entries for msr and mrs instructions.
 
-2008-02-13  Jan Beulich  <jbeulich@novell.com>
+2011-04-11  Kai Tietz  <ktietz@redhat.com>
 
-	* config/tc-i386.c (parse_real_register): Don't return 'FLAT'
-	if not in Intel mode.
-	(i386_intel_operand): Ignore segment overrides in immediate and
-	offset operands.
-	(intel_e11): Range-check i.mem_operands before use as array
-	index. Filter out FLAT for uses other than as segment override.
-	(intel_get_token): Remove broken promotion of "FLAT:" to mean
-	"offset FLAT:".
+	* config/tc-i386.c (x86_cons): Initialize adjust with zero.
 
-2008-02-13  Jan Beulich  <jbeulich@novell.com>
+2011-04-11  Nick Clifton  <nickc@redhat.com>
 
-	* config/tc-i386.c (intel_e09): Also special-case 'bound'.
+	* config/tc-i386.c (x86_cons): Define even for non-ELF targets.
+	* config/tc-i386.h (x86_cons): Always prototype.
 
-2008-02-13  Jan Beulich  <jbeulich@novell.com>
+	* config/tc-cr16.c (getprocregp_image): Fix type of 'r' parameter
+	in order to avoid a compile time warning.
+	(getprocreg_image): Likewise.
 
-	* config/tc-i386.c (allow_pseudo_reg): New.
-	(parse_real_register): Check for NULL just once. Allow all
-	register table entries when allow_pseudo_reg is non-zero.
-	Don't allow any registers without type when allow_pseudo_reg
-	is zero.
-	(tc_x86_regname_to_dw2regnum): Replace with ...
-	(tc_x86_parse_to_dw2regnum): ... this.
-	(tc_x86_frame_initial_instructions): Adjust for above change.
-	* config/tc-i386.h (tc_regname_to_dw2regnum): Remove.
-	(tc_parse_to_dw2regnum): New.
-	(tc_x86_regname_to_dw2regnum): Replace with ...
-	(tc_x86_parse_to_dw2regnum): ... this.
-	* dw2gencfi.c (tc_parse_to_dw2regnum): New, broken out of ...
-	(cfi_parse_reg): ... this. Use tc_parse_to_dw2regnum. Adjust
-	error handling.
+2011-04-11  Alan Modra  <amodra@gmail.com>
 
-2008-02-12  Nick Clifton  <nickc@redhat.com>
+	* config/tc-cr16.c (getprocreg_image): Correct range check.
+	(getprocregp_image): Likewise.
 
-	* config/tc-tic4x.c (tic4x_insn_insert): Add const qualifier to
-	argument.
-	(tic4x_insn_add): Likewise.
-	(md_begin): Drop cast that was discarding a const qualifier.
-	* config/tc-d30v.c (get_reloc): Add const qualifier to op
-	argument.
-	(build_insn): Drop cast that was discarding a const qualifier.
+2011-04-06  Joseph Myers  <joseph@codesourcery.com>
 
-2008-02-11  H.J. Lu  <hongjiu.lu@intel.com>
+	* configure.tgt (strongarm*be, strongarm*b, strongarm*,
+	xscale*be|xscale*b, xscale*): Remove architectures.
+	(thumb-*-coff, thumb-*-rtems*, thumb-*-elf, thumb-epoc-pe,
+	thumb-*-pe, xscale-*-coff, xscale-*-elf): Remove targets.
 
-	* config/tc-i386.c (cpu_arch): Add .xsave.
-	(md_show_usage): Add .xsave.
+2011-04-01  Tristan Gingold  <gingold@adacore.com>
 
-	* doc/c-i386.texi: Add xsave to -march=.
+	* config/tc-ia64.c (md_apply_fix): Add a cast to avoid a warning.
 
-2008-02-07  Alan Modra  <amodra@bigpond.net.au>
+2011-03-31  Bernd Schmidt  <bernds@codesourcery.com>
 
-	* read.c (s_weakref): Don't pass unadorned NULL to concat.
-	* config/tc-i386.c (set_cpu_arch, md_parse_option): Likewise.
+	* config/tc-tic6x.c (sbss_section, scom_section, scom_symbol): New
+	static variables.
+	(md_begin): Initialize them.
+	(s_tic6x_scomm): New static function.
+	(md_pseudo_table): Add "scomm".
+	(tc_gen_reloc): Really undo all adjustments made by
+	bfd_install_relocation.
+	* doc/c-tic6x.texi: Document the .scomm directive.
 
-2008-02-05  Sterling Augustine  <sterling@tensilica.com>
+2011-03-31  Tristan Gingold  <gingold@adacore.com>
 
-	* config/tc-xtensa.c (relax_frag_immed): Change internal consistency
-	checks into assertions.  When relaxation produces an operation that
-	does not fit in the current FLIX instruction, make sure that the
-	operation is relaxed as needed to account for being placed following
-	the current instruction.
+	* dwarf2dbg.c (DWARF2_VERSION): Define.
+	(out_debug_line): Use it.
+	(out_debug_aranges): Ditto.
+	(out_debug_info): Ditto.
+	* config/tc-ia64.h (DWARF2_VERSION): Override it.
 
-2008-02-04  H.J. Lu  <hongjiu.lu@intel.com>
+2011-03-30  Michael Snyder  <msnyder@vmware.com>
 
-	PR 5715
-	* configure: Regenerated.
+	* obj-elf.c (obj_elf_section): Free malloced name.
+	* macro.c (get_any_string): Free malloced br_buf.
+	(do_formals): Free 'formal'.
 
-2008-02-04  Adam Nemet  <anemet@caviumnetworks.com>
+2011-03-30  Tristan Gingold  <gingold@adacore.com>
 
-	* config/tc-mips.c (mips_cpu_info_table): Add Octeon.
+	* config/tc-ppc.c (ppc_frob_symbol): Convert stsym symbols value
+	to offset only if within is set.
+	(ppc_stabx): Reformat.  For stsym stabs, add a check and set
+	within only for symbols.
 
-2008-01-31  Marc Gauthier  <marc@tensilica.com>
+2011-03-29  Richard Henderson  <rth@redhat.com>
 
-	* configure.tgt (xtensa*-*-*): Recognize processor variants.
+	PR 12610
+	* config/tc-alpha.c (s_alpha_align): Don't auto-align a previous
+	label; zap alpha_insn_label.
 
-2008-01-25  Kai Tietz  <kai.tietz@onevision.com>
+2011-03-29  H.J. Lu  <hongjiu.lu@intel.com>
 
-	* read.c: (emit_expr): Correct for mingw use of printf size
-	specifier.
+	* config/tc-i386.c (handle_quad): Properly handle multiple
+	operands.
 
-2008-01-24  Bob Wilson  <bob.wilson@acm.org>
+2011-03-29  Mike Frysinger  <vapier@gentoo.org>
 
-	* doc/c-xtensa.texi (Xtensa Syntax): Clarify handling of opcodes that
-	can only be encoded in FLIX instructions but are not specified as such.
-	(Xtensa Automatic Alignment): Remove obsolete comment about debugging
-	labels.
-
-2008-01-24  H.J. Lu  <hongjiu.lu@intel.com>
-
-	* NEWS: Mention new command line options for x86 targets.
-
-2008-01-23  H.J. Lu  <hongjiu.lu@intel.com>
-
-	* config/tc-i386.c (md_show_usage): Replace tabs with spaces.
+	* config/bfin-parse.y (BYTEUNPACK): Return yyerror when dest
+	reg $2 is the same as dest reg $4.
 
-2008-01-23  Eric B. Weddington  <eric.weddington@atmel.com>
+2011-03-29  Mike Frysinger  <vapier@gentoo.org>
 
-	* config/tc-avr.c (mcu_types): Change opcode set for at86rf401.
+	* config/bfin-parse.y (BYTEOP16M): Return yyerror when dest
+	reg $2 is the same as dest reg $4.
 
-2008-01-23  H.J. Lu  <hongjiu.lu@intel.com>
+2011-03-29  Mike Frysinger  <vapier@gentoo.org>
 
-	* config/tc-i386.c (md_show_usage): Show more processors for
-	-march=/-mtune=.
+	* config/bfin-parse.y (BYTEOP16P): Return yyerror when dest
+	reg $2 is the same as dest reg $4.
 
-2008-01-22  H.J. Lu  <hongjiu.lu@intel.com>
+2011-03-28  Mike Frysinger  <vapier@gentoo.org>
 
-	* config/tc-i386.c (i386_target_format): Remove cpummx2.
+	* config/bfin-parse.y (16bit acc add): Return yyerror when dest
+	reg $1 is the same as dest reg $7.
 
-2008-01-22  H.J. Lu  <hongjiu.lu@intel.com>
+2011-03-28  H.J. Lu  <hongjiu.lu@intel.com>
 
-	* config/tc-i386.c (XXX_PREFIX): Moved from tc-i386.h.
-	(XXX_MNEM_SUFFIX): Likewise.
-	(END_OF_INSN): Likewise.
-	(templates): Likewise.
-	(modrm_byte): Likewise.
-	(rex_byte): Likewise.
-	(DREX_XXX): Likewise.
-	(drex_byte): Likewise.
-	(sib_byte): Likewise.
-	(processor_type): Likewise.
-	(arch_entry): Likewise.
-	(cpu_sub_arch_name): Remove const.
-	(cpu_arch): Add .vmx and .smx.
-	(set_cpu_arch): Append cpu_sub_arch_name.
-	(md_parse_option): Support -march=CPU[,+EXTENSION...].
-	(md_show_usage): Updated.
+	* config/tc-i386.c (handle_quad): New.
+	(md_pseudo_table): Add "quad".
 
-	* config/tc-i386.h (XXX_PREFIX): Moved to tc-i386.c.
-	(XXX_MNEM_SUFFIX): Likewise.
-	(END_OF_INSN): Likewise.
-	(templates): Likewise.
-	(modrm_byte): Likewise.
-	(rex_byte): Likewise.
-	(DREX_XXX): Likewise.
-	(drex_byte): Likewise.
-	(sib_byte): Likewise.
-	(processor_type): Likewise.
-	(arch_entry): Likewise.
+2011-03-26  John Marino  <binutils@marino.st>
 
-	* doc/as.texinfo: Update i386 -march option.
+	* configure.tgt: Fix support for *-*-dragonfly*.
+	* config/tc-i386.c: define SVR4_COMMENT_CHARS for dragonfly.
+	* config/te-dragonfly.h: New file.
 
-	* doc/c-i386.texi: Update -march= for ISA.
+2011-03-24  Eric B. Weddington  <eric.weddington@atmel.com>
 
-2008-01-18  Bob Wilson  <bob.wilson@acm.org>
+	* config/tc-avr.c (mcu_types): Add new devices: atmega325pa,
+	atmega3250pa, atmega3290pa, atmega16hvbrevb, atmega32hvbrevb,
+	at90pwm161.
+	* doc/c-avr.texi: Document new device names.
 
-	* config/tc-xtensa.c (xtensa_leb128): New function.
-	(md_pseudo_table): Use it for sleb128 and uleb128.
-	(is_leb128_expr): New internal flag.
-	(xtensa_symbol_new_hook): Check new flag.
+2011-03-24  Mike Frysinger  <vapier@gentoo.org>
 
-2008-01-16  Eric B. Weddington  <eric.weddington@atmel.com>
+	* config/bfin-parse.y (dual 32bit add/sub): Return yyerror when dest
+	reg $1 is the same as dest reg $7.
+	(quad 16bit add/sub): Return yyerror when dest reg $1 is the same as
+	dest reg $7.
 
-	* config/tc-avr.c (mcu_types): Change opcode set for avr3,
-	at90usb82, at90usb162.
-	* doc/c-avr.texi: Change architecture grouping for at90usb82,
-	at90usb162.
-	These changes support the new avr35 architecture group in gcc.
+2011-03-24  Mike Frysinger  <vapier@gentoo.org>
 
-2008-01-15  H.J. Lu  <hongjiu.lu@intel.com>
+	* config/bfin-parse.y (check_macfuncs): Clarify error message when
+	P is mismatched.  Check destination regno are off by one when P is
+	set, or are equal when P is not set.
 
-	* config/tc-i386.c (md_assemble): Also zap movzx and movsx
-	suffix for AT&T syntax.
+2011-03-23  Mike Frysinger  <vapier@gentoo.org>
 
-2008-01-14  H.J. Lu  <hongjiu.lu@intel.com>
+	* config/bfin-parse.y (SEARCH): Return yyerror when dest reg $2 is
+	the same as dest reg $4.
+	(BITMUX): Return yyerror when dest reg $3 is the same as dest reg $5.
 
-	* config/tc-i386.c (match_reg_size): New.
-	(match_mem_size): Likewise.
-	(operand_size_match): Likewise.
-	(operand_type_match): Also clear all size fields.
-	(match_template): Skip Intel syntax when in AT&T syntax.
-	Call operand_size_match to check operand size.
-	(i386_att_operand): Set the mem field to 1 for memory
-	operand.
-	(i386_intel_operand): Likewise.
+2011-03-23  Eric B. Weddington  <eric.weddington@atmel.com>
 
-2008-01-12  H.J. Lu  <hongjiu.lu@intel.com>
+	* config/tc-avr.c (mcu_types): Add new xmega devices: atxmega64a1u,
+	atxmega128a1u, atxmega16x1, atxmega32x1, atxmega128b1, atxmega256a3bu.
+	* doc/c-avr.texi: Document new device names.
 
-	PR gas/5534
-	* config/tc-i386.c (_i386_insn): Update comment.
-	(operand_type_match): Also clear unspecified.
-	(operand_type_register_match): Likewise.
-	(parse_operands): Initialize unspecified.
-	(i386_intel_operand): Likewise.
-	(match_template): Check memory and accumulator operand size.
-	(i386_att_operand): Clear unspecified on register operand.
-	(intel_e11): Likewise.
-	(intel_e09): Set operand size and clean unspecified for
-	"XXX PTR".
+2011-03-22  Eric B. Weddington  <eric.weddington@atmel.com>
 
-2008-01-11  Andreas Schwab  <schwab@suse.de>
+	* config/tc-avr.c (struct avr_opcodes_s): Add opcode field.
+	(AVR_INSN): Change definition to match.
+	(avr_opcodes): Likewise, change to match.
+	(mcu_types): Add XMEGA architecture names and new XMEGA device names.
+	(md_show_usage): Add XMEGA architecture names.
+	(avr_operand): Add 'E' constraint for DES instruction of XMEGA devices.
+	Add support for SPM Z+ instruction.
+	* doc/c-avr.texi: Add documentation for XMEGA architectures and
+	devices.
 
-	* read.c (s_space): Declare `repeat' as offsetT.
+2011-03-21  Eric B. Weddington  <eric.weddington@atmel.com>
 
-2008-01-10  H.J. Lu  <hongjiu.lu@intel.com>
+	* config/tc-avr.c (md_show_usage): Add "Assembler" text to output.
 
-	* config/tc-i386.c (match_template): Check processor support
-	first.
+2011-03-18  Alan Modra  <amodra@gmail.com>
 
-2008-01-10  H.J. Lu  <hongjiu.lu@intel.com>
+	* config/obj-elf.c (elf_frob_symbol): Report S_SET_SIZE symbol
+	on .size expression errors rather than symbols in the size expression.
 
-	* config/tc-i386.c (match_template): Continue if processor
-	doesn't match.
+2011-03-18  Alan Modra  <amodra@gmail.com>
 
-2008-01-09  Alexandre Oliva  <aoliva@redhat.com>
+	* input-scrub.c (line_numberT): Delete.
+	(input_scrub_close): Reset line counters.
+	* messages.c (as_show_where): Don't print invalid line number.
+	(as_warn_internal, as_bad_internal): Likewise.
 
-	* config/tc-ia64.c (ia64_convert_frag): Zero-initialize room for
-	unwind personality function address.
+2011-03-18  Alan Modra  <amodra@gmail.com>
 
-2008-01-09  Bob Wilson  <bob.wilson@acm.org>
+	* read.c (read_a_source_file): Remove md_after_pass_hook.
+	Move "quit" label before set of dot_symbol.
+	* config/tc-d10v.h (md_after_pass_hook): Don't define.
+	* config/tc-d30v.h (md_after_pass_hook): Likewise.
+	* config/tc-m32r.h (md_after_pass_hook): Likewise.
+	(md_cleanup): Define to call m32r_fill_insn.
 
-	* dwarf2dbg.c (out_sleb128): Delete.
-	(size_fixed_inc_line_addr, emit_fixed_inc_line_addr): New.
-	(out_fixed_inc_line_addr): Delete.
-	(relax_inc_line_addr, dwarf2dbg_estimate_size_before_relax): Call new
-	size_fixed_inc_line_addr if DWARF2_USE_FIXED_ADVANCE_PC is set.
-	(dwarf2dbg_convert_frag): Likewise for emit_fixed_inc_line_addr.
-	(process_entries): Remove calls to out_fixed_inc_line_addr.  When
-	DWARF2_USE_FIXED_ADVANCE_PC is set, call relax_inc_line_addr.
-	* read.h (emit_expr_fix): New prototype.
-	* read.c (emit_expr): Move code to emit_expr_fix and use it here.
-	(emit_expr_fix): New.
+2011-03-18  Andreas Krebbel  <Andreas.Krebbel@de.ibm.com>
 
-2008-01-09  H.J. Lu  <hongjiu.lu@intel.com>
+	* config/tc-s390.c (md_parse_option): Add -march=all option which
+	switches to the highest available CPU.
 
-	* config/tc-i386.c (match_template): Check register size
-	only when size of operands can be encoded the canonical way.
+2011-03-17  Alan Modra  <amodra@gmail.com>
 
-2008-01-08  H.J. Lu  <hongjiu.lu@intel.com>
+	PR 12569
+	* expr.c (operand): Correct passing of "mode" to expr.
+	* read.c (do_org): Allow expr_section.
+	(get_known_segmented_expression): Don't assert anything about the
+	segment.
 
-	* config/tc-i386.c (i386_operand): Renamed to ...
-	(i386_att_operand): This.
-	(parse_operands): Updated.
+2011-03-16  H.J. Lu  <hongjiu.lu@intel.com>
 
-2008-01-05  H.J. Lu  <hongjiu.lu@intel.com>
+	* as.c (show_usage): Add --size-check=.
+	(parse_args): Add and handle OPTION_SIZE_CHECK.
 
-	* doc/c-i386.texi: Update .att_mnemonic and .intel_mnemonic.
+	* as.h (flag_size_check): New.
 
-	* config/tc-i386.c (set_intel_mnemonic): Set intel_mnemonic
-	only.
-	(md_assemble): Remove Intel mode workaround.
-	(match_template): Check support for old gcc, AT&T mnemonic
-	and Intel Syntax.
-	(md_parse_option): Don't set intel_mnemonic to 0 for
-	OPTION_MOLD_GCC.
+	* config/obj-elf.c (elf_frob_symbol): Use as_bad to report
+	bad .size directive only for --size-check=error.
 
-2008-01-04  H.J. Lu  <hongjiu.lu@intel.com>
+	* doc/as.texinfo: Document --size-check=.
 
-	* config/tc-i386.h: Update copyright to 2008.
+2011-03-14  Mike Frysinger  <vapier@gentoo.org>
 
-2008-01-04  Nick Clifton  <nickc@redhat.com>
+	* config/tc-bfin.c (bfin_cpus[]): Add 0.4 for
+	bf542/bf544/bf547/bf548/bf549.
 
-	* config/tc-ppc.c (parse_cpu): Preserve the settings of the
-	PPC_OPCODE_ALTIVEC and PPC_OPCODE_SPE flags.
+2011-03-14  Richard Sandiford  <richard.sandiford@linaro.org>
 
-2008-01-03  H.J. Lu  <hongjiu.lu@intel.com>
+	* config/tc-arm.c (md_pcrel_from_section): Use S_FORCE_RELOC to
+	determine whether a relocation is needed.
+	(md_apply_fix, arm_apply_sym_value): Likewise.
 
-	* config/tc-i386.c (md_assemble): Use !intel_mnemonic instead
-	of SYSV386_COMPAT.
+2011-03-14  Richard Sandiford  <richard.sandiford@linaro.org>
 
-2008-01-03  H.J. Lu  <hongjiu.lu@intel.com>
+	* config/tc-arm.c (arm_adjust_symtab): Set the branch type
+	for Thumb symbols.
 
-	* gas/config/tc-i386.c (cpu_arch_flags_not): Removed.
-	(cpu_flags_not): Likewise.
-	(cpu_flags_match): Updated to check 64bit and arch.
-	(set_code_flag): Remove cpu_arch_flags_not.
-	(set_16bit_gcc_code_flag): Likewise.
-	(set_cpu_arch): Likewise.
-	(md_begin): Likewise.
-	(parse_insn): Call cpu_flags_match to check 64bit and arch.
-	(match_template): Likewise.
+2011-03-11  Nick Clifton  <nickc@redhat.com>
 
-2008-01-03  Jakub Jelinek  <jakub@redhat.com>
+	* remap.c (remap_debug_filename): Always allocate a buffer for the
+	returned pointer.
+	* stabs.c (stabs_generate_asm_file): Free the pointer returned by
+	remap_debug_filename.
 
-	* config/tc-i386.c (process_drex): Initialize modrm_reg and
-	modrm_regmem to 0 instead of None.
+2011-03-10  Michael Snyder  <msnyder@vmware.com>
 
-2008-01-03  H.J. Lu  <hongjiu.lu@intel.com>
+	Revert the following change:
+	* dwarf2dbg.c (out_file_list): Free malloced 'dir'.
+	(out_debug_info): Free malloced 'dirname' and 'comp_dir'.
 
-	* config/tc-i386.c (match_template): Use the xmmword field
-	instead of no_xsuf.
+2011-03-10  Alan Modra  <amodra@gmail.com>
 
-2008-01-02  H.J. Lu  <hongjiu.lu@intel.com>
+	* gas/config/obj-elf.h (ELF_TARGET_SYMBOL_FIELDS,
+	TARGET_SYMBOL_FIELDS): Don't define.
+	* gas/config/tc-arc.c (arc_common): Use correct symbol "local" field.
 
-	* config/tc-i386.c (process_suffix): Fix a typo.
+2011-03-09  Michael Snyder  <msnyder@vmware.com>
 
-2008-01-02  H.J. Lu  <hongjiu.lu@intel.com>
+	* dwarf2dbg.c (out_file_list): Free malloced 'dir'.
+	(out_debug_info): Free malloced 'dirname' and 'comp_dir'.
+	(emit_fixed_inc_line_addr): Assign instead of conditional in
+	assert.
 
-	PR gas/5534
-	* config/tc-i386.c (match_template): Handle XMMWORD_MNEM_SUFFIX.
-	Check memory size in Intel mode.
-	(process_suffix): Handle XMMWORD_MNEM_SUFFIX.
-	(intel_e09): Likewise.
+2011-03-05  H.J. Lu  <hongjiu.lu@intel.com>
 
-	* config/tc-i386.h (XMMWORD_MNEM_SUFFIX): New.
+	* config/obj-elf.c (elf_frob_symbol): Mention symbol name in
+	non-constant .size expression.
 
-2008-01-02  Catherine Moore  <clm@codesourcery.com>
+2011-03-02  Nick Clifton  <nickc@redhat.com>
 
-	* config/tc-mips.c (mips_ip): Check operands on jalr instruction.
+	* ecoff.c: Incldue filenames.h
 
-For older changes see ChangeLog-2007
+2011-02-28  Kai Tietz  <kai.tietz@onevision.com>
+
+	* depend.c (register_dependency): Use filename_(n)cmp.
+	* dwarf2dbg.c (get_filenum): Likewise.
+	* ecoff.c (add_file): Likewise.
+	(ecoff_generate_asm_lineno): Likewise.
+	* input-scrub.c (new_logical_line_flags): Likewise.
+	* listing.c (file_info): Likewise.
+	(listing_newline): Likewise.
+	* remap.c (remap_debug_filename): Likewise.
+	* stabs.c (generate_asm_file): Likewise.
+	(stabs_generate_asm_lineno): Likewise.
+
+2011-02-28  Maciej W. Rozycki  <macro@codesourcery.com>
+
+	* config/tc-mips.c (append_insn): Disable branch relaxation for
+	DSP instructions.
+
+2011-02-28  Maciej W. Rozycki  <macro@codesourcery.com>
+
+	* config/tc-mips.c (macro): Handle M_PREF_AB.
+
+2011-02-28  Maciej W. Rozycki  <macro@codesourcery.com>
+
+	* config/tc-mips.c (RELAX_BRANCH_ENCODE): Encode the temporary
+	register to use.
+	(RELAX_BRANCH_UNCOND): Adjust accordingly.
+	(RELAX_BRANCH_LIKELY): Likewise.
+	(RELAX_BRANCH_LINK): Likewise.
+	(RELAX_BRANCH_TOOFAR): Likewise.
+	(RELAX_BRANCH_AT): New macro.
+	(append_insn): Encode the temporary register to use in standard
+	MIPS branch relaxation.
+	(relaxed_branch_length): Update according to changes to
+	RELAX_BRANCH_ENCODE.
+	(md_convert_frag): Use the encoded register as the temporary.
+
+2011-02-28  Maciej W. Rozycki  <macro@codesourcery.com>
+
+	* config/tc-mips.c (mips_fix_adjustable): On REL targets also
+	reject PC-relative relocations.
+
+2011-02-28  Maciej W. Rozycki  <macro@codesourcery.com>
+
+	* config/tc-mips.c (md_convert_frag): Correct message
+	capitalization.
+
+2011-02-28  Alan Modra  <amodra@gmail.com>
+
+	* symbols.c (report_op_error): Remove unnecessary forward declaration.
+	Add "op" parameter.  Report operator and operand segments in error
+	message, not operand symbols.
+	(resolve_symbol_value): Always set segment for equated symbols, not
+	just when finalizing.  Adjust report_op_error calls.
+
+2011-02-25  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* config/tc-i386.c (reloc): Don't sign-check 4-byte relocations
+	if 64bit relocations aren't allowed.
+
+2011-02-25  Alan Modra  <amodra@gmail.com>
+
+	PR gas/12519
+	* config/obj-elf.c (elf_frob_symbol): Properly handle size expression.
+
+2011-02-21  Maciej W. Rozycki  <macro@codesourcery.com>
+
+	* config/tc-mips.c (mips_ip) <'o'>: Remove duplicate
+	initialization of offset_reloc.
+
+2011-02-15  Richard Henderson  <rth@redhat.com>
+
+	* dw2gencfi.c (dot_cfi_dummy): New.
+	(cfi_pseudo_table) [!TARGET_USE_CFIPOP]: New.
+	* read.c (pobegin): Unconditionally call cfi_pop_insert.
+
+2011-02-13  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
+
+	* configure: Regenerate.
+
+2011-02-13  Mike Frysinger  <vapier@gentoo.org>
+
+	* config/bfin-lex.l (BYTEOP2M): Remove tokenization.
+	* config/bfin-parse.y (BYTEOP2M): Delete token.
+	(asm_1): Remove BYTEOP2M insn matching.
+
+2011-02-12  Mike Frysinger  <vapier@gentoo.org>
+
+	* config/bfin-defs.h: Include opcode/bfin.h.
+	(M_S2RND, M_T, M_W32, M_FU, M_TFU, M_IS, M_ISS2, M_IH, M_IU): Delete.
+
+2011-02-11  Mike Frysinger  <vapier@gentoo.org>
+
+	* doc/c-bfin.texi (Instruction Delimiting): Fix occur typo.
+	(Modify Registers): Fix subtracted typo.
+	(.byte2): Extend and swap descriptions with .byte4.
+	(.byte4): Extend and swap descriptions with .byte2.
+	(.db, .dw, .dd): Document behavior.
+
+2011-02-11  Mike Frysinger  <vapier@gentoo.org>
+
+	* config/bfin-parse.y (TESTSET): Reject REG_SP and REG_FP.
+
+2011-02-11  Alan Modra  <amodra@gmail.com>
+
+	* doc/c-ppc.texi (PowerPC-Opts <-nops>): Clarify.
+
+2011-02-10  Alan Modra  <amodra@gmail.com>
+
+	* doc/as.texinfo (Overview): Add missing markup around Blackfin
+	and PowerPC options.
+
+2011-02-10  Alan Modra  <amodra@gmail.com>
+
+	* config/tc-ppc.c (md_show_usage): Remove -l and -b.  Add -K PIC.
+	* doc/as.texinfo: Refer to and include c-ppc.texi for PowerPC options.
+	(Overview <Target PowerPC options>): Add a number of missing options.
+	* doc/c-ppc.texi: Likewise.  Add markup for use in manpage generation.
+
+2011-02-08  H.J. Lu  <hongjiu.lu@intel.com>
+
+	PR gas/6957
+	* config/tc-i386.c (i386_align_code): Use f32_patt when tuning
+	for i686.
+
+2011-02-08  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* config/tc-i386.c (set_cpu_arch): Also update cpu_arch_isa_flags
+	for ISA extensions.
+	(md_parse_option): Likewise.
+
+2011-02-04  Bernd Schmidt  <bernds@codesourcery.com>
+
+	* doc/as.texinfo (Target TIC6X options): Don't mention "-matomic".
+	* doc/c-tic6x.texi (TIC6X Directives): Don't mention ".atomic".
+	(TIC6X Options): Don't mention "-matomic".
+	* config/tc-tic6x.c (OPTION_MATOMIC, OPTION_MNO_ATOMIC): Delete.
+	(md_longopts): Remove corresponding entries.
+	(md_parse_option): Don't handle them.
+	(md_show_usage): Don't document them.
+	(tic6x_atomic): Delete variable.
+	(tic6x_update_features): Always copy tic6x_arch_enable to
+	tic6x_features.
+	(tic6x_arch_enable): Remove references to TIC6X_INSN_ATOMIC.
+	(s_tic6x_atomic, s_tic6x_noatomic): Remove functions.
+	(md_pseudo_table): Remove ".atomic" and ".noatomic".
+
+2011-01-31  Nick Clifton  <nickc@redhat.com>
+
+	* write.c (write_contents): Include output file name and bfd error
+	value when reporting the inability to write to the output file.
+	* config/tc-rx.c (rx_handle_align): Do not insert NOPs into align
+	frag that has a non-zero fill value.
+
+2011-01-27  DJ Delorie  <dj@redhat.com>
+
+	* config/tc-rx.c (md_convert_frag): If we can't compute the target
+	address, zero out the values stored in the object file to make
+	objdump's output consistent.
+
+2011-01-26  Kai Tietz  <kai.tietz@onevision.com>
+
+	* config/tc-i386.c (md_begin): Set for x64 windows COFF target
+	x86_dwarf2_return_column to 32.
+
+2011-01-20  Nick Clifton  <nickc@redhat.com>
+
+	PR gas/12384
+	* config/tc-h8300.c (constant_fits_width_p): Use correct type for
+	comparison.
+
+2011-01-18  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* write.c (compress_debug): Return if section size is smaller
+	than 32 bytes.
+
+2011-01-18  H.J. Lu  <hongjiu.lu@intel.com>
+
+	PR gas/12409
+	* write.c (compress_debug): Return if section size is 0.
+
+2011-01-18  Mingfeng Wu  <mingfeng@faraday-tech.com>
+
+	* config/tc-arm.c (arm_cpus): Add Faraday ARMv5TE compatible
+	cores: fa606te, fa616te, fmp626.  Modify the VFP of fa626te.
+	* doc/c-arm.texi (ARM Options): Add -mcpu={fa606te, fa616te,
+	fmp626} options.
+
+2011-01-18  Nick Clifton  <nickc@redhat.com>
+
+	PR gas/12390
+	* doc/all.texi: Add NS32K
+	* doc/as.texinfo: Remove target specific details of which
+	characters act as comment initiators and statement separators into
+	individual target specific files.
+	* doc/c-alpha.texi (Alpha-Chars): Document special behaviour of
+	the hash character at the start of a line.
+	* doc/c-arm.texi (ARM-Chars): Likewise.
+	* doc/c-avr.texi (AVR-Chars): Likewise.
+	* doc/c-d10v.texi (D10V-Chars): Likewise.
+	* doc/c-d30v.texi (D30V-Chars):	Likewise.
+	* doc/c-mmix.texi (MMIX-Chars): Likewise.
+	* doc/c-s390.texi (s390 characters): Likewise.
+	* doc/c-sh.texi (SH-Chars): Likewise.
+	* doc/c-sh64.texi (SH64-Chars): Likewise.
+	* doc/c-sparc.texi (SPARC-Chars): Likewise.
+	* doc/c-tic6x.texi (TIC6X Syntax): Likewise.
+	* doc/c-xtensa.texi (Xtensa Syntax): Likewise.
+	* doc/c-z80.texi (Z80-Chars): Likewise.
+	* doc/c-z8k.texi (Z8000-Chars): Likewise.
+	* doc/c-pdp11.texi (PDP11-Syntax): Document line separator character.
+	* doc/c-arc.texi (ARC-Chars): Fill in this subsection.
+	* doc/c-bfin.texi (Blackfin Syntax): Document line comment and
+	line separator characters.
+	* doc/c-cr16.texi (CR16 Syntax): Likewise.
+	* doc/c-i386.texi (i386-Chars): Likewise.
+	* doc/c-i860.texi (i860-Chars):	Likewise.
+	* doc/c-i960.texi (i960-Chars):	Likewise.
+	* doc/c-ip2k.texi (IP2K-Chars):	Likewise.
+	* doc/c-lm32.texi (LM32-Chars):	likewise.
+	* doc/c-m32c.texi (M32C-Chars): Likewise.
+	* doc/c-m68hc11.texi (M68HC11-syntax): Likewise.
+	* doc/c-m68k.texi (M68K-Chars): Likewise.
+	* doc/c-microblaze.texi (MicroBlaze-Chars): Likewise.
+	* doc/c-msp430.texi (MSP430-Chars): Likewise.
+	* doc/c-mt.texi (MT-Chars): Likewise.
+	* doc/c-ns32k.texi (NS32K-Chars): Likewise.
+	* doc/c-pj.texi (PJ-Chars): Likewise.
+	* doc/c-ppc.texi (PowerPC-Chars): Likewise.
+	* doc/c-rx.texi (RX-Chars): Likewise.
+	* doc/c-score.texi (SCORE-Chars): Likewise.
+	* doc/c-tic54x.texi (TIC54X-Chars): Likewise.
+	* doc/c-v850.texi (V850-Chars): Likewise.
+	* doc/c-vax.texi (VAX-Chars): Likewise.
+	* doc/c-xc16x.texi (xc16x-Chars): Likewise.
+
+2011-01-17  Quentin Neill  <quentin.neill@amd.com>
+
+	* config/tc-i386.c (cpu_arch): Add CPU_TBM_FLAGS.
+
+	* doc/c-i386.texi (i386-TBM): New section.
+
+2011-01-16  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* config/tc-i386.c (disallow_64bit_disp): Renamed to ...
+	(disallow_64bit_reloc): This.
+	(md_assemble): Don't check movabs for x32 mode here.
+	(i386_target_format): Updated.
+	(tc_gen_reloc): Check if 64bit relocations are allowed.
+
+2011-01-15  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* config/tc-i386.c (disallow_64bit_disp): New.
+	(x86_elf_abi): Replace X86_64_LP64_ABI/X86_64_ILP32_ABI with
+	X86_64_ABI/X86_64_X32_ABI.
+	(md_assemble): Don't allow movabs with relocation in x32 mode.
+	(i386_target_format): Updated.
+
+2011-01-14  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* config/tc-i386.c (OPTION_N32): Renamed to ...
+	(OPTION_X32): This.
+	(md_longopts): Replace n32 with x32.
+	(md_parse_option): Updated.
+	(md_show_usage): Likewise.
+
+	* doc/c-i386.texi: Replace --n32 with --x32.
+
+2011-01-11  Mingjie Xing  <mingjie.xing@gmail.com>
+
+	* config/tc-mips.c (mips_ip): Update error messages.  Take an
+	unadjusted offset for "+c" argument.
+
+2011-01-10  Nick Clifton  <nickc@redhat.com>
+
+	* config/tc-i386.c (x86_elf_abi): Only define for targets that use
+	it.
+
+2011-01-10  Nick Clifton  <nickc@redhat.com>
+
+	* config/tc-arm.c (s_arm_tls_desceq): Move code into ELF-only
+	part of the file.
+
+2011-01-10  Nathan Sidwell  <nathan@codesourcery.com>
+	    Glauber de Oliveira Costa  <glommer@gmail.com>
+
+	* doc/c-arm.texi: Document TLSDESC and TLSCALL relocations, and
+	.tlsdescseq directive.
+	* config/tc-arm.c (arm_typed_reg_parse): Check for potential reloc
+	following a symbol.
+	(s_arm_tls_descseq): New directive.
+	(md_pseudo_table): Add it.
+	(encode_branch): Allow TLS_CALL relocs too.
+	(do_t_blx, do_t_branch23): Use encode_branch.
+	(reloc_names): Add tlsdesc and tlscall.
+	(md_apply_fix): Process tls desc relocations.
+	(tc_gen_reloc): Likewise.
+	(arm_fix_adjustable): Likewise.
+
+2011-01-07  Quentin Neill  <quentin.neill@amd.com>
+
+	* config/tc-i386.c (cpu_arch): Add CPU_BMI_FLAGS.
+
+	* doc/c-i386.texi (i386-BMI): New section.
+
+2011-01-06  Paul Koning  <ni1d@arrl.net>
+
+	* config/tc-pdp11.c (parse_op_no_deferred): Allow PC-relative
+	references to absolute addresses.
+
+2011-01-05  DJ Delorie  <dj@redhat.com>
+
+	* config/tc-rx.c (tc_gen_reloc): Emit an RX_OP_NEG expression
+	instead of an RH_NEG32 one.
+
+2011-01-05  Jonathan Wakely  <jwakely.gcc@gmail.com>
+
+	* doc/c-i386.texi: Clarify --n32.
+
+2011-01-04  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* config/tc-i386.c (build_modrm_byte): Allow encoding 32/64bit
+	integer registers in VEX.vvvv.  Check register-only source
+	operand when two source operands are swapped.  Properly update
+	destination when two source operands are swapped.
+
+2011-01-01  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* gas.c (parse_args): Update copyright to 2011.
+
+For older changes see ChangeLog-2010
 
 Local Variables:
 mode: change-log

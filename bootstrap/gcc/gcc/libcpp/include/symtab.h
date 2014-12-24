@@ -1,5 +1,5 @@
 /* Hash tables.
-   Copyright (C) 2000, 2001, 2003, 2004, 2007, 2008, 2009
+   Copyright (C) 2000, 2001, 2003, 2004, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
 
 This program is free software; you can redistribute it and/or modify it
@@ -20,6 +20,7 @@ along with this program; see the file COPYING3.  If not see
 #define LIBCPP_SYMTAB_H
 
 #include "obstack.h"
+
 #ifndef GTY
 #define GTY(x) /* nothing */
 #endif
@@ -27,8 +28,8 @@ along with this program; see the file COPYING3.  If not see
 /* This is what each hash table entry points to.  It may be embedded
    deeply within another object.  */
 typedef struct ht_identifier ht_identifier;
-struct ht_identifier GTY(())
-{
+typedef struct ht_identifier *ht_identifier_ptr;
+struct GTY(()) ht_identifier {
   const unsigned char *str;
   unsigned int len;
   unsigned int hash_value;

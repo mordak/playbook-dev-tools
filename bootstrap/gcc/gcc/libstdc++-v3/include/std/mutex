@@ -1,6 +1,6 @@
 // <mutex> -*- C++ -*-
 
-// Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009
+// Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -23,7 +23,7 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file mutex
+/** @file include/mutex
  *  This is a Standard C++ Library header.
  */
 
@@ -33,11 +33,10 @@
 #pragma GCC system_header
 
 #ifndef __GXX_EXPERIMENTAL_CXX0X__
-# include <c++0x_warning.h>
+# include <bits/c++0x_warning.h>
 #else
 
 #include <tuple>
-#include <cstddef>
 #include <chrono>
 #include <exception>
 #include <type_traits>
@@ -49,8 +48,10 @@
 
 #if defined(_GLIBCXX_HAS_GTHREADS) && defined(_GLIBCXX_USE_C99_STDINT_TR1)
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
   /**
    * @defgroup mutexes Mutexes
    * @ingroup concurrency
@@ -68,16 +69,17 @@ namespace std
   public:
     typedef __native_type* 			native_handle_type;
 
+#ifdef __GTHREAD_MUTEX_INIT
+    constexpr mutex() : _M_mutex(__GTHREAD_MUTEX_INIT) { }
+#else
     mutex()
     {
       // XXX EAGAIN, ENOMEM, EPERM, EBUSY(may), EINVAL(may)
-#ifdef __GTHREAD_MUTEX_INIT
-      __native_type __tmp = __GTHREAD_MUTEX_INIT;
-      _M_mutex = __tmp;
-#else
       __GTHREAD_MUTEX_INIT_FUNCTION(&_M_mutex);
-#endif
     }
+
+    ~mutex() { __gthread_mutex_destroy(&_M_mutex); }
+#endif
 
     mutex(const mutex&) = delete;
     mutex& operator=(const mutex&) = delete;
@@ -111,6 +113,45 @@ namespace std
     { return &_M_mutex; }
   };
 
+#ifndef __GTHREAD_RECURSIVE_MUTEX_INIT
+  // FIXME: gthreads doesn't define __gthread_recursive_mutex_destroy
+  // so we need to obtain a __gthread_mutex_t to destroy
+  class __destroy_recursive_mutex
+  {
+    template<typename _Mx, typename _Rm>
+      static void
+      _S_destroy_win32(_Mx* __mx, _Rm const* __rmx)
+      {
+        __mx->counter = __rmx->counter;
+        __mx->sema = __rmx->sema;
+        __gthread_mutex_destroy(__mx);
+      }
+
+  public:
+    // matches a gthr-win32.h recursive mutex
+    template<typename _Rm>
+      static typename enable_if<sizeof(&_Rm::sema), void>::type
+      _S_destroy(_Rm* __mx)
+      {
+        __gthread_mutex_t __tmp;
+        _S_destroy_win32(&__tmp, __mx);
+      }
+
+    // matches a recursive mutex with a member 'actual'
+    template<typename _Rm>
+      static typename enable_if<sizeof(&_Rm::actual), void>::type
+      _S_destroy(_Rm* __mx)
+      { __gthread_mutex_destroy(&__mx->actual); }
+
+    // matches when there's only one mutex type
+    template<typename _Rm>
+      static
+      typename enable_if<is_same<_Rm, __gthread_mutex_t>::value, void>::type
+      _S_destroy(_Rm* __mx)
+      { __gthread_mutex_destroy(__mx); }
+  };
+#endif
+
   /// recursive_mutex
   class recursive_mutex
   {
@@ -120,16 +161,18 @@ namespace std
   public:
     typedef __native_type* 			native_handle_type;
 
+#ifdef __GTHREAD_RECURSIVE_MUTEX_INIT
+    recursive_mutex() : _M_mutex(__GTHREAD_RECURSIVE_MUTEX_INIT) { }
+#else
     recursive_mutex()
     {
       // XXX EAGAIN, ENOMEM, EPERM, EBUSY(may), EINVAL(may)
-#ifdef __GTHREAD_RECURSIVE_MUTEX_INIT
-      __native_type __tmp = __GTHREAD_RECURSIVE_MUTEX_INIT;
-      _M_mutex = __tmp;
-#else
       __GTHREAD_RECURSIVE_MUTEX_INIT_FUNCTION(&_M_mutex);
-#endif
     }
+
+    ~recursive_mutex()
+    { __destroy_recursive_mutex::_S_destroy(&_M_mutex); }
+#endif
 
     recursive_mutex(const recursive_mutex&) = delete;
     recursive_mutex& operator=(const recursive_mutex&) = delete;
@@ -179,15 +222,16 @@ namespace std
   public:
     typedef __native_type* 		  	native_handle_type;
 
+#ifdef __GTHREAD_MUTEX_INIT
+    timed_mutex() : _M_mutex(__GTHREAD_MUTEX_INIT) { }
+#else
     timed_mutex()
     {
-#ifdef __GTHREAD_MUTEX_INIT
-      __native_type __tmp = __GTHREAD_MUTEX_INIT;
-      _M_mutex = __tmp;
-#else
       __GTHREAD_MUTEX_INIT_FUNCTION(&_M_mutex);
-#endif
     }
+
+    ~timed_mutex() { __gthread_mutex_destroy(&_M_mutex); }
+#endif
 
     timed_mutex(const timed_mutex&) = delete;
     timed_mutex& operator=(const timed_mutex&) = delete;
@@ -283,16 +327,18 @@ namespace std
   public:
     typedef __native_type* 			native_handle_type;
 
+#ifdef __GTHREAD_RECURSIVE_MUTEX_INIT
+    recursive_timed_mutex() : _M_mutex(__GTHREAD_RECURSIVE_MUTEX_INIT) { }
+#else
     recursive_timed_mutex()
     {
       // XXX EAGAIN, ENOMEM, EPERM, EBUSY(may), EINVAL(may)
-#ifdef __GTHREAD_RECURSIVE_MUTEX_INIT
-      __native_type __tmp = __GTHREAD_RECURSIVE_MUTEX_INIT;
-      _M_mutex = __tmp;
-#else
       __GTHREAD_RECURSIVE_MUTEX_INIT_FUNCTION(&_M_mutex);
-#endif
     }
+
+    ~recursive_timed_mutex()
+    { __destroy_recursive_mutex::_S_destroy(&_M_mutex); }
+#endif
 
     recursive_timed_mutex(const recursive_timed_mutex&) = delete;
     recursive_timed_mutex& operator=(const recursive_timed_mutex&) = delete;
@@ -382,21 +428,9 @@ namespace std
   /// and manage it.
   struct adopt_lock_t { };
 
-  extern const defer_lock_t	defer_lock;
-  extern const try_to_lock_t	try_to_lock;
-  extern const adopt_lock_t	adopt_lock;
-
-  /** 
-   *  @brief Thrown to indicate errors with lock operations.
-   *
-   *  @ingroup exceptions
-   */
-  class lock_error : public exception
-  {
-  public:
-    virtual const char*
-    what() const throw();
-  };
+  constexpr defer_lock_t	defer_lock { };
+  constexpr try_to_lock_t	try_to_lock { };
+  constexpr adopt_lock_t	adopt_lock { };
 
   /// @brief  Scoped lock idiom.
   // Acquire the mutex here with a constructor call, then release with
@@ -410,8 +444,8 @@ namespace std
       explicit lock_guard(mutex_type& __m) : _M_device(__m)
       { _M_device.lock(); }
 
-      lock_guard(mutex_type& __m, adopt_lock_t __a) : _M_device(__m)
-      { _M_device.lock(); }
+      lock_guard(mutex_type& __m, adopt_lock_t) : _M_device(__m)
+      { } // calling thread owns mutex
 
       ~lock_guard()
       { _M_device.unlock(); }
@@ -567,7 +601,7 @@ namespace std
       }
 
       void
-      swap(unique_lock&& __u)
+      swap(unique_lock& __u)
       {
 	std::swap(_M_device, __u._M_device);
 	std::swap(_M_owns, __u._M_owns);
@@ -586,7 +620,7 @@ namespace std
       owns_lock() const
       { return _M_owns; }
 
-      /* explicit */ operator bool () const
+      explicit operator bool() const
       { return owns_lock(); }
 
       mutex_type*
@@ -601,16 +635,6 @@ namespace std
   template<typename _Mutex>
     inline void
     swap(unique_lock<_Mutex>& __x, unique_lock<_Mutex>& __y)
-    { __x.swap(__y); }
-
-  template<typename _Mutex>
-    inline void
-    swap(unique_lock<_Mutex>&& __x, unique_lock<_Mutex>& __y)
-    { __x.swap(__y); }
-
-  template<typename _Mutex>
-    inline void
-    swap(unique_lock<_Mutex>& __x, unique_lock<_Mutex>&& __y)
     { __x.swap(__y); }
 
   template<int _Idx>
@@ -634,23 +658,27 @@ namespace std
 	{ }
     };
 
+  template<typename _Lock>
+    unique_lock<_Lock>
+    __try_to_lock(_Lock& __l)
+    { return unique_lock<_Lock>(__l, try_to_lock); }
+
   template<int _Idx, bool _Continue = true>
     struct __try_lock_impl
     {
       template<typename... _Lock>
-	static int
-	__do_try_lock(tuple<_Lock&...>& __locks)
+	static void
+	__do_try_lock(tuple<_Lock&...>& __locks, int& __idx)
 	{
-	  if(std::get<_Idx>(__locks).try_lock())
-	    {
-	      return __try_lock_impl<_Idx + 1,
-		_Idx + 2 < sizeof...(_Lock)>::__do_try_lock(__locks);
-	    }
-	  else
-	    {
-	      __unlock_impl<_Idx>::__do_unlock(__locks);
-	      return _Idx;
-	    }
+          __idx = _Idx;
+          auto __lock = __try_to_lock(std::get<_Idx>(__locks));
+          if (__lock.owns_lock())
+            {
+              __try_lock_impl<_Idx + 1, _Idx + 2 < sizeof...(_Lock)>::
+                __do_try_lock(__locks, __idx);
+              if (__idx == -1)
+                __lock.release();
+            }
 	}
     };
 
@@ -658,16 +686,16 @@ namespace std
     struct __try_lock_impl<_Idx, false>
     {
       template<typename... _Lock>
-	static int
-	__do_try_lock(tuple<_Lock&...>& __locks)
+	static void
+	__do_try_lock(tuple<_Lock&...>& __locks, int& __idx)
 	{
-	  if(std::get<_Idx>(__locks).try_lock())
-	    return -1;
-	  else
-	    {
-	      __unlock_impl<_Idx>::__do_unlock(__locks);
-	      return _Idx;
-	    }
+          __idx = _Idx;
+          auto __lock = __try_to_lock(std::get<_Idx>(__locks));
+          if (__lock.owns_lock())
+            {
+              __idx = -1;
+              __lock.release();
+            }
 	}
     };
 
@@ -685,14 +713,43 @@ namespace std
     int
     try_lock(_Lock1& __l1, _Lock2& __l2, _Lock3&... __l3)
     {
-      tuple<_Lock1&, _Lock2&, _Lock3&...> __locks(__l1, __l2, __l3...);
-      return __try_lock_impl<0>::__do_try_lock(__locks);
+      int __idx;
+      auto __locks = std::tie(__l1, __l2, __l3...);
+      __try
+      { __try_lock_impl<0>::__do_try_lock(__locks, __idx); }
+      __catch(...)
+      { }
+      return __idx;
     }
 
-  /// lock
+  /** @brief Generic lock.
+   *  @param __l1 Meets Mutex requirements (try_lock() may throw).
+   *  @param __l2 Meets Mutex requirements (try_lock() may throw).
+   *  @param __l3 Meets Mutex requirements (try_lock() may throw).
+   *  @throw An exception thrown by an argument's lock() or try_lock() member.
+   *  @post All arguments are locked.
+   *
+   *  All arguments are locked via a sequence of calls to lock(), try_lock()
+   *  and unlock().  If the call exits via an exception any locks that were
+   *  obtained will be released.
+   */
   template<typename _L1, typename _L2, typename ..._L3>
     void
-    lock(_L1&, _L2&, _L3&...);
+    lock(_L1& __l1, _L2& __l2, _L3&... __l3)
+    {
+      while (true)
+        {
+          unique_lock<_L1> __first(__l1);
+          int __idx;
+          auto __locks = std::tie(__l2, __l3...);
+          __try_lock_impl<0, sizeof...(_L3)>::__do_try_lock(__locks, __idx);
+          if (__idx == -1)
+            {
+              __first.release();
+              return;
+            }
+        }
+    }
 
   /// once_flag
   struct once_flag
@@ -702,18 +759,14 @@ namespace std
     __native_type  _M_once;
 
   public:
-    once_flag()
-    {
-      __native_type __tmp = __GTHREAD_ONCE_INIT;
-      _M_once = __tmp;
-    }
+    constexpr once_flag() : _M_once(__GTHREAD_ONCE_INIT) { }
 
     once_flag(const once_flag&) = delete;
     once_flag& operator=(const once_flag&) = delete;
 
     template<typename _Callable, typename... _Args>
       friend void
-      call_once(once_flag& __once, _Callable __f, _Args&&... __args);
+      call_once(once_flag& __once, _Callable&& __f, _Args&&... __args);
   };
 
 #ifdef _GLIBCXX_HAVE_TLS
@@ -741,15 +794,17 @@ namespace std
   /// call_once
   template<typename _Callable, typename... _Args>
     void
-    call_once(once_flag& __once, _Callable __f, _Args&&... __args)
+    call_once(once_flag& __once, _Callable&& __f, _Args&&... __args)
     {
 #ifdef _GLIBCXX_HAVE_TLS
-      auto __bound_functor = bind(__f, __args...);
+      auto __bound_functor = std::bind<void>(std::forward<_Callable>(__f),
+          std::forward<_Args>(__args)...);
       __once_callable = &__bound_functor;
       __once_call = &__once_call_impl<decltype(__bound_functor)>;
 #else
       unique_lock<mutex> __functor_lock(__get_once_mutex());
-      __once_functor = bind(__f, __args...);
+      __once_functor = std::bind<void>(std::forward<_Callable>(__f),
+          std::forward<_Args>(__args)...);
       __set_once_functor_lock_ptr(&__functor_lock);
 #endif
 
@@ -765,7 +820,8 @@ namespace std
     }
 
   // @} group mutexes
-}
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif // _GLIBCXX_HAS_GTHREADS && _GLIBCXX_USE_C99_STDINT_TR1
 

@@ -1,7 +1,11 @@
-// { dg-options "-DPB_DS_REGRESSION" }
+// { dg-require-time "" }
+// This can take long on simulators, timing out the test.
+// { dg-options "-DITERATIONS=5" { target simulator } }
+// { dg-timeout-factor 2.0 }
+
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2009, 2011 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -35,20 +39,27 @@
  * Contains a random-operation test for maps and sets.
  */
 
-// { dg-require-time "" }
+#define PB_DS_REGRESSION
 
 #include <regression/rand/assoc/rand_regression_test.hpp>
 #include <regression/common_type.hpp>
 
-// This can take long on simulators, timing out the test.
-// { dg-options "-DPB_DS_REGRESSION -DITERATIONS=5" { target simulator } }
-// { dg-timeout-factor 2.0 }
 #ifndef ITERATIONS
-#define ITERATIONS 5000
+# ifdef _GLIBCXX_DEBUG
+#  define ITERATIONS 100
+# else
+#  define ITERATIONS 5000
 #endif
+#endif
+
 #ifndef KEYS
-#define KEYS 10000
+# ifdef _GLIBCXX_DEBUG
+#  define KEYS 200
+# else
+#  define KEYS 10000
+# endif
 #endif
+
 int
 main(int argc, char* a_p_argv[])
 {
@@ -59,4 +70,3 @@ main(int argc, char* a_p_argv[])
 			      "trie_data_map_rand_regression_test",
 			      map_tl_t());
 }
-

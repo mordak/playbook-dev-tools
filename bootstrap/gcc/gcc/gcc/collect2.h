@@ -1,5 +1,6 @@
 /* Header file for collect/tlink routines.
-   Copyright (C) 1998, 2003, 2004, 2005, 2007 Free Software Foundation, Inc.
+   Copyright (C) 1998, 2003, 2004, 2005, 2007, 2010
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -23,7 +24,7 @@ along with GCC; see the file COPYING3.  If not see
 extern void do_tlink (char **, char **);
 
 extern struct pex_obj *collect_execute (const char *, char **, const char *,
-					const char *);
+					const char *, int flags);
 
 extern void collect_exit (int) ATTRIBUTE_NORETURN;
 
@@ -38,9 +39,10 @@ extern const char *lderrout;
 extern const char *c_file_name;
 extern struct obstack temporary_obstack;
 extern char *temporary_firstobj;
-extern int vflag, debug;
+extern bool vflag, debug;
 
 extern void error (const char *, ...) ATTRIBUTE_PRINTF_1;
+extern void notice_translated (const char *, ...) ATTRIBUTE_PRINTF_1;
 extern void notice (const char *, ...) ATTRIBUTE_PRINTF_1;
 extern void fatal (const char *, ...) ATTRIBUTE_PRINTF_1 ATTRIBUTE_NORETURN;
 extern void fatal_perror (const char *, ...)

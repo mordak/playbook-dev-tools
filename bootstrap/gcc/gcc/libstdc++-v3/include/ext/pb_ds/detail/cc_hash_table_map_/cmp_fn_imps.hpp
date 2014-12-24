@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -64,7 +64,7 @@ cmp_with_other(const Other_Map_Type& other) const
 	const_cast<PB_DS_CLASS_C_DEC& >(*this).
 	find_key_pointer(r_key, traits_base::m_store_extra_indicator);
 
-      if (p_mapped_value == NULL)
+      if (p_mapped_value == 0)
 	return false;
 
 #ifdef PB_DS_DATA_TRUE_INDICATOR

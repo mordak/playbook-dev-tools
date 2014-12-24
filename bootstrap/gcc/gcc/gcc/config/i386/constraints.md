@@ -19,7 +19,7 @@
 
 ;;; Unused letters:
 ;;;     B     H           T  W
-;;;           h jk          vw  z
+;;;           h jk          vw
 
 ;; Integer register constraints.
 ;; It is not necessary to define 'r' here.
@@ -105,6 +105,10 @@
  "TARGET_MMX && TARGET_INTER_UNIT_MOVES ? MMX_REGS : NO_REGS"
  "@internal Any MMX register, when inter-unit moves are enabled.")
 
+(define_constraint "z"
+  "@internal Constant call address operand."
+  (match_operand 0 "constant_call_address_operand"))
+
 ;; Integer constant constraints.
 (define_constraint "I"
   "Integer constant in the range 0 @dots{} 31, for 32-bit shifts."
@@ -149,7 +153,7 @@
 (define_constraint "G"
   "Standard 80387 floating point constant."
   (and (match_code "const_double")
-       (match_test "standard_80387_constant_p (op)")))
+       (match_test "standard_80387_constant_p (op) > 0")))
 
 ;; This can theoretically be any mode's CONST0_RTX.
 (define_constraint "C"

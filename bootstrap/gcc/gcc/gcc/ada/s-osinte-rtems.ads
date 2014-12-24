@@ -191,14 +191,6 @@ package System.OS_Interface is
    function To_Timespec (D : Duration) return timespec;
    pragma Inline (To_Timespec);
 
-   type struct_timeval is private;
-
-   function To_Duration (TV : struct_timeval) return Duration;
-   pragma Inline (To_Duration);
-
-   function To_Timeval (D : Duration) return struct_timeval;
-   pragma Inline (To_Timeval);
-
    -------------------------
    -- Priority Scheduling --
    -------------------------
@@ -296,8 +288,8 @@ package System.OS_Interface is
 
    function Get_Page_Size return size_t;
    function Get_Page_Size return Address;
-   --  returns the size of a page, or 0 if this is not relevant on this
-   --  target (which is the case for RTEMS)
+   pragma Import (C, Get_Page_Size, "getpagesize");
+   --  Returns the size of a page
 
    PROT_ON  : constant := 0;
    PROT_OFF : constant := 0;
@@ -595,12 +587,6 @@ private
    type clockid_t is new rtems_id;
    CLOCK_REALTIME : constant clockid_t := 1;
 
-   type struct_timeval is record
-      tv_sec  : int;
-      tv_usec : int;
-   end record;
-   pragma Convention (C, struct_timeval);
-
    type pthread_attr_t is record
       is_initialized  : int;
       stackaddr       : System.Address;
@@ -625,6 +611,7 @@ private
       process_shared  : int;
       prio_ceiling    : int;
       protocol        : int;
+      mutex_type      : int;
       recursive       : int;
    end record;
    pragma Convention (C, pthread_mutexattr_t);

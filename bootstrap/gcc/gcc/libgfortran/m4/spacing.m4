@@ -1,5 +1,5 @@
 `/* Implementation of the SPACING intrinsic
-   Copyright 2006, 2007, 2009 Free Software Foundation, Inc.
+   Copyright 2006, 2007, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Steven G. Kargl <kargl@gcc.gnu.org>
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -27,7 +27,9 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 include(`mtype.m4')dnl
 
-`#if defined (HAVE_'real_type`) && defined (HAVE_FREXP'Q`)
+mathfunc_macro
+
+`#if defined (HAVE_'real_type`) && 'hasmathfunc(frexp)`
 
 extern 'real_type` spacing_r'kind` ('real_type` s, int p, int emin, 'real_type` tiny);
 export_proto(spacing_r'kind`);
@@ -38,13 +40,13 @@ spacing_r'kind` ('real_type` s, int p, int emin, 'real_type` tiny)
   int e;
   if (s == 0.)
     return tiny;
-  frexp'q` (s, &e);
+  MATHFUNC(frexp) (s, &e);
   e = e - p;
   e = e > emin ? e : emin;
-#if defined (HAVE_LDEXP'Q`)
-  return ldexp'q` (1., e);
+#if 'hasmathfunc(ldexp)`
+  return MATHFUNC(ldexp) (1., e);
 #else
-  return scalbn'q` (1., e);
+  return MATHFUNC(scalbn) (1., e);
 #endif
 }
 

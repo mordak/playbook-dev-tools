@@ -1,5 +1,5 @@
 ;; Constraint definitions for MIPS.
-;; Copyright (C) 2006, 2007, 2008 Free Software Foundation, Inc.
+;; Copyright (C) 2006, 2007, 2008, 2010 Free Software Foundation, Inc.
 ;;
 ;; This file is part of GCC.
 ;;
@@ -86,8 +86,8 @@
 
 ;; Registers that can be used as the target of multiply-accumulate
 ;; instructions.  The core MIPS32 ISA provides a hi/lo madd,
-;; but the DSPr2 version allows any accumulator target.
-(define_register_constraint "ka" "ISA_HAS_DSPR2 ? ACC_REGS : MD_REGS")
+;; but the DSP version allows any accumulator target.
+(define_register_constraint "ka" "ISA_HAS_DSP_MULT ? ACC_REGS : MD_REGS")
 
 (define_constraint "kf"
   "@internal"
@@ -215,3 +215,19 @@
    A signed 10-bit constant."
   (and (match_code "const_int")
        (match_test "IMM10_OPERAND (ival)")))
+
+(define_constraint "Yb"
+   "@internal"
+   (match_operand 0 "qi_mask_operand"))
+
+(define_constraint "Yh"
+   "@internal"
+    (match_operand 0 "hi_mask_operand"))
+
+(define_constraint "Yw"
+   "@internal"
+    (match_operand 0 "si_mask_operand"))
+
+(define_constraint "Yx"
+   "@internal"
+   (match_operand 0 "low_bitmask_operand"))

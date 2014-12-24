@@ -3,6 +3,7 @@
    for a function that doesn't use attribute((option)).  */
 /* { dg-do compile } */
 /* { dg-require-effective-target ilp32 } */
+/* { dg-skip-if "" { i?86-*-* x86_64-*-* } { "-march=*" } { "-march=i386" } } */
 /* { dg-options "-O3 -ftree-vectorize -march=i386" } */
 /* { dg-final { scan-assembler "addps\[ \t\]" } } */
 /* { dg-final { scan-assembler "fsubs\[ \t\]" } } */
@@ -11,9 +12,9 @@
 #define SIZE 1024
 #endif
 
-static float a[SIZE] __attribute__((__aligned__(16)));
-static float b[SIZE] __attribute__((__aligned__(16)));
-static float c[SIZE] __attribute__((__aligned__(16)));
+float a[SIZE] __attribute__((__aligned__(16)));
+float b[SIZE] __attribute__((__aligned__(16)));
+float c[SIZE] __attribute__((__aligned__(16)));
 
 void sse_addnums (void) __attribute__ ((__target__ ("sse2")));
 

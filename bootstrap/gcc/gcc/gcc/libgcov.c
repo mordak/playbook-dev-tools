@@ -1,7 +1,7 @@
 /* Routines required for instrumenting a program.  */
 /* Compile this one with gcc.  */
 /* Copyright (C) 1989, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
-   2000, 2001, 2002, 2003, 2004, 2005, 2008, 2009
+   2000, 2001, 2002, 2003, 2004, 2005, 2008, 2009, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -88,17 +88,26 @@ static gcov_unsigned_t gcov_crc32;
 /* Size of the longest file name. */
 static size_t gcov_max_filename = 0;
 
-#ifdef TARGET_POSIX_IO
-/* Make sure path component of the given FILENAME exists, create 
-   missing directories. FILENAME must be writable. 
+/* Make sure path component of the given FILENAME exists, create
+   missing directories. FILENAME must be writable.
    Returns zero on success, or -1 if an error occurred.  */
 
 static int
 create_file_directory (char *filename)
 {
+#if !defined(TARGET_POSIX_IO) && !defined(_WIN32)
+  (void) filename;
+  return -1;
+#else
   char *s;
 
-  for (s = filename + 1; *s != '\0'; s++)
+  s = filename;
+
+  if (HAS_DRIVE_SPEC(s))
+    s += 2;
+  if (IS_DIR_SEPARATOR(*s))
+    ++s;
+  for (; *s != '\0'; s++)
     if (IS_DIR_SEPARATOR(*s))
       {
         char sep = *s;
@@ -106,7 +115,11 @@ create_file_directory (char *filename)
 
         /* Try to make directory if it doesn't already exist.  */
         if (access (filename, F_OK) == -1
+#ifdef TARGET_POSIX_IO
             && mkdir (filename, 0755) == -1
+#else
+            && mkdir (filename) == -1
+#endif
             /* The directory might have been made by another process.  */
 	    && errno != EEXIST)
 	  {
@@ -115,18 +128,18 @@ create_file_directory (char *filename)
             *s = sep;
 	    return -1;
 	  };
-        
+
 	*s = sep;
       };
   return 0;
-}
 #endif
+}
 
 /* Check if VERSION of the info block PTR matches libgcov one.
    Return 1 on success, or zero in case of versions mismatch.
-   If FILENAME is not NULL, its value used for reporting purposes 
+   If FILENAME is not NULL, its value used for reporting purposes
    instead of value from the info block.  */
-   
+
 static int
 gcov_version (struct gcov_info *ptr, gcov_unsigned_t version,
 	      const char *filename)
@@ -137,7 +150,7 @@ gcov_version (struct gcov_info *ptr, gcov_unsigned_t version,
 
       GCOV_UNSIGNED2STRING (v, version);
       GCOV_UNSIGNED2STRING (e, GCOV_VERSION);
-      
+
       fprintf (stderr,
 	       "profiling:%s:Version mismatch - expected %.4s got %.4s\n",
 	       filename? filename : ptr->filename, e, v);
@@ -191,20 +204,21 @@ gcov_exit (void)
 	}
     }
 
+  {
+    /* Check if the level of dirs to strip off specified. */
+    char *tmp = getenv("GCOV_PREFIX_STRIP");
+    if (tmp)
+      {
+	gcov_prefix_strip = atoi (tmp);
+	/* Do not consider negative values. */
+	if (gcov_prefix_strip < 0)
+	  gcov_prefix_strip = 0;
+      }
+  }
   /* Get file name relocation prefix.  Non-absolute values are ignored. */
   gcov_prefix = getenv("GCOV_PREFIX");
-  if (gcov_prefix && IS_ABSOLUTE_PATH (gcov_prefix))
+  if (gcov_prefix)
     {
-      /* Check if the level of dirs to strip off specified. */
-      char *tmp = getenv("GCOV_PREFIX_STRIP");
-      if (tmp)
-        {
-          gcov_prefix_strip = atoi (tmp);
-          /* Do not consider negative values. */
-          if (gcov_prefix_strip < 0)
-            gcov_prefix_strip = 0;
-        }
-      
       prefix_length = strlen(gcov_prefix);
 
       /* Remove an unnecessary trailing '/' */
@@ -213,13 +227,20 @@ gcov_exit (void)
     }
   else
     prefix_length = 0;
-  
-  /* Allocate and initialize the filename scratch space.  */
-  gi_filename = (char *) alloca (prefix_length + gcov_max_filename + 1);
+
+  /* If no prefix was specified and a prefix stip, then we assume
+     relative.  */
+  if (gcov_prefix_strip != 0 && prefix_length == 0)
+    {
+      gcov_prefix = ".";
+      prefix_length = 1;
+    }
+  /* Allocate and initialize the filename scratch space plus one.  */
+  gi_filename = (char *) alloca (prefix_length + gcov_max_filename + 2);
   if (prefix_length)
     memcpy (gi_filename, gcov_prefix, prefix_length);
   gi_filename_up = gi_filename + prefix_length;
-  
+
   /* Now merge each file.  */
   for (gi_ptr = gcov_list; gi_ptr; gi_ptr = gi_ptr->next)
     {
@@ -234,31 +255,42 @@ gcov_exit (void)
       gcov_unsigned_t tag, length;
       gcov_position_t summary_pos = 0;
       gcov_position_t eof_pos = 0;
+      const char *fname, *s;
+
+      fname = gi_ptr->filename;
 
       memset (&this_object, 0, sizeof (this_object));
       memset (&object, 0, sizeof (object));
-      
-      /* Build relocated filename, stripping off leading 
+
+      /* Avoid to add multiple drive letters into combined path.  */
+      if (prefix_length != 0 && HAS_DRIVE_SPEC(fname))
+        fname += 2;
+
+      /* Build relocated filename, stripping off leading
          directories from the initial filename if requested. */
       if (gcov_prefix_strip > 0)
         {
           int level = 0;
-          const char *fname = gi_ptr->filename;
-          const char *s;
+          s = fname;
+          if (IS_DIR_SEPARATOR(*s))
+            ++s;
 
           /* Skip selected directory levels. */
-	  for (s = fname + 1; (*s != '\0') && (level < gcov_prefix_strip); s++)
+	  for (; (*s != '\0') && (level < gcov_prefix_strip); s++)
 	    if (IS_DIR_SEPARATOR(*s))
 	      {
 		fname = s;
 		level++;
-	      };
-
-          /* Update complete filename with stripped original. */
-          strcpy (gi_filename_up, fname);
+	      }
         }
+      /* Update complete filename with stripped original. */
+      if (!IS_DIR_SEPARATOR (*fname) && !HAS_DRIVE_SPEC(fname))
+	{
+	  strcpy (gi_filename_up, "/");
+	  strcpy (gi_filename_up + 1, fname);
+	}
       else
-        strcpy (gi_filename_up, gi_ptr->filename);
+        strcpy (gi_filename_up, fname);
 
       /* Totals for this object file.  */
       ci_ptr = gi_ptr->counts;
@@ -295,10 +327,9 @@ gcov_exit (void)
 	  fi_stride += __alignof__ (struct gcov_fn_info) - 1;
 	  fi_stride &= ~(__alignof__ (struct gcov_fn_info) - 1);
 	}
-      
+
       if (!gcov_open (gi_filename))
 	{
-#ifdef TARGET_POSIX_IO
 	  /* Open failed likely due to missed directory.
 	     Create directory and retry to open file. */
           if (create_file_directory (gi_filename))
@@ -306,7 +337,6 @@ gcov_exit (void)
 	      fprintf (stderr, "profiling:%s:Skip\n", gi_filename);
 	      continue;
 	    }
-#endif
 	  if (!gcov_open (gi_filename))
 	    {
               fprintf (stderr, "profiling:%s:Cannot open\n", gi_filename);
@@ -332,7 +362,7 @@ gcov_exit (void)
 	  if (length != gi_ptr->stamp)
 	    /* Read from a different compilation. Overwrite the file.  */
 	    goto rewrite;
-	  
+
 	  /* Merge execution counts for each function.  */
 	  for (f_ix = 0; f_ix < gi_ptr->n_functions; f_ix++)
 	    {
@@ -361,10 +391,10 @@ gcov_exit (void)
 
 		  if (!((1 << t_ix) & gi_ptr->ctr_mask))
 		    continue;
-		  
+
 		  n_counts = fi_ptr->n_ctrs[c_ix];
 		  merge = gi_ptr->counts[c_ix].merge;
-		    
+
 		  tag = gcov_read_unsigned ();
 		  length = gcov_read_unsigned ();
 		  if (tag != GCOV_TAG_FOR_COUNTER (t_ix)
@@ -383,7 +413,7 @@ gcov_exit (void)
 	  while (1)
 	    {
 	      int is_program;
-	      
+
 	      eof_pos = gcov_position ();
 	      tag = gcov_read_unsigned ();
 	      if (!tag)
@@ -405,11 +435,11 @@ gcov_exit (void)
 	    }
 	}
       goto rewrite;
-      
+
     read_error:;
       fprintf (stderr, error < 0 ? "profiling:%s:Overflow merging\n"
 	       : "profiling:%s:Error merging\n", gi_filename);
-	      
+
     read_fatal:;
       gcov_close ();
       continue;
@@ -439,7 +469,7 @@ gcov_exit (void)
 	      if (cs_obj->run_max < cs_tobj->run_max)
 		cs_obj->run_max = cs_tobj->run_max;
 	      cs_obj->sum_max += cs_tobj->run_max;
-	      
+
 	      if (!cs_prg->runs++)
 		cs_prg->num = cs_tprg->num;
 	      else if (cs_prg->num != cs_tprg->num)
@@ -451,7 +481,7 @@ gcov_exit (void)
 	    }
 	  else if (cs_obj->num || cs_prg->num)
 	    goto read_mismatch;
-	  
+
 	  if (!cs_all->runs && cs_prg->runs)
 	    memcpy (cs_all, cs_prg, sizeof (*cs_all));
 	  else if (!all.checksum
@@ -464,7 +494,7 @@ gcov_exit (void)
 	      all.checksum = ~0u;
 	    }
 	}
-      
+
       c_ix = 0;
       for (t_ix = 0; t_ix < GCOV_COUNTERS; t_ix++)
 	if ((1 << t_ix) & gi_ptr->ctr_mask)
@@ -474,11 +504,11 @@ gcov_exit (void)
 	  }
 
       program.checksum = gcov_crc32;
-      
+
       /* Write out the data.  */
       gcov_write_tag_length (GCOV_DATA_MAGIC, GCOV_VERSION);
       gcov_write_unsigned (gi_ptr->stamp);
-      
+
       /* Write execution counts for each function.  */
       for (f_ix = 0; f_ix < gi_ptr->n_functions; f_ix++)
 	{
@@ -499,7 +529,7 @@ gcov_exit (void)
 		continue;
 
 	      n_counts = fi_ptr->n_ctrs[c_ix];
-		    
+
 	      gcov_write_tag_length (GCOV_TAG_FOR_COUNTER (t_ix),
 				     GCOV_TAG_COUNTER_LENGTH (n_counts));
 	      c_ptr = values[c_ix];
@@ -545,7 +575,7 @@ __gcov_init (struct gcov_info *info)
       /* Refresh the longest file name information */
       if (filename_length > gcov_max_filename)
         gcov_max_filename = filename_length;
-      
+
       do
 	{
 	  unsigned ix;
@@ -561,12 +591,12 @@ __gcov_init (struct gcov_info *info)
 	    }
 	}
       while (*ptr++);
-      
+
       gcov_crc32 = crc32;
-      
+
       if (!gcov_list)
 	atexit (gcov_exit);
-      
+
       info->next = gcov_list;
       gcov_list = info;
     }
@@ -588,7 +618,7 @@ __gcov_flush (void)
     {
       unsigned t_ix;
       const struct gcov_ctr_info *ci_ptr;
-      
+
       for (t_ix = 0, ci_ptr = gi_ptr->counts; t_ix != GCOV_COUNTERS; t_ix++)
 	if ((1 << t_ix) & gi_ptr->ctr_mask)
 	  {
@@ -630,7 +660,7 @@ __gcov_merge_ior (gcov_type *counters, unsigned n_counters)
    reads the same number of counters from the gcov file.  The counters
    are split into 3-tuples where the members of the tuple have
    meanings:
-   
+
    -- the stored candidate on the most common value of the measured entity
    -- counter
    -- total number of evaluations of the value  */
@@ -668,7 +698,7 @@ __gcov_merge_single (gcov_type *counters, unsigned n_counters)
    given an array COUNTERS of N_COUNTERS old counters and it reads the
    same number of counters from the gcov file.  The counters are split
    into 4-tuples where the members of the tuple have meanings:
-   
+
    -- the last value of the measured entity
    -- the stored candidate on the most common difference
    -- counter
@@ -677,13 +707,13 @@ void
 __gcov_merge_delta (gcov_type *counters, unsigned n_counters)
 {
   unsigned i, n_measures;
-  gcov_type last, value, counter, all;
+  gcov_type value, counter, all;
 
   gcc_assert (!(n_counters % 4));
   n_measures = n_counters / 4;
   for (i = 0; i < n_measures; i++, counters += 4)
     {
-      last = gcov_read_counter ();
+      /* last = */ gcov_read_counter ();
       value = gcov_read_counter ();
       counter = gcov_read_counter ();
       all = gcov_read_counter ();
@@ -770,16 +800,34 @@ __gcov_one_value_profiler (gcov_type *counters, gcov_type value)
 #endif
 
 #ifdef L_gcov_indirect_call_profiler
+
+/* By default, the C++ compiler will use function addresses in the
+   vtable entries.  Setting TARGET_VTABLE_USES_DESCRIPTORS to nonzero
+   tells the compiler to use function descriptors instead.  The value
+   of this macro says how many words wide the descriptor is (normally 2),
+   but it may be dependent on target flags.  Since we do not have access
+   to the target flags here we just check to see if it is set and use
+   that to set VTABLE_USES_DESCRIPTORS to 0 or 1.
+
+   It is assumed that the address of a function descriptor may be treated
+   as a pointer to a function.  */
+
+#ifdef TARGET_VTABLE_USES_DESCRIPTORS
+#define VTABLE_USES_DESCRIPTORS 1
+#else
+#define VTABLE_USES_DESCRIPTORS 0
+#endif
+
 /* Tries to determine the most common value among its inputs. */
 void
-__gcov_indirect_call_profiler (gcov_type* counter, gcov_type value, 
+__gcov_indirect_call_profiler (gcov_type* counter, gcov_type value,
 			       void* cur_func, void* callee_func)
 {
   /* If the C++ virtual tables contain function descriptors then one
      function may have multiple descriptors and we need to dereference
      the descriptors to see if they point to the same function.  */
   if (cur_func == callee_func
-      || (TARGET_VTABLE_USES_DESCRIPTORS && callee_func
+      || (VTABLE_USES_DESCRIPTORS && callee_func
 	  && *(void **) cur_func == *(void **) callee_func))
     __gcov_one_value_profiler_body (counter, value);
 }

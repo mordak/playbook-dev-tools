@@ -1,6 +1,6 @@
 // <extptr_allocator.h> -*- C++ -*-
 
-// Copyright (C) 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2008, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -23,8 +23,10 @@
 // <http://www.gnu.org/licenses/>.
 
 /**
- * @file ext/extptr_allocator.h
- * @author Bob Walters
+ *  @file ext/extptr_allocator.h
+ *  This file is a GNU extension to the Standard C++ Library.
+ *
+ *  @author Bob Walters
  *
  * An example allocator which uses an alternative pointer type from
  * bits/pointer.h.  Supports test cases which confirm container support
@@ -38,7 +40,9 @@
 #include <limits>
 #include <ext/pointer.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   /**
    * @brief An example allocator which uses a non-standard pointer type.
@@ -82,10 +86,10 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       { }
 
       pointer address(reference __x) const
-      { return &__x; }
+      { return std::__addressof(__x); }
 
       const_pointer address(const_reference __x) const
-      { return &__x; }
+      { return std::__addressof(__x); }
 
       pointer allocate(size_type __n, void* __hint = 0)
       { return _M_real_alloc.allocate(__n,__hint); }
@@ -171,6 +175,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       __larg._M_real_alloc = __tmp;
     }
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif /* _EXTPTR_ALLOCATOR_H */

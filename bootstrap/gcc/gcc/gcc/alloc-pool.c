@@ -1,6 +1,6 @@
 /* Functions to support a pool of allocatable objects.
    Copyright (C) 1987, 1997, 1998, 1999, 2000, 2001, 2003, 2004, 2005, 2006,
-   2007, 2008  Free Software Foundation, Inc.
+   2007, 2008, 2010  Free Software Foundation, Inc.
    Contributed by Daniel Berlin <dan@cgsoftware.com>
 
 This file is part of GCC.
@@ -41,10 +41,10 @@ typedef struct allocation_object_def
 
       /* Because we want any type of data to be well aligned after the ID,
 	 the following elements are here.  They are never accessed so
-	 the allocated object may be even smaller than this structure.  */
+	 the allocated object may be even smaller than this structure.
+	 We do not care about alignment for floating-point types.  */
       char *align_p;
       HOST_WIDEST_INT align_i;
-      long double align_ld;
     } u;
 } allocation_object;
 
@@ -116,7 +116,7 @@ alloc_pool_descriptor (const char *name)
   slot = (struct alloc_pool_descriptor **)
     htab_find_slot_with_hash (alloc_pool_hash, name,
 			      htab_hash_pointer (name),
-			      1);
+			      INSERT);
   if (*slot)
     return *slot;
   *slot = XCNEW (struct alloc_pool_descriptor);
@@ -137,7 +137,7 @@ create_alloc_pool (const char *name, size_t size, size_t num)
   struct alloc_pool_descriptor *desc;
 #endif
 
-  gcc_assert (name);
+  gcc_checking_assert (name);
 
   /* Make size large enough to store the list header.  */
   if (size < sizeof (alloc_pool_list))
@@ -152,7 +152,7 @@ create_alloc_pool (const char *name, size_t size, size_t num)
 #endif
 
   /* Um, we can't really allocate 0 elements per block.  */
-  gcc_assert (num);
+  gcc_checking_assert (num);
 
   /* Allocate memory for the pool structure.  */
   pool = XNEW (struct alloc_pool_def);
@@ -201,7 +201,7 @@ empty_alloc_pool (alloc_pool pool)
   struct alloc_pool_descriptor *desc = alloc_pool_descriptor (pool->name);
 #endif
 
-  gcc_assert (pool);
+  gcc_checking_assert (pool);
 
   /* Free each block allocated to the pool.  */
   for (block = pool->block_list; block != NULL; block = next_block)
@@ -260,7 +260,7 @@ pool_alloc (alloc_pool pool)
     desc->peak = desc->current;
 #endif
 
-  gcc_assert (pool);
+  gcc_checking_assert (pool);
 
   /* If there are no more free elements, make some more!.  */
   if (!pool->returned_free_list)
@@ -274,7 +274,7 @@ pool_alloc (alloc_pool pool)
 	  block = XNEWVEC (char, pool->block_size);
 	  block_header = (alloc_pool_list) block;
 	  block += align_eight (sizeof (struct alloc_pool_list_def));
-	  
+
 	  /* Throw it on the block list.  */
 	  block_header->next = pool->block_list;
 	  pool->block_list = block_header;
@@ -290,7 +290,7 @@ pool_alloc (alloc_pool pool)
 	  pool->blocks_allocated += 1;
 	}
 
-      
+
       /* We now know that we can take the first elt off the virgin list and
 	 put it on the returned list. */
       block = pool->virgin_free_list;
@@ -328,19 +328,19 @@ pool_free (alloc_pool pool, void *ptr)
   struct alloc_pool_descriptor *desc = alloc_pool_descriptor (pool->name);
 #endif
 
-  gcc_assert (ptr);
 
 #ifdef ENABLE_CHECKING
-  /* Check whether the PTR was allocated from POOL.  */
-  gcc_assert (pool->id == ALLOCATION_OBJECT_PTR_FROM_USER_PTR (ptr)->id);
+  gcc_assert (ptr
+	      /* Check if we free more than we allocated, which is Bad (TM).  */
+	      && pool->elts_free < pool->elts_allocated
+	      /* Check whether the PTR was allocated from POOL.  */
+	      && pool->id == ALLOCATION_OBJECT_PTR_FROM_USER_PTR (ptr)->id);
 
   memset (ptr, 0xaf, pool->elt_size - offsetof (allocation_object, u.data));
 
   /* Mark the element to be free.  */
   ALLOCATION_OBJECT_PTR_FROM_USER_PTR (ptr)->id = 0;
 #else
-  /* Check if we free more than we allocated, which is Bad (TM).  */
-  gcc_assert (pool->elts_free < pool->elts_allocated);
 #endif
 
   header = (alloc_pool_list) ptr;
@@ -374,8 +374,8 @@ print_statistics (void **slot, void *b)
   if (d->allocated)
     {
       fprintf (stderr, "%-22s %6d %10lu %10lu(%10lu) %10lu(%10lu) %10lu(%10lu)\n", d->name,
-	       d->elt_size, d->created, d->allocated, d->allocated / d->elt_size, 
-	       d->peak, d->peak / d->elt_size, 
+	       d->elt_size, d->created, d->allocated, d->allocated / d->elt_size,
+	       d->peak, d->peak / d->elt_size,
 	       d->current, d->current / d->elt_size);
       i->total_allocated += d->allocated;
       i->total_created += d->created;

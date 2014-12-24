@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -40,9 +40,7 @@
 --  2005 functionality is required. In particular, it is used for building
 --  run times on all targets.
 
-pragma Warnings (Off);
 pragma Compiler_Unit;
-pragma Warnings (On);
 
 pragma Style_Checks (All_Checks);
 --  No subprogram ordering check, due to logical grouping
@@ -59,9 +57,9 @@ with System.Soft_Links;       use System.Soft_Links;
 package body Ada.Exceptions is
 
    pragma Suppress (All_Checks);
-   --  We definitely do not want exceptions occurring within this unit, or
-   --  we are in big trouble. If an exceptional situation does occur, better
-   --  that it not be raised, since raising it can cause confusing chaos.
+   --  We definitely do not want exceptions occurring within this unit, or we
+   --  are in big trouble. If an exceptional situation does occur, better that
+   --  it not be raised, since raising it can cause confusing chaos.
 
    -----------------------
    -- Local Subprograms --
@@ -79,14 +77,14 @@ package body Ada.Exceptions is
 
    procedure To_Stderr (S : String);
    pragma Export (Ada, To_Stderr, "__gnat_to_stderr");
-   --  Little routine to output string to stderr that is also used
-   --  in the tasking run time.
+   --  Little routine to output string to stderr that is also used in the
+   --  tasking run time.
 
    procedure To_Stderr (C : Character);
    pragma Inline (To_Stderr);
    pragma Export (Ada, To_Stderr, "__gnat_to_stderr_char");
-   --  Little routine to output a character to stderr, used by some of
-   --  the separate units below.
+   --  Little routine to output a character to stderr, used by some of the
+   --  separate units below.
 
    package Exception_Data is
 
@@ -95,25 +93,26 @@ package body Ada.Exceptions is
       ---------------------------------
 
       procedure Set_Exception_C_Msg
-        (Id   : Exception_Id;
-         Msg1 : System.Address;
-         Line : Integer        := 0;
-         Msg2 : System.Address := System.Null_Address);
+        (Id     : Exception_Id;
+         Msg1   : System.Address;
+         Line   : Integer        := 0;
+         Column : Integer        := 0;
+         Msg2   : System.Address := System.Null_Address);
       --  This routine is called to setup the exception referenced by the
       --  Current_Excep field in the TSD to contain the indicated Id value
       --  and message. Msg1 is a null terminated string which is generated
       --  as the exception message. If line is non-zero, then a colon and
       --  the decimal representation of this integer is appended to the
-      --  message. When Msg2 is non-null, a space and this additional null
-      --  terminated string is added to the message.
+      --  message. Ditto for Column. When Msg2 is non-null, a space and this
+      --  additional null terminated string is added to the message.
 
       procedure Set_Exception_Msg
         (Id      : Exception_Id;
          Message : String);
       --  This routine is called to setup the exception referenced by the
-      --  Current_Excep field in the TSD to contain the indicated Id value
-      --  and message. Message is a string which is generated as the
-      --  exception message.
+      --  Current_Excep field in the TSD to contain the indicated Id value and
+      --  message. Message is a string which is generated as the exception
+      --  message.
 
       --------------------------------------
       -- Exception information subprogram --
@@ -128,18 +127,20 @@ package body Ada.Exceptions is
       --    Call stack traceback locations:  (only if at least one location)
       --    <0xyyyyyyyy 0xyyyyyyyy ...>      (is recorded)
       --
-      --  The lines are separated by a ASCII.LF character.
-      --  The nnnn is the partition Id given as decimal digits.
+      --  The lines are separated by a ASCII.LF character
+      --
+      --  The nnnn is the partition Id given as decimal digits
+      --
       --  The 0x... line represents traceback program counter locations, in
       --  execution order with the first one being the exception location. It
       --  is present only
       --
-      --  The Exception_Name and Message lines are omitted in the abort
-      --  signal case, since this is not really an exception.
+      --  The Exception_Name and Message lines are omitted in the abort signal
+      --  case, since this is not really an exception.
 
-      --  !! If the format of the generated string is changed, please note
-      --  !! that an equivalent modification to the routine String_To_EO must
-      --  !! be made to preserve proper functioning of the stream attributes.
+      --  Note: If the format of the generated string is changed, please note
+      --  that an equivalent modification to the routine String_To_EO must be
+      --  made to preserve proper functioning of the stream attributes.
 
       ---------------------------------------
       -- Exception backtracing subprograms --
@@ -200,11 +201,11 @@ package body Ada.Exceptions is
 
       procedure Unhandled_Exception_Terminate;
       pragma No_Return (Unhandled_Exception_Terminate);
-      --  This procedure is called to terminate execution following an
-      --  unhandled exception. The exception information, including
-      --  traceback if available is output, and execution is then
-      --  terminated. Note that at the point where this routine is
-      --  called, the stack has typically been destroyed.
+      --  This procedure is called to terminate program execution following an
+      --  unhandled exception. The exception information, including traceback
+      --  if available is output, and execution is then terminated. Note that
+      --  at the point where this routine is called, the stack has typically
+      --  been destroyed.
 
    end Exception_Traces;
 
@@ -255,10 +256,10 @@ package body Ada.Exceptions is
    procedure Raise_With_Msg (E : Exception_Id);
    pragma No_Return (Raise_With_Msg);
    pragma Export (C, Raise_With_Msg, "__gnat_raise_with_msg");
-   --  Raises an exception with given exception id value. A message
-   --  is associated with the raise, and has already been stored in the
-   --  exception occurrence referenced by the Current_Excep in the TSD.
-   --  Abort is deferred before the raise call.
+   --  Raises an exception with given exception id value. A message is
+   --  associated with the raise, and has already been stored in the exception
+   --  occurrence referenced by the Current_Excep in the TSD. Abort is deferred
+   --  before the raise call.
 
    procedure Raise_With_Location_And_Msg
      (E : Exception_Id;
@@ -268,8 +269,8 @@ package body Ada.Exceptions is
    pragma No_Return (Raise_With_Location_And_Msg);
    --  Raise an exception with given exception id value. A filename and line
    --  number is associated with the raise and is stored in the exception
-   --  occurrence and in addition a string message M is appended to
-   --  this (if M is not null).
+   --  occurrence and in addition a string message M is appended to this
+   --  if M is not null.
 
    procedure Raise_Constraint_Error
      (File : System.Address;
@@ -346,9 +347,9 @@ package body Ada.Exceptions is
    procedure Reraise;
    pragma No_Return (Reraise);
    pragma Export (C, Reraise, "__gnat_reraise");
-   --  Reraises the exception referenced by the Current_Excep field of
-   --  the TSD (all fields of this exception occurrence are set). Abort
-   --  is deferred before the reraise operation.
+   --  Reraises the exception referenced by the Current_Excep field of the TSD
+   --  (all fields of this exception occurrence are set). Abort is deferred
+   --  before the reraise operation.
 
    --  Save_Occurrence variations: As the management of the private data
    --  attached to occurrences is delicate, whether or not pointers to such
@@ -375,11 +376,10 @@ package body Ada.Exceptions is
    -- Run-Time Check Routines --
    -----------------------------
 
-   --  These routines raise a specific exception with a reason message
-   --  attached. The parameters are the file name and line number in each
-   --  case. The names are keyed to the codes defined in types.ads and
-   --  a-types.h (for example, the name Rcheck_05 refers to the Reason
-   --  RT_Exception_Code'Val (5)).
+   --  Routines to a specific exception with a reason message attached. The
+   --  parameters are the file name and line number in each case. The names are
+   --  keyed to the codes defined in types.ads and a-types.h (for example, the
+   --  name Rcheck_05 refers to the Reason RT_Exception_Code'Val (5)).
 
    procedure Rcheck_00 (File : System.Address; Line : Integer);
    procedure Rcheck_01 (File : System.Address; Line : Integer);
@@ -414,6 +414,8 @@ package body Ada.Exceptions is
    procedure Rcheck_30 (File : System.Address; Line : Integer);
    procedure Rcheck_31 (File : System.Address; Line : Integer);
    procedure Rcheck_32 (File : System.Address; Line : Integer);
+   procedure Rcheck_33 (File : System.Address; Line : Integer);
+   procedure Rcheck_34 (File : System.Address; Line : Integer);
 
    pragma Export (C, Rcheck_00, "__gnat_rcheck_00");
    pragma Export (C, Rcheck_01, "__gnat_rcheck_01");
@@ -448,6 +450,8 @@ package body Ada.Exceptions is
    pragma Export (C, Rcheck_30, "__gnat_rcheck_30");
    pragma Export (C, Rcheck_31, "__gnat_rcheck_31");
    pragma Export (C, Rcheck_32, "__gnat_rcheck_32");
+   pragma Export (C, Rcheck_33, "__gnat_rcheck_33");
+   pragma Export (C, Rcheck_34, "__gnat_rcheck_34");
 
    --  None of these procedures ever returns (they raise an exception!). By
    --  using pragma No_Return, we ensure that any junk code after the call,
@@ -485,6 +489,8 @@ package body Ada.Exceptions is
    pragma No_Return (Rcheck_29);
    pragma No_Return (Rcheck_30);
    pragma No_Return (Rcheck_32);
+   pragma No_Return (Rcheck_33);
+   pragma No_Return (Rcheck_34);
 
    ---------------------------------------------
    -- Reason Strings for Run-Time Check Calls --
@@ -511,25 +517,29 @@ package body Ada.Exceptions is
    Rmsg_13 : constant String := "tag check failed"                 & NUL;
    Rmsg_14 : constant String := "access before elaboration"        & NUL;
    Rmsg_15 : constant String := "accessibility check failed"       & NUL;
-   Rmsg_16 : constant String := "all guards closed"                & NUL;
-   Rmsg_17 : constant String := "Current_Task referenced in entry" &
+   Rmsg_16 : constant String := "attempt to take address of"       &
+                                " intrinsic subprogram"            & NUL;
+   Rmsg_17 : constant String := "all guards closed"                & NUL;
+   Rmsg_18 : constant String := "improper use of generic subtype"  &
+                                " with predicate"                  & NUL;
+   Rmsg_19 : constant String := "Current_Task referenced in entry" &
                                 " body"                            & NUL;
-   Rmsg_18 : constant String := "duplicated entry address"         & NUL;
-   Rmsg_19 : constant String := "explicit raise"                   & NUL;
-   Rmsg_20 : constant String := "finalize/adjust raised exception" & NUL;
-   Rmsg_21 : constant String := "implicit return with No_Return"   & NUL;
-   Rmsg_22 : constant String := "misaligned address value"         & NUL;
-   Rmsg_23 : constant String := "missing return"                   & NUL;
-   Rmsg_24 : constant String := "overlaid controlled object"       & NUL;
-   Rmsg_25 : constant String := "potentially blocking operation"   & NUL;
-   Rmsg_26 : constant String := "stubbed subprogram called"        & NUL;
-   Rmsg_27 : constant String := "unchecked union restriction"      & NUL;
-   Rmsg_28 : constant String := "actual/returned class-wide value "
-                                & "not transportable"              & NUL;
-   Rmsg_29 : constant String := "empty storage pool"               & NUL;
-   Rmsg_30 : constant String := "explicit raise"                   & NUL;
-   Rmsg_31 : constant String := "infinite recursion"               & NUL;
-   Rmsg_32 : constant String := "object too large"                 & NUL;
+   Rmsg_20 : constant String := "duplicated entry address"         & NUL;
+   Rmsg_21 : constant String := "explicit raise"                   & NUL;
+   Rmsg_22 : constant String := "finalize/adjust raised exception" & NUL;
+   Rmsg_23 : constant String := "implicit return with No_Return"   & NUL;
+   Rmsg_24 : constant String := "misaligned address value"         & NUL;
+   Rmsg_25 : constant String := "missing return"                   & NUL;
+   Rmsg_26 : constant String := "overlaid controlled object"       & NUL;
+   Rmsg_27 : constant String := "potentially blocking operation"   & NUL;
+   Rmsg_28 : constant String := "stubbed subprogram called"        & NUL;
+   Rmsg_29 : constant String := "unchecked union restriction"      & NUL;
+   Rmsg_30 : constant String := "actual/returned class-wide"       &
+                                " value not transportable"         & NUL;
+   Rmsg_31 : constant String := "empty storage pool"               & NUL;
+   Rmsg_32 : constant String := "explicit raise"                   & NUL;
+   Rmsg_33 : constant String := "infinite recursion"               & NUL;
+   Rmsg_34 : constant String := "object too large"                 & NUL;
 
    -----------------------
    -- Polling Interface --
@@ -543,8 +553,8 @@ package body Ada.Exceptions is
    --  perform periodic but not systematic operations.
 
    procedure Poll is separate;
-   --  The actual polling routine is separate, so that it can easily
-   --  be replaced with a target dependent version.
+   --  The actual polling routine is separate, so that it can easily be
+   --  replaced with a target dependent version.
 
    ------------------------------
    -- Current_Target_Exception --
@@ -566,8 +576,8 @@ package body Ada.Exceptions is
    -- EO_To_String --
    ------------------
 
-   --  We use the null string to represent the null occurrence, otherwise
-   --  we output the Exception_Information string for the occurrence.
+   --  We use the null string to represent the null occurrence, otherwise we
+   --  output the Exception_Information string for the occurrence.
 
    function EO_To_String (X : Exception_Occurrence) return String
      renames Stream_Attributes.EO_To_String;
@@ -580,9 +590,9 @@ package body Ada.Exceptions is
      (X : Exception_Occurrence) return Exception_Id
    is
    begin
-      --  Note that the following test used to be here for the original
-      --  Ada 95 semantics, but these were modified by AI-241 to require
-      --  returning Null_Id instead of raising Constraint_Error.
+      --  Note that the following test used to be here for the original Ada 95
+      --  semantics, but these were modified by AI-241 to require returning
+      --  Null_Id instead of raising Constraint_Error.
 
       --  if X.Id = Null_Id then
       --     raise Constraint_Error;
@@ -664,8 +674,8 @@ package body Ada.Exceptions is
    --------------------
 
    package body Exception_Data is separate;
-   --  This package can be easily dummied out if we do not want the
-   --  basic support for exception messages (such as in Ada 83).
+   --  This package can be easily dummied out if we do not want the basic
+   --  support for exception messages (such as in Ada 83).
 
    package body Exception_Propagation is
 
@@ -688,10 +698,10 @@ package body Ada.Exceptions is
    ----------------------
 
    package body Exception_Traces is separate;
-   --  Depending on the underlying support for IO the implementation
-   --  will differ. Moreover we would like to dummy out this package
-   --  in case we do not want any exception tracing support. This is
-   --  why this package is separated.
+   --  Depending on the underlying support for IO the implementation will
+   --  differ. Moreover we would like to dummy out this package in case we do
+   --  not want any exception tracing support. This is why this package is
+   --  separated.
 
    -----------------------
    -- Stream Attributes --
@@ -717,17 +727,17 @@ package body Ada.Exceptions is
       pragma Import (C, builtin_longjmp, "_gnat_builtin_longjmp");
 
    begin
-      --  WARNING: There should be no exception handler for this body
-      --  because this would cause gigi to prepend a setup for a new
-      --  jmpbuf to the sequence of statements in case of built-in sjljl.
-      --  We would then always get this new buf in Jumpbuf_Ptr instead of the
-      --  one for the exception we are handling, which would completely break
-      --  the whole design of this procedure.
+      --  WARNING: There should be no exception handler for this body because
+      --  this would cause gigi to prepend a setup for a new jmpbuf to the
+      --  sequence of statements in case of built-in sjljl. We would then
+      --  always get this new buf in Jumpbuf_Ptr instead of the one for the
+      --  exception we are handling, which would completely break the whole
+      --  design of this procedure.
 
-      --  If the jump buffer pointer is non-null, transfer control using
-      --  it. Otherwise announce an unhandled exception (note that this
-      --  means that we have no finalizations to do other than at the outer
-      --  level). Perform the necessary notification tasks in both cases.
+      --  If the jump buffer pointer is non-null, transfer control using it.
+      --  Otherwise announce an unhandled exception (note that this means that
+      --  we have no finalizations to do other than at the outer level).
+      --  Perform the necessary notification tasks in both cases.
 
       if Jumpbuf_Ptr /= Null_Address then
          if not Excep.Exception_Raised then
@@ -954,7 +964,7 @@ package body Ada.Exceptions is
       M : System.Address := System.Null_Address)
    is
    begin
-      Exception_Data.Set_Exception_C_Msg (E, F, L, M);
+      Exception_Data.Set_Exception_C_Msg (E, F, L, Msg2 => M);
       Abort_Defer.all;
       Raise_Current_Excep (E);
    end Raise_With_Location_And_Msg;
@@ -1127,12 +1137,12 @@ package body Ada.Exceptions is
 
    procedure Rcheck_29 (File : System.Address; Line : Integer) is
    begin
-      Raise_Storage_Error_Msg (File, Line, Rmsg_29'Address);
+      Raise_Program_Error_Msg (File, Line, Rmsg_29'Address);
    end Rcheck_29;
 
    procedure Rcheck_30 (File : System.Address; Line : Integer) is
    begin
-      Raise_Storage_Error_Msg (File, Line, Rmsg_30'Address);
+      Raise_Program_Error_Msg (File, Line, Rmsg_30'Address);
    end Rcheck_30;
 
    procedure Rcheck_31 (File : System.Address; Line : Integer) is
@@ -1144,6 +1154,16 @@ package body Ada.Exceptions is
    begin
       Raise_Storage_Error_Msg (File, Line, Rmsg_32'Address);
    end Rcheck_32;
+
+   procedure Rcheck_33 (File : System.Address; Line : Integer) is
+   begin
+      Raise_Storage_Error_Msg (File, Line, Rmsg_33'Address);
+   end Rcheck_33;
+
+   procedure Rcheck_34 (File : System.Address; Line : Integer) is
+   begin
+      Raise_Storage_Error_Msg (File, Line, Rmsg_34'Address);
+   end Rcheck_34;
 
    -------------
    -- Reraise --
@@ -1243,9 +1263,9 @@ package body Ada.Exceptions is
    begin
       --  Setup Target as an exception to be propagated in the calling task
       --  (rendezvous-wise), taking care not to clobber the associated private
-      --  data.  Target is expected to be a pointer to the calling task's
-      --  fixed TSD occurrence, which is very different from Get_Current_Excep
-      --  here because this subprogram is called from the called task.
+      --  data. Target is expected to be a pointer to the calling task's fixed
+      --  TSD occurrence, which is very different from Get_Current_Excep here
+      --  because this subprogram is called from the called task.
 
       Save_Occurrence_No_Private (Target.all, Source);
    end Transfer_Occurrence;
@@ -1285,7 +1305,6 @@ package body Ada.Exceptions is
    ---------------
 
    procedure To_Stderr (C : Character) is
-
       type int is new Integer;
 
       procedure put_char_stderr (C : int);

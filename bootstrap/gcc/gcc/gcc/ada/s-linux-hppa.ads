@@ -6,7 +6,7 @@
 --                                                                          --
 --                                  S p e c                                 --
 --                                                                          --
---             Copyright (C) 2009, Free Software Foundation, Inc.           --
+--          Copyright (C) 2008-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -96,8 +96,9 @@ package System.Linux is
 
    --  struct_sigaction offsets
 
-   sa_flags_pos : constant := Standard'Address_Size / 8;
-   sa_mask_pos  : constant := sa_flags_pos * 2;
+   sa_handler_pos : constant := 0;
+   sa_flags_pos   : constant := Standard'Address_Size / 8;
+   sa_mask_pos    : constant := sa_flags_pos * 2;
 
    SA_SIGINFO : constant := 16#10#;
    SA_ONSTACK : constant := 16#01#;

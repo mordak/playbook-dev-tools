@@ -1,6 +1,6 @@
 /* ECOFF debugging support.
    Copyright 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002,
-   2003, 2004, 2005, 2006, 2007, 2008
+   2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by Cygnus Support.
    This file was put together by Ian Lance Taylor <ian@cygnus.com>.  A
@@ -37,7 +37,7 @@
 #include "coff/internal.h"
 #include "coff/symconst.h"
 #include "aout/stab_gnu.h"
-
+#include "filenames.h"
 #include "safe-ctype.h"
 
 /* Why isn't this in coff/sym.h?  */
@@ -1506,6 +1506,16 @@ ecoff_symbol_new_hook (symbolS *symbolP)
   obj->ecoff_symbol = NULL;
   obj->ecoff_extern_size = 0;
 }
+
+void
+ecoff_symbol_clone_hook (symbolS *newsymP, symbolS *orgsymP)
+{
+  OBJ_SYMFIELD_TYPE *n, *o;
+
+  n = symbol_get_obj (newsymP);
+  o = symbol_get_obj (orgsymP);
+  memcpy (n, o, sizeof *n);
+}
 
 /* Add a page to a varray object.  */
 
@@ -1745,7 +1755,7 @@ add_ecoff_symbol (const char *str,	/* symbol name */
 	      ty = add_aux_sym_tir (&last_func_type_info,
 				    hash_no,
 				    &cur_file_ptr->thash_head[0]);
-
+	      (void) ty;
 /* This seems to be unnecessary.  I'm not even sure what it is
  * intended to do.  It's from mips-tfile.
  *	      if (last_func_sym_value != (symbolS *) NULL)
@@ -2247,7 +2257,7 @@ add_file (const char *file_name, int indx ATTRIBUTE_UNUSED, int fake)
        fil_ptr = fil_ptr->next_file)
     {
       if (first_ch == fil_ptr->name[0]
-	  && strcmp (file_name, fil_ptr->name) == 0
+	  && filename_cmp (file_name, fil_ptr->name) == 0
 	  && fil_ptr->fdr.fMerge)
 	{
 	  cur_file_ptr = fil_ptr;
@@ -2315,7 +2325,7 @@ add_file (const char *file_name, int indx ATTRIBUTE_UNUSED, int fake)
 void
 ecoff_new_file (const char *name, int appfile ATTRIBUTE_UNUSED)
 {
-  if (cur_file_ptr != NULL && strcmp (cur_file_ptr->name, name) == 0)
+  if (cur_file_ptr != NULL && filename_cmp (cur_file_ptr->name, name) == 0)
     return;
   add_file (name, 0, 0);
 
@@ -3323,7 +3333,7 @@ mark_stabs (int ignore ATTRIBUTE_UNUSED)
     {
       /* Add a dummy @stabs dymbol.  */
       stabs_seen = 1;
-      (void) add_ecoff_symbol (stabs_symbol, stNil, scInfo,
+      (void) add_ecoff_symbol (stabs_symbol, st_Nil, sc_Info,
 			       (symbolS *) NULL,
 			       (bfd_vma) 0, (symint_t) -1,
 			       ECOFF_MARK_STAB (0));
@@ -3616,7 +3626,7 @@ ecoff_add_bytes (char **buf,
   if (need < PAGE_SIZE)
     need = PAGE_SIZE;
   want = (*bufend - *buf) + need;
-  *buf = xrealloc (*buf, want);
+  *buf = (char *) xrealloc (*buf, want);
   *bufend = *buf + want;
   return *buf + at;
 }
@@ -4129,7 +4139,7 @@ ecoff_build_symbols (const struct ecoff_debug_swap *backend,
 			sym_ptr->ecoff_sym.asym.iss =
 			  begin_ptr->ecoff_sym.asym.iss;
 
-		      begin_type = begin_ptr->ecoff_sym.asym.st;
+		      begin_type = (st_t) begin_ptr->ecoff_sym.asym.st;
 		      if (begin_type == st_File
 			  || begin_type == st_Block)
 			{
@@ -4697,7 +4707,7 @@ ecoff_build_debug (HDRR *hdr,
 
   /* Build the symbolic information.  */
   offset = 0;
-  buf = xmalloc (PAGE_SIZE);
+  buf = (char *) xmalloc (PAGE_SIZE);
   bufend = buf + PAGE_SIZE;
 
   /* Build the line number information.  */
@@ -5190,7 +5200,7 @@ ecoff_generate_asm_lineno (void)
   as_where (&filename, &lineno);
 
   if (current_stabs_filename == (char *) NULL
-      || strcmp (current_stabs_filename, filename))
+      || filename_cmp (current_stabs_filename, filename))
     add_file (filename, 0, 1);
 
   list = allocate_lineno_list ();

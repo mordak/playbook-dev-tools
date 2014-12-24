@@ -1,8 +1,12 @@
 /* Contributed by Nicola Pero - Fri Dec 14 08:36:00 GMT 2001 */
 /* { dg-do run } */
+/* { dg-xfail-run-if "Needs OBJC2 ABI" { *-*-darwin* && { lp64 && { ! objc2 } } } { "-fnext-runtime" } { "" } } */
+
 #include <objc/objc.h>
+#ifndef __NEXT_RUNTIME__
 #include <objc/objc-api.h>
-#include <objc/Object.h>
+#endif
+#include "../../objc-obj-c++-shared/next-mapping.h"
 
 extern void abort (void);
 

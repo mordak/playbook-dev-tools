@@ -1,5 +1,5 @@
 /* Implementation of the ISO_C_BINDING library helper functions.
-   Copyright (C) 2007, 2009 Free Software Foundation, Inc.
+   Copyright (C) 2007, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Christopher Rickett.
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -65,7 +65,7 @@ ISO_C_BINDING_PREFIX (c_f_pointer) (void *c_ptr_in,
       /* Put in the element size.  */
       f_ptr_out->dtype = f_ptr_out->dtype | (elemSize << GFC_DTYPE_SIZE_SHIFT);
 
-      /* Set the data type (e.g., GFC_DTYPE_INTEGER).  */
+      /* Set the data type (e.g., BT_INTEGER).  */
       f_ptr_out->dtype = f_ptr_out->dtype | (type << GFC_DTYPE_TYPE_SHIFT);
     }
   
@@ -75,9 +75,8 @@ ISO_C_BINDING_PREFIX (c_f_pointer) (void *c_ptr_in,
 
 
 /* A generic function to set the common fields of all descriptors, no
-   matter whether it's to a scalar or an array.  Fields set are: data,
-   and if appropriate, rank, offset, dim[*].lbound, dim[*].ubound, and
-   dim[*].stride.  Parameter shape is a rank 1 array of integers
+   matter whether it's to a scalar or an array.  Access is via the array
+   descrptor macros. Parameter shape is a rank 1 array of integers
    containing the upper bound of each dimension of what f_ptr_out
    points to.  The length of this array must be EXACTLY the rank of
    what f_ptr_out points to, as required by the draft (J3/04-007).  If
@@ -95,52 +94,65 @@ ISO_C_BINDING_PREFIX (c_f_pointer_u0) (void *c_ptr_in,
 
   if (shape != NULL)
     {
-      f_ptr_out->offset = 0;
+      index_type source_stride, size;
+      index_type str = 1;
+      char *p;
+
+      f_ptr_out->offset = str;
       shapeSize = 0;
-      
+      p = shape->data;
+      size = GFC_DESCRIPTOR_SIZE(shape);
+
+      source_stride = GFC_DESCRIPTOR_STRIDE_BYTES(shape,0);
+
       /* shape's length (rank of the output array) */
-      shapeSize = shape->dim[0].ubound + 1 - shape->dim[0].lbound;
+      shapeSize = GFC_DESCRIPTOR_EXTENT(shape,0);
       for (i = 0; i < shapeSize; i++)
         {
-          /* Lower bound is 1, as specified by the draft.  */
-          f_ptr_out->dim[i].lbound = 1;
+	  index_type ub;
+
           /* Have to allow for the SHAPE array to be any valid kind for
              an INTEGER type.  */
+	  switch (size)
+	    {
 #ifdef HAVE_GFC_INTEGER_1
-	  if (GFC_DESCRIPTOR_SIZE (shape) == 1)
-	    f_ptr_out->dim[i].ubound = ((GFC_INTEGER_1 *) (shape->data))[i];
+	      case 1:
+		ub = *((GFC_INTEGER_1 *) p);
+		break;
 #endif
 #ifdef HAVE_GFC_INTEGER_2
-	  if (GFC_DESCRIPTOR_SIZE (shape) == 2)
-	    f_ptr_out->dim[i].ubound = ((GFC_INTEGER_2 *) (shape->data))[i];
+	      case 2:
+		ub = *((GFC_INTEGER_2 *) p);
+		break;
 #endif
 #ifdef HAVE_GFC_INTEGER_4
-	  if (GFC_DESCRIPTOR_SIZE (shape) == 4)
-	    f_ptr_out->dim[i].ubound = ((GFC_INTEGER_4 *) (shape->data))[i];
+	      case 4:
+		ub = *((GFC_INTEGER_4 *) p);
+		break;
 #endif
 #ifdef HAVE_GFC_INTEGER_8
-	  if (GFC_DESCRIPTOR_SIZE (shape) == 8)
-	    f_ptr_out->dim[i].ubound = ((GFC_INTEGER_8 *) (shape->data))[i];
+	      case 8:
+		ub = *((GFC_INTEGER_8 *) p);
+		break;
 #endif
 #ifdef HAVE_GFC_INTEGER_16
-	  if (GFC_DESCRIPTOR_SIZE (shape) == 16)
-	    f_ptr_out->dim[i].ubound = ((GFC_INTEGER_16 *) (shape->data))[i];
-#endif		
-        }
+	      case 16:
+		ub = *((GFC_INTEGER_16 *) p);
+		break;
+#endif
+	      default:
+		internal_error (NULL, "c_f_pointer_u0: Invalid size");
+	    }
+	  p += source_stride;
 
-      /* Set the offset and strides.
-         offset is (sum of (dim[i].lbound * dim[i].stride) for all
-         dims) the -1 means we'll back the data pointer up that much
-         perhaps we could just realign the data pointer and not change
-         the offset?  */
-      f_ptr_out->dim[0].stride = 1;
-      f_ptr_out->offset = f_ptr_out->dim[0].lbound * f_ptr_out->dim[0].stride;
-      for (i = 1; i < shapeSize; i++)
-        {
-          f_ptr_out->dim[i].stride = ((f_ptr_out->dim[i-1].ubound + 1)
-            - f_ptr_out->dim[i-1].lbound) * f_ptr_out->dim[i-1].stride;
-          f_ptr_out->offset += f_ptr_out->dim[i].lbound
-            * f_ptr_out->dim[i].stride;
+	  if (i != 0)
+	    {
+	      str = str * GFC_DESCRIPTOR_EXTENT(f_ptr_out,i-1);
+	      f_ptr_out->offset += str;
+	    }
+
+          /* Lower bound is 1, as specified by the draft.  */
+	  GFC_DIMENSION_SET(f_ptr_out->dim[i], 1, ub, str);
         }
 
       f_ptr_out->offset *= -1;
@@ -172,6 +184,6 @@ ISO_C_BINDING_PREFIX (c_f_pointer_d0) (void *c_ptr_in,
     {
       f_ptr_out->dtype = f_ptr_out->dtype & (~GFC_DTYPE_TYPE_MASK);
       f_ptr_out->dtype = f_ptr_out->dtype
-			 | (GFC_DTYPE_DERIVED << GFC_DTYPE_TYPE_SHIFT);
+			 | (BT_DERIVED << GFC_DTYPE_TYPE_SHIFT);
     }
 }

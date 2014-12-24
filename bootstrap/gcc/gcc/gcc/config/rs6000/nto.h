@@ -154,6 +154,12 @@ QNX_SYSTEM_LIBDIRS \
 #undef  DRAFT_V4_STRUCT_RET
 #define DRAFT_V4_STRUCT_RET 1
 
+/* We don't need to generate entries in .fixup, except when
+   -mrelocatable or -mrelocatable-lib is given.  */
+#undef RELOCATABLE_NEEDS_FIXUP
+#define RELOCATABLE_NEEDS_FIXUP \
+  (target_flags & target_flags_explicit & MASK_RELOCATABLE)
+
 /* Enable SPE */
 #undef TARGET_SPE_ABI
 #undef TARGET_SPE

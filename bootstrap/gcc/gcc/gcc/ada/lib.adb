@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -113,6 +113,11 @@ package body Lib is
       return Units.Table (U).Generate_Code;
    end Generate_Code;
 
+   function Has_Allocator (U : Unit_Number_Type) return Boolean is
+   begin
+      return Units.Table (U).Has_Allocator;
+   end Has_Allocator;
+
    function Has_RACW (U : Unit_Number_Type) return Boolean is
    begin
       return Units.Table (U).Has_RACW;
@@ -132,6 +137,11 @@ package body Lib is
    begin
       return Units.Table (U).Loading;
    end Loading;
+
+   function Main_CPU (U : Unit_Number_Type) return Int is
+   begin
+      return Units.Table (U).Main_CPU;
+   end Main_CPU;
 
    function Main_Priority (U : Unit_Number_Type) return Int is
    begin
@@ -198,6 +208,11 @@ package body Lib is
       Units.Table (U).Generate_Code := B;
    end Set_Generate_Code;
 
+   procedure Set_Has_Allocator (U : Unit_Number_Type; B : Boolean := True) is
+   begin
+      Units.Table (U).Has_Allocator := B;
+   end Set_Has_Allocator;
+
    procedure Set_Has_RACW (U : Unit_Number_Type; B : Boolean := True) is
    begin
       Units.Table (U).Has_RACW := B;
@@ -220,6 +235,11 @@ package body Lib is
    begin
       Units.Table (U).Loading := B;
    end Set_Loading;
+
+   procedure Set_Main_CPU (U : Unit_Number_Type; P : Int) is
+   begin
+      Units.Table (U).Main_CPU := P;
+   end Set_Main_CPU;
 
    procedure Set_Main_Priority (U : Unit_Number_Type; P : Int) is
    begin
@@ -602,10 +622,19 @@ package body Lib is
          end if;
       end loop;
 
-      --  If not in the table, must be the main source unit, and we just
-      --  have not got it put into the table yet.
+      --  If not in the table, must be a spec created for a main unit that is a
+      --  child subprogram body which we have not inserted into the table yet.
 
-      return Main_Unit;
+      if N = Library_Unit (Cunit (Main_Unit)) then
+         return Main_Unit;
+
+      --  If it is anything else, something is seriously wrong, and we really
+      --  don't want to proceed, even if assertions are off, so we explicitly
+      --  raise an exception in this case to terminate compilation.
+
+      else
+         raise Program_Error;
+      end if;
    end Get_Cunit_Unit_Number;
 
    ---------------------
@@ -692,11 +721,10 @@ package body Lib is
       Mloc : constant Source_Ptr := Sloc (Cunit (Main_Unit));
 
    begin
-      --  If Mloc is not set, it means we are still parsing the main unit,
-      --  so everything so far is in the extended main source unit.
+      --  If parsing, then use the global flag to indicate result
 
-      if Mloc = No_Location then
-         return True;
+      if Compiler_State = Parsing then
+         return Parsing_Main_Extended_Source;
 
       --  Special value cases
 
@@ -732,11 +760,10 @@ package body Lib is
       Mloc : constant Source_Ptr := Sloc (Cunit (Main_Unit));
 
    begin
-      --  If Mloc is not set, it means we are still parsing the main unit,
-      --  so everything so far is in the extended main source unit.
+      --  If parsing, then use the global flag to indicate result
 
-      if Mloc = No_Location then
-         return True;
+      if Compiler_State = Parsing then
+         return Parsing_Main_Extended_Source;
 
       --  Special value cases
 
@@ -849,6 +876,7 @@ package body Lib is
    procedure Initialize is
    begin
       Linker_Option_Lines.Init;
+      Notes.Init;
       Load_Stack.Init;
       Units.Init;
       Compilation_Switches.Init;
@@ -975,10 +1003,17 @@ package body Lib is
 
    procedure Store_Linker_Option_String (S : String_Id) is
    begin
-      Linker_Option_Lines.Increment_Last;
-      Linker_Option_Lines.Table (Linker_Option_Lines.Last) :=
-        (Option => S, Unit => Current_Sem_Unit);
+      Linker_Option_Lines.Append ((Option => S, Unit => Current_Sem_Unit));
    end Store_Linker_Option_String;
+
+   ----------------
+   -- Store_Note --
+   ----------------
+
+   procedure Store_Note (N : Node_Id) is
+   begin
+      Notes.Append ((Pragma_Node => N, Unit => Current_Sem_Unit));
+   end Store_Note;
 
    -------------------------------
    -- Synchronize_Serial_Number --

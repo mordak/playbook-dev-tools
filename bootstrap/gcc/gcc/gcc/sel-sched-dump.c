@@ -1,5 +1,5 @@
 /* Instruction scheduling pass.   Log dumping infrastructure.
-   Copyright (C) 2006, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2006, 2007, 2008, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -21,7 +21,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "system.h"
 #include "coretypes.h"
 #include "tm.h"
-#include "toplev.h"
+#include "diagnostic-core.h"
 #include "rtl.h"
 #include "tm_p.h"
 #include "hard-reg-set.h"
@@ -34,6 +34,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "output.h"
 #include "basic-block.h"
 #include "cselib.h"
+#include "target.h"
 
 #ifdef INSN_SCHEDULING
 #include "sel-sched-ir.h"
@@ -74,7 +75,7 @@ static void
 switch_dump (FILE *to)
 {
   gcc_assert (saved_sched_dump == NULL);
-  
+
   saved_sched_dump = sched_dump;
   sched_dump = to;
 }
@@ -88,7 +89,7 @@ restore_dump (void)
 }
 
 
-/* Functions for dumping instructions, av sets, and exprs.  */ 
+/* Functions for dumping instructions, av sets, and exprs.  */
 
 /* Default flags for dumping insns.  */
 static int dump_insn_rtx_flags = DUMP_INSN_RTX_PATTERN;
@@ -163,7 +164,7 @@ dump_insn_rtx (rtx insn)
 
 
 /* Dump INSN to stderr.  */
-void
+DEBUG_FUNCTION void
 debug_insn_rtx (rtx insn)
 {
   switch_dump (stderr);
@@ -213,12 +214,12 @@ dump_vinsn (vinsn_t vi)
 }
 
 /* Dump vinsn VI to stderr.  */
-void
+DEBUG_FUNCTION void
 debug_vinsn (vinsn_t vi)
 {
   switch_dump (stderr);
   dump_vinsn_1 (vi, debug_vinsn_flags);
-  sel_print ("\n"); 
+  sel_print ("\n");
   restore_dump ();
 }
 
@@ -280,7 +281,7 @@ dump_expr_1 (expr_t expr, int flags)
       if (orig_bb != 0)
 	sel_print ("orig_bb:%d;", orig_bb);
     }
-  
+
   if (EXPR_TARGET_AVAILABLE (expr) < 1)
     sel_print ("target:%d;", EXPR_TARGET_AVAILABLE (expr));
   sel_print ("]");
@@ -294,7 +295,7 @@ dump_expr (expr_t expr)
 }
 
 /* Dump expression EXPR to stderr.  */
-void
+DEBUG_FUNCTION void
 debug_expr (expr_t expr)
 {
   switch_dump (stderr);
@@ -352,7 +353,7 @@ dump_insn (insn_t i)
 }
 
 /* Dump INSN to stderr.  */
-void
+DEBUG_FUNCTION void
 debug_insn (insn_t insn)
 {
   switch_dump (stderr);
@@ -367,10 +368,10 @@ dump_av_set (av_set_t av)
 {
   av_set_iterator i;
   expr_t expr;
-  
+
   if (!sched_dump_to_dot_p)
     sel_print ("{");
-  
+
   FOR_EACH_EXPR (expr, i, av)
     {
       dump_expr (expr);
@@ -379,7 +380,7 @@ dump_av_set (av_set_t av)
       else
         sel_print ("\n");
     }
-  
+
   if (!sched_dump_to_dot_p)
     sel_print ("}");
 }
@@ -390,7 +391,7 @@ dump_lv_set (regset lv)
 {
   sel_print ("{");
 
-  /* This code was adapted from flow.c: dump_regset ().  */
+  /* This code was adapted from cfg.c: dump_regset ().  */
   if (lv == NULL)
     sel_print ("nil");
   else
@@ -398,7 +399,7 @@ dump_lv_set (regset lv)
       unsigned i;
       reg_set_iterator rsi;
       int count = 0;
-      
+
       EXECUTE_IF_SET_IN_REG_SET (lv, 0, i, rsi)
         {
           sel_print (" %d", i);
@@ -407,9 +408,9 @@ dump_lv_set (regset lv)
               sel_print (" [%s]", reg_names[i]);
               ++count;
             }
-          
+
           ++count;
-          
+
           if (sched_dump_to_dot_p && count == 12)
             {
               count = 0;
@@ -417,7 +418,7 @@ dump_lv_set (regset lv)
             }
         }
     }
-  
+
   sel_print ("}\n");
 }
 
@@ -439,7 +440,7 @@ dump_blist (blist_t bnds)
   for (; bnds; bnds = BLIST_NEXT (bnds))
     {
       bnd_t bnd = BLIST_BND (bnds);
-      
+
       sel_print ("[to: %d; ptr: ", INSN_UID (BND_TO (bnd)));
       dump_ilist (BND_PTR (bnd));
       sel_print ("] ");
@@ -464,8 +465,8 @@ dump_insn_vector (rtx_vec_t succs)
 {
   int i;
   rtx succ;
-  
-  for (i = 0; VEC_iterate (rtx, succs, i, succ); i++)
+
+  FOR_EACH_VEC_ELT (rtx, succs, i, succ)
     if (succ)
       dump_insn (succ);
     else
@@ -500,16 +501,16 @@ sel_print_insn (const_rtx insn, int aligned ATTRIBUTE_UNUSED)
 {
   static char buf[80];
 
-  /* '+' before insn means it is a new cycle start and it's not been 
+  /* '+' before insn means it is a new cycle start and it's not been
      scheduled yet.  '>' - has been scheduled.  */
   if (s_i_d && INSN_LUID (insn) > 0)
     if (GET_MODE (insn) == TImode)
-      sprintf (buf, "%s %4d", 
-               INSN_SCHED_TIMES (insn) > 0 ? "> " : "< ", 
+      sprintf (buf, "%s %4d",
+               INSN_SCHED_TIMES (insn) > 0 ? "> " : "< ",
                INSN_UID (insn));
     else
-      sprintf (buf, "%s %4d", 
-               INSN_SCHED_TIMES (insn) > 0 ? "! " : "  ", 
+      sprintf (buf, "%s %4d",
+               INSN_SCHED_TIMES (insn) > 0 ? "! " : "  ",
                INSN_UID (insn));
   else
     if (GET_MODE (insn) == TImode)
@@ -537,7 +538,7 @@ replace_str_in_buf (char *buf, const char *str1, const char *str2)
   do
     {
       p = strstr (p, str1);
-      if (p) 
+      if (p)
 	{
 	  char *p1 = p + str1_len;
 	  /* Copy the rest of buf and '\0'.  */
@@ -555,7 +556,7 @@ replace_str_in_buf (char *buf, const char *str1, const char *str2)
 	  /* Copy str2.  */
 	  for (i = 0; i < str2_len; i++)
 	    p[i] = str2[i];
-	    
+
 	  p += str2_len;
 	  buf_len += diff;
 	}
@@ -565,17 +566,39 @@ replace_str_in_buf (char *buf, const char *str1, const char *str2)
 }
 
 /* Replace characters in BUF that have special meaning in .dot file.  */
-void
+static void
 sel_prepare_string_for_dot_label (char *buf)
 {
   static char specials_from[7][2] = { "<", ">", "{", "|", "}", "\"",
                                       "\n" };
-  static char specials_to[7][3] = { "\\<", "\\>", "\\{", "\\|", "\\}", 
+  static char specials_to[7][3] = { "\\<", "\\>", "\\{", "\\|", "\\}",
                                     "\\\"", "\\l" };
   unsigned i;
 
   for (i = 0; i < 7; i++)
     replace_str_in_buf (buf, specials_from[i], specials_to[i]);
+}
+
+/* This function acts like printf but dumps to the sched_dump file.  */
+void
+sel_print (const char *fmt, ...)
+{
+  va_list ap;
+  va_start (ap, fmt);
+  if (sched_dump_to_dot_p)
+    {
+      char *message;
+      if (vasprintf (&message, fmt, ap) >= 0 && message != NULL)
+	{
+	  message = (char *) xrealloc (message, 2 * strlen (message) + 1);
+	  sel_prepare_string_for_dot_label (message);
+	  fprintf (sched_dump, "%s", message);
+	  free (message);
+	}
+    }
+  else
+    vfprintf (sched_dump, fmt, ap);
+  va_end (ap);
 }
 
 /* Dump INSN with FLAGS.  */
@@ -800,7 +823,7 @@ sel_dump_cfg_2 (FILE *f, int flags)
   sched_dump_to_dot_p = false;
 }
 
-/* Dump a cfg region to the file specified by TAG honoring flags.  
+/* Dump a cfg region to the file specified by TAG honoring flags.
    The file is created by the function.  */
 static void
 sel_dump_cfg_1 (const char *tag, int flags)
@@ -860,7 +883,7 @@ sel_debug_cfg_1 (int flags)
 }
 
 /* Dumps av_set AV to stderr.  */
-void
+DEBUG_FUNCTION void
 debug_av_set (av_set_t av)
 {
   switch_dump (stderr);
@@ -870,7 +893,7 @@ debug_av_set (av_set_t av)
 }
 
 /* Dump LV to stderr.  */
-void
+DEBUG_FUNCTION void
 debug_lv_set (regset lv)
 {
   switch_dump (stderr);
@@ -880,7 +903,7 @@ debug_lv_set (regset lv)
 }
 
 /* Dump an instruction list P to stderr.  */
-void
+DEBUG_FUNCTION void
 debug_ilist (ilist_t p)
 {
   switch_dump (stderr);
@@ -890,7 +913,7 @@ debug_ilist (ilist_t p)
 }
 
 /* Dump a boundary list BNDS to stderr.  */
-void
+DEBUG_FUNCTION void
 debug_blist (blist_t bnds)
 {
   switch_dump (stderr);
@@ -900,7 +923,7 @@ debug_blist (blist_t bnds)
 }
 
 /* Dump an insn vector SUCCS.  */
-void
+DEBUG_FUNCTION void
 debug_insn_vector (rtx_vec_t succs)
 {
   switch_dump (stderr);
@@ -910,7 +933,7 @@ debug_insn_vector (rtx_vec_t succs)
 }
 
 /* Dump a hard reg set SET to stderr.  */
-void
+DEBUG_FUNCTION void
 debug_hard_reg_set (HARD_REG_SET set)
 {
   switch_dump (stderr);
@@ -927,15 +950,18 @@ sel_debug_cfg (void)
 }
 
 /* Print a current cselib value for X's address to stderr.  */
-rtx
+DEBUG_FUNCTION rtx
 debug_mem_addr_value (rtx x)
 {
   rtx t, addr;
+  enum machine_mode address_mode;
 
   gcc_assert (MEM_P (x));
+  address_mode = targetm.addr_space.address_mode (MEM_ADDR_SPACE (x));
+
   t = shallow_copy_rtx (x);
-  if (cselib_lookup (XEXP (t, 0), Pmode, 0))
-    XEXP (t, 0) = cselib_subst_to_values (XEXP (t, 0));
+  if (cselib_lookup (XEXP (t, 0), address_mode, 0, GET_MODE (t)))
+    XEXP (t, 0) = cselib_subst_to_values (XEXP (t, 0), GET_MODE (t));
 
   t = canon_rtx (t);
   addr = get_addr (XEXP (t, 0));

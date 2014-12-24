@@ -1,6 +1,6 @@
 /* FR30 specific functions.
-   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2004, 2005, 2007, 2008
-   Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2004, 2005, 2007, 2008, 2009,
+   2010 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions.
 
    This file is part of GCC.
@@ -28,7 +28,6 @@
 #include "rtl.h"
 #include "regs.h"
 #include "hard-reg-set.h"
-#include "real.h"
 #include "insn-config.h"
 #include "conditions.h"
 #include "insn-attr.h"
@@ -40,19 +39,14 @@
 #include "obstack.h"
 #include "except.h"
 #include "function.h"
-#include "toplev.h"
+#include "df.h"
+#include "diagnostic-core.h"
 #include "tm_p.h"
 #include "target.h"
 #include "target-def.h"
 
 /*}}}*/
 /*{{{  Function Prologues & Epilogues */ 
-
-/* Define the information needed to generate branch and scc insns.  This is
-   stored from the compare operation.  */
-
-struct rtx_def * fr30_compare_op0;
-struct rtx_def * fr30_compare_op1;
 
 /* The FR30 stack looks like this:
 
@@ -125,7 +119,18 @@ static void fr30_setup_incoming_varargs (CUMULATIVE_ARGS *, enum machine_mode,
 static bool fr30_must_pass_in_stack (enum machine_mode, const_tree);
 static int fr30_arg_partial_bytes (CUMULATIVE_ARGS *, enum machine_mode,
 				   tree, bool);
-
+static rtx fr30_function_arg (CUMULATIVE_ARGS *, enum machine_mode,
+			      const_tree, bool);
+static void fr30_function_arg_advance (CUMULATIVE_ARGS *, enum machine_mode,
+				       const_tree, bool);
+static bool fr30_frame_pointer_required (void);
+static rtx fr30_function_value (const_tree, const_tree, bool);
+static rtx fr30_libcall_value (enum machine_mode, const_rtx);
+static bool fr30_function_value_regno_p (const unsigned int);
+static bool fr30_can_eliminate (const int, const int);
+static void fr30_asm_trampoline_template (FILE *);
+static void fr30_trampoline_init (rtx, tree, rtx);
+static int fr30_num_arg_regs (enum machine_mode, const_tree);
 
 #define FRAME_POINTER_MASK 	(1 << (FRAME_POINTER_REGNUM))
 #define RETURN_POINTER_MASK 	(1 << (RETURN_POINTER_REGNUM))
@@ -145,6 +150,13 @@ static int fr30_arg_partial_bytes (CUMULATIVE_ARGS *, enum machine_mode,
 #if UNITS_PER_WORD == 4
 #define WORD_ALIGN(SIZE) (((SIZE) + 3) & ~3)
 #endif
+
+/* Implement TARGET_OPTION_OPTIMIZATION_TABLE.  */
+static const struct default_options fr30_option_optimization_table[] =
+  {
+    { OPT_LEVELS_1_PLUS, OPT_fomit_frame_pointer, NULL, 1 },
+    { OPT_LEVELS_NONE, 0, NULL, 0 }
+  };
 
 /* Initialize the GCC target structure.  */
 #undef  TARGET_ASM_ALIGNED_HI_OP
@@ -158,14 +170,51 @@ static int fr30_arg_partial_bytes (CUMULATIVE_ARGS *, enum machine_mode,
 #define TARGET_PASS_BY_REFERENCE hook_pass_by_reference_must_pass_in_stack
 #undef  TARGET_ARG_PARTIAL_BYTES
 #define TARGET_ARG_PARTIAL_BYTES fr30_arg_partial_bytes
+#undef  TARGET_FUNCTION_ARG
+#define TARGET_FUNCTION_ARG fr30_function_arg
+#undef  TARGET_FUNCTION_ARG_ADVANCE
+#define TARGET_FUNCTION_ARG_ADVANCE fr30_function_arg_advance
+
+#undef TARGET_FUNCTION_VALUE
+#define TARGET_FUNCTION_VALUE fr30_function_value
+#undef TARGET_LIBCALL_VALUE
+#define TARGET_LIBCALL_VALUE fr30_libcall_value
+#undef TARGET_FUNCTION_VALUE_REGNO_P
+#define TARGET_FUNCTION_VALUE_REGNO_P fr30_function_value_regno_p
 
 #undef  TARGET_SETUP_INCOMING_VARARGS
 #define TARGET_SETUP_INCOMING_VARARGS fr30_setup_incoming_varargs
 #undef  TARGET_MUST_PASS_IN_STACK
 #define TARGET_MUST_PASS_IN_STACK fr30_must_pass_in_stack
 
+#undef TARGET_FRAME_POINTER_REQUIRED
+#define TARGET_FRAME_POINTER_REQUIRED fr30_frame_pointer_required
+
+#undef TARGET_CAN_ELIMINATE
+#define TARGET_CAN_ELIMINATE fr30_can_eliminate
+
+#undef TARGET_ASM_TRAMPOLINE_TEMPLATE
+#define TARGET_ASM_TRAMPOLINE_TEMPLATE fr30_asm_trampoline_template
+#undef TARGET_TRAMPOLINE_INIT
+#define TARGET_TRAMPOLINE_INIT fr30_trampoline_init
+
+#undef TARGET_EXCEPT_UNWIND_INFO
+#define TARGET_EXCEPT_UNWIND_INFO sjlj_except_unwind_info
+
+#undef TARGET_OPTION_OPTIMIZATION_TABLE
+#define TARGET_OPTION_OPTIMIZATION_TABLE fr30_option_optimization_table
+
 struct gcc_target targetm = TARGET_INITIALIZER;
 
+
+/* Worker function for TARGET_CAN_ELIMINATE.  */
+
+bool
+fr30_can_eliminate (const int from ATTRIBUTE_UNUSED, const int to)
+{
+  return (to == FRAME_POINTER_REGNUM || ! frame_pointer_needed);
+}
+
 /* Returns the number of bytes offset between FROM_REG and TO_REG
    for the current function.  As a side effect it fills in the 
    current_frame_info structure, if the data is available.  */
@@ -664,6 +713,34 @@ fr30_print_operand (FILE *file, rtx x, int code)
 }
 
 /*}}}*/
+
+/* Implements TARGET_FUNCTION_VALUE.  */
+
+static rtx
+fr30_function_value (const_tree valtype,
+		     const_tree fntype_or_decli ATTRIBUTE_UNUSED,
+		     bool outgoing ATTRIBUTE_UNUSED)
+{
+  return gen_rtx_REG (TYPE_MODE (valtype), RETURN_VALUE_REGNUM);
+}
+
+/* Implements TARGET_LIBCALL_VALUE.  */
+
+static rtx
+fr30_libcall_value (enum machine_mode mode,
+		    const_rtx fun ATTRIBUTE_UNUSED)
+{
+  return gen_rtx_REG (mode, RETURN_VALUE_REGNUM);
+}
+
+/* Implements TARGET_FUNCTION_VALUE_REGNO_P.  */
+
+static bool
+fr30_function_value_regno_p (const unsigned int regno)
+{
+  return (regno == RETURN_VALUE_REGNUM);
+}
+
 /*{{{  Function arguments */ 
 
 /* Return true if we should pass an argument on the stack rather than
@@ -681,8 +758,8 @@ fr30_must_pass_in_stack (enum machine_mode mode, const_tree type)
 
 /* Compute the number of word sized registers needed to hold a
    function argument of mode INT_MODE and tree type TYPE.  */
-int
-fr30_num_arg_regs (enum machine_mode mode, tree type)
+static int
+fr30_num_arg_regs (enum machine_mode mode, const_tree type)
 {
   int size;
 
@@ -724,6 +801,33 @@ fr30_arg_partial_bytes (CUMULATIVE_ARGS *cum, enum machine_mode mode,
     return 0;
   
   return (FR30_NUM_ARG_REGS - *cum) * UNITS_PER_WORD;
+}
+
+static rtx
+fr30_function_arg (CUMULATIVE_ARGS *cum, enum machine_mode mode,
+		   const_tree type, bool named)
+{
+  if (!named
+      || fr30_must_pass_in_stack (mode, type)
+      || *cum >= FR30_NUM_ARG_REGS)
+    return NULL_RTX;
+  else
+    return gen_rtx_REG (mode, *cum + FIRST_ARG_REGNUM);
+}
+
+/* A C statement (sans semicolon) to update the summarizer variable CUM to
+   advance past an argument in the argument list.  The values MODE, TYPE and
+   NAMED describe that argument.  Once this is done, the variable CUM is
+   suitable for analyzing the *following* argument with `FUNCTION_ARG', etc.
+
+   This macro need not do anything if the argument in question was passed on
+   the stack.  The compiler knows how to track the amount of stack space used
+   for arguments without any special help.  */
+static void
+fr30_function_arg_advance (CUMULATIVE_ARGS *cum, enum machine_mode mode,
+			   const_tree type, bool named)
+{
+  *cum += named * fr30_num_arg_regs (mode, type);
 }
 
 /*}}}*/
@@ -827,9 +931,8 @@ fr30_move_double (rtx * operands)
       else if (src_code == MEM)
 	{
 	  rtx addr = XEXP (src, 0);
-	  int dregno = REGNO (dest);
-	  rtx dest0 = operand_subword (dest, 0, TRUE, mode);;
-	  rtx dest1 = operand_subword (dest, 1, TRUE, mode);;
+	  rtx dest0 = operand_subword (dest, 0, TRUE, mode);
+	  rtx dest1 = operand_subword (dest, 1, TRUE, mode);
 	  rtx new_mem;
 	  
 	  gcc_assert (GET_CODE (addr) == REG);
@@ -903,6 +1006,58 @@ fr30_move_double (rtx * operands)
   end_sequence ();
 
   return val;
+}
+
+/* Implement TARGET_FRAME_POINTER_REQUIRED.  */
+
+bool
+fr30_frame_pointer_required (void)
+{
+  return (flag_omit_frame_pointer == 0 || crtl->args.pretend_args_size > 0);
+}
+
+/*}}}*/
+/*{{{  Trampoline Output Routines  */
+
+/* Implement TARGET_ASM_TRAMPOLINE_TEMPLATE.
+   On the FR30, the trampoline is:
+
+   nop
+   ldi:32 STATIC, r12
+   nop
+   ldi:32 FUNCTION, r0
+   jmp    @r0
+
+   The no-ops are to guarantee that the static chain and final
+   target are 32 bit aligned within the trampoline.  That allows us to
+   initialize those locations with simple SImode stores.   The alternative
+   would be to use HImode stores.  */
+   
+static void
+fr30_asm_trampoline_template (FILE *f)
+{
+  fprintf (f, "\tnop\n");
+  fprintf (f, "\tldi:32\t#0, %s\n", reg_names [STATIC_CHAIN_REGNUM]);
+  fprintf (f, "\tnop\n");
+  fprintf (f, "\tldi:32\t#0, %s\n", reg_names [COMPILER_SCRATCH_REGISTER]);
+  fprintf (f, "\tjmp\t@%s\n", reg_names [COMPILER_SCRATCH_REGISTER]);
+}
+
+/* Implement TARGET_TRAMPOLINE_INIT.  */
+
+static void
+fr30_trampoline_init (rtx m_tramp, tree fndecl, rtx chain_value)
+{
+  rtx fnaddr = XEXP (DECL_RTL (fndecl), 0);
+  rtx mem;
+
+  emit_block_move (m_tramp, assemble_trampoline_template (),
+		   GEN_INT (TRAMPOLINE_SIZE), BLOCK_OP_NORMAL);
+
+  mem = adjust_address (m_tramp, SImode, 4);
+  emit_move_insn (mem, chain_value);
+  mem = adjust_address (m_tramp, SImode, 12);
+  emit_move_insn (mem, fnaddr);
 }
 
 /*}}}*/

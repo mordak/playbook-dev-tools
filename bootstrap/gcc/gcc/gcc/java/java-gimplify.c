@@ -1,5 +1,5 @@
 /* Java(TM) language-specific gimplification routines.
-   Copyright (C) 2003, 2004, 2006, 2007, 2007, 2008
+   Copyright (C) 2003, 2004, 2006, 2007, 2007, 2008, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -25,12 +25,10 @@ The Free Software Foundation is independent of Sun Microsystems, Inc.  */
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "tm.h"
 #include "tree.h"
 #include "java-tree.h"
 #include "tree-dump.h"
 #include "gimple.h"
-#include "toplev.h"
 
 static tree java_gimplify_block (tree);
 static enum gimplify_status java_gimplify_modify_expr (tree *);
@@ -44,12 +42,8 @@ static void dump_java_tree (enum tree_dump_index, tree);
 void
 java_genericize (tree fndecl)
 {
+  walk_tree (&DECL_SAVED_TREE (fndecl), java_replace_references, NULL, NULL);
   dump_java_tree (TDI_original, fndecl);
-
-  /* Genericize with the gimplifier.  */
-  gimplify_function_tree (fndecl);
-
-  dump_function (TDI_generic, fndecl);
 }
 
 /* Gimplify a Java tree.  */
@@ -65,22 +59,8 @@ java_gimplify_expr (tree *expr_p, gimple_seq *pre_p, gimple_seq *post_p)
       *expr_p = java_gimplify_block (*expr_p);
       break;
 
-    case VAR_DECL:
-      *expr_p = java_replace_reference (*expr_p, /* want_lvalue */ false);
-      return GS_UNHANDLED;
-
     case MODIFY_EXPR:
       return java_gimplify_modify_expr (expr_p);
-
-    case SAVE_EXPR:
-      /* Note that we can see <save_expr NULL> if the save_expr was
-	 already handled by gimplify_save_expr.  */
-      if (TREE_OPERAND (*expr_p, 0) != NULL_TREE
-	  && TREE_CODE (TREE_OPERAND (*expr_p, 0)) == VAR_DECL)
-	TREE_OPERAND (*expr_p, 0) 
-	  = java_replace_reference (TREE_OPERAND (*expr_p, 0), 
-			       /* want_lvalue */ false);
-      return GS_UNHANDLED;
 
     case POSTINCREMENT_EXPR:
     case POSTDECREMENT_EXPR:
@@ -96,26 +76,6 @@ java_gimplify_expr (tree *expr_p, gimple_seq *pre_p, gimple_seq *post_p)
       gcc_unreachable ();
 
     default:
-      /* Java insists on strict left-to-right evaluation of expressions.
-	 A problem may arise if a variable used in the LHS of a binary
-	 operation is altered by an assignment to that value in the RHS
-	 before we've performed the operation.  So, we always copy every
-	 LHS to a temporary variable.  
-
-	 FIXME: Are there any other cases where we should do this?
-	 Parameter lists, maybe?  Or perhaps that's unnecessary because
-	 the front end already generates SAVE_EXPRs.  */
-
-      if (TREE_CODE_CLASS (code) == tcc_binary
-	  || TREE_CODE_CLASS (code) == tcc_comparison)
-	{
-	  enum gimplify_status stat 
-	    = gimplify_expr (&TREE_OPERAND (*expr_p, 0), pre_p, post_p,
-			     is_gimple_formal_tmp_var, fb_rvalue);
-	  if (stat == GS_ERROR)
-	    return stat;
-	}
-
       return GS_UNHANDLED;
     }
 
@@ -130,27 +90,12 @@ java_gimplify_modify_expr (tree *modify_expr_p)
   tree rhs = TREE_OPERAND (modify_expr, 1);
   tree lhs_type = TREE_TYPE (lhs);
 
-  /* This is specific to the bytecode compiler.  If a variable has
-     LOCAL_SLOT_P set, replace an assignment to it with an assignment
-     to the corresponding variable that holds all its aliases.  */
-  if (TREE_CODE (lhs) == VAR_DECL
-      && DECL_LANG_SPECIFIC (lhs)
-      && LOCAL_SLOT_P (lhs)
-      && TREE_CODE (lhs_type) == POINTER_TYPE)
-    {
-      tree new_lhs = java_replace_reference (lhs, /* want_lvalue */ true);
-      tree new_rhs = build1 (NOP_EXPR, TREE_TYPE (new_lhs), rhs);
-      modify_expr = build2 (MODIFY_EXPR, TREE_TYPE (new_lhs),
-			    new_lhs, new_rhs);
-      modify_expr = build1 (NOP_EXPR, lhs_type, modify_expr);
-    }
-  else if (lhs_type != TREE_TYPE (rhs))
+  if (lhs_type != TREE_TYPE (rhs))
     /* Fix up type mismatches to make legal GIMPLE.  These are
        generated in several places, in particular null pointer
        assignment and subclass assignment.  */
     TREE_OPERAND (modify_expr, 1) = convert (lhs_type, rhs);
 
-  *modify_expr_p = modify_expr;
   return GS_UNHANDLED;
 }
 
@@ -183,7 +128,7 @@ java_gimplify_block (tree java_block)
 
   /* Don't bother with empty blocks.  */
   if (! body)
-    return build_empty_stmt ();
+    return build_empty_stmt (input_location);
 
   if (IS_EMPTY_STMT (body))
     return body;

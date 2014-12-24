@@ -9,8 +9,8 @@ Disassembly of section .text:
 0+004 <[^>]*> f6d9f007 	pli	\[r9, r7\]
 0+008 <[^>]*> f6d0f101 	pli	\[r0, r1, lsl #2\]
 0+00c <[^>]*> f4d5f000 	pli	\[r5\]
-0+010 <[^>]*> f4d5ffff 	pli	\[r5, #4095\]
-0+014 <[^>]*> f455ffff 	pli	\[r5, #-4095\]
+0+010 <[^>]*> f4d5ffff 	pli	\[r5, #4095\].*
+0+014 <[^>]*> f455ffff 	pli	\[r5, #-4095\].*
 0+018 <[^>]*> e320f0f0 	dbg	#0
 0+01c <[^>]*> e320f0ff 	dbg	#15
 0+020 <[^>]*> f57ff05f 	dmb	sy
@@ -26,7 +26,7 @@ Disassembly of section .text:
 0+048 <[^>]*> f919 f007 	pli	\[r9, r7\]
 0+04c <[^>]*> f910 f021 	pli	\[r0, r1, lsl #2\]
 0+050 <[^>]*> f995 f000 	pli	\[r5\]
-0+054 <[^>]*> f995 ffff 	pli	\[r5, #4095\]
+0+054 <[^>]*> f995 ffff 	pli	\[r5, #4095\].*
 0+058 <[^>]*> f915 fcff 	pli	\[r5, #-255\]
 0+05c <[^>]*> f99f ffff 	pli	\[pc, #4095\]	; 0+0105f <[^>]*>
 0+060 <[^>]*> f91f ffff 	pli	\[pc, #-4095\]	; f+ff065 <[^>]*>
@@ -57,10 +57,10 @@ Disassembly of section .text:
 0+0c0 <[^>]*> f3ef 8009 	mrs	r0, PSP
 0+0c4 <[^>]*> f3ef 8010 	mrs	r0, PRIMASK
 0+0c8 <[^>]*> f3ef 8011 	mrs	r0, BASEPRI
-0+0cc <[^>]*> f3ef 8012 	mrs	r0, BASEPRI_MASK
+0+0cc <[^>]*> f3ef 8012 	mrs	r0, BASEPRI_MAX
 0+0d0 <[^>]*> f3ef 8013 	mrs	r0, FAULTMASK
 0+0d4 <[^>]*> f3ef 8014 	mrs	r0, CONTROL
-0+0d8 <[^>]*> f380 8800 	msr	(CPSR_f|APSR), r0
+0+0d8 <[^>]*> f380 8800 	msr	(CPSR_f|APSR_nzcvq), r0
 0+0dc <[^>]*> f380 8801 	msr	IAPSR, r0
 0+0e0 <[^>]*> f380 8802 	msr	EAPSR, r0
 0+0e4 <[^>]*> f380 8803 	msr	PSR, r0
@@ -71,6 +71,10 @@ Disassembly of section .text:
 0+0f8 <[^>]*> f380 8809 	msr	PSP, r0
 0+0fc <[^>]*> f380 8810 	msr	PRIMASK, r0
 0+100 <[^>]*> f380 8811 	msr	BASEPRI, r0
-0+104 <[^>]*> f380 8812 	msr	BASEPRI_MASK, r0
+0+104 <[^>]*> f380 8812 	msr	BASEPRI_MAX, r0
 0+108 <[^>]*> f380 8813 	msr	FAULTMASK, r0
 0+10c <[^>]*> f380 8814 	msr	CONTROL, r0
+0+110 <[^>]*> f3ef 8003 	mrs	r0, PSR
+0+114 <[^>]*> f380 8803 	msr	PSR, r0
+0+118 <[^>]*> df00      	svc	0
+#...

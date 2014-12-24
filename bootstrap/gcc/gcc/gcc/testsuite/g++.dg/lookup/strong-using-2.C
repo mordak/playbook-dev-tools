@@ -1,5 +1,6 @@
 // PR c++/13594
 
+// { dg-options "" }
 // { dg-do compile }
 
 namespace foo {
@@ -20,4 +21,4 @@ namespace baz {
 
 foo::T *t1;
 bar::T *t2;
-baz::T *t3; // { dg-error "(ambiguous|expected|extra)" "" }
+baz::T *t3; // { dg-error "(ambiguous|does not name a type)" "" }

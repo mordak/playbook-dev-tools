@@ -1,6 +1,6 @@
 // Underlying io library details -*- C++ -*-
 
-// Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2009
+// Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -23,9 +23,9 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file c++io.h
+/** @file bits/c++io.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{ios}
  */
 
 // c_io_stdio.h - Defines for using "C" stdio.h
@@ -34,16 +34,18 @@
 #define _GLIBCXX_CXX_IO_H 1
 
 #include <cstdio>
-#include <cstddef>
 #include <bits/gthr.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   typedef __gthread_mutex_t __c_lock;
 
   // for basic_file.h
   typedef FILE __c_file;
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif

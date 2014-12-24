@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1999-2009, Free Software Foundation, Inc.         --
+--          Copyright (C) 1999-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -33,11 +33,11 @@
 --  Second_Duration and Day_Of_Week and Day_In_Year from Calendar.Time.
 --  Second_Duration precision depends on the target clock precision.
 --
---  GNAT.Calendar provides the same kind of abstraction found in
---  Ada.Calendar. It provides Split and Time_Of to build and split a Time
---  data. And it provides accessor functions to get only one of Hour, Minute,
---  Second, Second_Duration. Other functions are to access more advanced
---  values like Day_Of_Week, Day_In_Year and Week_In_Year.
+--  GNAT.Calendar provides the same kind of abstraction found in Ada.Calendar.
+--  It provides Split and Time_Of to build and split a Time data. And it
+--  provides accessor functions to get only one of Hour, Minute, Second,
+--  Second_Duration. Other functions are to access more advanced values like
+--  Day_Of_Week, Day_In_Year and Week_In_Year.
 
 with Ada.Calendar;
 with Interfaces.C;
@@ -46,6 +46,7 @@ package GNAT.Calendar is
 
    type Day_Name is
      (Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday);
+   pragma Ordered (Day_Name);
 
    subtype Hour_Number         is Natural range 0 .. 23;
    subtype Minute_Number       is Natural range 0 .. 59;
@@ -70,17 +71,8 @@ package GNAT.Calendar is
    --  Return the day name
 
    function Day_In_Year (Date : Ada.Calendar.Time) return Day_In_Year_Number;
-   --  Returns the day number in the year. (1st January is day 1 and 31st
+   --  Return the day number in the year. (1st January is day 1 and 31st
    --  December is day 365 or 366 for leap year).
-
-   function Week_In_Year (Date : Ada.Calendar.Time) return Week_In_Year_Number;
-   --  Returns the week number as defined in ISO 8601. A week always starts on
-   --  a Monday and the first week of a particular year is the one containing
-   --  the first Thursday. A year may have 53 weeks when January 1st is a
-   --  Wednesday and the year is leap or January 1st is a Thursday. Note that
-   --  the last days of December may belong to the first week on the next year
-   --  and conversely, the first days of January may belong to the last week
-   --  of the last year.
 
    procedure Split
      (Date       : Ada.Calendar.Time;
@@ -102,7 +94,23 @@ package GNAT.Calendar is
       Minute     : Minute_Number;
       Second     : Second_Number;
       Sub_Second : Second_Duration := 0.0) return Ada.Calendar.Time;
-   --  Returns an Ada.Calendar.Time data built from the date and time values
+   --  Return an Ada.Calendar.Time data built from the date and time values
+
+   function Week_In_Year (Date : Ada.Calendar.Time) return Week_In_Year_Number;
+   --  Return the week number as defined in ISO 8601. A week always starts on
+   --  a Monday and the first week of a particular year is the one containing
+   --  the first Thursday. A year may have 53 weeks when January 1st is a
+   --  Wednesday and the year is leap or January 1st is a Thursday. Note that
+   --  the last days of December may belong to the first week on the next year
+   --  and conversely, the first days of January may belong to the last week
+   --  of the last year.
+
+   procedure Year_Week_In_Year
+     (Date : Ada.Calendar.Time;
+      Year : out Ada.Calendar.Year_Number;
+      Week : out Week_In_Year_Number);
+   --  Return the week number as defined in ISO 8601 along with the year in
+   --  which the week occurs.
 
    --  C timeval conversion
 

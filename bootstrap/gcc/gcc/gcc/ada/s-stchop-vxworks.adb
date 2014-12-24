@@ -29,7 +29,8 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
---  This is the VxWorks version of this package.
+--  This is the verson for VxWorks 5 and VxWorks MILS
+
 --  This file should be kept synchronized with the general implementation
 --  provided by s-stchop.adb.
 
@@ -44,16 +45,20 @@ with Interfaces.C;
 package body System.Stack_Checking.Operations is
 
    --  In order to have stack checking working appropriately on VxWorks we need
-   --  to extract the stack size information from the VxWorks kernel itself. It
-   --  means that the library for showing task-related information needs to be
-   --  linked into the VxWorks system, when using stack checking. The TaskShow
-   --  library can be linked into the VxWorks system by either:
+   --  to extract the stack size information from the VxWorks kernel itself.
+
+   --  For VxWorks 5 the library for showing task-related information needs to
+   --  be linked into the VxWorks system, when using stack checking. The
+   --  taskShow library can be linked into the VxWorks system by either:
 
    --    * defining INCLUDE_SHOW_ROUTINES in config.h when using
    --      configuration header files, or
 
    --    * selecting INCLUDE_TASK_SHOW when using the Tornado project
    --      facility.
+
+   --  VxWorks MILS includes the necessary routine in taskLib, so nothing
+   --  special needs to be done there.
 
    Stack_Limit : Address :=
                    Boolean'Pos (Stack_Grows_Down) * Address'First
@@ -85,10 +90,12 @@ package body System.Stack_Checking.Operations is
 
    procedure Initialize_Stack_Limit is
    begin
-      --  For the environment task.
+      --  For the environment task
+
       Set_Stack_Limit_For_Current_Task;
 
-      --  Will be called by every created task.
+      --  Will be called by every created task
+
       Set_Stack_Limit_Hook := Set_Stack_Limit_For_Current_Task'Access;
    end Initialize_Stack_Limit;
 
@@ -99,10 +106,10 @@ package body System.Stack_Checking.Operations is
    procedure Set_Stack_Limit_For_Current_Task is
       use Interfaces.C;
 
-      --  Import from VxWorks.
       function Task_Var_Add (Tid : Interfaces.C.int; Var : Address)
                             return Interfaces.C.int;
       pragma Import (C, Task_Var_Add, "taskVarAdd");
+      --  Import from VxWorks
 
       type OS_Stack_Info is record
          Size  : Interfaces.C.int;
@@ -120,10 +127,15 @@ package body System.Stack_Checking.Operations is
 
       Stack_Info : aliased OS_Stack_Info;
 
-      Limit      : System.Address;
+      Limit : System.Address;
+
    begin
-      --  Get stack bounds from VxWorks.
+      --  Get stack bounds from VxWorks
+
       Get_Stack_Info (Stack_Info'Access);
+
+      --  In s-stchop.adb, we check for overflow in the following operations,
+      --  but we have no such check in this vxworks version. Why not ???
 
       if Stack_Grows_Down then
          Limit := Stack_Info.Base - Storage_Offset (Stack_Info.Size);
@@ -131,7 +143,8 @@ package body System.Stack_Checking.Operations is
          Limit := Stack_Info.Base + Storage_Offset (Stack_Info.Size);
       end if;
 
-      --  Note: taskVarAdd implicitly calls taskVarInit if required.
+      --  Note: taskVarAdd implicitly calls taskVarInit if required
+
       if Task_Var_Add (0, Stack_Limit'Address) = 0 then
          Stack_Limit := Limit;
       end if;

@@ -1,5 +1,5 @@
 /* Prototypes for alpha.c functions used in the md file & elsewhere.
-   Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007
+   Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2009, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -21,15 +21,12 @@ along with GCC; see the file COPYING3.  If not see
 extern int alpha_next_sequence_number;
 
 extern void literal_section (void);
-extern void override_options (void);
 extern int zap_mask (HOST_WIDE_INT);
 extern int direct_return (void);
 
 extern int alpha_sa_size (void);
 extern HOST_WIDE_INT alpha_initial_elimination_offset (unsigned int,
 						       unsigned int);
-extern int alpha_pv_save_size (void);
-extern int alpha_using_fp (void);
 extern void alpha_expand_prologue (void);
 extern void alpha_expand_epilogue (void);
 extern void alpha_output_filename (FILE *, const char *);
@@ -38,8 +35,6 @@ extern rtx alpha_tablejump_addr_vec (rtx);
 extern rtx alpha_tablejump_best_label (rtx);
 
 extern bool alpha_legitimate_constant_p (rtx);
-extern bool alpha_legitimate_address_p (enum machine_mode, rtx, int);
-extern rtx alpha_legitimize_address (rtx, rtx, enum machine_mode);
 extern rtx alpha_legitimize_reload_address (rtx, enum machine_mode,
 					    int, int, int);
 
@@ -69,6 +64,9 @@ extern rtx alpha_expand_zap_mask (HOST_WIDE_INT);
 extern void alpha_expand_builtin_vector_binop (rtx (*)(rtx, rtx, rtx),
 					       enum machine_mode,
 					       rtx, rtx, rtx);
+extern void alpha_expand_builtin_establish_vms_condition_handler (rtx, rtx);
+extern void alpha_expand_builtin_revert_vms_condition_handler (rtx);
+
 extern rtx alpha_return_addr (int, rtx);
 extern rtx alpha_gp_save_rtx (void);
 extern void print_operand (FILE *, rtx, int);
@@ -76,7 +74,6 @@ extern void print_operand_address (FILE *, rtx);
 extern void alpha_initialize_trampoline (rtx, rtx, rtx, int, int, int);
 
 extern rtx alpha_va_arg (tree, tree);
-extern rtx function_arg (CUMULATIVE_ARGS, enum machine_mode, tree, int);
 extern rtx function_value (const_tree, const_tree, enum machine_mode);
 
 extern void alpha_start_function (FILE *, const char *, tree);
@@ -89,8 +86,8 @@ extern int check_float_value (enum machine_mode, REAL_VALUE_TYPE *, int);
 #endif
 
 #ifdef RTX_CODE
-extern rtx alpha_emit_conditional_branch (enum rtx_code);
-extern rtx alpha_emit_setcc (enum rtx_code);
+extern void alpha_emit_conditional_branch (rtx[], enum machine_mode);
+extern bool alpha_emit_setcc (rtx[], enum machine_mode);
 extern int alpha_split_conditional_move (enum rtx_code, rtx, rtx, rtx, rtx);
 extern void alpha_emit_xfloating_arith (enum rtx_code, rtx[]);
 extern void alpha_emit_xfloating_cvt (enum rtx_code, rtx[]);
@@ -111,6 +108,12 @@ extern rtx alpha_use_linkage (rtx, tree, int, int);
 #if TARGET_ABI_OPEN_VMS
 extern enum avms_arg_type alpha_arg_type (enum machine_mode);
 extern rtx alpha_arg_info_reg_val (CUMULATIVE_ARGS);
+extern void avms_asm_output_external (FILE *, tree, const char *);
+extern void vms_output_aligned_decl_common (FILE *, tree, const char *,
+					    unsigned HOST_WIDE_INT,
+					    unsigned int);
+extern HOST_WIDE_INT alpha_vms_initial_elimination_offset (unsigned int,
+							   unsigned int);
 #endif
 
 extern rtx unicosmk_add_call_info_word (rtx);

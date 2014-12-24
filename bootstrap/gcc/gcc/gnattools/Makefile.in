@@ -1,5 +1,5 @@
 # Makefile for gnattools
-#   Copyright 2003, 2004, 2009 Free Software Foundation, Inc.
+#   Copyright 2003, 2004, 2009, 2010 Free Software Foundation, Inc.
 #
 # This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -161,7 +161,7 @@ $(GCC_DIR)/stamp-gnatlib-rts:
 $(GCC_DIR)/stamp-tools:
 	-rm -rf $(GCC_DIR)/ada/tools
 	-mkdir -p $(GCC_DIR)/ada/tools
-	-(cd $(GCC_DIR)/ada/tools; $(LN_S) ../sdefault.adb .)
+	-(cd $(GCC_DIR)/ada/tools; $(LN_S) ../sdefault.adb ../snames.ads ../snames.adb .)
 	-$(foreach PAIR,$(TOOLS_TARGET_PAIRS), \
 	          rm -f $(GCC_DIR)/ada/tools/$(word 1,$(subst <, ,$(PAIR)));\
 	          $(LN_S) $(fsrcdir)/ada/$(word 2,$(subst <, ,$(PAIR))) \
@@ -274,17 +274,23 @@ pdf:
 # Build HTML (none here).
 html:
 
+.PHONY: check installcheck info dvi pdf html
+
 # Build TAGS (none here).
 TAGS:
 
 # Installation rules.
 install:
 
+install-strip: install
+
 install-info:
 
 install-pdf:
 
 install-html:
+
+.PHONY: install install-strip install-info install-pdf install-html
 
 # Cleaning rules.
 mostlyclean:
@@ -296,6 +302,8 @@ distclean:
 
 maintainer-clean:
 
+.PHONY: mostlyclean clean distclean maintainer-clean
+
 # Rules for rebuilding this Makefile.
 Makefile: $(srcdir)/Makefile.in config.status
 	CONFIG_FILES=$@ ; \
@@ -305,9 +313,14 @@ Makefile: $(srcdir)/Makefile.in config.status
 config.status: $(srcdir)/configure
 	$(SHELL) ./config.status --recheck
 
-$(srcdir)/configure: @MAINT@ $(srcdir)/configure.ac \
-	$(srcdir)/../config/acx.m4 $(srcdir)/../config/override.m4
-	cd $(srcdir) && autoconf
+AUTOCONF = autoconf
+configure_deps = \
+	$(srcdir)/configure.ac \
+	$(srcdir)/../config/acx.m4 \
+	$(srcdir)/../config/override.m4
+
+$(srcdir)/configure: @MAINT@ $(configure_deps)
+	cd $(srcdir) && $(AUTOCONF)
 
 # Don't export variables to the environment, in order to not confuse
 # configure.

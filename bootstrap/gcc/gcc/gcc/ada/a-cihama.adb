@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2004-2009, Free Software Foundation, Inc.         --
+--          Copyright (C) 2004-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -84,23 +84,21 @@ package body Ada.Containers.Indefinite_Hashed_Maps is
    -- Local Instantiations --
    --------------------------
 
-   package HT_Ops is
-      new Ada.Containers.Hash_Tables.Generic_Operations
-        (HT_Types          => HT_Types,
-         Hash_Node         => Hash_Node,
-         Next              => Next,
-         Set_Next          => Set_Next,
-         Copy_Node         => Copy_Node,
-         Free              => Free);
+   package HT_Ops is new Ada.Containers.Hash_Tables.Generic_Operations
+     (HT_Types  => HT_Types,
+      Hash_Node => Hash_Node,
+      Next      => Next,
+      Set_Next  => Set_Next,
+      Copy_Node => Copy_Node,
+      Free      => Free);
 
-   package Key_Ops is
-      new Hash_Tables.Generic_Keys
-       (HT_Types  => HT_Types,
-        Next      => Next,
-        Set_Next  => Set_Next,
-        Key_Type  => Key_Type,
-        Hash      => Hash,
-        Equivalent_Keys => Equivalent_Key_Node);
+   package Key_Ops is new Hash_Tables.Generic_Keys
+     (HT_Types        => HT_Types,
+      Next            => Next,
+      Set_Next        => Set_Next,
+      Key_Type        => Key_Type,
+      Hash            => Hash,
+      Equivalent_Keys => Equivalent_Key_Node);
 
    ---------
    -- "=" --
@@ -108,7 +106,7 @@ package body Ada.Containers.Indefinite_Hashed_Maps is
 
    function Is_Equal is new HT_Ops.Generic_Equal (Find_Equal_Key);
 
-   function "=" (Left, Right : Map) return Boolean is
+   overriding function "=" (Left, Right : Map) return Boolean is
    begin
       return Is_Equal (Left.HT, Right.HT);
    end "=";
@@ -199,7 +197,7 @@ package body Ada.Containers.Indefinite_Hashed_Maps is
 
       if Container.HT.Busy > 0 then
          raise Program_Error with
-           "Delete attempted to tamper with elements (map is busy)";
+           "Delete attempted to tamper with cursors (map is busy)";
       end if;
 
       pragma Assert (Vet (Position), "bad cursor in Delete");
@@ -484,7 +482,7 @@ package body Ada.Containers.Indefinite_Hashed_Maps is
       if not Inserted then
          if Container.HT.Lock > 0 then
             raise Program_Error with
-              "Include attempted to tamper with cursors (map is locked)";
+              "Include attempted to tamper with elements (map is locked)";
          end if;
 
          K := Position.Node.Key;
@@ -838,7 +836,7 @@ package body Ada.Containers.Indefinite_Hashed_Maps is
 
       if Container.HT.Lock > 0 then
          raise Program_Error with
-           "Replace attempted to tamper with cursors (map is locked)";
+           "Replace attempted to tamper with elements (map is locked)";
       end if;
 
       K := Node.Key;
@@ -887,7 +885,7 @@ package body Ada.Containers.Indefinite_Hashed_Maps is
 
       if Position.Container.HT.Lock > 0 then
          raise Program_Error with
-           "Replace_Element attempted to tamper with cursors (map is locked)";
+           "Replace_Element attempted to tamper with elements (map is locked)";
       end if;
 
       pragma Assert (Vet (Position), "bad cursor in Replace_Element");
@@ -1033,7 +1031,7 @@ package body Ada.Containers.Indefinite_Hashed_Maps is
                return False;
             end if;
 
-            if X = X.Next then -- to prevent endless loop
+            if X = X.Next then  --  to prevent unnecessary looping
                return False;
             end if;
 

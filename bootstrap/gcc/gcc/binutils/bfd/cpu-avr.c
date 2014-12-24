@@ -1,5 +1,6 @@
 /* BFD library support routines for the AVR architecture.
-   Copyright 1999, 2000, 2002, 2006, 2007 Free Software Foundation, Inc.
+   Copyright 1999, 2000, 2002, 2005, 2006, 2007, 2008
+   Free Software Foundation, Inc.
    Contributed by Denis Chertykov <denisc@overta.ru>
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -38,7 +39,13 @@ compatible (const bfd_arch_info_type * a,
   if (a->mach == b->mach)
     return a;
 
-  if (a->mach <= bfd_mach_avr6 && b->mach <= bfd_mach_avr6)
+  /* avr-6 is compatible only with itself as its call convention is not
+     compatible with other avr (the mcu saves the return address on 3 bytes
+     instead of 2).  */
+  if (a->mach == bfd_mach_avr6 || b->mach == bfd_mach_avr6)
+    return NULL;
+
+  if (a->mach < bfd_mach_avr6 && b->mach < bfd_mach_avr6)
     {
       /* Special case for ATmega[16]03 (avr:3) and ATmega83 (avr:4).  */
       if ((a->mach == bfd_mach_avr3 && b->mach == bfd_mach_avr4)
@@ -126,7 +133,29 @@ static const bfd_arch_info_type arch_info_struct[] =
   N (22, bfd_mach_avr51, "avr:51", FALSE, & arch_info_struct[9]),
 
   /* 3-Byte PC.  */
-  N (22, bfd_mach_avr6, "avr:6", FALSE, NULL)
+  N (22, bfd_mach_avr6, "avr:6", FALSE, & arch_info_struct[10]),
+  
+  /* Xmega 1 */
+  N (24, bfd_mach_avrxmega1, "avr:101", FALSE, & arch_info_struct[11]),
+
+  /* Xmega 2 */
+  N (24, bfd_mach_avrxmega2, "avr:102", FALSE, & arch_info_struct[12]),
+  
+  /* Xmega 3 */
+  N (24, bfd_mach_avrxmega3, "avr:103", FALSE, & arch_info_struct[13]),
+  
+  /* Xmega 4 */
+  N (24, bfd_mach_avrxmega4, "avr:104", FALSE, & arch_info_struct[14]),
+  
+  /* Xmega 5 */
+  N (24, bfd_mach_avrxmega5, "avr:105", FALSE, & arch_info_struct[15]),
+  
+  /* Xmega 6 */
+  N (24, bfd_mach_avrxmega6, "avr:106", FALSE, & arch_info_struct[16]),
+  
+  /* Xmega 7 */
+  N (24, bfd_mach_avrxmega7, "avr:107", FALSE, NULL)
+  
 };
 
 const bfd_arch_info_type bfd_avr_arch =

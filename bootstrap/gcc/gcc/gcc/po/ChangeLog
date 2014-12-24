@@ -1,6 +1,507 @@
-2009-10-15  Release Manager
+2012-03-01  Release Manager
 
-	* GCC 4.4.2 released.
+	* GCC 4.6.3 released.
+
+2011-10-30  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po: Update.
+
+2011-10-26  Release Manager
+
+	* GCC 4.6.2 released.
+
+2011-10-25  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po: Update.
+
+2011-10-03  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po: Update.
+
+2011-09-02  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po: Update.
+
+2011-08-28  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po: Update.
+
+2011-07-31  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po: Update.
+
+2011-07-21  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po, sv.po: Update.
+
+2011-07-08  Joseph Myers  <joseph@codesourcery.com>
+
+	* be.po, da.po, de.po, el.po, es.po, fi.po, fr.po, id.po, ja.po,
+	nl.po, ru.po, sr.po, sv.po, tr.po, vi.po, zh_CN.po, zh_TW.po:
+	Update.
+
+2011-06-30  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po: Update.
+
+2011-06-27  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po: Update.
+
+2011-06-27  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po: Update.
+
+2011-06-27  Release Manager
+
+	* GCC 4.6.1 released.
+
+2011-06-24  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po: Update.
+
+2011-06-23  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po: Update.
+
+2011-06-21  Joseph Myers  <joseph@codesourcery.com>
+
+	* gcc.pot: Regenerate.
+
+2011-05-19  Joseph Myers  <joseph@codesourcery.com>
+
+	* zh_CN.po: Update.
+
+2011-05-14  Joseph Myers  <joseph@codesourcery.com>
+
+	* zh_CN.po: Update.
+
+2011-04-26  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po: Update.
+
+2011-04-21  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po: Update.
+
+2011-04-13  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2011-04-08  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po: Update.
+
+2011-04-07  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po: Update.
+
+2011-04-05  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po: Update.
+
+2011-04-04  Joseph Myers  <joseph@codesourcery.com>
+
+	* es.po: Update.
+
+2011-04-03  Joseph Myers  <joseph@codesourcery.com>
+
+	* be.po, da.po, de.po, el.po, es.po, fi.po, fr.po, id.po, ja.po,
+	nl.po, ru.po, sr.po, sv.po, tr.po, vi.po, zh_CN.po, zh_TW.po:
+	Update.
+
+2011-03-25  Release Manager
+
+	* GCC 4.6.0 released.
+
+2011-03-24  Joseph Myers  <joseph@codesourcery.com>
+
+	* gcc.pot: Regenerate.
+
+2011-03-17  Joseph Myers  <joseph@codesourcery.com>
+
+	* gcc.pot: Regenerate.
+
+2011-03-06  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po: Update.
+
+2011-03-05  Joseph Myers  <joseph@codesourcery.com>
+
+	* gcc.pot: Regenerate.
+
+2011-02-27  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po: Update.
+
+2011-02-27  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po: Update.
+
+2011-01-28  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po: Update.
+
+2011-01-27  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po: Update.
+
+2011-01-26  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po, sv.po: Update.
+
+2011-01-13  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po: Update.
+
+2011-01-10  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po: Update.
+
+2011-01-09  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po, sv.po: Update.
+
+2011-01-08  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po: Update.
+
+2011-01-05  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po: Update.
+
+2011-01-02  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po: Update.
+
+2011-01-02  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2011-01-02  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po: Update.
+
+2011-01-01  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po: Update.
+
+2010-12-31  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po: Update.
+
+2010-12-30  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po: Update.
+
+2010-12-29  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po: Update.
+
+2010-12-29  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po: Update.
+
+2010-12-27  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po: Update.
+
+2010-12-26  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2010-12-25  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po: Update.
+
+2010-12-21  Joseph Myers  <joseph@codesourcery.com>
+
+	* es.po, ja.po: Update.
+
+2010-12-19  Joseph Myers  <joseph@codesourcery.com>
+
+	* be.po, da.po, de.po, el.po, es.po, fi.po, fr.po, id.po, ja.po,
+	nl.po, ru.po, sr.po, sv.po, tr.po, vi.po, zh_CN.po, zh_TW.po:
+	Update.
+
+2010-12-19  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2010-12-19  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po: Update.
+
+2010-12-18  Joseph Myers  <joseph@codesourcery.com>
+
+	* gcc.pot: Regenerate.
+
+2010-12-17  Joseph Myers  <joseph@codesourcery.com>
+
+	* ja.po: Update.
+
+2010-12-13  Joseph Myers  <joseph@codesourcery.com>
+
+	* de.po, sv.po: Update.
+
+2010-12-05  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2010-11-29  Joseph Myers  <joseph@codesourcery.com>
+
+	* es.po: Update.
+
+2010-11-28  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2010-11-26  Joseph Myers  <joseph@codesourcery.com>
+
+	* exgettext: Handle UnknownError.
+
+2010-11-21  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2010-11-14  Joseph Myers  <joseph@codesourcery.com>
+
+	* be.po, da.po, de.po, el.po, es.po, fi.po, fr.po, id.po, ja.po,
+	nl.po, ru.po, sr.po, sv.po, tr.po, vi.po, zh_CN.po, zh_TW.po:
+	Update.
+
+2010-11-13  Joseph Myers  <joseph@codesourcery.com>
+
+	* gcc.pot: Regenerate.
+
+2010-11-12  Joseph Myers  <joseph@codesourcery.com>
+
+	* gcc.pot: Regenerate.
+
+2010-11-10  Joseph Myers  <joseph@codesourcery.com>
+
+	* gcc.pot: Regenerate.
+
+2010-11-09  Ian Lance Taylor  <iant@google.com>
+
+	* exgettext: Look for .cc files.  Look in subdirectories of
+	language subdirectories.
+	* EXCLUDES: Update comment.
+
+2010-10-22  Joseph Myers  <joseph@codesourcery.com>
+
+	* gcc.pot: Regenerate.
+
+2010-10-22  Joseph Myers  <joseph@codesourcery.com>
+
+	* EXCLUDES: Add read-md.c.
+
+2010-10-22  Joseph Myers  <joseph@codesourcery.com>
+
+	* exgettext: Only handle Warn when followed by '('.
+
+2010-10-13  Joseph Myers  <joseph@codesourcery.com>
+
+	* vi.po: Update.
+
+2010-10-07  Joseph Myers  <joseph@codesourcery.com>
+
+	* vi.po: New.
+
+2010-09-02  Joseph Myers  <joseph@codesourcery.com>
+
+	* exgettext: Handle {} in operand of MissingArgError.  Handle
+	Warn.
+
+2010-07-27  Joseph Myers  <joseph@codesourcery.com>
+
+	* exgettext: Also extract MissingArgError texts from .opt files.
+
+2010-06-29  Joern Rennecke  <joern.rennecke@embecosm.com>
+
+	PR other/44034
+	* EXCLUDES: Add genhooks.c.
+
+2010-05-01  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2010-04-26  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2010-04-20  Joseph Myers  <joseph@codesourcery.com>
+
+	* es.po: Update.
+
+2010-04-19  Joseph Myers  <joseph@codesourcery.com>
+
+	* zh_CN.po: Update.
+
+2010-04-16  Joseph Myers  <joseph@codesourcery.com>
+
+	* be.po, da.po, de.po, el.po, es.po, fi.po, fr.po, id.po, ja.po,
+	nl.po, ru.po, sr.po, sv.po, tr.po, zh_CN.po, zh_TW.po: Update.
+
+2010-04-06  Joseph Myers  <joseph@codesourcery.com>
+
+	* gcc.pot: Regenerate.
+
+2010-03-26  Joseph Myers  <joseph@codesourcery.com>
+
+	* gcc.pot: Regenerate.
+
+2010-03-09  Joseph Myers  <joseph@codesourcery.com>
+
+	* zh_CN.po: Update.
+
+2010-03-01  Shujing Zhao  <pearly.zhao@oracle.com>
+
+	* exgettext: Handle the functions that end with _n.
+
+2010-02-24  Joseph Myers  <joseph@codesourcery.com>
+
+	* zh_CN.po: Update.
+
+2010-02-21  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2010-02-14  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2010-02-07  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2010-02-07  Joseph Myers  <joseph@codesourcery.com>
+
+	* es.po: Update.
+
+2010-02-05  Joseph Myers  <joseph@codesourcery.com>
+
+	* be.po, da.po, de.po, el.po, es.po, fi.po, fr.po, id.po, ja.po,
+	nl.po, ru.po, sr.po, sv.po, tr.po, zh_CN.po, zh_TW.po: Update.
+
+2010-02-04  Joseph Myers  <joseph@codesourcery.com>
+
+	* gcc.pot: Regenerate.
+
+2010-02-01  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2010-01-24  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2010-01-22  Shujing Zhao  <pearly.zhao@oracle.com>
+
+	* exgettext: Handle the functions and the macro definitions that the
+	arguments are broken into more than one line.
+
+2010-01-20  Joseph Myers  <joseph@codesourcery.com>
+
+	* zh_CN.po: Update.
+
+2010-01-18  Joseph Myers  <joseph@codesourcery.com>
+
+	* zh_CN.po: Update.
+
+2010-01-17  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2010-01-14  Shujing Zhao  <pearly.zhao@oracle.com>
+
+	PR translation/39521
+	* exgettext: Extracted all specs %n strings and the %e strings that %e
+	is at the start of a line.
+
+2010-01-11  Joseph Myers  <joseph@codesourcery.com>
+
+	* fi.po: Update.
+
+2010-01-11  Joseph Myers  <joseph@codesourcery.com>
+
+	* zh_CN.po: Update.
+
+2010-01-11  Joseph Myers  <joseph@codesourcery.com>
+
+	* gcc.pot: Regenerate.
+
+2010-01-11  Joseph Myers  <joseph@codesourcery.com>
+	    Shujing Zhao  <pearly.zhao@oracle.com>
+	    
+	PR translation/42467
+	* exgettext: Keep the text before tab character in the option help
+	string at *.opt file.
+
+2010-01-10  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2010-01-04  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2009-12-29  Joseph Myers  <joseph@codesourcery.com>
+
+	* zh_CN.po: Update.
+
+2009-12-27  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2009-12-20  Joseph Myers  <joseph@codesourcery.com>
+
+	* sv.po: Update.
+
+2009-12-18  Joseph Myers  <joseph@codesourcery.com>
+
+	* zh_CN.po: Update.
+
+2009-12-16  Joseph Myers  <joseph@codesourcery.com>
+
+	* zh_CN.po: Update.
+
+2009-12-14  Joseph Myers  <joseph@codesourcery.com>
+
+	* zh_CN.po: Update.
+
+2009-12-13  Joseph Myers  <joseph@codesourcery.com>
+
+	* fi.po, sv.po: Update.
+
+2009-12-11  Joseph Myers  <joseph@codesourcery.com>
+
+	* es.po: Update.
+
+2009-12-10  Joseph Myers  <joseph@codesourcery.com>
+
+	* zh_CN.po: Update.
+
+2009-12-04  Joseph Myers  <joseph@codesourcery.com>
+
+	* be.po, da.po, de.po, el.po, es.po, fi.po, fr.po, id.po, ja.po,
+	nl.po, ru.po, sr.po, sv.po, tr.po, zh_CN.po, zh_TW.po: Update.
+
+2009-12-03  Joseph Myers  <joseph@codesourcery.com>
+
+	* gcc.pot: Regenerate.
+
+2009-12-02  Joseph Myers  <joseph@codesourcery.com>
+
+	* gcc.pot: Regenerate.
+
+2009-11-10  Joseph Myers  <joseph@codesourcery.com>
+
+	* id.po: Update.
+
+2009-10-17  Joseph Myers  <joseph@codesourcery.com>
+
+	* gcc.pot: Regenerate.
 
 2009-09-03  Joseph Myers  <joseph@codesourcery.com>
 
@@ -23,11 +524,7 @@
 	* be.po, da.po, de.po, el.po, es.po, fi.po, fr.po, id.po, ja.po,
 	nl.po, ru.po, sr.po, sv.po, tr.po, zh_CN.po, zh_TW.po: Update.
 
-2009-07-22  Release Manager
-
-	* GCC 4.4.1 released.
-
-2009-07-15  Jakub Jelinek  <jakub@redhat.com>
+2009-05-10  Joseph Myers  <joseph@codesourcery.com>
 
 	* gcc.pot: Regenerate.
 
@@ -40,9 +537,9 @@
 	* exgettext: Also look for */*/config-lang.in to find language
 	subdirectories.
 
-2009-04-21  Release Manager
+2009-04-21  Joseph Myers  <joseph@codesourcery.com>
 
-	* GCC 4.4.0 released.
+	* ChangeLog, EXCLUDES: Add copyright and license notices.
 
 2009-04-09  Jakub Jelinek  <jakub@redhat.com>
 
@@ -57,6 +554,11 @@
 2009-03-28  Joseph Myers  <joseph@codesourcery.com>
 
 	* gcc.pot: Regenerate.
+
+2009-03-28  Joseph Myers  <joseph@codesourcery.com>
+
+	* EXCLUDES (fix-header.c, gen-protos.c, scan-decls.c, scan.c,
+	scan.h): Remove.
 
 2009-03-03  Joseph Myers  <joseph@codesourcery.com>
 
@@ -1128,3 +1630,10 @@ Sun Oct 31 17:17:18 1999  Jeffrey A Law  (law@cygnus.com)
 	Fix names of those files which are now living in egcs's
 	libiberty/include directories.
 
+
+Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
+2009 Free Software Foundation, Inc.
+
+Copying and distribution of this file, with or without modification,
+are permitted in any medium without royalty provided the copyright
+notice and this notice are preserved.

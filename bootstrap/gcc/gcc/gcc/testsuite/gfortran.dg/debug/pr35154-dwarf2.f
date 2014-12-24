@@ -1,7 +1,8 @@
 C     Test program for common block debugging.  G. Helffrich 11 July 2004.
 C { dg-do compile }
 C { dg-skip-if "DWARF-2 only" { "*-*-*" } { "*" } { "-gdwarf-2" } }
-C { dg-options "-dA" }
+C { dg-skip-if "DWARF-2 only" { "*-*-*" } { "-g1" } { "" } }
+C { dg-options "-dA -gno-strict-dwarf" }
       common i,j
       common /label/l,m
       i = 1

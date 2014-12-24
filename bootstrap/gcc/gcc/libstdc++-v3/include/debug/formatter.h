@@ -1,6 +1,7 @@
 // Debug-mode error formatting implementation -*- C++ -*-
 
-// Copyright (C) 2003, 2004, 2005, 2006, 2007, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -29,27 +30,16 @@
 #ifndef _GLIBCXX_DEBUG_FORMATTER_H
 #define _GLIBCXX_DEBUG_FORMATTER_H 1
 
+#include <bits/c++config.h>
+#include <bits/cpp_type_traits.h>
 #include <typeinfo>
-#include <debug/debug.h>
 
 namespace __gnu_debug
 {
   using std::type_info;
 
-  /** Determine if the two types are the same. */
-  template<typename _Type1, typename _Type2>
-    struct __is_same
-    {
-      static const bool value = false;
-    };
-
-  template<typename _Type>
-    struct __is_same<_Type, _Type>
-    {
-      static const bool value = true;
-    };
-
-  template<bool> struct __truth { };
+  template<typename _Iterator>
+    bool __check_singular(_Iterator&);
 
   class _Safe_sequence_base;
 
@@ -109,7 +99,11 @@ namespace __gnu_debug
     __msg_output_ostream,
     // istreambuf_iterator
     __msg_deref_istreambuf,
-    __msg_inc_istreambuf
+    __msg_inc_istreambuf,
+    // forward_list
+    __msg_insert_after_end,
+    __msg_erase_after_bad,
+    __msg_valid_range2
   };
 
   class _Error_formatter
@@ -131,6 +125,7 @@ namespace __gnu_debug
       __begin,         // dereferenceable, and at the beginning
       __middle,        // dereferenceable, not at the beginning
       __end,           // past-the-end, may be at beginning if sequence empty
+      __before_begin,  // before begin
       __last_state
     };
 
@@ -210,23 +205,31 @@ namespace __gnu_debug
         {
 	  _M_variant._M_iterator._M_name = __name;
 	  _M_variant._M_iterator._M_address = &__it;
+#ifdef __GXX_RTTI
 	  _M_variant._M_iterator._M_type = &typeid(__it);
+#else
+	  _M_variant._M_iterator._M_type = 0;
+#endif
 	  _M_variant._M_iterator._M_constness =
-	    __is_same<_Safe_iterator<_Iterator, _Sequence>,
-	                         typename _Sequence::iterator>::
-	      value? __mutable_iterator : __const_iterator;
+	    std::__are_same<_Safe_iterator<_Iterator, _Sequence>,
+	                    typename _Sequence::iterator>::
+	      __value ? __mutable_iterator : __const_iterator;
 	  _M_variant._M_iterator._M_sequence = __it._M_get_sequence();
+#ifdef __GXX_RTTI
 	  _M_variant._M_iterator._M_seq_type = &typeid(_Sequence);
+#else
+	  _M_variant._M_iterator._M_seq_type = 0;
+#endif
 
 	  if (__it._M_singular())
 	    _M_variant._M_iterator._M_state = __singular;
 	  else
 	    {
-	      bool __is_begin = __it._M_is_begin();
-	      bool __is_end = __it._M_is_end();
-	      if (__is_end)
+	      if (__it._M_is_before_begin())
+		_M_variant._M_iterator._M_state = __before_begin;
+	      else if (__it._M_is_end())
 		_M_variant._M_iterator._M_state = __end;
-	      else if (__is_begin)
+	      else if (__it._M_is_begin())
 		_M_variant._M_iterator._M_state = __begin;
 	      else
 		_M_variant._M_iterator._M_state = __middle;
@@ -239,7 +242,11 @@ namespace __gnu_debug
         {
 	  _M_variant._M_iterator._M_name = __name;
 	  _M_variant._M_iterator._M_address = &__it;
+#ifdef __GXX_RTTI
 	  _M_variant._M_iterator._M_type = &typeid(__it);
+#else
+	  _M_variant._M_iterator._M_type = 0;
+#endif
 	  _M_variant._M_iterator._M_constness = __mutable_iterator;
 	  _M_variant._M_iterator._M_state = __it? __unknown_state : __singular;
 	  _M_variant._M_iterator._M_sequence = 0;
@@ -252,7 +259,11 @@ namespace __gnu_debug
         {
 	  _M_variant._M_iterator._M_name = __name;
 	  _M_variant._M_iterator._M_address = &__it;
+#ifdef __GXX_RTTI
 	  _M_variant._M_iterator._M_type = &typeid(__it);
+#else
+	  _M_variant._M_iterator._M_type = 0;
+#endif
 	  _M_variant._M_iterator._M_constness = __const_iterator;
 	  _M_variant._M_iterator._M_state = __it? __unknown_state : __singular;
 	  _M_variant._M_iterator._M_sequence = 0;
@@ -265,7 +276,11 @@ namespace __gnu_debug
         {
 	  _M_variant._M_iterator._M_name = __name;
 	  _M_variant._M_iterator._M_address = &__it;
+#ifdef __GXX_RTTI
 	  _M_variant._M_iterator._M_type = &typeid(__it);
+#else
+	  _M_variant._M_iterator._M_type = 0;
+#endif
 	  _M_variant._M_iterator._M_constness = __unknown_constness;
 	  _M_variant._M_iterator._M_state =
 	    __gnu_debug::__check_singular(__it)? __singular : __unknown_state;
@@ -281,7 +296,11 @@ namespace __gnu_debug
 	  _M_variant._M_sequence._M_name = __name;
 	  _M_variant._M_sequence._M_address =
 	    static_cast<const _Sequence*>(&__seq);
+#ifdef __GXX_RTTI
 	  _M_variant._M_sequence._M_type = &typeid(_Sequence);
+#else
+	  _M_variant._M_sequence._M_type = 0;
+#endif
 	}
 
       template<typename _Sequence>
@@ -290,7 +309,11 @@ namespace __gnu_debug
         {
 	  _M_variant._M_sequence._M_name = __name;
 	  _M_variant._M_sequence._M_address = &__seq;
+#ifdef __GXX_RTTI
 	  _M_variant._M_sequence._M_type = &typeid(_Sequence);
+#else
+	  _M_variant._M_sequence._M_type = 0;
+#endif
 	}
 
       void
@@ -308,7 +331,7 @@ namespace __gnu_debug
       const _Error_formatter&
       _M_iterator(const _Iterator& __it, const char* __name = 0)  const
       {
-	if (_M_num_parameters < size_t(__max_parameters))
+	if (_M_num_parameters < std::size_t(__max_parameters))
 	  _M_parameters[_M_num_parameters++] = _Parameter(__it, __name,
 							  _Is_iterator());
 	return *this;
@@ -317,7 +340,7 @@ namespace __gnu_debug
     const _Error_formatter&
     _M_integer(long __value, const char* __name = 0) const
     {
-      if (_M_num_parameters < size_t(__max_parameters))
+      if (_M_num_parameters < std::size_t(__max_parameters))
 	_M_parameters[_M_num_parameters++] = _Parameter(__value, __name);
       return *this;
     }
@@ -325,7 +348,7 @@ namespace __gnu_debug
     const _Error_formatter&
     _M_string(const char* __value, const char* __name = 0) const
     {
-      if (_M_num_parameters < size_t(__max_parameters))
+      if (_M_num_parameters < std::size_t(__max_parameters))
 	_M_parameters[_M_num_parameters++] = _Parameter(__value, __name);
       return *this;
     }
@@ -334,7 +357,7 @@ namespace __gnu_debug
       const _Error_formatter&
       _M_sequence(const _Sequence& __seq, const char* __name = 0) const
       {
-	if (_M_num_parameters < size_t(__max_parameters))
+	if (_M_num_parameters < std::size_t(__max_parameters))
 	  _M_parameters[_M_num_parameters++] = _Parameter(__seq, __name,
 							  _Is_sequence());
 	return *this;
@@ -345,20 +368,20 @@ namespace __gnu_debug
     { _M_text = __text; return *this; }
 
     const _Error_formatter&
-    _M_message(_Debug_msg_id __id) const;
+    _M_message(_Debug_msg_id __id) const throw ();
 
-    void
+    _GLIBCXX_NORETURN void
     _M_error() const;
 
   private:
-    _Error_formatter(const char* __file, size_t __line)
+    _Error_formatter(const char* __file, std::size_t __line)
     : _M_file(__file), _M_line(__line), _M_num_parameters(0), _M_text(0),
       _M_max_length(78), _M_column(1), _M_first_line(true), _M_wordwrap(false)
     { _M_get_max_length(); }
 
     template<typename _Tp>
       void
-      _M_format_word(char*, int, const char*, _Tp) const;
+      _M_format_word(char*, int, const char*, _Tp) const throw ();
 
     void
     _M_print_word(const char* __word) const;
@@ -367,24 +390,24 @@ namespace __gnu_debug
     _M_print_string(const char* __string) const;
 
     void
-    _M_get_max_length() const;
+    _M_get_max_length() const throw ();
 
     enum { __max_parameters = 9 };
 
     const char*         _M_file;
-    size_t              _M_line;
+    std::size_t         _M_line;
     mutable _Parameter  _M_parameters[__max_parameters];
-    mutable size_t      _M_num_parameters;
+    mutable std::size_t _M_num_parameters;
     mutable const char* _M_text;
-    mutable size_t      _M_max_length;
+    mutable std::size_t _M_max_length;
     enum { _M_indent = 4 } ;
-    mutable size_t      _M_column;
+    mutable std::size_t _M_column;
     mutable bool        _M_first_line;
     mutable bool        _M_wordwrap;
 
   public:
     static _Error_formatter
-    _M_at(const char* __file, size_t __line)
+    _M_at(const char* __file, std::size_t __line)
     { return _Error_formatter(__file, __line); }
   };
 } // namespace __gnu_debug

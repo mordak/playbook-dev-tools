@@ -1,7 +1,8 @@
 // -*- C++ -*-
 // typelist for the C++ library testsuite. 
 //
-// Copyright (C) 2005, 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2007, 2008, 2009, 2010, 2011
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -36,6 +37,7 @@
 #include <list>
 #include <deque>
 #include <string>
+#include <limits>
 
 #include <map>
 #include <set>
@@ -44,7 +46,7 @@
 #include <tr1/unordered_set>
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
-#include <cstdatomic>
+#include <atomic>
 #include <type_traits>
 #endif
 
@@ -338,6 +340,14 @@ namespace __gnu_test
   typedef transform<integral_types::type, atomics>::type atomics_tl;
 #endif
 
+  template<typename Tp>
+    struct numeric_limits
+    {
+      typedef Tp			value_type;
+      typedef std::numeric_limits<value_type>	type;
+    };
+
+  typedef transform<integral_types::type, numeric_limits>::type limits_tl;
 
   struct has_increment_operators
   {
@@ -383,12 +393,26 @@ namespace __gnu_test
       }
   };
 
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+  template<typename _Tp>
+    void
+    constexpr_bitwise_operators()
+    {
+      constexpr _Tp a = _Tp();
+      constexpr _Tp b = _Tp();
+      constexpr _Tp c1 __attribute__((unused)) = a | b;
+      constexpr _Tp c2 __attribute__((unused)) = a & b;
+      constexpr _Tp c3 __attribute__((unused)) = a ^ b;
+      constexpr _Tp c4 __attribute__((unused)) = ~b;
+    }
+#endif
+
   template<typename _Tp>
     void
     bitwise_operators()
     {
-      _Tp a; 
-      _Tp b;
+      _Tp a = _Tp();
+      _Tp b = _Tp();
       a | b;
       a & b;
       a ^ b;
@@ -399,8 +423,8 @@ namespace __gnu_test
     void
     bitwise_assignment_operators()
     {
-      _Tp a; 
-      _Tp b;
+      _Tp a = _Tp();
+      _Tp b = _Tp();
       a |= b; // set
       a &= ~b; // clear
       a ^= b;
@@ -426,8 +450,12 @@ namespace __gnu_test
 	{
 	  void __constraint()
 	  {
-	    bitwise_assignment_operators<_Tp>();
+	    a |= b; // set
+	    a &= ~b; // clear
+	    a ^= b;
 	  }
+	  _Tp a;
+	  _Tp b;
 	};
 
 	void (_Concept::*__x)() __attribute__((unused))
@@ -435,8 +463,35 @@ namespace __gnu_test
       }
   };
 
-  // Generator to test standard layout
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
+
+  struct constexpr_comparison_eq_ne
+  {
+    template<typename _Tp1, typename _Tp2 = _Tp1>
+      void 
+      operator()()
+      {
+	static_assert(_Tp1() == _Tp2(), "eq");
+	static_assert(!(_Tp1() != _Tp2()), "ne");
+      }
+  };
+
+  struct constexpr_comparison_operators
+  {
+    template<typename _Tp>
+      void 
+      operator()()
+      {
+	static_assert(!(_Tp() < _Tp()), "less");
+	static_assert(_Tp() <= _Tp(), "leq");
+	static_assert(!(_Tp() > _Tp()), "more");
+	static_assert(_Tp() >= _Tp(), "meq");
+	static_assert(_Tp() == _Tp(), "eq");
+	static_assert(!(_Tp() != _Tp()), "ne");
+      }
+  };
+
+  // Generator to test standard layout
   struct has_trivial_cons_dtor
   {
     template<typename _Tp>
@@ -470,12 +525,8 @@ namespace __gnu_test
 	{
 	  void __constraint()
 	  {
-	    // libstdc++/37907
-	    // typedef std::is_standard_layout<_Tp> standard_layout_p;
-	    // static_assert(standard_layout_p::value, "not standard_layout");
-
-	    typedef std::has_virtual_destructor<_Tp> ctor_p;
-	    static_assert(!ctor_p::value, "has virtual destructor");
+	    typedef std::is_standard_layout<_Tp> standard_layout_p;
+	    static_assert(standard_layout_p::value, "not standard_layout");
 	  }
 	};
 
@@ -539,7 +590,7 @@ namespace __gnu_test
 	struct _Concept
 	{
 	  void __constraint()
-	  { _Tp __v; }
+	  { _Tp __v __attribute__((unused)); }
 	};
 
 	void (_Concept::*__x)() __attribute__((unused))
@@ -587,6 +638,100 @@ namespace __gnu_test
       }
   };
 
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+  // Generator to test default constructor.
+  struct constexpr_default_constructible
+  {
+    template<typename _Tp, bool _IsLitp = std::is_literal_type<_Tp>::value>
+      struct _Concept;
+
+    // NB: _Tp must be a literal type.
+    // Have to have user-defined default ctor for this to work.
+    template<typename _Tp>
+      struct _Concept<_Tp, true>
+      {
+	void __constraint()
+	{ constexpr _Tp __obj; }
+      };
+
+    // Non-literal type, declare local static and verify no
+    // constructors generated for _Tp within the translation unit.
+    template<typename _Tp>
+      struct _Concept<_Tp, false>
+      {
+	void __constraint()
+	{ static _Tp __obj; }
+      };
+
+    template<typename _Tp>
+      void 
+      operator()()
+      {
+	_Concept<_Tp> c;
+	c.__constraint();
+      }
+  };
+
+  // Generator to test defaulted default constructor.
+  struct constexpr_defaulted_default_constructible
+  {
+    template<typename _Tp>
+      void
+      operator()()
+      {
+	struct _Concept
+	{
+	  void __constraint()
+	  { constexpr _Tp __v __attribute__((unused)) { }; }
+	};
+
+	void (_Concept::*__x)() __attribute__((unused))
+	  = &_Concept::__constraint;
+      }
+  };
+
+  struct constexpr_single_value_constructible
+  {
+    template<typename _Ttesttype, typename _Tvaluetype, 
+	     bool _IsLitp = std::is_literal_type<_Ttesttype>::value>
+      struct _Concept;
+
+    // NB: _Tvaluetype and _Ttesttype must be literal types.
+    // Additional constraint on _Tvaluetype needed.  Either assume
+    // user-defined default ctor as per
+    // constexpr_default_constructible and provide no initializer,
+    // provide an initializer, or assume empty-list init-able. Choose
+    // the latter.
+    template<typename _Ttesttype, typename _Tvaluetype>
+      struct _Concept<_Ttesttype, _Tvaluetype, true>
+      {
+	void __constraint()
+	{
+	  constexpr _Tvaluetype __v { };
+	  constexpr _Ttesttype __obj(__v);
+	}
+      };
+
+    template<typename _Ttesttype, typename _Tvaluetype>
+      struct _Concept<_Ttesttype, _Tvaluetype, false>
+      {
+	void __constraint()
+	{ 
+	  const _Tvaluetype __v { };
+	  static _Ttesttype __obj(__v);
+	}
+      };
+
+    template<typename _Ttesttype, typename _Tvaluetype>
+      void
+      operator()()
+      {
+	_Concept<_Ttesttype, _Tvaluetype> c;
+	c.__constraint();
+      }
+  };
+#endif
+
   // Generator to test direct list initialization
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
   struct direct_list_initializable
@@ -622,7 +767,7 @@ namespace __gnu_test
 	struct _Concept
 	{
 	  void __constraint()
-	  { _Ttype __v = {__a}; }
+	  { _Ttype __v __attribute__((unused)) = {__a}; }
 	  
 	  _Tvalue __a;
 	};

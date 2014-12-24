@@ -54,6 +54,7 @@ eoshift0 (gfc_array_char * ret, const gfc_array_char * array,
   index_type dim;
   index_type len;
   index_type n;
+  index_type arraysize;
 
   /* The compiler cannot figure out that these are set, initialize
      them to avoid warnings.  */
@@ -61,29 +62,44 @@ eoshift0 (gfc_array_char * ret, const gfc_array_char * array,
   soffset = 0;
   roffset = 0;
 
+  arraysize = size0 ((array_t *) array);
+
   if (ret->data == NULL)
     {
       int i;
 
-      ret->data = internal_malloc_size (size * size0 ((array_t *)array));
       ret->offset = 0;
       ret->dtype = array->dtype;
       for (i = 0; i < GFC_DESCRIPTOR_RANK (array); i++)
         {
-          ret->dim[i].lbound = 0;
-          ret->dim[i].ubound = array->dim[i].ubound - array->dim[i].lbound;
+	  index_type ub, str;
+
+          ub = GFC_DESCRIPTOR_EXTENT(array,i) - 1;
 
           if (i == 0)
-            ret->dim[i].stride = 1;
+	    str = 1;
           else
-            ret->dim[i].stride = (ret->dim[i-1].ubound + 1) * ret->dim[i-1].stride;
+            str = GFC_DESCRIPTOR_EXTENT(ret,i-1)
+	      * GFC_DESCRIPTOR_STRIDE(ret,i-1);
+
+	  GFC_DIMENSION_SET(ret->dim[i], 0, ub, str);
+
         }
+
+      if (arraysize > 0)
+	ret->data = internal_malloc_size (size * arraysize);
+      else
+	ret->data = internal_malloc_size (1);
+
     }
-  else
+  else if (unlikely (compile_options.bounds_check))
     {
-      if (size0 ((array_t *) ret) == 0)
-	return;
+      bounds_equal_extents ((array_t *) ret, (array_t *) array,
+				 "return value", "EOSHIFT");
     }
+
+  if (arraysize == 0)
+    return;
 
   which = which - 1;
 
@@ -96,20 +112,20 @@ eoshift0 (gfc_array_char * ret, const gfc_array_char * array,
     {
       if (dim == which)
         {
-          roffset = ret->dim[dim].stride * size;
+          roffset = GFC_DESCRIPTOR_STRIDE_BYTES(ret,dim);
           if (roffset == 0)
             roffset = size;
-          soffset = array->dim[dim].stride * size;
+          soffset = GFC_DESCRIPTOR_STRIDE_BYTES(array,dim);
           if (soffset == 0)
             soffset = size;
-          len = array->dim[dim].ubound + 1 - array->dim[dim].lbound;
+          len = GFC_DESCRIPTOR_EXTENT(array,dim);
         }
       else
         {
           count[n] = 0;
-          extent[n] = array->dim[dim].ubound + 1 - array->dim[dim].lbound;
-          rstride[n] = ret->dim[dim].stride * size;
-          sstride[n] = array->dim[dim].stride * size;
+          extent[n] = GFC_DESCRIPTOR_EXTENT(array,dim);
+          rstride[n] = GFC_DESCRIPTOR_STRIDE_BYTES(ret,dim);
+          sstride[n] = GFC_DESCRIPTOR_STRIDE_BYTES(array,dim);
           n++;
         }
     }

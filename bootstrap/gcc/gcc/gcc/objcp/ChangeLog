@@ -1,14 +1,214 @@
-2009-10-15  Release Manager
+2012-03-01  Release Manager
 
-	* GCC 4.4.2 released.
+	* GCC 4.6.3 released.
 
-2009-07-22  Release Manager
+2011-10-26  Release Manager
 
-	* GCC 4.4.1 released.
+	* GCC 4.6.2 released.
 
-2009-04-21  Release Manager
+2011-06-27  Release Manager
 
-	* GCC 4.4.0 released.
+	* GCC 4.6.1 released.
+
+2011-03-25  Release Manager
+
+	* GCC 4.6.0 released.
+
+2011-03-06  Joseph Myers  <joseph@codesourcery.com>
+
+	* lang-specs.h: Match -save-temps* instead of -save-temps.
+
+2011-02-20  Nicola Pero  <nicola.pero@meta-innovation.com>
+
+	PR objc++/47711
+	* config-lang.in (gtfiles): Updated list.
+
+2011-02-17  Iain Sandoe  <iains@gcc.gnu.org>
+
+	* Make-lang.in (START_HDRS): New.
+	(OBJCXX_OBJS): Added new object files from objc/.
+	(objcp/objcp-act.o): Updated prerequisites.
+	(objcp/objcp-lang.o): Updated prerequisites.
+	(objcp/objc-runtime-shared-support.o): New.
+	(objcp/objc-gnu-runtime-abi-01.o): New.
+	(objcp/objc-next-runtime-abi-01.o): New.
+	(objcp/objc-next-runtime-abi-02.o): New.
+	* config-lang.in (gtfiles): Updated.
+	* objcp-lang.c (objcxx_eh_personality): Removed.
+	(LANG_HOOKS_EH_PERSONALITY): Removed.
+	(LANG_HOOKS_EH_RUNTIME_TYPE): Removed.
+	(objcp_eh_personality_decl): Removed.
+	
+2011-02-07  Mike Stump  <mikestump@comcast.net>
+
+	* Make-lang.in (obj-c++.tags): Don't include *.y.
+
+2010-12-29  Nicola Pero  <nicola.pero@meta-innovation.com>
+
+	* objcp-lang.c (objcp_tsubst_copy_and_build): Update call to
+	objc_finish_message_expr.
+
+2010-12-26  Nicola Pero  <nicola.pero@meta-innovation.com>
+
+	* config-lang.in (gtfiles): Added c-family/c-cppbuiltin.c.
+
+2010-12-06  Nicola Pero  <nicola.pero@meta-innovation.com>
+
+	* config-lang.in (gtfiles): Added c-family/c-objc.h.
+	* Make-lang.in (objcp/objcp-act.o): Depend on
+	c-family/c-objc.h.
+	(objcp/objcp-lang.o): Same change.
+	(objcp/objcp-decl.o): Same change.
+	* objcp-lang.c: Include c-family/c-objc.h.
+	* objcp-decl.c: Same change.
+
+2010-11-23  Nicola Pero  <nicola.pero@meta-innovation.com>
+
+	PR objc/24358
+	* lang-specs.h: Print a deprecation note every time
+	objc++-cpp-output is requested.
+
+2010-10-24  Nicola Pero  <nicola.pero@meta-innovation.com>
+
+	* objcp-lang.c (LANG_HOOKS_DECL_PRINTABLE_NAME): Do not define.
+
+2010-10-20  Nicola Pero  <nicola.pero@meta-innovation.com>
+
+	* objcp-lang.c (finish_file): Removed.
+
+2010-10-14  Iain Sandoe  <iains@gcc.gnu.org>
+
+	merge from FSF apple 'trunk' branch. 
+	2006 Fariborz Jahanian <fjahanian@apple.com>
+	
+	Radars 4436866, 4505126, 4506903, 4517826
+	* objcp-lang.c (objcxx_init_ts): Update for property_decl.
+
+2010-10-13  Richard Henderson  <rth@redhat.com>
+
+	* objcp-lang.c (objcxx_eh_personality): Update call to
+	build_personality_function.
+
+2010-10-11  Andi Kleen  <ak@linux.intel.com>
+
+	* Make-lang.in (cc1objplus-checksum.c): Use correct temporary
+	name.
+
+2010-10-07  Andi Kleen  <ak@linux.intel.com>
+
+	* Make-lang.in (cc1objplus-dummy): Remove.
+	(cc1objplus-checksum): Change to run checksum over object files
+        and options only.
+
+2010-10-04  Andi Kleen <ak@linux.intel.com>
+
+	* Make-lang.in (cc1objplus-dummy, cc1objplus): Add + to build rule.
+
+2010-09-28  Richard Henderson  <rth@redhat.com>
+
+	* objcp-lang.c: Include "target.h".
+	(objcxx_eh_personality): Use targetm.except_unwind_info.
+	* Make-lang.in (objcp-lang.o): Update deps.
+
+2010-09-21  Nicola Pero  <nicola.pero@meta-innovation.com>
+
+	PR objc/25965	
+	* objcp-decl.c (objcp_finish_struct): Call
+	objc_get_interface_ivars() and check for duplicate ivars.
+
+2010-06-28  Steven Bosscher  <steven@gcc.gnu.org>
+
+	* objcp-lang.c: Do not include except.h.
+	* Make-lang.in: Update dependencies.
+
+2010-06-25  Joseph Myers  <joseph@codesourcery.com>
+
+	* lang-specs.h: Remove +e handling.
+
+2010-06-08  Laurynas Biveinis  <laurynas.biveinis@gmail.com>
+
+	* objcp-decl.h (ALLOC_OBJC_TYPE_LANG_SPECIFIC): Use typed GC
+	allocation.
+
+2010-06-05  Steven Bosscher  <steven@gcc.gnu.org>
+
+	* objcp-lang.c: Update include path for moved files.
+	* config-lang.in: Update paths in gtfiles for files in c-family/.
+
+2010-05-25  Steven Bosscher  <steven@gcc.gnu.org>
+
+	* objcp-decl.c: Do not include tm.h, rtl.h, expr.h, c-common.h,
+	flags.h, input.h, except.h, output.h, toplev.h, cpplib.h, debug.h,
+	and target.h.
+	* objcp-lang.c: Do not include tm.h, toplev.h, diagnostics.h,
+	and debug.h.  Explain why except.h has to be included.
+	* Make-lang.in: Update dependencies.
+
+2010-04-30  Steven Bosscher  <steven@gcc.gnu.org>
+
+	* objcp-decl.c: Do not include varray.h.
+
+2009-09-22  Richard Guenther  <rguenther@suse.de>
+
+	PR objc++/41430
+	* Make-lang.in (objcp-lang.o): Add $(EXCEPT_H) dependency.
+	* objcp-lang.c (LANG_HOOKS_EH_PERSONALITY): Define.
+	(LANG_HOOKS_EH_RUNTIME_TYPE): Likewise.
+	(objcxx_eh_personality): New function.
+
+2009-09-03  Diego Novillo  <dnovillo@google.com>
+
+	* objcp-lang.c (lang_hooks): Remove const qualifier.
+
+2009-07-14  Taras Glek  <tglek@mozilla.com>
+	    Rafael Espindola  <espindola@google.com>
+
+	* Make-lang.in (obj-c.install-plugin): New target for
+	installing plugin headers.
+
+2009-06-19  Ian Lance Taylor  <iant@google.com>
+
+	* objcp-decl.h (start_struct): Remove in_struct and struct_types
+	parameters.  Add struct_info parameter.
+	(finish_struct): Likewise.
+
+2009-06-13  Aldy Hernandez  <aldyh@redhat.com>
+
+	* objcp-decl.h (start_struct): Add location argument.
+	(finish_struct): Same.
+	(finish_decl): New.
+
+2009-06-12  Aldy Hernandez  <aldyh@redhat.com>
+
+	* objcp-decl.h (c_end_compound_stmt): New argument.
+	* objcp-decl.c (objcp_start_struct): Add argument.
+	(objcp_finish_struct): Same.
+
+2009-06-03  Ian Lance Taylor  <iant@google.com>
+
+	* Make-lang.in (cc1objplus-checksum.o): Depend upon $(CONFIG_H)
+	and $(SYSTEM_H).
+
+2009-05-27  Ian Lance Taylor  <iant@google.com>
+
+	* Make-lang.in (cc1objplus-dummy$(exeext)): Change $(COMPILER) to
+	$(LINKER).
+	(cc1objplus$(exeext)): Likewise.
+
+2009-05-26  Ian Lance Taylor  <iant@google.com>
+
+	* Make-lang.in (cc1objplus-dummy$(exeext)): Use $(COMPILER).
+	(cc1objplus$(exeext), objcp/objcp-act.o): Likwise.
+
+2009-05-10  Ian Lance Taylor  <iant@google.com>
+
+	* objcp-decl.h (start_struct): Add three new, ignored, macro
+	parameters.
+	(finish_struct): Add two new, ignored, macro parameters.
+
+2009-04-21  Joseph Myers  <joseph@codesourcery.com>
+
+	* ChangeLog: Add copyright and license notices.
 
 2008-12-05  Sebastian Pop  <sebastian.pop@amd.com>
 
@@ -193,3 +393,10 @@
 	* objcp-decl.c: Likewise.
 	* objcp-decl.h: Likewise.
 	* objcp-lang.c: Likewise.
+
+
+Copyright (C) 2005, 2006, 2007, 2008 Free Software Foundation, Inc.
+
+Copying and distribution of this file, with or without modification,
+are permitted in any medium without royalty provided the copyright
+notice and this notice are preserved.

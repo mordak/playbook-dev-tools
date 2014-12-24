@@ -1,4 +1,4 @@
-#   Copyright (C) 2000, 2007 Free Software Foundation, Inc.
+#   Copyright (C) 2000, 2007, 2009, 2010 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -35,8 +35,11 @@ set tests [prune $tests $srcdir/$subdir/bprob/*]
 set tests [prune $tests $srcdir/$subdir/charset/*]
 set tests [prune $tests $srcdir/$subdir/compat/*]
 set tests [prune $tests $srcdir/$subdir/debug/*]
+set tests [prune $tests $srcdir/$subdir/dfp/*]
 set tests [prune $tests $srcdir/$subdir/gcov/*]
+set tests [prune $tests $srcdir/$subdir/lto/*]
 set tests [prune $tests $srcdir/$subdir/pch/*]
+set tests [prune $tests $srcdir/$subdir/plugin/*]
 set tests [prune $tests $srcdir/$subdir/special/*]
 set tests [prune $tests $srcdir/$subdir/tls/*]
 set tests [prune $tests $srcdir/$subdir/vect/*]
@@ -44,9 +47,18 @@ set tests [prune $tests $srcdir/$subdir/gomp/*]
 set tests [prune $tests $srcdir/$subdir/tree-prof/*]
 set tests [prune $tests $srcdir/$subdir/torture/*]
 set tests [prune $tests $srcdir/$subdir/graphite/*]
+set tests [prune $tests $srcdir/$subdir/guality/*]
 
 # Main loop.
 dg-runtest $tests "" $DEFAULT_CXXFLAGS
+
+# C/C++ common tests.
+dg-runtest [lsort [glob -nocomplain $srcdir/c-c++-common/*.\[cSi\]]] \
+	"" ""
+
+dg-runtest [lsort [glob -nocomplain $srcdir/c-c++-common/cpp/*.\[cS\]]] \
+	"" ""
+
 
 # All done.
 dg-finish

@@ -1,5 +1,5 @@
 /* Dwarf2 assembler output helper routines.
-   Copyright (C) 2001, 2002, 2003, 2004, 2005, 2007, 2008
+   Copyright (C) 2001, 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -52,7 +52,7 @@ dw2_assemble_integer (int size, rtx x)
   if (op)
     {
       fputs (op, asm_out_file);
-      if (GET_CODE (x) == CONST_INT)
+      if (CONST_INT_P (x))
 	fprintf (asm_out_file, HOST_WIDE_INT_PRINT_HEX,
 		 (unsigned HOST_WIDE_INT) INTVAL (x));
       else
@@ -80,14 +80,14 @@ dw2_asm_output_data_raw (int size, unsigned HOST_WIDE_INT value)
   if (BYTES_BIG_ENDIAN)
     {
       for (i = size - 1; i > 0; --i)
-	fprintf (asm_out_file, "0x%x,", bytes[i]);
-      fprintf (asm_out_file, "0x%x", bytes[0]);
+	fprintf (asm_out_file, "%#x,", bytes[i]);
+      fprintf (asm_out_file, "%#x", bytes[0]);
     }
   else
     {
       for (i = 0; i < size - 1; ++i)
-	fprintf (asm_out_file, "0x%x,", bytes[i]);
-      fprintf (asm_out_file, "0x%x", bytes[i]);
+	fprintf (asm_out_file, "%#x,", bytes[i]);
+      fprintf (asm_out_file, "%#x", bytes[i]);
     }
 }
 
@@ -148,6 +148,35 @@ dw2_asm_output_delta (int size, const char *lab1, const char *lab2,
       vfprintf (asm_out_file, comment, ap);
     }
   fputc ('\n', asm_out_file);
+
+  va_end (ap);
+}
+
+/* Output the difference between two symbols in instruction units
+   in a given size.  */
+
+void
+dw2_asm_output_vms_delta (int size ATTRIBUTE_UNUSED,
+			  const char *lab1, const char *lab2,
+			  const char *comment, ...)
+{
+  va_list ap;
+
+  va_start (ap, comment);
+
+#ifndef ASM_OUTPUT_DWARF_VMS_DELTA
+  /* VMS Delta is only special on ia64-vms, but this funtion also gets
+     called on alpha-vms so it has to do something sane.  */
+  dw2_asm_output_delta (size, lab1, lab2, comment);
+#else
+  ASM_OUTPUT_DWARF_VMS_DELTA (asm_out_file, size, lab1, lab2);
+  if (flag_debug_asm && comment)
+    {
+      fprintf (asm_out_file, "\t%s ", ASM_COMMENT_START);
+      vfprintf (asm_out_file, comment, ap);
+    }
+  fputc ('\n', asm_out_file);
+#endif
 
   va_end (ap);
 }
@@ -268,7 +297,7 @@ dw2_asm_output_addr_rtx (int size, rtx addr,
    If COMMENT is not NULL and comments in the debug information
    have been requested by the user, append the given COMMENT
    to the generated output.  */
-   
+
 void
 dw2_asm_output_nstring (const char *str, size_t orig_len,
 			const char *comment, ...)
@@ -446,6 +475,8 @@ eh_data_format_name (int format)
   S(DW_EH_PE_sdata4 | DW_EH_PE_funcrel, "funcrel sdata4")
   S(DW_EH_PE_sdata8 | DW_EH_PE_funcrel, "funcrel sdata8")
 
+  S(DW_EH_PE_indirect | DW_EH_PE_absptr, "indirect absolute")
+
   S(DW_EH_PE_indirect | DW_EH_PE_absptr | DW_EH_PE_pcrel,
     "indirect pcrel")
   S(DW_EH_PE_indirect | DW_EH_PE_uleb128 | DW_EH_PE_pcrel,
@@ -526,7 +557,7 @@ eh_data_format_name (int format)
   };
 
   gcc_assert (format >= 0 && format < 0x100 && format_names[format]);
-  
+
   return format_names[format];
 #else
   }
@@ -547,7 +578,7 @@ dw2_asm_output_data_uleb128_raw (unsigned HOST_WIDE_INT value)
 	/* More bytes to follow.  */
 	byte |= 0x80;
 
-      fprintf (asm_out_file, "0x%x", byte);
+      fprintf (asm_out_file, "%#x", byte);
       if (value == 0)
 	break;
       fputc (',', asm_out_file);
@@ -589,7 +620,7 @@ dw2_asm_output_data_uleb128 (unsigned HOST_WIDE_INT value,
 
 	if (byte_op)
 	  {
-	    fprintf (asm_out_file, "0x%x", byte);
+	    fprintf (asm_out_file, "%#x", byte);
 	    if (work != 0)
 	      fputc (',', asm_out_file);
 	  }
@@ -631,7 +662,7 @@ dw2_asm_output_data_sleb128_raw (HOST_WIDE_INT value)
       if (more)
 	byte |= 0x80;
 
-      fprintf (asm_out_file, "0x%x", byte);
+      fprintf (asm_out_file, "%#x", byte);
       if (!more)
 	break;
       fputc (',', asm_out_file);
@@ -676,7 +707,7 @@ dw2_asm_output_data_sleb128 (HOST_WIDE_INT value,
 
 	if (byte_op)
 	  {
-	    fprintf (asm_out_file, "0x%x", byte);
+	    fprintf (asm_out_file, "%#x", byte);
 	    if (more)
 	      fputc (',', asm_out_file);
 	  }
@@ -767,8 +798,8 @@ static GTY((param1_is (char *), param2_is (tree))) splay_tree indirect_pool;
 
 static GTY(()) int dw2_const_labelno;
 
-#if defined(HAVE_GAS_HIDDEN) && defined(SUPPORTS_ONE_ONLY)
-# define USE_LINKONCE_INDIRECT 1
+#if defined(HAVE_GAS_HIDDEN)
+# define USE_LINKONCE_INDIRECT (SUPPORTS_ONE_ONLY)
 #else
 # define USE_LINKONCE_INDIRECT 0
 #endif
@@ -809,19 +840,21 @@ dw2_force_const_mem (rtx x, bool is_public)
 {
   splay_tree_node node;
   const char *key;
-  tree decl;
+  tree decl_id;
 
   if (! indirect_pool)
     /* We use strcmp, rather than just comparing pointers, so that the
        sort order will not depend on the host system.  */
-    indirect_pool = splay_tree_new_ggc (splay_tree_compare_strings);
+    indirect_pool = splay_tree_new_ggc (splay_tree_compare_strings,
+					ggc_alloc_splay_tree_str_tree_node_splay_tree_s,
+					ggc_alloc_splay_tree_str_tree_node_splay_tree_node_s);
 
   gcc_assert (GET_CODE (x) == SYMBOL_REF);
 
   key = XSTR (x, 0);
   node = splay_tree_lookup (indirect_pool, (splay_tree_key) key);
   if (node)
-    decl = (tree) node->value;
+    decl_id = (tree) node->value;
   else
     {
       tree id;
@@ -832,13 +865,9 @@ dw2_force_const_mem (rtx x, bool is_public)
 	  char *ref_name = XALLOCAVEC (char, strlen (str) + sizeof "DW.ref.");
 
 	  sprintf (ref_name, "DW.ref.%s", str);
-	  id = get_identifier (ref_name);
-	  decl = build_decl (VAR_DECL, id, ptr_type_node);
-	  DECL_ARTIFICIAL (decl) = 1;
-	  DECL_IGNORED_P (decl) = 1;
-	  TREE_PUBLIC (decl) = 1;
-	  DECL_INITIAL (decl) = decl;
-	  make_decl_one_only (decl);
+	  gcc_assert (!maybe_get_identifier (ref_name));
+	  decl_id = get_identifier (ref_name);
+	  TREE_PUBLIC (decl_id) = 1;
 	}
       else
 	{
@@ -846,12 +875,8 @@ dw2_force_const_mem (rtx x, bool is_public)
 
 	  ASM_GENERATE_INTERNAL_LABEL (label, "LDFCM", dw2_const_labelno);
 	  ++dw2_const_labelno;
-	  id = get_identifier (label);
-	  decl = build_decl (VAR_DECL, id, ptr_type_node);
-	  DECL_ARTIFICIAL (decl) = 1;
-	  DECL_IGNORED_P (decl) = 1;
-	  TREE_STATIC (decl) = 1;
-	  DECL_INITIAL (decl) = decl;
+	  gcc_assert (!maybe_get_identifier (label));
+	  decl_id = get_identifier (label);
 	}
 
       id = maybe_get_identifier (str);
@@ -859,10 +884,10 @@ dw2_force_const_mem (rtx x, bool is_public)
 	TREE_SYMBOL_REFERENCED (id) = 1;
 
       splay_tree_insert (indirect_pool, (splay_tree_key) key,
-			 (splay_tree_value) decl);
+			 (splay_tree_value) decl_id);
     }
 
-  return XEXP (DECL_RTL (decl), 0);
+  return gen_rtx_SYMBOL_REF (Pmode, IDENTIFIER_POINTER (decl_id));
 }
 
 /* A helper function for dw2_output_indirect_constants called through
@@ -874,10 +899,26 @@ dw2_output_indirect_constant_1 (splay_tree_node node,
 {
   const char *sym;
   rtx sym_ref;
-  tree decl;
+  tree id, decl;
 
   sym = (const char *) node->key;
-  decl = (tree) node->value;
+  id = (tree) node->value;
+
+  decl = build_decl (UNKNOWN_LOCATION, VAR_DECL, id, ptr_type_node);
+  SET_DECL_ASSEMBLER_NAME (decl, id);
+  DECL_ARTIFICIAL (decl) = 1;
+  DECL_IGNORED_P (decl) = 1;
+  DECL_INITIAL (decl) = decl;
+  TREE_READONLY (decl) = 1;
+
+  if (TREE_PUBLIC (id))
+    {
+      TREE_PUBLIC (decl) = 1;
+      make_decl_one_only (decl, DECL_ASSEMBLER_NAME (decl));
+    }
+  else
+    TREE_STATIC (decl) = 1;
+
   sym_ref = gen_rtx_SYMBOL_REF (Pmode, sym);
   sym = targetm.strip_name_encoding (sym);
   if (TREE_PUBLIC (decl) && USE_LINKONCE_INDIRECT)

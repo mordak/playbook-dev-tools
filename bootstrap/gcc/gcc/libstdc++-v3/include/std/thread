@@ -1,6 +1,6 @@
 // <thread> -*- C++ -*-
 
-// Copyright (C) 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -22,7 +22,7 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file thread
+/** @file include/thread
  *  This is a Standard C++ Library header.
  */
 
@@ -32,7 +32,7 @@
 #pragma GCC system_header
 
 #ifndef __GXX_EXPERIMENTAL_CXX0X__
-# include <c++0x_warning.h>
+# include <bits/c++0x_warning.h>
 #else
 
 #include <chrono>
@@ -40,14 +40,16 @@
 #include <memory>
 #include <mutex>
 #include <condition_variable>
-#include <cstddef>
 #include <bits/functexcept.h>
+#include <bits/functional_hash.h>
 #include <bits/gthr.h>
 
 #if defined(_GLIBCXX_HAS_GTHREADS) && defined(_GLIBCXX_USE_C99_STDINT_TR1)
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
   /**
    * @defgroup threads Threads
    * @ingroup concurrency
@@ -77,6 +79,7 @@ namespace std
 
     private:
       friend class thread;
+      friend class hash<thread::id>;
 
       friend bool
       operator==(thread::id __x, thread::id __y)
@@ -88,7 +91,7 @@ namespace std
 
       template<class _CharT, class _Traits>
 	friend basic_ostream<_CharT, _Traits>&
-	operator<<(basic_ostream<_CharT, _Traits>&& __out, thread::id __id);
+	operator<<(basic_ostream<_CharT, _Traits>& __out, thread::id __id);
     };
 
     // Simple base type that the templatized, derived class containing
@@ -97,7 +100,7 @@ namespace std
     {
       __shared_base_type	_M_this_ptr;
 
-      virtual ~_Impl_base() = default;
+      inline virtual ~_Impl_base();
 
       virtual void _M_run() = 0;
     };
@@ -119,18 +122,20 @@ namespace std
 
   public:
     thread() = default;
+    thread(thread&) = delete;
     thread(const thread&) = delete;
 
     thread(thread&& __t)
     { swap(__t); }
 
-    template<typename _Callable>
-      explicit thread(_Callable __f)
-      { _M_start_thread(_M_make_routine<_Callable>(__f)); }
-
     template<typename _Callable, typename... _Args>
+      explicit 
       thread(_Callable&& __f, _Args&&... __args)
-      { _M_start_thread(_M_make_routine(std::bind(__f, __args...))); }
+      {
+        _M_start_thread(_M_make_routine(std::bind<void>(
+                std::forward<_Callable>(__f),
+                std::forward<_Args>(__args)...)));
+      }
 
     ~thread()
     {
@@ -149,7 +154,7 @@ namespace std
     }
 
     void
-    swap(thread&& __t)
+    swap(thread& __t)
     { std::swap(_M_id, __t._M_id); }
 
     bool
@@ -190,16 +195,10 @@ namespace std
       }
   };
 
+  inline thread::_Impl_base::~_Impl_base() = default;
+
   inline void
   swap(thread& __x, thread& __y)
-  { __x.swap(__y); }
-
-  inline void
-  swap(thread&& __x, thread& __y)
-  { __x.swap(__y); }
-
-  inline void
-  swap(thread& __x, thread&& __y)
   { __x.swap(__y); }
 
   inline bool
@@ -218,9 +217,20 @@ namespace std
   operator>=(thread::id __x, thread::id __y)
   { return !(__x < __y); }
 
+  // DR 889.
+  /// std::hash specialization for thread::id.
+  template<>
+    struct hash<thread::id>
+    : public __hash_base<size_t, thread::id>
+    {
+      size_t
+      operator()(const thread::id& __id) const
+      { return std::_Hash_impl::hash(__id._M_thread); }
+    };
+
   template<class _CharT, class _Traits>
     inline basic_ostream<_CharT, _Traits>&
-    operator<<(basic_ostream<_CharT, _Traits>&& __out, thread::id __id)
+    operator<<(basic_ostream<_CharT, _Traits>& __out, thread::id __id)
     {
       if (__id == thread::id())
 	return __out << "thread::id of a non-executing thread";
@@ -228,12 +238,16 @@ namespace std
 	return __out << __id._M_thread;
     }
 
+_GLIBCXX_END_NAMESPACE_VERSION
+
   /** @namespace std::this_thread
    *  @brief ISO C++ 0x entities sub namespace for thread.
    *  30.2.2 Namespace this_thread.
    */
   namespace this_thread
   {
+  _GLIBCXX_BEGIN_NAMESPACE_VERSION
+
     /// get_id
     inline thread::id
     get_id() { return thread::id(__gthread_self()); }
@@ -272,10 +286,13 @@ namespace std
 	::nanosleep(&__ts, 0);
       }
 #endif
+
+  _GLIBCXX_END_NAMESPACE_VERSION
   }
 
   // @} group threads
-}
+
+} // namespace
 
 #endif // _GLIBCXX_HAS_GTHREADS && _GLIBCXX_USE_C99_STDINT_TR1
 

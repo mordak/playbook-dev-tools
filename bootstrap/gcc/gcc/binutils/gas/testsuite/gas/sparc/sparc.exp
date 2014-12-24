@@ -50,12 +50,17 @@ if [istarget sparc*-*-*] {
 	run_dump_test "plt64"
 	run_dump_test "gotop64"
     }
+    run_dump_test "imm-plus-rreg"
+    run_dump_test "ticc-imm-reg"
+    run_dump_test "v8-movwr-imm"
+    run_dump_test "save-args"
     run_dump_test "v9branch1"
     run_dump_test "v9branch2"
     run_dump_test "v9branch3"
     run_dump_test "v9branch4"
     run_dump_test "v9branch5"
     run_dump_test "pc2210"
+    run_dump_test "hpcvis3"
 
     run_list_test "pr4587" ""
 }

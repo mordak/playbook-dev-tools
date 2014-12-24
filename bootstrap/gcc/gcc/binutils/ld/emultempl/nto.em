@@ -31,7 +31,6 @@ cat >>e${EMULATION_NAME}.c <<EOF
 #include "elf-bfd.h"
 #include "../bfd/libbfd.h"
 
-
 #define NOTE_SEC_NAME ".note"
 #define QNX_NOTE_NAME "QNX"
 #define QNX_NOTE_NAMESZ 4

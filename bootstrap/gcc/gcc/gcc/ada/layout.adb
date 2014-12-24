@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2001-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 2001-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -36,6 +36,7 @@ with Nmake;    use Nmake;
 with Opt;      use Opt;
 with Repinfo;  use Repinfo;
 with Sem;      use Sem;
+with Sem_Aux;  use Sem_Aux;
 with Sem_Ch13; use Sem_Ch13;
 with Sem_Eval; use Sem_Eval;
 with Sem_Util; use Sem_Util;
@@ -619,7 +620,7 @@ package body Layout is
                    Name                   => New_Occurrence_Of (Ent, Loc),
                    Parameter_Associations => New_List (
                      Make_Selected_Component (Loc,
-                       Prefix        => Make_Identifier (Loc, Chars => Vname),
+                       Prefix        => Make_Identifier (Loc, Vname),
                        Selector_Name => New_Occurrence_Of (Comp, Loc))));
 
             else
@@ -627,7 +628,7 @@ package body Layout is
                  Make_Function_Call (Loc,
                    Name                   => New_Occurrence_Of (Ent, Loc),
                    Parameter_Associations => New_List (
-                     Make_Identifier (Loc, Chars => Vname)));
+                     Make_Identifier (Loc, Vname)));
             end if;
 
          else
@@ -726,7 +727,7 @@ package body Layout is
          Size := (Dynamic, Expr_From_SO_Ref (Loc, Component_Size (E)));
       end if;
 
-      --  Loop through indices
+      --  Loop through indexes
 
       Indx := First_Index (E);
       while Present (Indx) loop
@@ -987,7 +988,7 @@ package body Layout is
 
             N :=
               Make_Selected_Component (Loc,
-                Prefix        => Make_Identifier (Loc, Chars => Vname),
+                Prefix        => Make_Identifier (Loc, Vname),
                 Selector_Name => New_Occurrence_Of (Entity (N), Loc));
 
             --  Set the Etype attributes of the selected name and its prefix.
@@ -1058,7 +1059,7 @@ package body Layout is
          Size := (Dynamic, Expr_From_SO_Ref (Loc, Component_Size (E)));
       end if;
 
-      --  Loop to process array indices
+      --  Loop to process array indexes
 
       Indx := First_Index (E);
       while Present (Indx) loop
@@ -1989,7 +1990,7 @@ package body Layout is
                        Make_Function_Call (Loc,
                          Name => New_Occurrence_Of (RMS_Ent, Loc),
                          Parameter_Associations => New_List (
-                           Make_Identifier (Loc, Chars => Vname)));
+                           Make_Identifier (Loc, Vname)));
 
                   --  If the size is represented by a constant, then the
                   --  expression we want is a reference to this constant
@@ -2103,7 +2104,7 @@ package body Layout is
                            Discrim :=
                              Make_Selected_Component (Loc,
                                Prefix        =>
-                                 Make_Identifier (Loc, Chars => Vname),
+                                 Make_Identifier (Loc, Vname),
                                Selector_Name =>
                                  New_Occurrence_Of
                                    (Entity (Name (Vpart)), Loc));
@@ -2129,10 +2130,9 @@ package body Layout is
                               Append (
                                 Make_Selected_Component (Loc,
                                   Prefix        =>
-                                    Make_Identifier (Loc, Chars => Vname),
+                                    Make_Identifier (Loc, Vname),
                                   Selector_Name =>
-                                    New_Occurrence_Of
-                                      (D_Entity, Loc)),
+                                    New_Occurrence_Of (D_Entity, Loc)),
                                 D_List);
 
                               D_Entity := Next_Discriminant (D_Entity);
@@ -2500,6 +2500,29 @@ package body Layout is
       --  Non-elementary (composite) types
 
       else
+         --  For packed arrays, take size and alignment values from the packed
+         --  array type if a packed array type has been created and the fields
+         --  are not currently set.
+
+         if Is_Array_Type (E) and then Present (Packed_Array_Type (E)) then
+            declare
+               PAT : constant Entity_Id := Packed_Array_Type (E);
+
+            begin
+               if Unknown_Esize (E) then
+                  Set_Esize     (E, Esize     (PAT));
+               end if;
+
+               if Unknown_RM_Size (E) then
+                  Set_RM_Size   (E, RM_Size   (PAT));
+               end if;
+
+               if Unknown_Alignment (E) then
+                  Set_Alignment (E, Alignment (PAT));
+               end if;
+            end;
+         end if;
+
          --  If RM_Size is known, set Esize if not known
 
          if Known_RM_Size (E) and then Unknown_Esize (E) then
@@ -2536,22 +2559,17 @@ package body Layout is
 
             begin
                --  For some reasons, access types can cause trouble, So let's
-               --  just do this for discrete types ???
+               --  just do this for scalar types ???
 
                if Present (CT)
-                 and then Is_Discrete_Type (CT)
+                 and then Is_Scalar_Type (CT)
                  and then Known_Static_Esize (CT)
                then
                   declare
                      S : constant Uint := Esize (CT);
-
                   begin
-                     if S = 8  or else
-                        S = 16 or else
-                        S = 32 or else
-                        S = 64
-                     then
-                        Set_Component_Size (E, Esize (CT));
+                     if Addressable (S) then
+                        Set_Component_Size (E, S);
                      end if;
                   end;
                end if;
@@ -2677,7 +2695,6 @@ package body Layout is
    procedure Rewrite_Integer (N : Node_Id; V : Uint) is
       Loc : constant Source_Ptr := Sloc (N);
       Typ : constant Entity_Id  := Etype (N);
-
    begin
       Rewrite (N, Make_Integer_Literal (Loc, Intval => V));
       Set_Etype (N, Typ);
@@ -2713,8 +2730,7 @@ package body Layout is
       begin
          if Spec < Min then
             Error_Msg_Uint_1 := Min;
-            Error_Msg_NE
-              ("size for & too small, minimum allowed is ^", SC, E);
+            Error_Msg_NE ("size for & too small, minimum allowed is ^", SC, E);
             Init_Esize   (E);
             Init_RM_Size (E);
          end if;
@@ -3032,15 +3048,37 @@ package body Layout is
       --  the type, or the maximum allowed alignment.
 
       declare
-         S : constant Int :=
-               UI_To_Int (Esize (E)) / SSU;
-         A : Nat;
+         S             : constant Int := UI_To_Int (Esize (E)) / SSU;
+         A             : Nat;
+         Max_Alignment : Nat;
 
       begin
+         --  If the default alignment of "double" floating-point types is
+         --  specifically capped, enforce the cap.
+
+         if Ttypes.Target_Double_Float_Alignment > 0
+           and then S = 8
+           and then Is_Floating_Point_Type (E)
+         then
+            Max_Alignment := Ttypes.Target_Double_Float_Alignment;
+
+         --  If the default alignment of "double" or larger scalar types is
+         --  specifically capped, enforce the cap.
+
+         elsif Ttypes.Target_Double_Scalar_Alignment > 0
+           and then S >= 8
+           and then Is_Scalar_Type (E)
+         then
+            Max_Alignment := Ttypes.Target_Double_Scalar_Alignment;
+
+         --  Otherwise enforce the overall alignment cap
+
+         else
+            Max_Alignment := Ttypes.Maximum_Alignment;
+         end if;
+
          A := 1;
-         while 2 * A <= Ttypes.Maximum_Alignment
-            and then 2 * A <= S
-         loop
+         while 2 * A <= Max_Alignment and then 2 * A <= S loop
             A := 2 * A;
          end loop;
 
@@ -3074,11 +3112,7 @@ package body Layout is
       Make_Func : Boolean   := False) return Dynamic_SO_Ref
    is
       Loc  : constant Source_Ptr := Sloc (Ins_Type);
-
-      K : constant Entity_Id :=
-            Make_Defining_Identifier (Loc,
-              Chars => New_Internal_Name ('K'));
-
+      K    : constant Entity_Id := Make_Temporary (Loc, 'K');
       Decl : Node_Id;
 
       Vtype_Primary_View : Entity_Id;

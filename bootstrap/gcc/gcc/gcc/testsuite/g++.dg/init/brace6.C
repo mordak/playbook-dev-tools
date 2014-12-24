@@ -1,12 +1,12 @@
 /* PR c++/30759 */
-/* { dg-do "compile" } */
+/* { dg-do compile } */
 
 struct A {
    A(int) { }
 };
 
 struct B {
-   B(const B&);			// { dg-message "candidate" }
+   B(const B&);
    int b;
 };
 
@@ -19,7 +19,7 @@ int main()
    int i = { 1 };
    int j = { 1, 2 }; /* { dg-error "requires one element" } */
    A a = { 6 }; /* { dg-error "initialize" } */
-   B b = { 6 }; /* { dg-error "initialize" } */
+   B b = { 6 }; /* { dg-error "" } */
    C c = { 6 }; /* { dg-error "too many initializers" } */
    D d = { 6 };
 }

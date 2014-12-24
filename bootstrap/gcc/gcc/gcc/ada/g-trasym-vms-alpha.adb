@@ -40,7 +40,7 @@ with System.Traceback_Entries;
 
 package body GNAT.Traceback.Symbolic is
 
-   pragma Warnings (Off);
+   pragma Warnings (Off); --  Needs comment ???
    pragma Linker_Options ("--for-linker=sys$library:trace.exe");
 
    use Interfaces.C;
@@ -217,11 +217,9 @@ package body GNAT.Traceback.Symbolic is
          System.Soft_Links.Lock_Task.all;
 
          for J in Traceback'Range loop
-            if J = Traceback'Last then
-               Return_Address := Address_Zero;
-            else
-               Return_Address := PC_For (Traceback (J + 1));
-            end if;
+            Return_Address :=
+              (if J = Traceback'Last then Address_Zero
+                                     else PC_For (Traceback (J + 1)));
 
             Symbolize
               (Status,

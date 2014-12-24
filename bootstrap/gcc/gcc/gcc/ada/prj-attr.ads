@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 2001-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 2001-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -44,22 +44,40 @@ package Prj.Attr is
    --  packages and their attribute. This procedure should be called by
    --  Prj.Initialize.
 
-   type Attribute_Kind is
-     (Unknown,
+   type Attribute_Kind is (
+      Unknown,
+      --  The attribute does not exist
+
       Single,
+      --  Single variable attribute (not an associative array)
+
       Associative_Array,
+      --  Associative array attribute with a case sensitive index
+
       Optional_Index_Associative_Array,
+      --  Associative array attribute with a case sensitive index and an
+      --  optional source index.
+
       Case_Insensitive_Associative_Array,
-      Optional_Index_Case_Insensitive_Associative_Array);
+      --  Associative array attribute with a case insensitive index
+
+      Optional_Index_Case_Insensitive_Associative_Array
+      --  Associative array attribute with a case insensitive index and an
+      --  optional source index.
+   );
    --  Characteristics of an attribute. Optional_Index indicates that there
    --  may be an optional index in the index of the associative array, as in
    --     for Switches ("files.ada" at 2) use ...
-   --  Above character literals should be documented ???
 
    subtype Defined_Attribute_Kind is Attribute_Kind
      range Single .. Optional_Index_Case_Insensitive_Associative_Array;
    --  Subset of Attribute_Kinds that may be used for the attributes that is
    --  used when defining a new package.
+
+   subtype All_Case_Insensitive_Associative_Array is Attribute_Kind range
+     Case_Insensitive_Associative_Array ..
+     Optional_Index_Case_Insensitive_Associative_Array;
+   --  Subtype including both cases of Case_Insensitive_Associative_Array
 
    Max_Attribute_Name_Length : constant := 64;
    --  The maximum length of attribute names
@@ -183,7 +201,7 @@ package Prj.Attr is
    --  Default value of Package_Node_Id objects
 
    Unknown_Package : constant Package_Node_Id;
-   --  Value of an unknown package that has been found but is unknown.
+   --  Value of an unknown package that has been found but is unknown
 
    procedure Register_New_Package (Name : String; Id : out Package_Node_Id);
    --  Add a new package. Fails if Name (the package name) is empty or is

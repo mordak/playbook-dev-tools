@@ -1,5 +1,5 @@
 /* Perform branch target register load optimizations.
-   Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008
+   Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -34,7 +34,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "function.h"
 #include "except.h"
 #include "tm_p.h"
-#include "toplev.h"
+#include "diagnostic-core.h"
 #include "tree-pass.h"
 #include "recog.h"
 #include "df.h"
@@ -457,8 +457,8 @@ compute_defs_uses_and_gen (fibheap_t all_btr_defs, btr_def *def_array,
   btr_def_group all_btr_def_groups = NULL;
   defs_uses_info info;
 
-  sbitmap_vector_zero (bb_gen, n_basic_blocks);
-  for (i = NUM_FIXED_BLOCKS; i < n_basic_blocks; i++)
+  sbitmap_vector_zero (bb_gen, last_basic_block);
+  for (i = NUM_FIXED_BLOCKS; i < last_basic_block; i++)
     {
       basic_block bb = BASIC_BLOCK (i);
       int reg;
@@ -618,8 +618,8 @@ compute_kill (sbitmap *bb_kill, sbitmap *btr_defset,
 
   /* For each basic block, form the set BB_KILL - the set
      of definitions that the block kills.  */
-  sbitmap_vector_zero (bb_kill, n_basic_blocks);
-  for (i = NUM_FIXED_BLOCKS; i < n_basic_blocks; i++)
+  sbitmap_vector_zero (bb_kill, last_basic_block);
+  for (i = NUM_FIXED_BLOCKS; i < last_basic_block; i++)
     {
       for (regno = first_btr; regno <= last_btr; regno++)
 	if (TEST_HARD_REG_BIT (all_btrs, regno)
@@ -642,14 +642,14 @@ compute_out (sbitmap *bb_out, sbitmap *bb_gen, sbitmap *bb_kill, int max_uid)
   int changed;
   sbitmap bb_in = sbitmap_alloc (max_uid);
 
-  for (i = NUM_FIXED_BLOCKS; i < n_basic_blocks; i++)
+  for (i = NUM_FIXED_BLOCKS; i < last_basic_block; i++)
     sbitmap_copy (bb_out[i], bb_gen[i]);
 
   changed = 1;
   while (changed)
     {
       changed = 0;
-      for (i = NUM_FIXED_BLOCKS; i < n_basic_blocks; i++)
+      for (i = NUM_FIXED_BLOCKS; i < last_basic_block; i++)
 	{
 	  sbitmap_union_of_preds (bb_in, bb_out, i);
 	  changed |= sbitmap_union_of_diff_cg (bb_out[i], bb_gen[i],
@@ -668,7 +668,7 @@ link_btr_uses (btr_def *def_array, btr_user *use_array, sbitmap *bb_out,
 
   /* Link uses to the uses lists of all of their reaching defs.
      Count up the number of reaching defs of each use.  */
-  for (i = NUM_FIXED_BLOCKS; i < n_basic_blocks; i++)
+  for (i = NUM_FIXED_BLOCKS; i < last_basic_block; i++)
     {
       basic_block bb = BASIC_BLOCK (i);
       rtx insn;
@@ -780,8 +780,8 @@ build_btr_def_use_webs (fibheap_t all_btr_defs)
   btr_user *use_array   = XCNEWVEC (btr_user, max_uid);
   sbitmap *btr_defset   = sbitmap_vector_alloc (
 			   (last_btr - first_btr) + 1, max_uid);
-  sbitmap *bb_gen      = sbitmap_vector_alloc (n_basic_blocks, max_uid);
-  HARD_REG_SET *btrs_written = XCNEWVEC (HARD_REG_SET, n_basic_blocks);
+  sbitmap *bb_gen      = sbitmap_vector_alloc (last_basic_block, max_uid);
+  HARD_REG_SET *btrs_written = XCNEWVEC (HARD_REG_SET, last_basic_block);
   sbitmap *bb_kill;
   sbitmap *bb_out;
 
@@ -790,11 +790,11 @@ build_btr_def_use_webs (fibheap_t all_btr_defs)
   compute_defs_uses_and_gen (all_btr_defs, def_array, use_array, btr_defset,
 			     bb_gen, btrs_written);
 
-  bb_kill = sbitmap_vector_alloc (n_basic_blocks, max_uid);
+  bb_kill = sbitmap_vector_alloc (last_basic_block, max_uid);
   compute_kill (bb_kill, btr_defset, btrs_written);
   free (btrs_written);
 
-  bb_out = sbitmap_vector_alloc (n_basic_blocks, max_uid);
+  bb_out = sbitmap_vector_alloc (last_basic_block, max_uid);
   compute_out (bb_out, bb_gen, bb_kill, max_uid);
 
   sbitmap_vector_free (bb_gen);
@@ -1403,7 +1403,7 @@ migrate_btr_defs (enum reg_class btr_class, int allow_callee_save)
     {
       int i;
 
-      for (i = NUM_FIXED_BLOCKS; i < n_basic_blocks; i++)
+      for (i = NUM_FIXED_BLOCKS; i < last_basic_block; i++)
 	{
 	  basic_block bb = BASIC_BLOCK (i);
 	  fprintf(dump_file,
@@ -1417,7 +1417,7 @@ migrate_btr_defs (enum reg_class btr_class, int allow_callee_save)
   CLEAR_HARD_REG_SET (all_btrs);
   for (first_btr = -1, reg = 0; reg < FIRST_PSEUDO_REGISTER; reg++)
     if (TEST_HARD_REG_BIT (reg_class_contents[(int) btr_class], reg)
-	&& (allow_callee_save || call_used_regs[reg] 
+	&& (allow_callee_save || call_used_regs[reg]
 	    || df_regs_ever_live_p (reg)))
       {
 	SET_HARD_REG_BIT (all_btrs, reg);
@@ -1426,8 +1426,8 @@ migrate_btr_defs (enum reg_class btr_class, int allow_callee_save)
 	  first_btr = reg;
       }
 
-  btrs_live = XCNEWVEC (HARD_REG_SET, n_basic_blocks);
-  btrs_live_at_end = XCNEWVEC (HARD_REG_SET, n_basic_blocks);
+  btrs_live = XCNEWVEC (HARD_REG_SET, last_basic_block);
+  btrs_live_at_end = XCNEWVEC (HARD_REG_SET, last_basic_block);
 
   build_btr_def_use_webs (all_btr_defs);
 
@@ -1458,7 +1458,8 @@ migrate_btr_defs (enum reg_class btr_class, int allow_callee_save)
 static void
 branch_target_load_optimize (bool after_prologue_epilogue_gen)
 {
-  enum reg_class klass = targetm.branch_target_register_class ();
+  enum reg_class klass
+    = (enum reg_class) targetm.branch_target_register_class ();
   if (klass != NO_REGS)
     {
       /* Initialize issue_rate.  */
@@ -1513,7 +1514,7 @@ struct rtl_opt_pass pass_branch_target_load_optimize1 =
   NULL,                                 /* sub */
   NULL,                                 /* next */
   0,                                    /* static_pass_number */
-  0,		                        /* tv_id */
+  TV_NONE,	                        /* tv_id */
   0,                                    /* properties_required */
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
@@ -1563,7 +1564,7 @@ struct rtl_opt_pass pass_branch_target_load_optimize2 =
   NULL,                                 /* sub */
   NULL,                                 /* next */
   0,                                    /* static_pass_number */
-  0,					/* tv_id */
+  TV_NONE,				/* tv_id */
   0,                                    /* properties_required */
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
@@ -1572,4 +1573,3 @@ struct rtl_opt_pass pass_branch_target_load_optimize2 =
   TODO_ggc_collect,                     /* todo_flags_finish */
  }
 };
-

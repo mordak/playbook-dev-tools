@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -291,7 +291,7 @@ package body Ch2 is
       --  Ada 2005 (AI-284): INTERFACE is a new reserved word but it is
       --  allowed as a pragma name.
 
-      if Ada_Version >= Ada_05
+      if Ada_Version >= Ada_2005
         and then Token = Tok_Interface
       then
          Prag_Name := Name_Interface;
@@ -469,10 +469,13 @@ package body Ch2 is
    is
       Scan_State      : Saved_Scan_State;
       Identifier_Node : Node_Id;
+      Id_Present      : Boolean;
 
    begin
       Association := New_Node (N_Pragma_Argument_Association, Token_Ptr);
       Set_Chars (Association, No_Name);
+
+      --  Argument starts with identifier
 
       if Token = Tok_Identifier then
          Identifier_Node := Token_Node;
@@ -483,20 +486,38 @@ package body Ch2 is
             Identifier_Seen := True;
             Scan; -- past arrow
             Set_Chars (Association, Chars (Identifier_Node));
+            Id_Present := True;
 
-            --  Case of argument with no identifier
+         --  Case of argument with no identifier
 
          else
             Restore_Scan_State (Scan_State); -- to Identifier
-
-            if Identifier_Seen then
-               Error_Msg_SC
-                 ("|pragma argument identifier required here (RM 2.8(4))");
-            end if;
+            Id_Present := False;
          end if;
+
+      --  Argument does not start with identifier
+
+      else
+         Id_Present := False;
       end if;
 
-      Set_Expression (Association, P_Expression);
+      --  Diagnose error of "positional" argument for pragma appearing after
+      --  a "named" argument (quotes here are because that's not quite accurate
+      --  Ada RM terminology).
+
+      --  Since older GNAT versions did not generate this error, disable this
+      --  message in codepeer mode to help legacy code using codepeer.
+
+      if Identifier_Seen and not Id_Present and not CodePeer_Mode then
+         Error_Msg_SC ("|pragma argument identifier required here");
+         Error_Msg_SC ("\since previous argument had identifier (RM 2.8(4))");
+      end if;
+
+      if Id_Present then
+         Set_Expression (Association, P_Expression);
+      else
+         Set_Expression (Association, P_Expression_If_OK);
+      end if;
    end Scan_Pragma_Argument_Association;
 
 end Ch2;

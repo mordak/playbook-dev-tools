@@ -1,6 +1,6 @@
 /* Xtensa Linux configuration.
    Derived from the configuration for GCC for Intel i386 running Linux.
-   Copyright (C) 2001, 2002, 2003, 2006, 2007, 2008
+   Copyright (C) 2001, 2002, 2003, 2006, 2007, 2008, 2010, 2011
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -27,6 +27,12 @@ along with GCC; see the file COPYING3.  If not see
 #undef TARGET_VERSION
 #define TARGET_VERSION fputs (" (Xtensa GNU/Linux with ELF)", stderr);
 
+#undef SIZE_TYPE
+#define SIZE_TYPE "unsigned int"
+
+#undef PTRDIFF_TYPE
+#define PTRDIFF_TYPE "int"
+
 #undef WCHAR_TYPE
 #define WCHAR_TYPE "long int"
 
@@ -35,8 +41,7 @@ along with GCC; see the file COPYING3.  If not see
 
 #undef ASM_SPEC
 #define ASM_SPEC \
- "%{v} \
-  %{mtext-section-literals:--text-section-literals} \
+ "%{mtext-section-literals:--text-section-literals} \
   %{mno-text-section-literals:--no-text-section-literals} \
   %{mtarget-align:--target-align} \
   %{mno-target-align:--no-target-align} \
@@ -49,17 +54,18 @@ along with GCC; see the file COPYING3.  If not see
 #define LINK_SPEC \
  "%{shared:-shared} \
   %{!shared: \
-    %{!ibcs: \
-      %{!static: \
-        %{rdynamic:-export-dynamic} \
-        %{!dynamic-linker:-dynamic-linker " LINUX_DYNAMIC_LINKER "}} \
-      %{static:-static}}}"
+    %{!static: \
+      %{rdynamic:-export-dynamic} \
+      -dynamic-linker " LINUX_DYNAMIC_LINKER "} \
+    %{static:-static}}"
 
 #undef LOCAL_LABEL_PREFIX
 #define LOCAL_LABEL_PREFIX	"."
 
 /* Always enable "-fpic" for Xtensa Linux.  */
 #define XTENSA_ALWAYS_PIC 1
+
+#undef DBX_REGISTER_NUMBER
 
 #define MD_UNWIND_SUPPORT "config/xtensa/linux-unwind.h"
 

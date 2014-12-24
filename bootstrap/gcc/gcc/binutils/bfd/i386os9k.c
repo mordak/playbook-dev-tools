@@ -1,6 +1,6 @@
 /* BFD back-end for os9000 i386 binaries.
    Copyright 1990, 1991, 1992, 1993, 1994, 1995, 1998, 1999, 2001, 2002,
-   2004, 2005, 2006, 2007 Free Software Foundation, Inc.
+   2004, 2005, 2006, 2007, 2009, 2011 Free Software Foundation, Inc.
    Written by Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -167,15 +167,19 @@ os9k_sizeof_headers (bfd *abfd ATTRIBUTE_UNUSED,
   bfd_generic_get_relocated_section_contents
 #define os9k_bfd_relax_section bfd_generic_relax_section
 #define os9k_bfd_gc_sections bfd_generic_gc_sections
+#define os9k_bfd_lookup_section_flags bfd_generic_lookup_section_flags
 #define os9k_bfd_merge_sections bfd_generic_merge_sections
 #define os9k_bfd_is_group_section bfd_generic_is_group_section
 #define os9k_bfd_discard_group bfd_generic_discard_group
 #define os9k_section_already_linked \
   _bfd_generic_section_already_linked
+#define os9k_bfd_define_common_symbol bfd_generic_define_common_symbol
 #define os9k_bfd_link_hash_table_create _bfd_generic_link_hash_table_create
 #define os9k_bfd_link_hash_table_free _bfd_generic_link_hash_table_free
 #define os9k_bfd_link_add_symbols _bfd_generic_link_add_symbols
 #define os9k_bfd_link_just_syms _bfd_generic_link_just_syms
+#define os9k_bfd_copy_link_hash_symbol_type \
+  _bfd_generic_copy_link_hash_symbol_type
 #define os9k_bfd_final_link _bfd_generic_final_link
 #define os9k_bfd_link_split_section  _bfd_generic_link_split_section
 
@@ -190,6 +194,7 @@ const bfd_target i386os9k_vec =
     0,				/* symbol leading char */
     ' ',				/* ar_pad_char */
     16,				/* ar_max_namelen */
+    0,				/* match priority.  */
 
     bfd_getl64, bfd_getl_signed_64, bfd_putl64,
     bfd_getl32, bfd_getl_signed_32, bfd_putl32,

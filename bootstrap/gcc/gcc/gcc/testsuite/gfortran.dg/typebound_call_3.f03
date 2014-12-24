@@ -1,8 +1,5 @@
 ! { dg-do run }
 
-! FIXME: Remove -w after polymorphic entities are supported.
-! { dg-options "-w" }
-
 ! Type-bound procedures
 ! Check that calls work across module-boundaries.
 
@@ -19,7 +16,7 @@ CONTAINS
 
   SUBROUTINE swap (me1, me2)
     IMPLICIT NONE
-    TYPE(trueOrFalse), INTENT(INOUT) :: me1, me2
+    CLASS(trueOrFalse), INTENT(INOUT) :: me1, me2
 
     IF (.NOT. me1%val .OR. me2%val) THEN
       CALL abort ()

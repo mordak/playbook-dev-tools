@@ -16,8 +16,13 @@ WARRANTY; without even the implied warranty of MERCHANTABILITY or
 FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 for more details.
 
-You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING3.  If not see
+Under Section 7 of GPL version 3, you are granted additional
+permissions described in the GCC Runtime Library Exception, version
+3.1, as published by the Free Software Foundation.
+
+You should have received a copy of the GNU General Public License and
+a copy of the GCC Runtime Library Exception along with this program;
+see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 <http://www.gnu.org/licenses/>.  */
 
 /* Routines declared in gcov-io.h.  This file should be #included by
@@ -46,11 +51,13 @@ static inline gcov_unsigned_t from_file (gcov_unsigned_t value)
 
 /* Open a gcov file. NAME is the name of the file to open and MODE
    indicates whether a new file should be created, or an existing file
-   opened for modification. If MODE is >= 0 an existing file will be
-   opened, if possible, and if MODE is <= 0, a new file will be
-   created. Use MODE=0 to attempt to reopen an existing file and then
-   fall back on creating a new one.  Return zero on failure, >0 on
-   opening an existing file and <0 on creating a new one.  */
+   opened. If MODE is >= 0 an existing file will be opened, if
+   possible, and if MODE is <= 0, a new file will be created. Use
+   MODE=0 to attempt to reopen an existing file and then fall back on
+   creating a new one.  If MODE < 0, the file will be opened in
+   read-only mode.  Otherwise it will be opened for modification.
+   Return zero on failure, >0 on opening an existing file and <0 on
+   creating a new one.  */
 
 GCOV_LINKAGE int
 #if IN_LIBGCOV
@@ -66,13 +73,12 @@ gcov_open (const char *name, int mode)
   struct flock s_flock;
   int fd;
 
-  s_flock.l_type = F_WRLCK;
   s_flock.l_whence = SEEK_SET;
   s_flock.l_start = 0;
   s_flock.l_len = 0; /* Until EOF.  */
   s_flock.l_pid = getpid ();
 #endif
-  
+
   gcc_assert (!gcov_var.file);
   gcov_var.start = 0;
   gcov_var.offset = gcov_var.length = 0;
@@ -83,16 +89,25 @@ gcov_open (const char *name, int mode)
 #endif
 #if GCOV_LOCKED
   if (mode > 0)
-    fd = open (name, O_RDWR);
+    {
+      /* Read-only mode - acquire a read-lock.  */
+      s_flock.l_type = F_RDLCK;
+      fd = open (name, O_RDONLY);
+    }
   else
-    fd = open (name, O_RDWR | O_CREAT, 0666);
+    {
+      /* Write mode - acquire a write-lock.  */
+      s_flock.l_type = F_WRLCK;
+      fd = open (name, O_RDWR | O_CREAT, 0666);
+    }
   if (fd < 0)
     return 0;
 
   while (fcntl (fd, F_SETLKW, &s_flock) && errno == EINTR)
     continue;
 
-  gcov_var.file = fdopen (fd, "r+b");
+  gcov_var.file = fdopen (fd, (mode > 0) ? "rb" : "r+b");
+
   if (!gcov_var.file)
     {
       close (fd);
@@ -120,7 +135,8 @@ gcov_open (const char *name, int mode)
     gcov_var.mode = mode * 2 + 1;
 #else
   if (mode >= 0)
-    gcov_var.file = fopen (name, "r+b");
+    gcov_var.file = fopen (name, (mode > 0) ? "rb" : "r+b");
+
   if (gcov_var.file)
     gcov_var.mode = 1;
   else if (mode <= 0)
@@ -134,7 +150,7 @@ gcov_open (const char *name, int mode)
 #endif
 
   setbuf (gcov_var.file, (char *)0);
-  
+
   return 1;
 }
 
@@ -189,12 +205,12 @@ static void
 gcov_allocate (unsigned length)
 {
   size_t new_size = gcov_var.alloc;
-  
+
   if (!new_size)
     new_size = GCOV_BLOCK_SIZE;
   new_size += length;
   new_size *= 2;
-  
+
   gcov_var.alloc = new_size;
   gcov_var.buffer = XRESIZEVAR (gcov_unsigned_t, gcov_var.buffer, new_size << 2);
 }
@@ -237,7 +253,7 @@ gcov_write_words (unsigned words)
 #endif
   result = &gcov_var.buffer[gcov_var.offset];
   gcov_var.offset += words;
-  
+
   return result;
 }
 
@@ -285,7 +301,7 @@ gcov_write_string (const char *string)
       length = strlen (string);
       alloc = (length + 4) >> 2;
     }
-  
+
   buffer = gcov_write_words (1 + alloc);
 
   buffer[0] = alloc;
@@ -306,7 +322,7 @@ gcov_write_tag (gcov_unsigned_t tag)
 
   buffer[0] = tag;
   buffer[1] = 0;
-  
+
   return result;
 }
 
@@ -378,7 +394,7 @@ gcov_read_words (unsigned words)
 {
   const gcov_unsigned_t *result;
   unsigned excess = gcov_var.length - gcov_var.offset;
-  
+
   gcc_assert (gcov_var.mode > 0);
   if (excess < words)
     {
@@ -461,7 +477,7 @@ GCOV_LINKAGE const char *
 gcov_read_string (void)
 {
   unsigned length = gcov_read_unsigned ();
-  
+
   if (!length)
     return 0;
 
@@ -474,7 +490,7 @@ gcov_read_summary (struct gcov_summary *summary)
 {
   unsigned ix;
   struct gcov_ctr_summary *csum;
-  
+
   summary->checksum = gcov_read_unsigned ();
   for (csum = summary->ctrs, ix = GCOV_COUNTERS_SUMMABLE; ix--; csum++)
     {
@@ -527,7 +543,7 @@ GCOV_LINKAGE time_t
 gcov_time (void)
 {
   struct stat status;
-  
+
   if (fstat (fileno (gcov_var.file), &status))
     return 0;
   else

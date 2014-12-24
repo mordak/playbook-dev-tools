@@ -1,8 +1,5 @@
 ! { dg-do compile }
 
-! FIXME: Remove once polymorphic PASS is resolved
-! { dg-options "-w" }
-
 ! PR fortran/37638
 ! If a PASS(arg) is invalid, a call to this routine later would ICE in
 ! resolving.  Check that this also works for GENERIC, in addition to the
@@ -20,7 +17,7 @@ module foo_mod
   contains
 
     procedure, pass(a) :: makenull ! { dg-error "has no argument 'a'" }
-    generic :: null2 => makenull
+    generic :: null2 => makenull   ! { dg-error "Undefined specific binding" }
 
   end type base_foo_type
 
@@ -53,7 +50,7 @@ contains
     endif
 
     call a%makenull()
-    call a%null2 () ! { dg-error "no matching specific binding" }
+    call a%null2 () ! { dg-error "should be a SUBROUTINE" }
 
     Return
   End Subroutine foo_free

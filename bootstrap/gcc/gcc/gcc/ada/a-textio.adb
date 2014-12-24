@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -29,13 +29,13 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with Ada.Streams;          use Ada.Streams;
-with Interfaces.C_Streams; use Interfaces.C_Streams;
+with Ada.Streams;             use Ada.Streams;
+with Interfaces.C_Streams;    use Interfaces.C_Streams;
 
 with System.File_IO;
 with System.CRTL;
-with System.WCh_Cnv;       use System.WCh_Cnv;
-with System.WCh_Con;       use System.WCh_Con;
+with System.WCh_Cnv;          use System.WCh_Cnv;
+with System.WCh_Con;          use System.WCh_Con;
 
 with Ada.Unchecked_Conversion;
 with Ada.Unchecked_Deallocation;
@@ -57,14 +57,29 @@ package body Ada.Text_IO is
 
    WC_Encoding : Character;
    pragma Import (C, WC_Encoding, "__gl_wc_encoding");
+   --  Default wide character encoding
+
+   Err_Name : aliased String := "*stderr" & ASCII.NUL;
+   In_Name  : aliased String := "*stdin" & ASCII.NUL;
+   Out_Name : aliased String := "*stdout" & ASCII.NUL;
+   --  Names of standard files
+   --
+   --  Use "preallocated" strings to avoid calling "new" during the elaboration
+   --  of the run time. This is needed in the tasking case to avoid calling
+   --  Task_Lock too early. A filename is expected to end with a null character
+   --  in the runtime, here the null characters are added just to have a
+   --  correct filename length.
+   --
+   --  Note: the names for these files are bogus, and probably it would be
+   --  better for these files to have no names, but the ACVC tests insist!
+   --  We use names that are bound to fail in open etc.
+
+   Null_Str : aliased constant String := "";
+   --  Used as form string for standard files
 
    -----------------------
    -- Local Subprograms --
    -----------------------
-
-   function Getc_Immed (File : File_Type) return int;
-   --  This routine is identical to Getc, except that the read is done in
-   --  Get_Immediate mode (i.e. without waiting for a line return).
 
    function Get_Upper_Half_Char
      (C    : Character;
@@ -82,17 +97,47 @@ package body Ada.Text_IO is
    --  This routine is identical to Get_Upper_Half_Char, except that the reads
    --  are done in Get_Immediate mode (i.e. without waiting for a line return).
 
+   function Getc (File : File_Type) return int;
+   --  Gets next character from file, which has already been checked for being
+   --  in read status, and returns the character read if no error occurs. The
+   --  result is EOF if the end of file was read.
+
+   function Getc_Immed (File : File_Type) return int;
+   --  This routine is identical to Getc, except that the read is done in
+   --  Get_Immediate mode (i.e. without waiting for a line return).
+
    function Has_Upper_Half_Character (Item : String) return Boolean;
    --  Returns True if any of the characters is in the range 16#80#-16#FF#
+
+   function Nextc (File : File_Type) return int;
+   --  Returns next character from file without skipping past it (i.e. it is a
+   --  combination of Getc followed by an Ungetc).
 
    procedure Put_Encoded (File : File_Type; Char : Character);
    --  Called to output a character Char to the given File, when the encoding
    --  method for the file is other than brackets, and Char is upper half.
 
+   procedure Putc (ch : int; File : File_Type);
+   --  Outputs the given character to the file, which has already been checked
+   --  for being in output status. Device_Error is raised if the character
+   --  cannot be written.
+
    procedure Set_WCEM (File : in out File_Type);
    --  Called by Open and Create to set the wide character encoding method for
    --  the file, processing a WCEM form parameter if one is present. File is
    --  IN OUT because it may be closed in case of an error.
+
+   procedure Terminate_Line (File : File_Type);
+   --  If the file is in Write_File or Append_File mode, and the current line
+   --  is not terminated, then a line terminator is written using New_Line.
+   --  Note that there is no Terminate_Page routine, because the page mark at
+   --  the end of the file is implied if necessary.
+
+   procedure Ungetc (ch : int; File : File_Type);
+   --  Pushes back character into stream, using ungetc. The caller has checked
+   --  that the file is in read status. Device_Error is raised if the character
+   --  cannot be pushed back. An attempt to push back and end of file character
+   --  (EOF) is ignored.
 
    -------------------
    -- AFCB_Allocate --
@@ -562,13 +607,10 @@ package body Ada.Text_IO is
          if ch = EOF then
             raise End_Error;
          else
-            if not Is_Start_Of_Encoding
-                     (Character'Val (ch), File.WC_Method)
-            then
-               Item := Character'Val (ch);
-            else
-               Item := Get_Upper_Half_Char_Immed (Character'Val (ch), File);
-            end if;
+            Item :=
+              (if not Is_Start_Of_Encoding (Character'Val (ch), File.WC_Method)
+               then Character'Val (ch)
+               else Get_Upper_Half_Char_Immed (Character'Val (ch), File));
          end if;
       end if;
    end Get_Immediate;
@@ -625,13 +667,10 @@ package body Ada.Text_IO is
          else
             Available := True;
 
-            if Is_Start_Of_Encoding
-              (Character'Val (ch), File.WC_Method)
-            then
-               Item := Character'Val (ch);
-            else
-               Item := Get_Upper_Half_Char_Immed (Character'Val (ch), File);
-            end if;
+            Item :=
+              (if Is_Start_Of_Encoding (Character'Val (ch), File.WC_Method)
+               then Character'Val (ch)
+               else Get_Upper_Half_Char_Immed (Character'Val (ch), File));
          end if;
       end if;
 
@@ -652,113 +691,11 @@ package body Ada.Text_IO is
    procedure Get_Line
      (File : File_Type;
       Item : out String;
-      Last : out Natural)
-   is
-      ch : int;
-
-   begin
-      FIO.Check_Read_Status (AP (File));
-      Last := Item'First - 1;
-
-      --  Immediate exit for null string, this is a case in which we do not
-      --  need to test for end of file and we do not skip a line mark under
-      --  any circumstances.
-
-      if Last >= Item'Last then
-         return;
-      end if;
-
-      --  Here we have at least one character, if we are immediately before
-      --  a line mark, then we will just skip past it storing no characters.
-
-      if File.Before_LM then
-         File.Before_LM := False;
-         File.Before_LM_PM := False;
-
-      --  Otherwise we need to read some characters
-
-      else
-         ch := Getc (File);
-
-         --  If we are at the end of file now, it means we are trying to
-         --  skip a file terminator and we raise End_Error (RM A.10.7(20))
-
-         if ch = EOF then
-            raise End_Error;
-         end if;
-
-         --  Loop through characters. Don't bother if we hit a page mark,
-         --  since in normal files, page marks can only follow line marks
-         --  in any case and we only promise to treat the page nonsense
-         --  correctly in the absense of such rogue page marks.
-
-         loop
-            --  Exit the loop if read is terminated by encountering line mark
-
-            exit when ch = LM;
-
-            --  Otherwise store the character, note that we know that ch is
-            --  something other than LM or EOF. It could possibly be a page
-            --  mark if there is a stray page mark in the middle of a line,
-            --  but this is not an official page mark in any case, since
-            --  official page marks can only follow a line mark. The whole
-            --  page business is pretty much nonsense anyway, so we do not
-            --  want to waste time trying to make sense out of non-standard
-            --  page marks in the file! This means that the behavior of
-            --  Get_Line is different from repeated Get of a character, but
-            --  that's too bad. We only promise that page numbers etc make
-            --  sense if the file is formatted in a standard manner.
-
-            --  Note: we do not adjust the column number because it is quicker
-            --  to adjust it once at the end of the operation than incrementing
-            --  it each time around the loop.
-
-            Last := Last + 1;
-            Item (Last) := Character'Val (ch);
-
-            --  All done if the string is full, this is the case in which
-            --  we do not skip the following line mark. We need to adjust
-            --  the column number in this case.
-
-            if Last = Item'Last then
-               File.Col := File.Col + Count (Item'Length);
-               return;
-            end if;
-
-            --  Otherwise read next character. We also exit from the loop if
-            --  we read an end of file. This is the case where the last line
-            --  is not terminated with a line mark, and we consider that there
-            --  is an implied line mark in this case (this is a non-standard
-            --  file, but it is nice to treat it reasonably).
-
-            ch := Getc (File);
-            exit when ch = EOF;
-         end loop;
-      end if;
-
-      --  We have skipped past, but not stored, a line mark. Skip following
-      --  page mark if one follows, but do not do this for a non-regular
-      --  file (since otherwise we get annoying wait for an extra character)
-
-      File.Line := File.Line + 1;
-      File.Col := 1;
-
-      if File.Before_LM_PM then
-         File.Line := 1;
-         File.Before_LM_PM := False;
-         File.Page := File.Page + 1;
-
-      elsif File.Is_Regular_File then
-         ch := Getc (File);
-
-         if ch = PM and then File.Is_Regular_File then
-            File.Line := 1;
-            File.Page := File.Page + 1;
-         else
-            Ungetc (ch, File);
-         end if;
-      end if;
-   end Get_Line;
+      Last : out Natural) is separate;
+   --  The implementation of Ada.Text_IO.Get_Line is split into a subunit so
+   --  that different implementations can be used on different systems. In
+   --  particular the standard implementation uses low level stuff that is
+   --  not appropriate for the JVM and .NET implementations.
 
    procedure Get_Line
      (Item : out String;
@@ -970,6 +907,52 @@ package body Ada.Text_IO is
 
       return False;
    end Has_Upper_Half_Character;
+
+   -------------------------------
+   -- Initialize_Standard_Files --
+   -------------------------------
+
+   procedure Initialize_Standard_Files is
+   begin
+      Standard_Err.Stream            := stderr;
+      Standard_Err.Name              := Err_Name'Access;
+      Standard_Err.Form              := Null_Str'Unrestricted_Access;
+      Standard_Err.Mode              := FCB.Out_File;
+      Standard_Err.Is_Regular_File   := is_regular_file (fileno (stderr)) /= 0;
+      Standard_Err.Is_Temporary_File := False;
+      Standard_Err.Is_System_File    := True;
+      Standard_Err.Is_Text_File      := True;
+      Standard_Err.Access_Method     := 'T';
+      Standard_Err.Self              := Standard_Err;
+      Standard_Err.WC_Method         := Default_WCEM;
+
+      Standard_In.Stream             := stdin;
+      Standard_In.Name               := In_Name'Access;
+      Standard_In.Form               := Null_Str'Unrestricted_Access;
+      Standard_In.Mode               := FCB.In_File;
+      Standard_In.Is_Regular_File    := is_regular_file (fileno (stdin)) /= 0;
+      Standard_In.Is_Temporary_File  := False;
+      Standard_In.Is_System_File     := True;
+      Standard_In.Is_Text_File       := True;
+      Standard_In.Access_Method      := 'T';
+      Standard_In.Self               := Standard_In;
+      Standard_In.WC_Method          := Default_WCEM;
+
+      Standard_Out.Stream            := stdout;
+      Standard_Out.Name              := Out_Name'Access;
+      Standard_Out.Form              := Null_Str'Unrestricted_Access;
+      Standard_Out.Mode              := FCB.Out_File;
+      Standard_Out.Is_Regular_File   := is_regular_file (fileno (stdout)) /= 0;
+      Standard_Out.Is_Temporary_File := False;
+      Standard_Out.Is_System_File    := True;
+      Standard_Out.Is_Text_File      := True;
+      Standard_Out.Access_Method     := 'T';
+      Standard_Out.Self              := Standard_Out;
+      Standard_Out.WC_Method         := Default_WCEM;
+
+      FIO.Make_Unbuffered (AP (Standard_Out));
+      FIO.Make_Unbuffered (AP (Standard_Err));
+   end Initialize_Standard_Files;
 
    -------------
    -- Is_Open --
@@ -1574,8 +1557,8 @@ package body Ada.Text_IO is
    begin
       --  Don't allow change of mode for current file (RM A.10.2(5))
 
-      if (File = Current_In or else
-          File = Current_Out  or else
+      if (File = Current_In  or else
+          File = Current_Out or else
           File = Current_Error)
         and then To_FCB (Mode) /= File.Mode
       then
@@ -1923,7 +1906,7 @@ package body Ada.Text_IO is
             --  up for such files, so we assume an implicit LM in this case.
 
             loop
-               exit when ch = LM or ch = EOF;
+               exit when ch = LM or else ch = EOF;
                ch := Getc (File);
             end loop;
          end if;
@@ -2204,20 +2187,8 @@ package body Ada.Text_IO is
       end if;
    end Write;
 
-   --  Use "preallocated" strings to avoid calling "new" during the
-   --  elaboration of the run time. This is needed in the tasking case to
-   --  avoid calling Task_Lock too early. A filename is expected to end with a
-   --  null character in the runtime, here the null characters are added just
-   --  to have a correct filename length.
-
-   Err_Name : aliased String := "*stderr" & ASCII.NUL;
-   In_Name  : aliased String := "*stdin" & ASCII.NUL;
-   Out_Name : aliased String := "*stdout" & ASCII.NUL;
-
 begin
-   -------------------------------
-   -- Initialize Standard Files --
-   -------------------------------
+   --  Initialize Standard Files
 
    for J in WC_Encoding_Method loop
       if WC_Encoding = WC_Encoding_Letters (J) then
@@ -2225,51 +2196,10 @@ begin
       end if;
    end loop;
 
-   --  Note: the names in these files are bogus, and probably it would be
-   --  better for these files to have no names, but the ACVC test insist!
-   --  We use names that are bound to fail in open etc.
-
-   Standard_Err.Stream            := stderr;
-   Standard_Err.Name              := Err_Name'Access;
-   Standard_Err.Form              := Null_Str'Unrestricted_Access;
-   Standard_Err.Mode              := FCB.Out_File;
-   Standard_Err.Is_Regular_File   := is_regular_file (fileno (stderr)) /= 0;
-   Standard_Err.Is_Temporary_File := False;
-   Standard_Err.Is_System_File    := True;
-   Standard_Err.Is_Text_File      := True;
-   Standard_Err.Access_Method     := 'T';
-   Standard_Err.Self              := Standard_Err;
-   Standard_Err.WC_Method         := Default_WCEM;
-
-   Standard_In.Stream             := stdin;
-   Standard_In.Name               := In_Name'Access;
-   Standard_In.Form               := Null_Str'Unrestricted_Access;
-   Standard_In.Mode               := FCB.In_File;
-   Standard_In.Is_Regular_File    := is_regular_file (fileno (stdin)) /= 0;
-   Standard_In.Is_Temporary_File  := False;
-   Standard_In.Is_System_File     := True;
-   Standard_In.Is_Text_File       := True;
-   Standard_In.Access_Method      := 'T';
-   Standard_In.Self               := Standard_In;
-   Standard_In.WC_Method          := Default_WCEM;
-
-   Standard_Out.Stream            := stdout;
-   Standard_Out.Name              := Out_Name'Access;
-   Standard_Out.Form              := Null_Str'Unrestricted_Access;
-   Standard_Out.Mode              := FCB.Out_File;
-   Standard_Out.Is_Regular_File   := is_regular_file (fileno (stdout)) /= 0;
-   Standard_Out.Is_Temporary_File := False;
-   Standard_Out.Is_System_File    := True;
-   Standard_Out.Is_Text_File      := True;
-   Standard_Out.Access_Method     := 'T';
-   Standard_Out.Self              := Standard_Out;
-   Standard_Out.WC_Method         := Default_WCEM;
+   Initialize_Standard_Files;
 
    FIO.Chain_File (AP (Standard_In));
    FIO.Chain_File (AP (Standard_Out));
    FIO.Chain_File (AP (Standard_Err));
-
-   FIO.Make_Unbuffered (AP (Standard_Out));
-   FIO.Make_Unbuffered (AP (Standard_Err));
 
 end Ada.Text_IO;

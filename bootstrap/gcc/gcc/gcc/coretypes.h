@@ -1,5 +1,6 @@
 /* GCC core type declarations.
-   Copyright (C) 2002, 2004, 2007, 2008, 2009 Free Software Foundation, Inc.
+   Copyright (C) 2002, 2004, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -37,13 +38,18 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #ifndef GCC_CORETYPES_H
 #define GCC_CORETYPES_H
 
+#ifndef GTY
 #define GTY(x)  /* nothing - marker for gengtype */
+#endif
 
 #ifndef USED_FOR_TARGET
 
 struct bitmap_head_def;
 typedef struct bitmap_head_def *bitmap;
 typedef const struct bitmap_head_def *const_bitmap;
+struct simple_bitmap_def;
+typedef struct simple_bitmap_def *sbitmap;
+typedef const struct simple_bitmap_def *const_sbitmap;
 struct rtx_def;
 typedef struct rtx_def *rtx;
 typedef const struct rtx_def *const_rtx;
@@ -58,14 +64,24 @@ typedef const union tree_node *const_tree;
 typedef const union gimple_statement_d *const_gimple;
 union section;
 typedef union section section;
+struct gcc_options;
 struct cl_target_option;
 struct cl_optimization;
+struct cl_option;
+struct cl_decoded_option;
+struct cl_option_handlers;
+struct diagnostic_context;
+typedef struct diagnostic_context diagnostic_context;
 struct gimple_seq_d;
 typedef struct gimple_seq_d *gimple_seq;
 typedef const struct gimple_seq_d *const_gimple_seq;
-struct gimple_seq_node_d;
-typedef struct gimple_seq_node_d *gimple_seq_node;
-typedef const struct gimple_seq_node_d *const_gimple_seq_node;
+
+/* Address space number for named address space support.  */
+typedef unsigned char addr_space_t;
+
+/* The value of addr_space_t that represents the generic address space.  */
+#define ADDR_SPACE_GENERIC 0
+#define ADDR_SPACE_GENERIC_P(AS) ((AS) == ADDR_SPACE_GENERIC)
 
 /* The major intermediate representations of GCC.  */
 enum ir_type {
@@ -94,6 +110,52 @@ enum tls_model {
   TLS_MODEL_INITIAL_EXEC,
   TLS_MODEL_LOCAL_EXEC
 };
+
+/* Types of unwind/exception handling info that can be generated.  */
+
+enum unwind_info_type
+{
+  UI_NONE,
+  UI_SJLJ,
+  UI_DWARF2,
+  UI_TARGET
+};
+
+/* Callgraph node profile representation.  */
+enum node_frequency {
+  /* This function most likely won't be executed at all.
+     (set only when profile feedback is available or via function attribute). */
+  NODE_FREQUENCY_UNLIKELY_EXECUTED,
+  /* For functions that are known to be executed once (i.e. constructors, destructors
+     and main function.  */
+  NODE_FREQUENCY_EXECUTED_ONCE,
+  /* The default value.  */
+  NODE_FREQUENCY_NORMAL,
+  /* Optimize this function hard
+     (set only when profile feedback is available or via function attribute). */
+  NODE_FREQUENCY_HOT
+};
+
+
+struct edge_def;
+typedef struct edge_def *edge;
+typedef const struct edge_def *const_edge;
+struct basic_block_def;
+typedef struct basic_block_def *basic_block;
+typedef const struct basic_block_def *const_basic_block;
+
+#define obstack_chunk_alloc	((void *(*) (long)) xmalloc)
+#define obstack_chunk_free	((void (*) (void *)) free)
+#define OBSTACK_CHUNK_SIZE	0
+#define gcc_obstack_init(OBSTACK)			\
+  _obstack_begin ((OBSTACK), OBSTACK_CHUNK_SIZE, 0,	\
+		  obstack_chunk_alloc,			\
+		  obstack_chunk_free)
+
+/* enum reg_class is target specific, so it should not appear in
+   target-independent code or interfaces, like the target hook declarations
+   in target.h.  */
+typedef int reg_class_t;
 
 #else
 

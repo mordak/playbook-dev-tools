@@ -15,44 +15,11 @@
 // with this library; see the file COPYING3.  If not see
 // <http://www.gnu.org/licenses/>.
 
-// 23.2.2.4 list operations [lib.list.ops]
-
+#include "2.h"
 #include <list>
-#include <testsuite_hooks.h>
-
-bool test __attribute__((unused)) = true;
-
-// splice(p, x, i) + remove_if + operator==
-void
-test02()
-{
-  const int A[] = {1, 2, 3, 4, 5};
-  const int B[] = {2, 1, 3, 4, 5};
-  const int C[] = {1, 3, 4, 5, 2};
-  const int N = sizeof(A) / sizeof(int);
-  std::list<int> list0201(A, A + N);
-  std::list<int> list0202(A, A + N);
-  std::list<int> list0203(B, B + N);
-  std::list<int> list0204(C, C + N);
-  std::list<int>::iterator i = list0201.begin();
-
-  // result should be unchanged
-  list0201.splice(list0201.begin(), list0201, i);
-  VERIFY(list0201 == list0202);
-
-  // result should be [2 1 3 4 5]
-  ++i;
-  list0201.splice(list0201.begin(), list0201, i);
-  VERIFY(list0201 != list0202);
-  VERIFY(list0201 == list0203);
-
-  // result should be [1 3 4 5 2]
-  list0201.splice(list0201.end(), list0201, i);
-  VERIFY(list0201 == list0204);
-}
 
 int main()
 {
-  test02();
+  operations02<std::list<int> >();
   return 0;
 }

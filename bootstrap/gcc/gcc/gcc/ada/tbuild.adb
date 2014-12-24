@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -32,11 +32,11 @@ with Nmake;    use Nmake;
 with Opt;      use Opt;
 with Restrict; use Restrict;
 with Rident;   use Rident;
-with Sinfo;    use Sinfo;
+with Sem_Aux;  use Sem_Aux;
 with Snames;   use Snames;
 with Stand;    use Stand;
 with Stringt;  use Stringt;
-with Uintp;    use Uintp;
+with Urealp;   use Urealp;
 
 package body Tbuild is
 
@@ -197,6 +197,40 @@ package body Tbuild is
             Selector_Name =>
               New_Reference_To (First_Tag_Component (Full_Type), Loc)));
    end Make_DT_Access;
+
+   ------------------------
+   -- Make_Float_Literal --
+   ------------------------
+
+   function Make_Float_Literal
+     (Loc         : Source_Ptr;
+      Radix       : Uint;
+      Significand : Uint;
+      Exponent    : Uint) return Node_Id
+   is
+   begin
+      if Radix = 2 and then abs Significand /= 1 then
+         return
+           Make_Float_Literal
+             (Loc, Uint_16,
+              Significand * Radix**(Exponent mod 4),
+              Exponent / 4);
+
+      else
+         declare
+            N : constant Node_Id := New_Node (N_Real_Literal, Loc);
+
+         begin
+            Set_Realval (N,
+              UR_From_Components
+                (Num      => abs Significand,
+                 Den      => -Exponent,
+                 Rbase    => UI_To_Int (Radix),
+                 Negative => Significand < 0));
+            return N;
+         end;
+      end if;
+   end Make_Float_Literal;
 
    -------------------------------------
    -- Make_Implicit_Exception_Handler --
@@ -435,6 +469,23 @@ package body Tbuild is
           Strval => End_String);
    end Make_String_Literal;
 
+   --------------------
+   -- Make_Temporary --
+   --------------------
+
+   function Make_Temporary
+     (Loc          : Source_Ptr;
+      Id           : Character;
+      Related_Node : Node_Id := Empty) return Entity_Id
+   is
+      Temp : constant Entity_Id :=
+               Make_Defining_Identifier (Loc,
+                 Chars => New_Internal_Name (Id));
+   begin
+      Set_Related_Expression (Temp, Related_Node);
+      return Temp;
+   end Make_Temporary;
+
    ---------------------------
    -- Make_Unsuppress_Block --
    ---------------------------
@@ -510,8 +561,7 @@ package body Tbuild is
 
       if Suffix /= ' ' then
          pragma Assert (Is_OK_Internal_Letter (Suffix));
-         Name_Len := Name_Len + 1;
-         Name_Buffer (Name_Len) := Suffix;
+         Add_Char_To_Name_Buffer (Suffix);
       end if;
 
       if Suffix_Index /= 0 then
@@ -609,6 +659,58 @@ package body Tbuild is
       return Occurrence;
    end New_Occurrence_Of;
 
+   -----------------
+   -- New_Op_Node --
+   -----------------
+
+   function New_Op_Node
+     (New_Node_Kind : Node_Kind;
+      New_Sloc      : Source_Ptr) return Node_Id
+   is
+      type Name_Of_Type is array (N_Op) of Name_Id;
+      Name_Of : constant Name_Of_Type := Name_Of_Type'(
+         N_Op_And                    => Name_Op_And,
+         N_Op_Or                     => Name_Op_Or,
+         N_Op_Xor                    => Name_Op_Xor,
+         N_Op_Eq                     => Name_Op_Eq,
+         N_Op_Ne                     => Name_Op_Ne,
+         N_Op_Lt                     => Name_Op_Lt,
+         N_Op_Le                     => Name_Op_Le,
+         N_Op_Gt                     => Name_Op_Gt,
+         N_Op_Ge                     => Name_Op_Ge,
+         N_Op_Add                    => Name_Op_Add,
+         N_Op_Subtract               => Name_Op_Subtract,
+         N_Op_Concat                 => Name_Op_Concat,
+         N_Op_Multiply               => Name_Op_Multiply,
+         N_Op_Divide                 => Name_Op_Divide,
+         N_Op_Mod                    => Name_Op_Mod,
+         N_Op_Rem                    => Name_Op_Rem,
+         N_Op_Expon                  => Name_Op_Expon,
+         N_Op_Plus                   => Name_Op_Add,
+         N_Op_Minus                  => Name_Op_Subtract,
+         N_Op_Abs                    => Name_Op_Abs,
+         N_Op_Not                    => Name_Op_Not,
+
+         --  We don't really need these shift operators, since they never
+         --  appear as operators in the source, but the path of least
+         --  resistance is to put them in (the aggregate must be complete).
+
+         N_Op_Rotate_Left            => Name_Rotate_Left,
+         N_Op_Rotate_Right           => Name_Rotate_Right,
+         N_Op_Shift_Left             => Name_Shift_Left,
+         N_Op_Shift_Right            => Name_Shift_Right,
+         N_Op_Shift_Right_Arithmetic => Name_Shift_Right_Arithmetic);
+
+      Nod : constant Node_Id := New_Node (New_Node_Kind, New_Sloc);
+
+   begin
+      if New_Node_Kind in Name_Of'Range then
+         Set_Chars (Nod, Name_Of (New_Node_Kind));
+      end if;
+
+      return Nod;
+   end New_Op_Node;
+
    ----------------------
    -- New_Reference_To --
    ----------------------
@@ -618,7 +720,6 @@ package body Tbuild is
       Loc    : Source_Ptr) return Node_Id
    is
       Occurrence : Node_Id;
-
    begin
       Occurrence := New_Node (N_Identifier, Loc);
       Set_Chars (Occurrence, Chars (Def_Id));
@@ -636,10 +737,8 @@ package body Tbuild is
    is
    begin
       Get_Name_String (Related_Id);
-      Name_Len := Name_Len + 1;
-      Name_Buffer (Name_Len) := '_';
-      Name_Buffer (Name_Len + 1 .. Name_Len + Suffix'Length) := Suffix;
-      Name_Len := Name_Len + Suffix'Length;
+      Add_Char_To_Name_Buffer ('_');
+      Add_Str_To_Name_Buffer (Suffix);
       return Name_Find;
    end New_Suffixed_Name;
 

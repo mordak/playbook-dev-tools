@@ -1,6 +1,7 @@
 // std::moneypunct implementation details, generic version -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2009, 2010
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -30,15 +31,17 @@
 
 #include <locale>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   // Construct and return valid pattern consisting of some combination of:
   // space none symbol sign value
   money_base::pattern
-  money_base::_S_construct_pattern(char, char, char)
+  money_base::_S_construct_pattern(char, char, char) throw()
   { return _S_default_pattern; }
 
-  template<> 
+  template<>
     void
     moneypunct<char, true>::_M_initialize_moneypunct(__c_locale, const char*)
     {
@@ -64,7 +67,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	_M_data->_M_atoms[__i] = money_base::_S_atoms[__i];
     }
 
-  template<> 
+  template<>
     void
     moneypunct<char, false>::_M_initialize_moneypunct(__c_locale, const char*)
     {
@@ -90,18 +93,18 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	_M_data->_M_atoms[__i] = money_base::_S_atoms[__i];
     }
 
-  template<> 
+  template<>
     moneypunct<char, true>::~moneypunct()
     { delete _M_data; }
 
-  template<> 
+  template<>
     moneypunct<char, false>::~moneypunct()
     { delete _M_data; }
 
 #ifdef _GLIBCXX_USE_WCHAR_T
-  template<> 
+  template<>
     void
-    moneypunct<wchar_t, true>::_M_initialize_moneypunct(__c_locale, 
+    moneypunct<wchar_t, true>::_M_initialize_moneypunct(__c_locale,
 							const char*)
     {
       // "C" locale
@@ -115,9 +118,9 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       _M_data->_M_curr_symbol = L"";
       _M_data->_M_curr_symbol_size = 0;
       _M_data->_M_positive_sign = L"";
-      _M_data->_M_positive_sign_size = 0;      
+      _M_data->_M_positive_sign_size = 0;
       _M_data->_M_negative_sign = L"";
-      _M_data->_M_negative_sign_size = 0;      
+      _M_data->_M_negative_sign_size = 0;
       _M_data->_M_frac_digits = 0;
       _M_data->_M_pos_format = money_base::_S_default_pattern;
       _M_data->_M_neg_format = money_base::_S_default_pattern;
@@ -127,9 +130,9 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	  static_cast<wchar_t>(money_base::_S_atoms[__i]);
     }
 
-  template<> 
+  template<>
     void
-    moneypunct<wchar_t, false>::_M_initialize_moneypunct(__c_locale, 
+    moneypunct<wchar_t, false>::_M_initialize_moneypunct(__c_locale,
 							 const char*)
     {
       // "C" locale
@@ -155,13 +158,14 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	  static_cast<wchar_t>(money_base::_S_atoms[__i]);
     }
 
-  template<> 
+  template<>
     moneypunct<wchar_t, true>::~moneypunct()
     { delete _M_data; }
 
-  template<> 
+  template<>
     moneypunct<wchar_t, false>::~moneypunct()
     { delete _M_data; }
 #endif
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace

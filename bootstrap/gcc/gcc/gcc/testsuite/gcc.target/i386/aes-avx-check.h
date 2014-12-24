@@ -3,8 +3,16 @@
 #endif
 #include <stdlib.h>
 #include "cpuid.h"
+#include "avx-os-support.h"
 
 static void aes_avx_test (void);
+
+static void
+__attribute__ ((noinline))
+do_test (void)
+{
+  aes_avx_test ();
+}
 
 int
 main ()
@@ -15,9 +23,11 @@ main ()
     return 0;
 
   /* Run AES + AVX test only if host has AES + AVX support.  */
-  if ((ecx & (bit_AVX | bit_AES)) == (bit_AVX | bit_AES))
+  if (((ecx & (bit_AVX | bit_OSXSAVE | bit_AES))
+       == (bit_AVX | bit_OSXSAVE | bit_AES))
+      && avx_os_support ())
     {
-      aes_avx_test ();
+      do_test ();
 #ifdef DEBUG
       printf ("PASSED\n");
 #endif

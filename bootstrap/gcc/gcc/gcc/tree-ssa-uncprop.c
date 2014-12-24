@@ -1,5 +1,6 @@
 /* Routines for discovering and unpropagating edge equivalences.
-   Copyright (C) 2005, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2005, 2007, 2008, 2010
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -23,19 +24,14 @@ along with GCC; see the file COPYING3.  If not see
 #include "tm.h"
 #include "tree.h"
 #include "flags.h"
-#include "rtl.h"
 #include "tm_p.h"
-#include "ggc.h"
 #include "basic-block.h"
 #include "output.h"
-#include "expr.h"
 #include "function.h"
-#include "diagnostic.h"
 #include "timevar.h"
 #include "tree-dump.h"
 #include "tree-flow.h"
 #include "domwalk.h"
-#include "real.h"
 #include "tree-pass.h"
 #include "tree-ssa-propagate.h"
 #include "langhooks.h"
@@ -53,7 +49,7 @@ struct edge_equivalency
    in the CFG.
 
    When complete, each edge that creates an equivalency will have an
-   EDGE_EQUIVALENCY structure hanging off the edge's AUX field. 
+   EDGE_EQUIVALENCY structure hanging off the edge's AUX field.
    The caller is responsible for freeing the AUX fields.  */
 
 static void
@@ -157,7 +153,7 @@ associate_equivalences_with_edges (void)
 		  equivalency->rhs = op1;
 		  if (code == EQ_EXPR)
 		    true_edge->aux = equivalency;
-		  else 
+		  else
 		    false_edge->aux = equivalency;
 
 		}
@@ -177,7 +173,7 @@ associate_equivalences_with_edges (void)
 	      && !SSA_NAME_OCCURS_IN_ABNORMAL_PHI (cond))
 	    {
 	      int i, n_labels = gimple_switch_num_labels (stmt);
-	      tree *info = XCNEWVEC (tree, n_basic_blocks);
+	      tree *info = XCNEWVEC (tree, last_basic_block);
 
 	      /* Walk over the case label vector.  Record blocks
 		 which are reached by a single case label which represents
@@ -289,9 +285,9 @@ struct equiv_hash_elt
   VEC(tree,heap) *equivalences;
 };
 
-static void uncprop_initialize_block (struct dom_walk_data *, basic_block);
-static void uncprop_finalize_block (struct dom_walk_data *, basic_block);
-static void uncprop_into_successor_phis (struct dom_walk_data *, basic_block);
+static void uncprop_enter_block (struct dom_walk_data *, basic_block);
+static void uncprop_leave_block (struct dom_walk_data *, basic_block);
+static void uncprop_into_successor_phis (basic_block);
 
 /* Hashing and equality routines for the hash table.  */
 
@@ -358,7 +354,7 @@ record_equiv (tree value, tree equivalence)
      free (equiv_hash_elt);
 
   equiv_hash_elt = (struct equiv_hash_elt *) *slot;
-  
+
   VEC_safe_push (tree, heap, equiv_hash_elt->equivalences, equivalence);
 }
 
@@ -381,18 +377,12 @@ tree_ssa_uncprop (void)
   calculate_dominance_info (CDI_DOMINATORS);
 
   /* Setup callbacks for the generic dominator tree walker.  */
-  walk_data.walk_stmts_backward = false;
   walk_data.dom_direction = CDI_DOMINATORS;
   walk_data.initialize_block_local_data = NULL;
-  walk_data.before_dom_children_before_stmts = uncprop_initialize_block;
-  walk_data.before_dom_children_walk_stmts = NULL;
-  walk_data.before_dom_children_after_stmts = uncprop_into_successor_phis;
-  walk_data.after_dom_children_before_stmts = NULL;
-  walk_data.after_dom_children_walk_stmts = NULL;
-  walk_data.after_dom_children_after_stmts = uncprop_finalize_block;
+  walk_data.before_dom_children = uncprop_enter_block;
+  walk_data.after_dom_children = uncprop_leave_block;
   walk_data.global_data = NULL;
   walk_data.block_local_data_size = 0;
-  walk_data.interesting_blocks = NULL;
 
   /* Now initialize the dominator walker.  */
   init_walk_dominator_tree (&walk_data);
@@ -432,8 +422,8 @@ tree_ssa_uncprop (void)
    the dominator tree.  */
 
 static void
-uncprop_finalize_block (struct dom_walk_data *walk_data ATTRIBUTE_UNUSED,
-			basic_block bb ATTRIBUTE_UNUSED)
+uncprop_leave_block (struct dom_walk_data *walk_data ATTRIBUTE_UNUSED,
+		     basic_block bb ATTRIBUTE_UNUSED)
 {
   /* Pop the topmost value off the equiv stack.  */
   tree value = VEC_pop (tree, equiv_stack);
@@ -447,8 +437,7 @@ uncprop_finalize_block (struct dom_walk_data *walk_data ATTRIBUTE_UNUSED,
 /* Unpropagate values from PHI nodes in successor blocks of BB.  */
 
 static void
-uncprop_into_successor_phis (struct dom_walk_data *walk_data ATTRIBUTE_UNUSED,
-			     basic_block bb)
+uncprop_into_successor_phis (basic_block bb)
 {
   edge e;
   edge_iterator ei;
@@ -463,7 +452,7 @@ uncprop_into_successor_phis (struct dom_walk_data *walk_data ATTRIBUTE_UNUSED,
 
       /* If there are no PHI nodes in this destination, then there is
 	 no sense in recording any equivalences.  */
-      if (!phis)
+      if (gimple_seq_empty_p (phis))
 	continue;
 
       /* Record any equivalency associated with E.  */
@@ -476,7 +465,6 @@ uncprop_into_successor_phis (struct dom_walk_data *walk_data ATTRIBUTE_UNUSED,
       /* Walk over the PHI nodes, unpropagating values.  */
       for (gsi = gsi_start (phis) ; !gsi_end_p (gsi); gsi_next (&gsi))
 	{
-	  /* Sigh.  We'll have more efficient access to this one day.  */
 	  gimple phi = gsi_stmt (gsi);
 	  tree arg = PHI_ARG_DEF (phi, e->dest_idx);
 	  struct equiv_hash_elt equiv_hash_elt;
@@ -556,8 +544,8 @@ single_incoming_edge_ignoring_loop_edges (basic_block bb)
 }
 
 static void
-uncprop_initialize_block (struct dom_walk_data *walk_data ATTRIBUTE_UNUSED,
-			  basic_block bb)
+uncprop_enter_block (struct dom_walk_data *walk_data ATTRIBUTE_UNUSED,
+		     basic_block bb)
 {
   basic_block parent;
   edge e;
@@ -583,6 +571,8 @@ uncprop_initialize_block (struct dom_walk_data *walk_data ATTRIBUTE_UNUSED,
 
   if (!recorded)
     VEC_safe_push (tree, heap, equiv_stack, NULL_TREE);
+
+  uncprop_into_successor_phis (bb);
 }
 
 static bool
@@ -591,7 +581,7 @@ gate_uncprop (void)
   return flag_tree_dom != 0;
 }
 
-struct gimple_opt_pass pass_uncprop = 
+struct gimple_opt_pass pass_uncprop =
 {
  {
   GIMPLE_PASS,

@@ -7,9 +7,7 @@ BIG_OUTPUT_FORMAT="elf32-tradbigmips"
 LITTLE_OUTPUT_FORMAT="elf32-tradlittlemips"
 unset DATA_ADDR
 SHLIB_TEXT_START_ADDR=0
-#ENTRY=__start
 
-#nto stuff
 ENTRY=_start
 TEXT_START_SYMBOLS='_btext = .;'
 TEXT_START_ADDR=0x08020000

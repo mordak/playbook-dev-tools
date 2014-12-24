@@ -1,7 +1,7 @@
 # Process this file with autoconf to produce a configure script, like so:
 # aclocal -I ../config && autoconf && autoheader && automake
 
-AC_PREREQ(2.59)
+AC_PREREQ(2.64)
 AC_INIT([GNU OpenMP Runtime Library], 1.0,,[libgomp])
 AC_CONFIG_HEADER(config.h)
 
@@ -58,10 +58,11 @@ target_alias=${target_alias-$host_alias}
 #              we can do about that; they come from AC_INIT).
 #  foreign:  we don't follow the normal rules for GNU packages (no COPYING
 #            file in the top srcdir, etc, etc), so stop complaining.
+#  no-dist:  we don't want 'dist' and related rules.
 #  -Wall:  turns on all automake warnings...
 #  -Wno-portability:  ...except this one, since GNU make is required.
 #  -Wno-override: ... and this one, since we do want this in testsuite.
-AM_INIT_AUTOMAKE([1.9.0 foreign -Wall -Wno-portability -Wno-override])
+AM_INIT_AUTOMAKE([1.9.0 foreign no-dist -Wall -Wno-portability -Wno-override])
 AM_ENABLE_MULTILIB(, ..)
 
 # Calculate toolexeclibdir
@@ -103,7 +104,7 @@ AC_SUBST(toolexeclibdir)
 m4_rename([_AC_ARG_VAR_PRECIOUS],[real_PRECIOUS])
 m4_define([_AC_ARG_VAR_PRECIOUS],[])
 AC_PROG_CC
-m4_rename([real_PRECIOUS],[_AC_ARG_VAR_PRECIOUS])
+m4_rename_force([real_PRECIOUS],[_AC_ARG_VAR_PRECIOUS])
 
 AC_SUBST(CFLAGS)
 
@@ -134,17 +135,32 @@ AM_CONDITIONAL(BUILD_INFO, test $gcc_cv_prog_makeinfo_modern = "yes")
 
 # Configure libtool
 AM_PROG_LIBTOOL
+ACX_LT_HOST_FLAGS
 AC_SUBST(enable_shared)
 AC_SUBST(enable_static)
 
 AM_MAINTAINER_MODE
 
+# Create a spec file, so that compile/link tests don't fail
+test -f libgfortran.spec || touch libgfortran.spec
+FCFLAGS="$FCFLAGS -L."
+
 # We need gfortran to compile parts of the library
 # We can't use AC_PROG_FC because it expects a fully working gfortran.
 #AC_PROG_FC(gfortran)
-FC="$GFORTRAN"
+case `echo $GFORTRAN` in
+  -* | no* )
+    FC=no ;;
+  *)
+    set dummy $GFORTRAN; ac_word=$2
+    if test -x "$ac_word"; then
+      FC="$GFORTRAN"
+    else
+      FC=no
+    fi ;;
+esac
 AC_PROG_FC(gfortran)
-FCFLAGS="$FCFLAGS -Wall"
+FCFLAGS="$FCFLAGS -Wall -L../libgfortran"
 
 # For libtool versioning info, format is CURRENT:REVISION:AGE
 libtool_VERSION=1:0:0
@@ -168,7 +184,7 @@ AC_LINK_IFELSE(
    void *g(void *d) { return NULL; }],
   [pthread_t t; pthread_create(&t,NULL,g,NULL);])],
  [XPCFLAGS=" -Wc,-pthread"],
- [CFLAGS="$save_CFLAGS" LIBS="-lpthread $LIBS"
+ [CFLAGS="$save_CFLAGS"
   AC_LINK_IFELSE(
    [AC_LANG_PROGRAM(
     [#include <pthread.h>

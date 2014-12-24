@@ -81,27 +81,27 @@
 ;;  Register constraints.
 ;;
 
-(define_register_constraint "a" 
+(define_register_constraint "a"
   "ADDR_REGS"
   "Any address register from 1 to 15.")
 
 
-(define_register_constraint "c" 
+(define_register_constraint "c"
   "CC_REGS"
   "Condition code register 33")
 
 
-(define_register_constraint "d" 
+(define_register_constraint "d"
   "GENERAL_REGS"
   "Any register from 0 to 15")
 
 
-(define_register_constraint "f" 
+(define_register_constraint "f"
   "FP_REGS"
   "Floating point registers")
 
 
-(define_register_constraint "t" 
+(define_register_constraint "t"
   "ACCESS_REGS"
   "@internal
    Access registers 36 and 37")
@@ -192,9 +192,9 @@
 ;;         is specified instead of a part number, the constraint matches
 ;;         if there is any single part with non-default value.
 ;;
-;; The following patterns define only those constraints that are actually 
-;; used in s390.md.  If you need an additional one, simply add it in the 
-;; obvious way.  Function s390_N_constraint_str is ready to handle all 
+;; The following patterns define only those constraints that are actually
+;; used in s390.md.  If you need an additional one, simply add it in the
+;; obvious way.  Function s390_N_constraint_str is ready to handle all
 ;; combinations.
 ;;
 
@@ -403,7 +403,7 @@ level.  This constraint will never be used and using it in an inline
 assembly is *always* a bug since there is no instruction accepting all
 those addresses.  It just serves as a placeholder for a generic memory
 constraint."
-  (match_test "legitimate_address_p (GET_MODE (op), op, 1)"))
+  (match_test "strict_memory_address_p (GET_MODE (op), op)"))
 
 ; This defines 'm' as normal memory constraint.  This is only possible
 ; since the standard memory constraint is re-defined in s390.h using
@@ -414,53 +414,53 @@ constraint."
                || s390_mem_constraint (\"T\", op)"))
 
 (define_memory_constraint "AQ"
-  "@internal 
+  "@internal
    Offsettable memory reference without index register and with short displacement"
   (match_test "s390_mem_constraint (\"AQ\", op)"))
 
 
 (define_memory_constraint "AR"
-  "@internal 
+  "@internal
    Offsettable memory reference with index register and short displacement"
   (match_test "s390_mem_constraint (\"AR\", op)"))
 
 
 (define_memory_constraint "AS"
-  "@internal 
+  "@internal
    Offsettable memory reference without index register but with long displacement"
   (match_test "s390_mem_constraint (\"AS\", op)"))
 
 
 (define_memory_constraint "AT"
-  "@internal 
+  "@internal
    Offsettable memory reference with index register and long displacement"
   (match_test "s390_mem_constraint (\"AT\", op)"))
 
 
 
 (define_constraint "BQ"
-  "@internal 
-   Memory reference without index register and with short 
+  "@internal
+   Memory reference without index register and with short
    displacement that does *not* refer to a literal pool entry."
   (match_test "s390_mem_constraint (\"BQ\", op)"))
 
 
 (define_constraint "BR"
-  "@internal 
+  "@internal
    Memory reference with index register and short displacement that
    does *not* refer to a literal pool entry. "
   (match_test "s390_mem_constraint (\"BR\", op)"))
 
 
 (define_constraint "BS"
-  "@internal 
+  "@internal
    Memory reference without index register but with long displacement
    that does *not* refer to a literal pool entry. "
   (match_test "s390_mem_constraint (\"BS\", op)"))
 
 
 (define_constraint "BT"
-  "@internal 
+  "@internal
    Memory reference with index register and long displacement that
    does *not* refer to a literal pool entry. "
   (match_test "s390_mem_constraint (\"BT\", op)"))

@@ -1,5 +1,5 @@
 /* BFD back-end for HP/Intel IA-64 COFF files.
-   Copyright 1999, 2000, 2001, 2002, 2007, 2008
+   Copyright 1999, 2000, 2001, 2002, 2005, 2007, 2008, 2009, 2011
    Free Software Foundation, Inc.
    Contributed by David Mosberger <davidm@hpl.hp.com>
 
@@ -29,9 +29,9 @@
 #include "libcoff.h"
 
 #define COFF_DEFAULT_SECTION_ALIGNMENT_POWER (2)
-/* The page size is a guess based on ELF.  */
 
-#define COFF_PAGE_SIZE 0x1000
+/* Windows ia64 uses 8K page size.  */
+#define COFF_PAGE_SIZE 0x2000
 
 static reloc_howto_type howto_table[] =
 {
@@ -176,6 +176,7 @@ const bfd_target
 #endif
   '/',				/* ar_pad_char */
   15,				/* ar_max_namelen */
+  0,				/* match priority.  */
 
   bfd_getl64, bfd_getl_signed_64, bfd_putl64,
      bfd_getl32, bfd_getl_signed_32, bfd_putl32,

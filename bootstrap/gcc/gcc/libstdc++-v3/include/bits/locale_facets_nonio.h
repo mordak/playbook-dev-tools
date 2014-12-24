@@ -1,6 +1,6 @@
 // Locale support -*- C++ -*-
 
-// Copyright (C) 2007, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -22,9 +22,9 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file locale_facets_nonio.h
+/** @file bits/locale_facets_nonio.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{locale}
  */
 
 //
@@ -38,13 +38,16 @@
 
 #include <ctime>	// For struct tm
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   /**
    *  @brief  Time format ordering data.
+   *  @ingroup locales
    *
-   *  This class provides an enum representing different orderings of day,
-   *  month, and year.
+   *  This class provides an enum representing different orderings of
+   *  time: day, month, and year.
   */
   class time_base
   {
@@ -117,20 +120,20 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       bool				_M_allocated;
 
       __timepunct_cache(size_t __refs = 0) : facet(__refs),
-      _M_date_format(NULL), _M_date_era_format(NULL), _M_time_format(NULL),
-      _M_time_era_format(NULL), _M_date_time_format(NULL),
-      _M_date_time_era_format(NULL), _M_am(NULL), _M_pm(NULL),
-      _M_am_pm_format(NULL), _M_day1(NULL), _M_day2(NULL), _M_day3(NULL),
-      _M_day4(NULL), _M_day5(NULL), _M_day6(NULL), _M_day7(NULL),
-      _M_aday1(NULL), _M_aday2(NULL), _M_aday3(NULL), _M_aday4(NULL),
-      _M_aday5(NULL), _M_aday6(NULL), _M_aday7(NULL), _M_month01(NULL),
-      _M_month02(NULL), _M_month03(NULL), _M_month04(NULL), _M_month05(NULL),
-      _M_month06(NULL), _M_month07(NULL), _M_month08(NULL), _M_month09(NULL),
-      _M_month10(NULL), _M_month11(NULL), _M_month12(NULL), _M_amonth01(NULL),
-      _M_amonth02(NULL), _M_amonth03(NULL), _M_amonth04(NULL),
-      _M_amonth05(NULL), _M_amonth06(NULL), _M_amonth07(NULL),
-      _M_amonth08(NULL), _M_amonth09(NULL), _M_amonth10(NULL),
-      _M_amonth11(NULL), _M_amonth12(NULL), _M_allocated(false)
+      _M_date_format(0), _M_date_era_format(0), _M_time_format(0),
+      _M_time_era_format(0), _M_date_time_format(0),
+      _M_date_time_era_format(0), _M_am(0), _M_pm(0),
+      _M_am_pm_format(0), _M_day1(0), _M_day2(0), _M_day3(0),
+      _M_day4(0), _M_day5(0), _M_day6(0), _M_day7(0),
+      _M_aday1(0), _M_aday2(0), _M_aday3(0), _M_aday4(0),
+      _M_aday5(0), _M_aday6(0), _M_aday7(0), _M_month01(0),
+      _M_month02(0), _M_month03(0), _M_month04(0), _M_month05(0),
+      _M_month06(0), _M_month07(0), _M_month08(0), _M_month09(0),
+      _M_month10(0), _M_month11(0), _M_month12(0), _M_amonth01(0),
+      _M_amonth02(0), _M_amonth03(0), _M_amonth04(0),
+      _M_amonth05(0), _M_amonth06(0), _M_amonth07(0),
+      _M_amonth08(0), _M_amonth09(0), _M_amonth10(0),
+      _M_amonth11(0), _M_amonth12(0), _M_allocated(false)
       { }
 
       ~__timepunct_cache();
@@ -200,7 +203,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *  This is a constructor for use by the library itself to set up new
        *  locales.
        *
-       *  @param cloc  The "C" locale.
+       *  @param cloc  The C locale.
        *  @param s  The name of a locale.
        *  @param refs  Passed to the base facet class.
       */
@@ -211,7 +214,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       // value of strftime/wcsftime.
       void
       _M_put(_CharT* __s, size_t __maxlen, const _CharT* __format,
-	     const tm* __tm) const;
+	     const tm* __tm) const throw ();
 
       void
       _M_date_formats(const _CharT** __date) const
@@ -312,7 +315,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
       // For use at construction time only.
       void
-      _M_initialize_timepunct(__c_locale __cloc = NULL);
+      _M_initialize_timepunct(__c_locale __cloc = 0);
     };
 
   template<typename _CharT>
@@ -325,7 +328,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
   template<>
     void
-    __timepunct<char>::_M_put(char*, size_t, const char*, const tm*) const;
+    __timepunct<char>::_M_put(char*, size_t, const char*, const tm*) const throw ();
 
 #ifdef _GLIBCXX_USE_WCHAR_T
   template<>
@@ -335,18 +338,22 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   template<>
     void
     __timepunct<wchar_t>::_M_put(wchar_t*, size_t, const wchar_t*,
-				 const tm*) const;
+				 const tm*) const throw ();
 #endif
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
   // Include host and configuration specific timepunct functions.
   #include <bits/time_members.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   /**
-   *  @brief  Facet for parsing dates and times.
+   *  @brief  Primary class template time_get.
+   *  @ingroup locales
    *
    *  This facet encapsulates the code to parse and return a date or
    *  time from a string.  It is used by the istream numeric
@@ -387,8 +394,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *  @brief  Return preferred order of month, day, and year.
        *
        *  This function returns an enum from timebase::dateorder giving the
-       *  preferred ordering if the format "x" given to time_put::put() only
-       *  uses month, day, and year.  If the format "x" for the associated
+       *  preferred ordering if the format @a x given to time_put::put() only
+       *  uses month, day, and year.  If the format @a x for the associated
        *  locale uses other fields, this function returns
        *  timebase::dateorder::noorder.
        *
@@ -403,11 +410,11 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       /**
        *  @brief  Parse input time string.
        *
-       *  This function parses a time according to the format "x" and puts the
+       *  This function parses a time according to the format @a X and puts the
        *  results into a user-supplied struct tm.  The result is returned by
        *  calling time_get::do_get_time().
        *
-       *  If there is a valid time string according to format "x", @a tm will
+       *  If there is a valid time string according to format @a X, @a tm will
        *  be filled in accordingly and the returned iterator will point to the
        *  first character beyond the time string.  If an error occurs before
        *  the end, err |= ios_base::failbit.  If parsing reads all the
@@ -428,11 +435,11 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       /**
        *  @brief  Parse input date string.
        *
-       *  This function parses a date according to the format "X" and puts the
+       *  This function parses a date according to the format @a x and puts the
        *  results into a user-supplied struct tm.  The result is returned by
        *  calling time_get::do_get_date().
        *
-       *  If there is a valid date string according to format "X", @a tm will
+       *  If there is a valid date string according to format @a x, @a tm will
        *  be filled in accordingly and the returned iterator will point to the
        *  first character beyond the date string.  If an error occurs before
        *  the end, err |= ios_base::failbit.  If parsing reads all the
@@ -542,7 +549,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *  @brief  Return preferred order of month, day, and year.
        *
        *  This function returns an enum from timebase::dateorder giving the
-       *  preferred ordering if the format "x" given to time_put::put() only
+       *  preferred ordering if the format @a x given to time_put::put() only
        *  uses month, day, and year.  This function is a hook for derived
        *  classes to change the value returned.
        *
@@ -554,7 +561,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       /**
        *  @brief  Parse input time string.
        *
-       *  This function parses a time according to the format "x" and puts the
+       *  This function parses a time according to the format @a x and puts the
        *  results into a user-supplied struct tm.  This function is a hook for
        *  derived classes to change the value returned.  @see get_time() for
        *  details.
@@ -573,7 +580,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       /**
        *  @brief  Parse input date string.
        *
-       *  This function parses a date according to the format "X" and puts the
+       *  This function parses a date according to the format @a X and puts the
        *  results into a user-supplied struct tm.  This function is a hook for
        *  derived classes to change the value returned.  @see get_date() for
        *  details.
@@ -652,12 +659,17 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 		     int __min, int __max, size_t __len,
 		     ios_base& __io, ios_base::iostate& __err) const;
 
-      // Extract day or month name, or any unique array of string
-      // literals in a const _CharT* array.
+      // Extract any unique array of string literals in a const _CharT* array.
       iter_type
       _M_extract_name(iter_type __beg, iter_type __end, int& __member,
 		      const _CharT** __names, size_t __indexlen,
 		      ios_base& __io, ios_base::iostate& __err) const;
+
+      // Extract day or month name in a const _CharT* array.
+      iter_type
+      _M_extract_wday_or_month(iter_type __beg, iter_type __end, int& __member,
+			       const _CharT** __names, size_t __indexlen,
+			       ios_base& __io, ios_base::iostate& __err) const;
 
       // Extract on a component-by-component basis, via __format argument.
       iter_type
@@ -688,7 +700,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     };
 
   /**
-   *  @brief  Facet for outputting dates and times.
+   *  @brief  Primary class template time_put.
+   *  @ingroup locales
    *
    *  This facet encapsulates the code to format and output dates and times
    *  according to formats used by strftime().
@@ -815,6 +828,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
   /**
    *  @brief  Money format ordering data.
+   *  @ingroup locales
    *
    *  This class contains an ordered array of 4 fields to represent the
    *  pattern for formatting a money amount.  Each field may contain one entry
@@ -844,8 +858,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
     // Construct and return valid pattern consisting of some combination of:
     // space none symbol sign value
-    static pattern
-    _S_construct_pattern(char __precedes, char __space, char __posn);
+    _GLIBCXX_CONST static pattern
+    _S_construct_pattern(char __precedes, char __space, char __posn) throw ();
   };
 
   template<typename _CharT, bool _Intl>
@@ -874,11 +888,11 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       bool				_M_allocated;
 
       __moneypunct_cache(size_t __refs = 0) : facet(__refs),
-      _M_grouping(NULL), _M_grouping_size(0), _M_use_grouping(false),
+      _M_grouping(0), _M_grouping_size(0), _M_use_grouping(false),
       _M_decimal_point(_CharT()), _M_thousands_sep(_CharT()),
-      _M_curr_symbol(NULL), _M_curr_symbol_size(0),
-      _M_positive_sign(NULL), _M_positive_sign_size(0),
-      _M_negative_sign(NULL), _M_negative_sign_size(0),
+      _M_curr_symbol(0), _M_curr_symbol_size(0),
+      _M_positive_sign(0), _M_positive_sign_size(0),
+      _M_negative_sign(0), _M_negative_sign_size(0),
       _M_frac_digits(0),
       _M_pos_format(money_base::pattern()),
       _M_neg_format(money_base::pattern()), _M_allocated(false)
@@ -910,7 +924,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     }
 
   /**
-   *  @brief  Facet for formatting data for money amounts.
+   *  @brief  Primary class template moneypunct.
+   *  @ingroup locales
    *
    *  This facet encapsulates the punctuation, grouping and other formatting
    *  features of money amount string representations.
@@ -945,7 +960,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *  @param refs  Passed to the base facet class.
       */
       explicit
-      moneypunct(size_t __refs = 0) : facet(__refs), _M_data(NULL)
+      moneypunct(size_t __refs = 0)
+      : facet(__refs), _M_data(0)
       { _M_initialize_moneypunct(); }
 
       /**
@@ -967,13 +983,13 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *  This is a constructor for use by the library itself to set up new
        *  locales.
        *
-       *  @param cloc  The "C" locale.
+       *  @param cloc  The C locale.
        *  @param s  The name of a locale.
        *  @param refs  Passed to the base facet class.
       */
       explicit
       moneypunct(__c_locale __cloc, const char* __s, size_t __refs = 0)
-      : facet(__refs), _M_data(NULL)
+      : facet(__refs), _M_data(0)
       { _M_initialize_moneypunct(__cloc, __s); }
 
       /**
@@ -1017,10 +1033,11 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *  string are required to group a number, the last char is used
        *  repeatedly.
        *
-       *  For example, if the grouping() returns "\003\002" and is applied to
-       *  the number 123456789, this corresponds to 12,34,56,789.  Note that
-       *  if the string was "32", this would put more than 50 digits into the
-       *  least significant group if the character set is ASCII.
+       *  For example, if the grouping() returns <code>\003\002</code>
+       *  and is applied to the number 123456789, this corresponds to
+       *  12,34,56,789.  Note that if the string was <code>32</code>, this would
+       *  put more than 50 digits into the least significant group if
+       *  the character set is ASCII.
        *
        *  The string is returned by calling
        *  moneypunct<char_type>::do_grouping().
@@ -1119,9 +1136,10 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *  present.
        *
        *  For example, for the US locale and pos_format() pattern
-       *  {symbol,sign,value,none}, curr_symbol() == '$' positive_sign() ==
-       *  '+', and value 10.01, and options set to force the symbol, the
-       *  corresponding string is "$+10.01".
+       *  {symbol,sign,value,none}, curr_symbol() == &apos;$&apos;
+       *  positive_sign() == &apos;+&apos;, and value 10.01, and
+       *  options set to force the symbol, the corresponding string is
+       *  <code>$+10.01</code>.
        *
        *  @return  Pattern for money values.
       */
@@ -1259,8 +1277,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
       // For use at construction time only.
        void
-       _M_initialize_moneypunct(__c_locale __cloc = NULL,
-				const char* __name = NULL);
+       _M_initialize_moneypunct(__c_locale __cloc = 0,
+				const char* __name = 0);
     };
 
   template<typename _CharT, bool _Intl>
@@ -1333,10 +1351,11 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   template<typename _CharT, bool _Intl>
     const bool moneypunct_byname<_CharT, _Intl>::intl;
 
-_GLIBCXX_BEGIN_LDBL_NAMESPACE
+_GLIBCXX_BEGIN_NAMESPACE_LDBL
 
   /**
-   *  @brief  Facet for parsing monetary amounts.
+   *  @brief  Primary class template money_get.
+   *  @ingroup locales
    *
    *  This facet encapsulates the code to parse and return a monetary
    *  amount from a string.
@@ -1407,10 +1426,11 @@ _GLIBCXX_BEGIN_LDBL_NAMESPACE
       /**
        *  @brief  Read and parse a monetary value.
        *
-       *  This function reads characters from @a s, interprets them as a
-       *  monetary value according to moneypunct and ctype facets retrieved
-       *  from io.getloc(), and returns the result in @a digits.  For example,
-       *  the string $10.01 in a US locale would store "1001" in @a digits.
+       *  This function reads characters from @a s, interprets them as
+       *  a monetary value according to moneypunct and ctype facets
+       *  retrieved from io.getloc(), and returns the result in @a
+       *  digits.  For example, the string $10.01 in a US locale would
+       *  store <code>1001</code> in @a digits.
        *
        *  Any characters not part of a valid money amount are not consumed.
        *
@@ -1485,7 +1505,8 @@ _GLIBCXX_BEGIN_LDBL_NAMESPACE
     locale::id money_get<_CharT, _InIter>::id;
 
   /**
-   *  @brief  Facet for outputting monetary amounts.
+   *  @brief  Primary class template money_put.
+   *  @ingroup locales
    *
    *  This facet encapsulates the code to format and output a monetary
    *  amount.
@@ -1526,7 +1547,7 @@ _GLIBCXX_BEGIN_LDBL_NAMESPACE
        *  This function formats @a units as a monetary value according to
        *  moneypunct and ctype facets retrieved from io.getloc(), and writes
        *  the resulting characters to @a s.  For example, the value 1001 in a
-       *  US locale would write "$10.01" to @a s.
+       *  US locale would write <code>$10.01</code> to @a s.
        *
        *  This function works by returning the result of do_put().
        *
@@ -1545,10 +1566,11 @@ _GLIBCXX_BEGIN_LDBL_NAMESPACE
       /**
        *  @brief  Format and output a monetary value.
        *
-       *  This function formats @a digits as a monetary value according to
-       *  moneypunct and ctype facets retrieved from io.getloc(), and writes
-       *  the resulting characters to @a s.  For example, the string "1001" in
-       *  a US locale would write "$10.01" to @a s.
+       *  This function formats @a digits as a monetary value
+       *  according to moneypunct and ctype facets retrieved from
+       *  io.getloc(), and writes the resulting characters to @a s.
+       *  For example, the string <code>1001</code> in a US locale
+       *  would write <code>$10.01</code> to @a s.
        *
        *  This function works by returning the result of do_put().
        *
@@ -1575,7 +1597,7 @@ _GLIBCXX_BEGIN_LDBL_NAMESPACE
        *  This function formats @a units as a monetary value according to
        *  moneypunct and ctype facets retrieved from io.getloc(), and writes
        *  the resulting characters to @a s.  For example, the value 1001 in a
-       *  US locale would write "$10.01" to @a s.
+       *  US locale would write <code>$10.01</code> to @a s.
        *
        *  This function is a hook for derived classes to change the value
        *  returned.  @see put().
@@ -1601,10 +1623,11 @@ _GLIBCXX_BEGIN_LDBL_NAMESPACE
       /**
        *  @brief  Format and output a monetary value.
        *
-       *  This function formats @a digits as a monetary value according to
-       *  moneypunct and ctype facets retrieved from io.getloc(), and writes
-       *  the resulting characters to @a s.  For example, the string "1001" in
-       *  a US locale would write "$10.01" to @a s.
+       *  This function formats @a digits as a monetary value
+       *  according to moneypunct and ctype facets retrieved from
+       *  io.getloc(), and writes the resulting characters to @a s.
+       *  For example, the string <code>1001</code> in a US locale
+       *  would write <code>$10.01</code> to @a s.
        *
        *  This function is a hook for derived classes to change the value
        *  returned.  @see put().
@@ -1636,10 +1659,11 @@ _GLIBCXX_BEGIN_LDBL_NAMESPACE
   template<typename _CharT, typename _OutIter>
     locale::id money_put<_CharT, _OutIter>::id;
 
-_GLIBCXX_END_LDBL_NAMESPACE
+_GLIBCXX_END_NAMESPACE_LDBL
 
   /**
    *  @brief  Messages facet base class providing catalog typedef.
+   *  @ingroup locales
    */
   struct messages_base
   {
@@ -1647,7 +1671,8 @@ _GLIBCXX_END_LDBL_NAMESPACE
   };
 
   /**
-   *  @brief  Facet for handling message catalogs
+   *  @brief  Primary class template messages.
+   *  @ingroup locales
    *
    *  This facet encapsulates the code to retrieve messages from
    *  message catalogs.  The only thing defined by the standard for this facet
@@ -1704,7 +1729,7 @@ _GLIBCXX_END_LDBL_NAMESPACE
        *  This is a constructor for use by the library itself to set up new
        *  locales.
        *
-       *  @param  cloc  The "C" locale.
+       *  @param  cloc  The C locale.
        *  @param  s  The name of a locale.
        *  @param  refs  Refcount to pass to the base class.
        */
@@ -1871,7 +1896,7 @@ _GLIBCXX_END_LDBL_NAMESPACE
   template<typename _CharT>
     locale::id messages<_CharT>::id;
 
-  // Specializations for required instantiations.
+  /// Specializations for required instantiations.
   template<>
     string
     messages<char>::do_get(catalog, int, int, const string&) const;
@@ -1899,7 +1924,8 @@ _GLIBCXX_END_LDBL_NAMESPACE
       { }
     };
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 // Include host and configuration specific messages functions.
 #include <bits/messages_members.h>
@@ -1907,8 +1933,6 @@ _GLIBCXX_END_NAMESPACE
 // 22.2.1.5  Template class codecvt
 #include <bits/codecvt.h>
 
-#ifndef _GLIBCXX_EXPORT_TEMPLATE
-# include <bits/locale_facets_nonio.tcc>
-#endif
+#include <bits/locale_facets_nonio.tcc>
 
 #endif

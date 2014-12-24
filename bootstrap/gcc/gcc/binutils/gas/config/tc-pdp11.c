@@ -1,5 +1,6 @@
 /* tc-pdp11.c - pdp11-specific -
-   Copyright 2001, 2002, 2004, 2005, 2007 Free Software Foundation, Inc.
+   Copyright 2001, 2002, 2004, 2005, 2007, 2009
+   Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -15,7 +16,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GAS; see the file COPYING.  If not, write to
-   the Free Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
+   the Free Software Foundation, 51 Franklin Street - Fifth Floor,
+   Boston, MA 02110-1301, USA.  */
 
 #include "as.h"
 #include "safe-ctype.h"
@@ -189,7 +191,7 @@ md_begin (void)
 
   insn_hash = hash_new ();
   if (insn_hash == NULL)
-    as_fatal ("Virtual memory exhausted");
+    as_fatal (_("Virtual memory exhausted"));
 
   for (i = 0; i < pdp11_num_opcodes; i++)
     hash_insert (insn_hash, pdp11_opcodes[i].name, (void *) (pdp11_opcodes + i));
@@ -334,7 +336,7 @@ parse_reg (char *str, struct pdp11_code *operand)
 	  str++;
 	  break;
 	default:
-	  operand->error = "Bad register name";
+	  operand->error = _("Bad register name");
 	  return str - 1;
 	}
     }
@@ -352,7 +354,7 @@ parse_reg (char *str, struct pdp11_code *operand)
     }
   else
     {
-      operand->error = "Bad register name";
+      operand->error = _("Bad register name");
       return str;
     }
 
@@ -377,13 +379,13 @@ parse_ac5 (char *str, struct pdp11_code *operand)
 	  str++;
 	  break;
 	default:
-	  operand->error = "Bad register name";
+	  operand->error = _("Bad register name");
 	  return str - 2;
 	}
     }
   else
     {
-      operand->error = "Bad register name";
+      operand->error = _("Bad register name");
       return str;
     }
 
@@ -396,7 +398,7 @@ parse_ac (char *str, struct pdp11_code *operand)
   str = parse_ac5 (str, operand);
   if (!operand->error && operand->code > 3)
     {
-	  operand->error = "Bad register name";
+      operand->error = _("Bad register name");
 	  return str - 3;
     }
 
@@ -415,7 +417,7 @@ parse_expression (char *str, struct pdp11_code *operand)
   if (seg == NULL)
     {
       input_line_pointer = save_input_line_pointer;
-      operand->error = "Error in expression";
+      operand->error = _("Error in expression");
       return str;
     }
 
@@ -443,7 +445,7 @@ parse_op_no_deferred (char *str, struct pdp11_code *operand)
       str = skip_whitespace (str);
       if (*str != ')')
 	{
-	  operand->error = "Missing ')'";
+	  operand->error = _("Missing ')'");
 	  return str;
 	}
       str++;
@@ -479,7 +481,7 @@ parse_op_no_deferred (char *str, struct pdp11_code *operand)
         case O_big:
           if (operand->reloc.exp.X_add_number > 0)
             {
-              operand->error = "Error in expression";
+              operand->error = _("Error in expression");
               break;
             }
           /* It's a floating literal...  */
@@ -490,7 +492,7 @@ parse_op_no_deferred (char *str, struct pdp11_code *operand)
             as_warn (_("Low order bits truncated in immediate float operand"));
           break;
 	default:
-	  operand->error = "Error in expression";
+	  operand->error = _("Error in expression");
 	  break;
 	}
       operand->code = 027;
@@ -499,8 +501,6 @@ parse_op_no_deferred (char *str, struct pdp11_code *operand)
       /* label, d(rn), -(rn)  */
     default:
       {
-	char *old = str;
-
 	if (strncmp (str, "-(", 2) == 0)	/* -(rn) */
 	  {
 	    str = parse_reg (str + 2, operand);
@@ -509,7 +509,7 @@ parse_op_no_deferred (char *str, struct pdp11_code *operand)
 	    str = skip_whitespace (str);
 	    if (*str != ')')
 	      {
-		operand->error = "Missing ')'";
+		operand->error = _("Missing ')'");
 		return str;
 	      }
 	    operand->code |= 040;
@@ -525,11 +525,6 @@ parse_op_no_deferred (char *str, struct pdp11_code *operand)
 
 	if (*str != '(')
 	  {
-	    if (operand->reloc.exp.X_op != O_symbol)
-	      {
-		operand->error = "Label expected";
-		return old;
-	      }
 	    operand->code = 067;
 	    operand->additional = 1;
 	    operand->word = 0;
@@ -548,7 +543,7 @@ parse_op_no_deferred (char *str, struct pdp11_code *operand)
 
 	if (*str != ')')
 	  {
-	    operand->error = "Missing ')'";
+	    operand->error = _("Missing ')'");
 	    return str;
 	  }
 
@@ -558,8 +553,8 @@ parse_op_no_deferred (char *str, struct pdp11_code *operand)
 	switch (operand->reloc.exp.X_op)
 	  {
 	  case O_symbol:
-	    operand->word = 0;
-	    operand->reloc.pc_rel = 1;
+	    operand->reloc.type = BFD_RELOC_16;
+	    operand->reloc.pc_rel = 0;
 	    break;
 	  case O_constant:
 	    if ((operand->code & 7) == 7)
@@ -613,7 +608,7 @@ parse_op (char *str, struct pdp11_code *operand)
   parse_ac5 (str, operand);
   if (!operand->error)
     {
-      operand->error = "Float AC not legal as integer operand";
+      operand->error = _("Float AC not legal as integer operand");
       return str;
     }
 
@@ -633,7 +628,7 @@ parse_fop (char *str, struct pdp11_code *operand)
   parse_reg (str, operand);
   if (!operand->error)
     {
-      operand->error = "General register not legal as float operand";
+      operand->error = _("General register not legal as float operand");
       return str;
     }
 
@@ -666,7 +661,7 @@ md_assemble (char *instruction_string)
   p = find_whitespace (str);
   if (p - str == 0)
     {
-      as_bad ("No instruction found");
+      as_bad (_("No instruction found"));
       return;
     }
 
@@ -682,7 +677,7 @@ md_assemble (char *instruction_string)
 
   if (!pdp11_extension[op->extension])
     {
-      as_warn ("Unsupported instruction set extension: %s", op->name);
+      as_warn (_("Unsupported instruction set extension: %s"), op->name);
       return;
     }
 
@@ -718,7 +713,7 @@ md_assemble (char *instruction_string)
 	break;
       if (op1.reloc.exp.X_op != O_constant || op1.reloc.type != BFD_RELOC_NONE)
 	{
-	  op1.error = "operand is not an absolute constant";
+	  op1.error = _("operand is not an absolute constant");
 	  break;
 	}
       switch (op->type)
@@ -726,21 +721,21 @@ md_assemble (char *instruction_string)
 	case PDP11_OPCODE_IMM3:
 	  if (op1.reloc.exp.X_add_number & ~7)
 	    {
-	      op1.error = "3-bit immediate out of range";
+	      op1.error = _("3-bit immediate out of range");
 	      break;
 	    }
 	  break;
 	case PDP11_OPCODE_IMM6:
 	  if (op1.reloc.exp.X_add_number & ~0x3f)
 	    {
-	      op1.error = "6-bit immediate out of range";
+	      op1.error = _("6-bit immediate out of range");
 	      break;
 	    }
 	  break;
 	case PDP11_OPCODE_IMM8:
 	  if (op1.reloc.exp.X_add_number & ~0xff)
 	    {
-	      op1.error = "8-bit immediate out of range";
+	      op1.error = _("8-bit immediate out of range");
 	      break;
 	    }
 	  break;
@@ -750,22 +745,22 @@ md_assemble (char *instruction_string)
 
     case PDP11_OPCODE_DISPL:
       {
-	char *new;
-	new = parse_expression (str, &op1);
+	char *new_pointer;
+	new_pointer = parse_expression (str, &op1);
 	op1.code = 0;
 	op1.reloc.pc_rel = 1;
 	op1.reloc.type = BFD_RELOC_PDP11_DISP_8_PCREL;
 	if (op1.reloc.exp.X_op != O_symbol)
 	  {
-	    op1.error = "Symbol expected";
+	    op1.error = _("Symbol expected");
 	    break;
 	  }
 	if (op1.code & ~0xff)
 	  {
-	    err = "8-bit displacement out of range";
+	    err = _("8-bit displacement out of range");
 	    break;
 	  }
-	str = new;
+	str = new_pointer;
 	insn.code |= op1.code;
 	insn.reloc = op1.reloc;
       }
@@ -804,7 +799,7 @@ md_assemble (char *instruction_string)
       str = parse_separator (str, &error);
       if (error)
 	{
-	  op2.error = "Missing ','";
+	  op2.error = _("Missing ','");
 	  break;
 	}
       str = parse_op (str, &op1);
@@ -825,7 +820,7 @@ md_assemble (char *instruction_string)
       str = parse_separator (str, &error);
       if (error)
 	{
-	  op2.error = "Missing ','";
+	  op2.error = _("Missing ','");
 	  break;
 	}
       str = parse_reg (str, &op2);
@@ -842,7 +837,7 @@ md_assemble (char *instruction_string)
       str = parse_separator (str, &error);
       if (error)
 	{
-	  op1.error = "Missing ','";
+	  op1.error = _("Missing ','");
 	  break;
 	}
       str = parse_fop (str, &op1);
@@ -863,7 +858,7 @@ md_assemble (char *instruction_string)
       str = parse_separator (str, &error);
       if (error)
 	{
-	  op1.error = "Missing ','";
+	  op1.error = _("Missing ','");
 	  break;
 	}
       str = parse_ac (str, &op2);
@@ -880,7 +875,7 @@ md_assemble (char *instruction_string)
       str = parse_separator (str, &error);
       if (error)
 	{
-	  op1.error = "Missing ','";
+	  op1.error = _("Missing ','");
 	  break;
 	}
       str = parse_op (str, &op1);
@@ -901,7 +896,7 @@ md_assemble (char *instruction_string)
       str = parse_separator (str, &error);
       if (error)
 	{
-	  op1.error = "Missing ','";
+	  op1.error = _("Missing ','");
 	  break;
 	}
       str = parse_ac (str, &op2);
@@ -920,7 +915,7 @@ md_assemble (char *instruction_string)
       str = parse_separator (str, &error);
       if (error)
 	{
-	  op2.error = "Missing ','";
+	  op2.error = _("Missing ','");
 	  break;
 	}
       str = parse_op (str, &op2);
@@ -933,7 +928,7 @@ md_assemble (char *instruction_string)
 
     case PDP11_OPCODE_REG_DISPL:
       {
-	char *new;
+	char *new_pointer;
 	str = parse_reg (str, &op2);
 	if (op2.error)
 	  break;
@@ -941,24 +936,24 @@ md_assemble (char *instruction_string)
 	str = parse_separator (str, &error);
 	if (error)
 	  {
-	    op1.error = "Missing ','";
+	    op1.error = _("Missing ','");
 	    break;
 	  }
-	new = parse_expression (str, &op1);
+	new_pointer = parse_expression (str, &op1);
 	op1.code = 0;
 	op1.reloc.pc_rel = 1;
 	op1.reloc.type = BFD_RELOC_PDP11_DISP_6_PCREL;
 	if (op1.reloc.exp.X_op != O_symbol)
 	  {
-	    op1.error = "Symbol expected";
+	    op1.error = _("Symbol expected");
 	    break;
 	  }
 	if (op1.code & ~0x3f)
 	  {
-	    err = "6-bit displacement out of range";
+	    err = _("6-bit displacement out of range");
 	    break;
 	  }
-	str = new;
+	str = new_pointer;
 	insn.code |= op1.code;
 	insn.reloc = op1.reloc;
       }
@@ -976,7 +971,7 @@ md_assemble (char *instruction_string)
     {
       str = skip_whitespace (str);
       if (*str)
-	err = "Too many operands";
+	err = _("Too many operands");
     }
 
   {
@@ -984,7 +979,7 @@ md_assemble (char *instruction_string)
 
     if (err)
       {
-	as_bad (err);
+	as_bad ("%s", err);
 	return;
       }
 
@@ -1426,7 +1421,7 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED,
   if (reloc->howto == NULL)
     {
       as_bad_where (fixp->fx_file, fixp->fx_line,
-		    "Can not represent %s relocation in this object file format",
+		    _("Can not represent %s relocation in this object file format"),
 		    bfd_get_reloc_code_name (code));
       return NULL;
     }

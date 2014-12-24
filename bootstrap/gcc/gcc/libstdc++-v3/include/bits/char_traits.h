@@ -1,7 +1,7 @@
 // Character Traits for use by standard string and iostream -*- C++ -*-
 
 // Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-// 2006, 2007, 2008, 2009
+// 2006, 2007, 2008, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -24,9 +24,9 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file char_traits.h
+/** @file bits/char_traits.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{string}
  */
 
 //
@@ -42,14 +42,9 @@
 #include <bits/postypes.h>      // For streampos
 #include <cwchar>               // For WEOF, wmemmove, wmemset, etc.
 
-#ifndef _GLIBCXX_STDIO_MACROS
-# include <cstdio>              // For EOF
-# define _CHAR_TRAITS_EOF EOF
-#else
-# define _CHAR_TRAITS_EOF (-1)
-#endif
-
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   /**
    *  @brief  Mapping from character type to associated types.
@@ -83,7 +78,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
    *  namespace __gnu_cxx may be.
    *
    *  See http://gcc.gnu.org/onlinedocs/libstdc++/manual/bk01pt05ch13s03.html
-   *  for advice on how to make use of this class for "unusual" character
+   *  for advice on how to make use of this class for @a unusual character
    *  types. Also, check out include/ext/pod_char_traits.h.  
    */
   template<typename _CharT>
@@ -99,11 +94,11 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       assign(char_type& __c1, const char_type& __c2)
       { __c1 = __c2; }
 
-      static bool
+      static _GLIBCXX_CONSTEXPR bool
       eq(const char_type& __c1, const char_type& __c2)
       { return __c1 == __c2; }
 
-      static bool
+      static _GLIBCXX_CONSTEXPR bool
       lt(const char_type& __c1, const char_type& __c2)
       { return __c1 < __c2; }
 
@@ -125,23 +120,23 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       static char_type*
       assign(char_type* __s, std::size_t __n, char_type __a);
 
-      static char_type
+      static _GLIBCXX_CONSTEXPR char_type
       to_char_type(const int_type& __c)
       { return static_cast<char_type>(__c); }
 
-      static int_type
+      static _GLIBCXX_CONSTEXPR int_type
       to_int_type(const char_type& __c)
       { return static_cast<int_type>(__c); }
 
-      static bool
+      static _GLIBCXX_CONSTEXPR bool
       eq_int_type(const int_type& __c1, const int_type& __c2)
       { return __c1 == __c2; }
 
-      static int_type
+      static _GLIBCXX_CONSTEXPR int_type
       eof()
-      { return static_cast<int_type>(_CHAR_TRAITS_EOF); }
+      { return static_cast<int_type>(_GLIBCXX_STDIO_EOF); }
 
-      static int_type
+      static _GLIBCXX_CONSTEXPR int_type
       not_eof(const int_type& __c)
       { return !eq_int_type(__c, eof()) ? __c : to_int_type(char_type()); }
     };
@@ -210,9 +205,12 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       return __s;
     }
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   // 21.1
   /**
@@ -224,7 +222,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
    *  appropriate definition by specializing __gnu_cxx::char_traits.
    *
    *  See http://gcc.gnu.org/onlinedocs/libstdc++/manual/bk01pt05ch13s03.html
-   *  for advice on how to make use of this class for "unusual" character
+   *  for advice on how to make use of this class for @a unusual character
    *  types. Also, check out include/ext/pod_char_traits.h.
   */
   template<class _CharT>
@@ -246,11 +244,11 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       assign(char_type& __c1, const char_type& __c2)
       { __c1 = __c2; }
 
-      static bool
+      static _GLIBCXX_CONSTEXPR bool
       eq(const char_type& __c1, const char_type& __c2)
       { return __c1 == __c2; }
 
-      static bool
+      static _GLIBCXX_CONSTEXPR bool
       lt(const char_type& __c1, const char_type& __c2)
       { return __c1 < __c2; }
 
@@ -278,25 +276,25 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       assign(char_type* __s, size_t __n, char_type __a)
       { return static_cast<char_type*>(__builtin_memset(__s, __a, __n)); }
 
-      static char_type
+      static _GLIBCXX_CONSTEXPR char_type
       to_char_type(const int_type& __c)
       { return static_cast<char_type>(__c); }
 
       // To keep both the byte 0xff and the eof symbol 0xffffffff
       // from ending up as 0xffffffff.
-      static int_type
+      static _GLIBCXX_CONSTEXPR int_type
       to_int_type(const char_type& __c)
       { return static_cast<int_type>(static_cast<unsigned char>(__c)); }
 
-      static bool
+      static _GLIBCXX_CONSTEXPR bool
       eq_int_type(const int_type& __c1, const int_type& __c2)
       { return __c1 == __c2; }
 
-      static int_type
+      static _GLIBCXX_CONSTEXPR int_type
       eof()
-      { return static_cast<int_type>(_CHAR_TRAITS_EOF); }
+      { return static_cast<int_type>(_GLIBCXX_STDIO_EOF); }
 
-      static int_type
+      static _GLIBCXX_CONSTEXPR int_type
       not_eof(const int_type& __c)
       { return (__c == eof()) ? 0 : __c; }
   };
@@ -317,11 +315,11 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       assign(char_type& __c1, const char_type& __c2)
       { __c1 = __c2; }
 
-      static bool
+      static _GLIBCXX_CONSTEXPR bool
       eq(const char_type& __c1, const char_type& __c2)
       { return __c1 == __c2; }
 
-      static bool
+      static _GLIBCXX_CONSTEXPR bool
       lt(const char_type& __c1, const char_type& __c2)
       { return __c1 < __c2; }
 
@@ -349,36 +347,39 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       assign(char_type* __s, size_t __n, char_type __a)
       { return wmemset(__s, __a, __n); }
 
-      static char_type
+      static _GLIBCXX_CONSTEXPR char_type
       to_char_type(const int_type& __c)
       { return char_type(__c); }
 
-      static int_type
+      static _GLIBCXX_CONSTEXPR int_type
       to_int_type(const char_type& __c)
       { return int_type(__c); }
 
-      static bool
+      static _GLIBCXX_CONSTEXPR bool
       eq_int_type(const int_type& __c1, const int_type& __c2)
       { return __c1 == __c2; }
 
-      static int_type
+      static _GLIBCXX_CONSTEXPR int_type
       eof()
       { return static_cast<int_type>(WEOF); }
 
-      static int_type
+      static _GLIBCXX_CONSTEXPR int_type
       not_eof(const int_type& __c)
       { return eq_int_type(__c, eof()) ? 0 : __c; }
   };
 #endif //_GLIBCXX_USE_WCHAR_T
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #if (defined(__GXX_EXPERIMENTAL_CXX0X__) \
      && defined(_GLIBCXX_USE_C99_STDINT_TR1))
 
 #include <cstdint>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   template<>
     struct char_traits<char16_t>
@@ -393,11 +394,11 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       assign(char_type& __c1, const char_type& __c2)
       { __c1 = __c2; }
 
-      static bool
+      static _GLIBCXX_CONSTEXPR bool
       eq(const char_type& __c1, const char_type& __c2)
       { return __c1 == __c2; }
 
-      static bool
+      static _GLIBCXX_CONSTEXPR bool
       lt(const char_type& __c1, const char_type& __c2)
       { return __c1 < __c2; }
 
@@ -452,23 +453,23 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	return __s;
       }
 
-      static char_type
+      static _GLIBCXX_CONSTEXPR char_type
       to_char_type(const int_type& __c)
       { return char_type(__c); }
 
-      static int_type
+      static _GLIBCXX_CONSTEXPR int_type
       to_int_type(const char_type& __c)
       { return int_type(__c); }
 
-      static bool
+      static _GLIBCXX_CONSTEXPR bool
       eq_int_type(const int_type& __c1, const int_type& __c2)
       { return __c1 == __c2; }
 
-      static int_type
+      static _GLIBCXX_CONSTEXPR int_type
       eof()
       { return static_cast<int_type>(-1); }
 
-      static int_type
+      static _GLIBCXX_CONSTEXPR int_type
       not_eof(const int_type& __c)
       { return eq_int_type(__c, eof()) ? 0 : __c; }
     };
@@ -486,11 +487,11 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       assign(char_type& __c1, const char_type& __c2)
       { __c1 = __c2; }
 
-      static bool
+      static _GLIBCXX_CONSTEXPR bool
       eq(const char_type& __c1, const char_type& __c2)
       { return __c1 == __c2; }
 
-      static bool
+      static _GLIBCXX_CONSTEXPR bool
       lt(const char_type& __c1, const char_type& __c2)
       { return __c1 < __c2; }
 
@@ -545,31 +546,30 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	return __s;
       }
 
-      static char_type
+      static _GLIBCXX_CONSTEXPR char_type
       to_char_type(const int_type& __c)
       { return char_type(__c); }
 
-      static int_type
+      static _GLIBCXX_CONSTEXPR int_type
       to_int_type(const char_type& __c)
       { return int_type(__c); }
 
-      static bool
+      static _GLIBCXX_CONSTEXPR bool
       eq_int_type(const int_type& __c1, const int_type& __c2)
       { return __c1 == __c2; }
 
-      static int_type
+      static _GLIBCXX_CONSTEXPR int_type
       eof()
       { return static_cast<int_type>(-1); }
 
-      static int_type
+      static _GLIBCXX_CONSTEXPR int_type
       not_eof(const int_type& __c)
       { return eq_int_type(__c, eof()) ? 0 : __c; }
     };
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif 
-
-#undef _CHAR_TRAITS_EOF
 
 #endif // _CHAR_TRAITS_H

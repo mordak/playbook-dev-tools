@@ -1,6 +1,6 @@
 /* Definitions of target machine for GNU compiler
    for Alpha Linux-based GNU systems using ELF.
-   Copyright (C) 1996, 1997, 1998, 2001, 2002, 2003, 2006, 2007
+   Copyright (C) 1996, 1997, 1998, 2001, 2002, 2003, 2006, 2007, 2010
    Free Software Foundation, Inc.
    Contributed by Richard Henderson.
 
@@ -29,10 +29,12 @@ along with GCC; see the file COPYING3.  If not see
 
 #define GLIBC_DYNAMIC_LINKER	"/lib/ld-linux.so.2"
 #define UCLIBC_DYNAMIC_LINKER "/lib/ld-uClibc.so.0"
-#if UCLIBC_DEFAULT
-#define CHOOSE_DYNAMIC_LINKER(G, U) "%{mglibc:%{muclibc:%e-mglibc and -muclibc used together}" G ";:" U "}"
+#if DEFAULT_LIBC == LIBC_UCLIBC
+#define CHOOSE_DYNAMIC_LINKER(G, U) "%{mglibc:" G ";:" U "}"
+#elif DEFAULT_LIBC == LIBC_GLIBC
+#define CHOOSE_DYNAMIC_LINKER(G, U) "%{muclibc:" U ";:" G "}"
 #else
-#define CHOOSE_DYNAMIC_LINKER(G, U) "%{muclibc:%{mglibc:%e-mglibc and -muclibc used together}" U ";:" G "}"
+#error "Unsupported DEFAULT_LIBC"
 #endif
 #define LINUX_DYNAMIC_LINKER \
   CHOOSE_DYNAMIC_LINKER (GLIBC_DYNAMIC_LINKER, UCLIBC_DYNAMIC_LINKER)
@@ -45,7 +47,7 @@ along with GCC; see the file COPYING3.  If not see
   %{!shared:							\
     %{!static:							\
       %{rdynamic:-export-dynamic}				\
-      %{!dynamic-linker:-dynamic-linker %(elf_dynamic_linker)}}	\
+      -dynamic-linker %(elf_dynamic_linker)}	\
     %{static:-static}}"
 
 #undef LIB_SPEC

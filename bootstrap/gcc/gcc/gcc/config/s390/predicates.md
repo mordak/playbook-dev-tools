@@ -172,6 +172,11 @@
   return (s390_branch_condition_mask (op) >= 0);
 })
 
+;; Return true if op is the cc register.
+(define_predicate "cc_reg_operand"
+  (and (match_code "reg")
+       (match_test "REGNO (op) == CC_REGNUM")))
+
 (define_predicate "s390_signed_integer_comparison"
   (match_code "eq, ne, lt, gt, le, ge")
 {
@@ -183,6 +188,17 @@
 {
   return (s390_compare_and_branch_condition_mask (op) >= 0);
 })
+
+;; Return nonzero if OP is a valid comparison operator for the
+;; cstore expanders -- respectively cstorecc4 and integer cstore.
+(define_predicate "s390_eqne_operator"
+  (match_code "eq, ne"))
+
+(define_predicate "s390_scond_operator"
+  (match_code "ltu, gtu, leu, geu"))
+
+(define_predicate "s390_brx_operator"
+  (match_code "le, gt"))
 
 ;; Return nonzero if OP is a valid comparison operator
 ;; for an ALC condition.

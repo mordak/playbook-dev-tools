@@ -1,6 +1,6 @@
 // <system_error> -*- C++ -*-
 
-// Copyright (C) 2007, 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -22,7 +22,7 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file system_error
+/** @file include/system_error
  *  This is a Standard C++ Library header.
  */
 
@@ -32,7 +32,7 @@
 #pragma GCC system_header
 
 #ifndef __GXX_EXPERIMENTAL_CXX0X__
-# include <c++0x_warning.h>
+# include <bits/c++0x_warning.h>
 #else
 
 #include <bits/c++config.h>
@@ -40,7 +40,9 @@
 #include <iosfwd>
 #include <stdexcept>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   class error_code;
   class error_condition;
@@ -64,10 +66,10 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   class error_category
   {
   protected:
-    error_category() = default;
+    error_category();
 
   public:
-    virtual ~error_category() { }
+    virtual ~error_category();
 
     error_category(const error_category&) = delete;
     error_category& operator=(const error_category&) = delete;
@@ -101,10 +103,13 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   };
 
   // DR 890.
-  const error_category& system_category();
-  const error_category& generic_category();
+  _GLIBCXX_CONST const error_category& system_category() throw();
+  _GLIBCXX_CONST const error_category& generic_category() throw();
 
   error_code make_error_code(errc);
+
+  template<typename _Tp>
+    struct hash;
 
   /// error_code
   // Implementation-specific error identification
@@ -152,18 +157,13 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     message() const
     { return category().message(value()); }
 
-    // Safe bool idiom.
-    // explicit operator bool() const throw()
-    // { return _M_value != 0; }
-    typedef void (*__bool_type)();
-
-    static void __not_bool_type() { }
-
-    operator __bool_type() const
-    { return _M_value != 0 ? &__not_bool_type : false; }
+    explicit operator bool() const
+    { return _M_value != 0 ? true : false; }
 
     // DR 804.
   private:
+    friend class hash<error_code>;
+
     int            		_M_value;
     const error_category* 	_M_cat;
   };
@@ -233,15 +233,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     message() const
     { return category().message(value()); }
 
-    // Safe bool idiom.
-    // explicit operator bool() const throw()
-    // { return _M_value != 0; }
-    typedef void (*__bool_type)();
-
-    static void __not_bool_type() { }
-
-    operator __bool_type() const
-    { return _M_value != 0 ? &__not_bool_type : false; }
+    explicit operator bool() const
+    { return _M_value != 0 ? true : false; }
 
     // DR 804.
   private:
@@ -318,26 +311,29 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
   public:
     system_error(error_code __ec = error_code())
-    : runtime_error(""), _M_code(__ec) { }
+    : runtime_error(__ec.message()), _M_code(__ec) { }
 
     system_error(error_code __ec, const string& __what)
-    : runtime_error(__what), _M_code(__ec) { }
-    
+    : runtime_error(__what + ": " + __ec.message()), _M_code(__ec) { }
+
     /*
      * TODO: Add const char* ctors to all exceptions.
      *
      * system_error(error_code __ec, const char* __what)
-     * : runtime_error(__what), _M_code(__ec) { }
+     * : runtime_error(__what + (": " + __ec.message())), _M_code(__ec) { }
      *
      * system_error(int __v, const error_category& __ecat, const char* __what)
-     * : runtime_error(__what), _M_code(error_code(__v, __ecat)) { }
+     * : runtime_error(__what + (": " + __ec.message())),
+     *   _M_code(error_code(__v, __ecat)) { }
      */
 
     system_error(int __v, const error_category& __ecat)
-    : runtime_error(""), _M_code(error_code(__v, __ecat)) { }
+    : runtime_error(error_code(__v, __ecat).message()),
+      _M_code(__v, __ecat) { }
 
     system_error(int __v, const error_category& __ecat, const string& __what)
-    : runtime_error(__what), _M_code(error_code(__v, __ecat)) { }
+    : runtime_error(__what + ": " + error_code(__v, __ecat).message()),
+      _M_code(__v, __ecat) { }
 
     virtual ~system_error() throw();
 
@@ -345,9 +341,36 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     code() const throw() { return _M_code; }
   };
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
+
+#ifndef _GLIBCXX_COMPATIBILITY_CXX0X
+
+#include <bits/functional_hash.h>
+
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
+  // DR 1182.
+  /// std::hash specialization for error_code.
+  template<>
+    struct hash<error_code>
+    : public __hash_base<size_t, error_code>
+    {
+      size_t
+      operator()(const error_code& __e) const
+      {
+	const size_t __tmp = std::_Hash_impl::hash(__e._M_value);
+	return std::_Hash_impl::__hash_combine(__e._M_cat, __tmp);
+      }
+    };
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
+
+#endif // _GLIBCXX_COMPATIBILITY_CXX0X
 
 #endif // __GXX_EXPERIMENTAL_CXX0X__
 
 #endif // _GLIBCXX_SYSTEM_ERROR
-

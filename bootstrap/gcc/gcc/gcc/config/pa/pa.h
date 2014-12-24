@@ -1,6 +1,7 @@
 /* Definitions of target machine for GNU compiler, for the HP Spectrum.
    Copyright (C) 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001,
-   2002, 2003, 2004, 2005, 2006, 2007, 2008 Free Software Foundation, Inc.
+   2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Michael Tiemann (tiemann@cygnus.com) of Cygnus Support
    and Tim Moore (moore@defmacro.cs.utah.edu) of the Center for
    Software Science at the University of Utah.
@@ -20,14 +21,6 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING3.  If not see
 <http://www.gnu.org/licenses/>.  */
-
-enum cmp_type				/* comparison type */
-{
-  CMP_SI,				/* compare integers */
-  CMP_SF,				/* compare single precision floats */
-  CMP_DF,				/* compare double precision floats */
-  CMP_MAX				/* max comparison type */
-};
 
 /* For long call handling.  */
 extern unsigned long total_code_bytes;
@@ -93,6 +86,11 @@ extern int flag_pa_unix;
 #define TARGET_HPUX_11_11 0
 #endif
 
+/* HP-UX long double library.  */
+#ifndef HPUX_LONG_DOUBLE_LIBRARY
+#define HPUX_LONG_DOUBLE_LIBRARY 0
+#endif
+
 /* The following three defines are potential target switches.  The current
    defines are optimal given the current capabilities of GAS and GNU ld.  */
 
@@ -151,8 +149,6 @@ extern int flag_pa_unix;
 /* Specify the dialect of assembler to use.  New mnemonics is dialect one
    and the old mnemonics are dialect zero.  */
 #define ASSEMBLER_DIALECT (TARGET_PA_20 ? 1 : 0)
-
-#define OVERRIDE_OPTIONS override_options ()
 
 /* Override some settings from dbxelf.h.  */
 
@@ -229,27 +225,15 @@ do {								\
 #define LIB_SPEC "%{!p:%{!pg:-lc}}%{p:-lc_p}%{pg:-lc_p}"
 #endif
 
-/* This macro defines command-line switches that modify the default
-   target name.
-
-   The definition is be an initializer for an array of structures.  Each
-   array element has have three elements: the switch name, one of the
-   enumeration codes ADD or DELETE to indicate whether the string should be
-   inserted or deleted, and the string to be inserted or deleted.  */
-#define MODIFY_TARGET_NAME {{"-32", DELETE, "64"}, {"-64", ADD, "64"}}
-
 /* Make gcc agree with <machine/ansi.h> */
 
 #define SIZE_TYPE "unsigned int"
 #define PTRDIFF_TYPE "int"
 #define WCHAR_TYPE "unsigned int"
 #define WCHAR_TYPE_SIZE 32
-
-/* Show we can debug even without a frame pointer.  */
-#define CAN_DEBUG_WITHOUT_FP
 
 /* target machine storage layout */
-typedef struct machine_function GTY(())
+typedef struct GTY(()) machine_function
 {
   /* Flag indicating that a .NSUBSPA directive has been output for
      this function.  */
@@ -332,8 +316,9 @@ typedef struct machine_function GTY(())
 #define BIGGEST_ALIGNMENT (2 * BITS_PER_WORD)
 
 /* Get around hp-ux assembler bug, and make strcpy of constants fast.  */
-#define CONSTANT_ALIGNMENT(CODE, TYPEALIGN) \
-  ((TYPEALIGN) < 32 ? 32 : (TYPEALIGN))
+#define CONSTANT_ALIGNMENT(EXP, ALIGN)		\
+  (TREE_CODE (EXP) == STRING_CST		\
+   && (ALIGN) < BITS_PER_WORD ? BITS_PER_WORD : (ALIGN))
 
 /* Make arrays of chars word-aligned for the same reasons.  */
 #define DATA_ALIGNMENT(TYPE, ALIGN)		\
@@ -361,27 +346,17 @@ typedef struct machine_function GTY(())
 /* Register to use for pushing function arguments.  */
 #define STACK_POINTER_REGNUM 30
 
-/* Base register for access to local variables of the function.  */
-#define FRAME_POINTER_REGNUM 3
+/* Fixed register for local variable access.  Always eliminated.  */
+#define FRAME_POINTER_REGNUM (TARGET_64BIT ? 61 : 89)
 
-/* Value should be nonzero if functions must have frame pointers.  */
-#define FRAME_POINTER_REQUIRED \
-  (cfun->calls_alloca)
+/* Base register for access to local variables of the function.  */
+#define HARD_FRAME_POINTER_REGNUM 3
 
 /* Don't allow hard registers to be renamed into r2 unless r2
    is already live or already being saved (due to eh).  */
 
 #define HARD_REGNO_RENAME_OK(OLD_REG, NEW_REG) \
   ((NEW_REG) != 2 || df_regs_ever_live_p (2) || crtl->calls_eh_return)
-
-/* C statement to store the difference between the frame pointer
-   and the stack pointer values immediately after the function prologue.
-
-   Note, we always pretend that this is a leaf function because if
-   it's not, there's no point in trying to eliminate the
-   frame pointer.  If it is a leaf function, we guessed right!  */
-#define INITIAL_FRAME_POINTER_OFFSET(VAR) \
-  do {(VAR) = - compute_frame_size (get_frame_size (), 0);} while (0)
 
 /* Base register for access to arguments of the function.  */
 #define ARG_POINTER_REGNUM (TARGET_64BIT ? 29 : 3)
@@ -406,6 +381,31 @@ extern struct rtx_def *hppa_pic_save_rtx (void);
    is passed to a function.  */
 #define PA_STRUCT_VALUE_REGNUM 28
 
+/* Definitions for register eliminations.
+
+   We have two registers that can be eliminated.  First, the frame pointer
+   register can often be eliminated in favor of the stack pointer register.
+   Secondly, the argument pointer register can always be eliminated in the
+   32-bit runtimes.  */
+
+/* This is an array of structures.  Each structure initializes one pair
+   of eliminable registers.  The "from" register number is given first,
+   followed by "to".  Eliminations of the same "from" register are listed
+   in order of preference.
+
+   The argument pointer cannot be eliminated in the 64-bit runtime.  It
+   is the same register as the hard frame pointer in the 32-bit runtime.
+   So, it does not need to be listed.  */
+#define ELIMINABLE_REGS                                 \
+{{ HARD_FRAME_POINTER_REGNUM, STACK_POINTER_REGNUM},    \
+ { FRAME_POINTER_REGNUM, STACK_POINTER_REGNUM},         \
+ { FRAME_POINTER_REGNUM, HARD_FRAME_POINTER_REGNUM} }
+
+/* Define the offset between two registers, one to be eliminated,
+   and the other its replacement, at the start of a routine.  */
+#define INITIAL_ELIMINATION_OFFSET(FROM, TO, OFFSET) \
+  ((OFFSET) = pa_initial_elimination_offset(FROM, TO))
+
 /* Describe how we implement __builtin_eh_return.  */
 #define EH_RETURN_DATA_REGNO(N)	\
   ((N) < 3 ? (N) + 20 : (N) == 3 ? 31 : INVALID_REGNUM)
@@ -414,6 +414,10 @@ extern struct rtx_def *hppa_pic_save_rtx (void);
 
 /* Offset from the frame pointer register value to the top of stack.  */
 #define FRAME_POINTER_CFA_OFFSET(FNDECL) 0
+
+/* The maximum number of hard registers that can be saved in the call
+   frame.  The soft frame pointer is not included.  */
+#define DWARF_FRAME_REGISTERS (FIRST_PSEUDO_REGISTER - 1)
 
 /* A C expression whose value is RTL representing the location of the
    incoming return address at the beginning of any function, before the
@@ -429,7 +433,7 @@ extern struct rtx_def *hppa_pic_save_rtx (void);
 
    Column 0 is not used but unfortunately its register size is set to
    4 bytes (sizeof CCmode) so it can't be used on 64-bit targets.  */
-#define DWARF_ALT_FRAME_RETURN_COLUMN FIRST_PSEUDO_REGISTER
+#define DWARF_ALT_FRAME_RETURN_COLUMN (FIRST_PSEUDO_REGISTER - 1)
 
 /* This macro chooses the encoding of pointers embedded in the exception
    handling sections.  If at all possible, this should be defined such
@@ -488,12 +492,6 @@ extern struct rtx_def *hppa_pic_save_rtx (void);
 
 /* True if register is floating-point.  */
 #define FP_REGNO_P(N) ((N) >= FP_REG_FIRST && (N) <= FP_REG_LAST)
-
-/* Given an rtx X being reloaded into a reg required to be
-   in class CLASS, return the class of reg to actually use.
-   In general this is just CLASS; but on some machines
-   in some cases it is preferable to use a more restrictive class.  */
-#define PREFERRED_RELOAD_CLASS(X,CLASS) (CLASS)
 
 #define MAYBE_FP_REG_CLASS_P(CLASS) \
   reg_classes_intersect_p ((CLASS), FP_REGS)
@@ -573,35 +571,6 @@ extern struct rtx_def *hppa_pic_save_rtx (void);
    ? (STACK_POINTER_OFFSET)		\
    : ((STACK_POINTER_OFFSET) - crtl->outgoing_args_size))
 
-/* Value is 1 if returning from a function call automatically
-   pops the arguments described by the number-of-args field in the call.
-   FUNDECL is the declaration node of the function (as a tree),
-   FUNTYPE is the data type of the function (as a tree),
-   or for a library call it is an identifier node for the subroutine name.  */
-
-#define RETURN_POPS_ARGS(FUNDECL,FUNTYPE,SIZE) 0
-
-/* Define how to find the value returned by a function.
-   VALTYPE is the data type of the value (as a tree).
-   If the precise function being called is known, FUNC is its FUNCTION_DECL;
-   otherwise, FUNC is 0.  */
-
-#define FUNCTION_VALUE(VALTYPE, FUNC) function_value (VALTYPE, FUNC)
-
-/* Define how to find the value returned by a library function
-   assuming the value has mode MODE.  */
-
-#define LIBCALL_VALUE(MODE)	\
-  gen_rtx_REG (MODE,							\
-	       (! TARGET_SOFT_FLOAT					\
-		&& ((MODE) == SFmode || (MODE) == DFmode) ? 32 : 28))
-
-/* 1 if N is a possible register number for a function value
-   as seen by the caller.  */
-
-#define FUNCTION_VALUE_REGNO_P(N) \
-  ((N) == 28 || (! TARGET_SOFT_FLOAT && (N) == 32))
-
 
 /* Define a data type for recording info about an argument list
    during the scan of that argument list.  This data type should
@@ -635,7 +604,7 @@ struct hppa_args {int words, nargs_prototype, incoming, indirect; };
   (CUM).words = 0, 							\
   (CUM).incoming = 0,							\
   (CUM).indirect = (FNTYPE) && !(FNDECL),				\
-  (CUM).nargs_prototype = (FNTYPE && TYPE_ARG_TYPES (FNTYPE)		\
+  (CUM).nargs_prototype = (FNTYPE && prototype_p (FNTYPE)		\
 			   ? (list_length (TYPE_ARG_TYPES (FNTYPE)) - 1	\
 			      + (TYPE_MODE (TREE_TYPE (FNTYPE)) == BLKmode \
 				 || pa_return_in_memory (TREE_TYPE (FNTYPE), 0))) \
@@ -660,17 +629,6 @@ struct hppa_args {int words, nargs_prototype, incoming, indirect; };
   ((((MODE) != BLKmode \
      ? (HOST_WIDE_INT) GET_MODE_SIZE (MODE) \
      : int_size_in_bytes (TYPE)) + UNITS_PER_WORD - 1) / UNITS_PER_WORD)
-
-/* Update the data in CUM to advance over an argument
-   of mode MODE and data type TYPE.
-   (TYPE is null for libcalls where that information may not be available.)  */
-
-#define FUNCTION_ARG_ADVANCE(CUM, MODE, TYPE, NAMED)			\
-{ (CUM).nargs_prototype--;						\
-  (CUM).words += FUNCTION_ARG_SIZE(MODE, TYPE)	 			\
-    + (((CUM).words & 01) && (TYPE) != 0				\
-	&& FUNCTION_ARG_SIZE(MODE, TYPE) > 1);				\
-}
 
 /* Determine where to put an argument to a function.
    Value is zero to push the argument on the stack,
@@ -734,31 +692,7 @@ struct hppa_args {int words, nargs_prototype, incoming, indirect; };
 #define BLOCK_REG_PADDING(MODE, TYPE, FIRST) \
   function_arg_padding ((MODE), (TYPE))
 
-/* Do not expect to understand this without reading it several times.  I'm
-   tempted to try and simply it, but I worry about breaking something.  */
-
-#define FUNCTION_ARG(CUM, MODE, TYPE, NAMED) \
-  function_arg (&CUM, MODE, TYPE, NAMED)
-
-/* If defined, a C expression that gives the alignment boundary, in
-   bits, of an argument with the specified mode and type.  If it is
-   not defined,  `PARM_BOUNDARY' is used for all arguments.  */
-
-/* Arguments larger than one word are double word aligned.  */
-
-#define FUNCTION_ARG_BOUNDARY(MODE, TYPE)				\
-  (((TYPE)								\
-    ? (integer_zerop (TYPE_SIZE (TYPE))					\
-       || !TREE_CONSTANT (TYPE_SIZE (TYPE))				\
-       || int_size_in_bytes (TYPE) <= UNITS_PER_WORD)			\
-    : GET_MODE_SIZE(MODE) <= UNITS_PER_WORD)				\
-   ? PARM_BOUNDARY : MAX_PARM_BOUNDARY)
-
 
-extern GTY(()) rtx hppa_compare_op0;
-extern GTY(()) rtx hppa_compare_op1;
-extern enum cmp_type hppa_branch_type;
-
 /* On HPPA, we emit profiling code as rtl via PROFILE_HOOK rather than
    as assembly via FUNCTION_PROFILER.  Just output a local label.
    We can't use the function label because the GAS SOM target can't
@@ -793,74 +727,13 @@ extern int may_call_alloca;
  (get_frame_size () != 0	\
   || cfun->calls_alloca || crtl->outgoing_args_size)
 
-/* Output assembler code for a block containing the constant parts
-   of a trampoline, leaving space for the variable parts.\
-
-   The trampoline sets the static chain pointer to STATIC_CHAIN_REGNUM
-   and then branches to the specified routine.
-
-   This code template is copied from text segment to stack location
-   and then patched with INITIALIZE_TRAMPOLINE to contain
-   valid values, and then entered as a subroutine.
-
-   It is best to keep this as small as possible to avoid having to
-   flush multiple lines in the cache.  */
-
-#define TRAMPOLINE_TEMPLATE(FILE) 					\
-  {									\
-    if (!TARGET_64BIT)							\
-      {									\
-	fputs ("\tldw	36(%r22),%r21\n", FILE);			\
-	fputs ("\tbb,>=,n	%r21,30,.+16\n", FILE);			\
-	if (ASSEMBLER_DIALECT == 0)					\
-	  fputs ("\tdepi	0,31,2,%r21\n", FILE);			\
-	else								\
-	  fputs ("\tdepwi	0,31,2,%r21\n", FILE);			\
-	fputs ("\tldw	4(%r21),%r19\n", FILE);				\
-	fputs ("\tldw	0(%r21),%r21\n", FILE);				\
-	if (TARGET_PA_20)						\
-	  {								\
-	    fputs ("\tbve	(%r21)\n", FILE);			\
-	    fputs ("\tldw	40(%r22),%r29\n", FILE);		\
-	    fputs ("\t.word	0\n", FILE);				\
-	    fputs ("\t.word	0\n", FILE);				\
-	  }								\
-	else								\
-	  {								\
-	    fputs ("\tldsid	(%r21),%r1\n", FILE);			\
-	    fputs ("\tmtsp	%r1,%sr0\n", FILE);			\
-	    fputs ("\tbe	0(%sr0,%r21)\n", FILE);			\
-	    fputs ("\tldw	40(%r22),%r29\n", FILE);		\
-	  }								\
-	fputs ("\t.word	0\n", FILE);					\
-	fputs ("\t.word	0\n", FILE);					\
-	fputs ("\t.word	0\n", FILE);					\
-	fputs ("\t.word	0\n", FILE);					\
-      }									\
-    else								\
-      {									\
-	fputs ("\t.dword 0\n", FILE);					\
-	fputs ("\t.dword 0\n", FILE);					\
-	fputs ("\t.dword 0\n", FILE);					\
-	fputs ("\t.dword 0\n", FILE);					\
-	fputs ("\tmfia	%r31\n", FILE);					\
-	fputs ("\tldd	24(%r31),%r1\n", FILE);				\
-	fputs ("\tldd	24(%r1),%r27\n", FILE);				\
-	fputs ("\tldd	16(%r1),%r1\n", FILE);				\
-	fputs ("\tbve	(%r1)\n", FILE);				\
-	fputs ("\tldd	32(%r31),%r31\n", FILE);			\
-	fputs ("\t.dword 0  ; fptr\n", FILE);				\
-	fputs ("\t.dword 0  ; static link\n", FILE);			\
-      }									\
-  }
-
 /* Length in units of the trampoline for entering a nested function.  */
 
 #define TRAMPOLINE_SIZE (TARGET_64BIT ? 72 : 52)
 
-/* Length in units of the trampoline instruction code.  */
+/* Alignment required by the trampoline.  */
 
-#define TRAMPOLINE_CODE_SIZE (TARGET_64BIT ? 24 : (TARGET_PA_20 ? 32 : 40))
+#define TRAMPOLINE_ALIGNMENT BITS_PER_WORD
 
 /* Minimum length of a cache line.  A length of 16 will work on all
    PA-RISC processors.  All PA 1.1 processors have a cache line of
@@ -870,102 +743,6 @@ extern int may_call_alloca;
 
 #define MIN_CACHELINE_SIZE 32
 
-/* Emit RTL insns to initialize the variable parts of a trampoline.
-   FNADDR is an RTX for the address of the function's pure code.
-   CXT is an RTX for the static chain value for the function.
-
-   Move the function address to the trampoline template at offset 36.
-   Move the static chain value to trampoline template at offset 40.
-   Move the trampoline address to trampoline template at offset 44.
-   Move r19 to trampoline template at offset 48.  The latter two
-   words create a plabel for the indirect call to the trampoline.
-
-   A similar sequence is used for the 64-bit port but the plabel is
-   at the beginning of the trampoline.
-
-   Finally, the cache entries for the trampoline code are flushed.
-   This is necessary to ensure that the trampoline instruction sequence
-   is written to memory prior to any attempts at prefetching the code
-   sequence.  */
-
-#define INITIALIZE_TRAMPOLINE(TRAMP, FNADDR, CXT) 			\
-{									\
-  rtx start_addr = gen_reg_rtx (Pmode);					\
-  rtx end_addr = gen_reg_rtx (Pmode);					\
-  rtx line_length = gen_reg_rtx (Pmode);				\
-  rtx tmp;								\
-									\
-  if (!TARGET_64BIT)							\
-    {									\
-      tmp = memory_address (Pmode, plus_constant ((TRAMP), 36));	\
-      emit_move_insn (gen_rtx_MEM (Pmode, tmp), (FNADDR));		\
-      tmp = memory_address (Pmode, plus_constant ((TRAMP), 40));	\
-      emit_move_insn (gen_rtx_MEM (Pmode, tmp), (CXT));			\
-									\
-      /* Create a fat pointer for the trampoline.  */			\
-      tmp = memory_address (Pmode, plus_constant ((TRAMP), 44));	\
-      emit_move_insn (gen_rtx_MEM (Pmode, tmp), (TRAMP));		\
-      tmp = memory_address (Pmode, plus_constant ((TRAMP), 48));	\
-      emit_move_insn (gen_rtx_MEM (Pmode, tmp),				\
-		      gen_rtx_REG (Pmode, 19));				\
-									\
-      /* fdc and fic only use registers for the address to flush,	\
-	 they do not accept integer displacements.  We align the	\
-	 start and end addresses to the beginning of their respective	\
-	 cache lines to minimize the number of lines flushed.  */	\
-      tmp = force_reg (Pmode, (TRAMP));					\
-      emit_insn (gen_andsi3 (start_addr, tmp,				\
-			     GEN_INT (-MIN_CACHELINE_SIZE)));		\
-      tmp = force_reg (Pmode,						\
-		       plus_constant (tmp, TRAMPOLINE_CODE_SIZE - 1));	\
-      emit_insn (gen_andsi3 (end_addr, tmp,				\
-			     GEN_INT (-MIN_CACHELINE_SIZE)));		\
-      emit_move_insn (line_length, GEN_INT (MIN_CACHELINE_SIZE));	\
-      emit_insn (gen_dcacheflushsi (start_addr, end_addr, line_length));\
-      emit_insn (gen_icacheflushsi (start_addr, end_addr, line_length,	\
-				  gen_reg_rtx (Pmode),			\
-				  gen_reg_rtx (Pmode)));		\
-    }									\
-  else									\
-    {									\
-      tmp = memory_address (Pmode, plus_constant ((TRAMP), 56));	\
-      emit_move_insn (gen_rtx_MEM (Pmode, tmp), (FNADDR));		\
-      tmp = memory_address (Pmode, plus_constant ((TRAMP), 64));	\
-      emit_move_insn (gen_rtx_MEM (Pmode, tmp), (CXT));			\
-									\
-      /* Create a fat pointer for the trampoline.  */			\
-      tmp = memory_address (Pmode, plus_constant ((TRAMP), 16));	\
-      emit_move_insn (gen_rtx_MEM (Pmode, tmp),				\
-		      force_reg (Pmode, plus_constant ((TRAMP), 32)));	\
-      tmp = memory_address (Pmode, plus_constant ((TRAMP), 24));	\
-      emit_move_insn (gen_rtx_MEM (Pmode, tmp),				\
-		      gen_rtx_REG (Pmode, 27));				\
-									\
-      /* fdc and fic only use registers for the address to flush,	\
-	 they do not accept integer displacements.  We align the	\
-	 start and end addresses to the beginning of their respective	\
-	 cache lines to minimize the number of lines flushed.  */	\
-      tmp = force_reg (Pmode, plus_constant ((TRAMP), 32));		\
-      emit_insn (gen_anddi3 (start_addr, tmp,				\
-			     GEN_INT (-MIN_CACHELINE_SIZE)));		\
-      tmp = force_reg (Pmode,						\
-		       plus_constant (tmp, TRAMPOLINE_CODE_SIZE - 1));	\
-      emit_insn (gen_anddi3 (end_addr, tmp,				\
-			     GEN_INT (-MIN_CACHELINE_SIZE)));		\
-      emit_move_insn (line_length, GEN_INT (MIN_CACHELINE_SIZE));	\
-      emit_insn (gen_dcacheflushdi (start_addr, end_addr, line_length));\
-      emit_insn (gen_icacheflushdi (start_addr, end_addr, line_length,	\
-				  gen_reg_rtx (Pmode),			\
-				  gen_reg_rtx (Pmode)));		\
-    }									\
-}
-
-/* Perform any machine-specific adjustment in the address of the trampoline.
-   ADDR contains the address that was passed to INITIALIZE_TRAMPOLINE.
-   Adjust the trampoline address to point to the plabel at offset 44.  */
-   
-#define TRAMPOLINE_ADJUST_ADDRESS(ADDR) \
-  if (!TARGET_64BIT) (ADDR) = memory_address (Pmode, plus_constant ((ADDR), 46))
 
 /* Addressing modes, and classification of registers for them. 
 
@@ -988,12 +765,14 @@ extern int may_call_alloca;
 
 #define REGNO_OK_FOR_INDEX_P(X) \
   ((X) && ((X) < 32							\
-   || (X >= FIRST_PSEUDO_REGISTER					\
+   || ((X) == FRAME_POINTER_REGNUM)					\
+   || ((X) >= FIRST_PSEUDO_REGISTER					\
        && reg_renumber							\
        && (unsigned) reg_renumber[X] < 32)))
 #define REGNO_OK_FOR_BASE_P(X) \
   ((X) && ((X) < 32							\
-   || (X >= FIRST_PSEUDO_REGISTER					\
+   || ((X) == FRAME_POINTER_REGNUM)					\
+   || ((X) >= FIRST_PSEUDO_REGISTER					\
        && reg_renumber							\
        && (unsigned) reg_renumber[X] < 32)))
 #define REGNO_OK_FOR_FP_P(X) \
@@ -1069,6 +848,9 @@ extern int may_call_alloca;
    && (NEW_HP_ASSEMBLER						\
        || TARGET_GAS						\
        || GET_CODE (X) != LABEL_REF)				\
+   && (!PA_SYMBOL_REF_TLS_P (X)					\
+       || (SYMBOL_REF_TLS_MODEL (X) != TLS_MODEL_GLOBAL_DYNAMIC		\
+	   && SYMBOL_REF_TLS_MODEL (X) != TLS_MODEL_LOCAL_DYNAMIC))	\
    && (!TARGET_64BIT						\
        || GET_CODE (X) != CONST_DOUBLE)				\
    && (!TARGET_64BIT						\
@@ -1142,12 +924,16 @@ extern int may_call_alloca;
 /* Nonzero if X is a hard reg that can be used as an index
    or if it is a pseudo reg.  */
 #define REG_OK_FOR_INDEX_P(X) \
-  (REGNO (X) && (REGNO (X) < 32 || REGNO (X) >= FIRST_PSEUDO_REGISTER))
+  (REGNO (X) && (REGNO (X) < 32 				\
+   || REGNO (X) == FRAME_POINTER_REGNUM				\
+   || REGNO (X) >= FIRST_PSEUDO_REGISTER))
 
 /* Nonzero if X is a hard reg that can be used as a base reg
    or if it is a pseudo reg.  */
 #define REG_OK_FOR_BASE_P(X) \
-  (REGNO (X) && (REGNO (X) < 32 || REGNO (X) >= FIRST_PSEUDO_REGISTER))
+  (REGNO (X) && (REGNO (X) < 32 				\
+   || REGNO (X) == FRAME_POINTER_REGNUM				\
+   || REGNO (X) >= FIRST_PSEUDO_REGISTER))
 
 #else
 
@@ -1338,9 +1124,7 @@ extern int may_call_alloca;
 	       || ((MODE) != SFmode					\
 		   && (MODE) != DFmode)))				\
     goto ADDR;								\
-  else if (GET_CODE (X) == LABEL_REF					\
-	   || (GET_CODE (X) == CONST_INT				\
-	       && INT_5_BITS (X)))					\
+  else if (GET_CODE (X) == CONST_INT && INT_5_BITS (X))			\
     goto ADDR;								\
   /* Needed for -fPIC */						\
   else if (GET_CODE (X) == LO_SUM					\
@@ -1421,31 +1205,6 @@ do { 									\
 } while (0)
 
 
-
-
-/* Try machine-dependent ways of modifying an illegitimate address
-   to be legitimate.  If we find one, return the new, valid address.
-   This macro is used in only one place: `memory_address' in explow.c.
-
-   OLDX is the address as it was before break_out_memory_refs was called.
-   In some cases it is useful to look at this to decide what needs to be done.
-
-   MODE and WIN are passed so that this macro can use
-   GO_IF_LEGITIMATE_ADDRESS.
-
-   It is always safe for this macro to do nothing.  It exists to recognize
-   opportunities to optimize the output.  */
-
-#define LEGITIMIZE_ADDRESS(X, OLDX, MODE, WIN)	\
-{ rtx orig_x = (X);				\
-  (X) = hppa_legitimize_address (X, OLDX, MODE);	\
-  if ((X) != orig_x && memory_address_p (MODE, X)) \
-    goto WIN; }
-
-/* Go to LABEL if ADDR (a legitimate address expression)
-   has an effect that depends on the machine mode it is used for.  */
-
-#define GO_IF_MODE_DEPENDENT_ADDRESS(ADDR,LABEL)
 
 #define TARGET_ASM_SELECT_SECTION  pa_select_section
 
@@ -1552,22 +1311,6 @@ do { 									\
 /* Define this to be nonzero if shift instructions ignore all but the low-order
    few bits.  */
 #define SHIFT_COUNT_TRUNCATED 1
-
-/* Compute extra cost of moving data between one register class
-   and another.
-
-   Make moves from SAR so expensive they should never happen.  We used to
-   have 0xffff here, but that generates overflow in rare cases.
-
-   Copies involving a FP register and a non-FP register are relatively
-   expensive because they must go through memory.
-
-   Other copies are reasonably cheap.  */
-#define REGISTER_MOVE_COST(MODE, CLASS1, CLASS2) \
- (CLASS1 == SHIFT_REGS ? 0x100					\
-  : FP_REG_CLASS_P (CLASS1) && ! FP_REG_CLASS_P (CLASS2) ? 16	\
-  : FP_REG_CLASS_P (CLASS2) && ! FP_REG_CLASS_P (CLASS1) ? 16	\
-  : 2)
 
 /* Adjust the cost of branches.  */
 #define BRANCH_COST(speed_p, predictable_p) (pa_cpu == PROCESSOR_8000 ? 2 : 1)
@@ -1745,9 +1488,6 @@ do { 									\
   
 /* All HP assemblers use "!" to separate logical lines.  */
 #define IS_ASM_LOGICAL_LINE_SEPARATOR(C, STR) ((C) == '!')
-
-#define PRINT_OPERAND_PUNCT_VALID_P(CHAR) \
-  ((CHAR) == '@' || (CHAR) == '#' || (CHAR) == '*' || (CHAR) == '^')
 
 /* Print operand X (an rtx) in assembler syntax to file FILE.
    CODE is a letter or dot (`z' in `%z0') or 0 if no letter was specified.

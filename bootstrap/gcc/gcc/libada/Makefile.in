@@ -1,5 +1,5 @@
 # Makefile for libada.
-#   Copyright 2003, 2004, 2009 Free Software Foundation, Inc.
+#   Copyright 2003, 2004, 2009, 2010 Free Software Foundation, Inc.
 #
 # This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
 all: gnatlib
 	$(MULTIDO) $(AM_MAKEFLAGS) DO=all multi-do # $(MAKE)
 
-.PHONY: all install
+.PHONY: all
 
 ## Multilib support variables.
 MULTISRCTOP =
@@ -39,7 +39,9 @@ prefix = @prefix@
 
 # Nonstandard autoconf-set variables.
 enable_shared = @enable_shared@
+
 LN_S=@LN_S@
+AWK=@AWK@
 
 # Variables for the user (or the top level) to override.
 objext=.o
@@ -56,6 +58,8 @@ WARN_CFLAGS = @warn_cflags@
 
 TARGET_LIBGCC2_CFLAGS=
 GNATLIBCFLAGS= -g -O2
+GNATLIBCFLAGS_FOR_C = $(GNATLIBCFLAGS) $(TARGET_LIBGCC2_CFLAGS) -fexceptions \
+	-DIN_RTS @have_getipinfo@
 
 # Get target-specific overrides for TARGET_LIBGCC2_CFLAGS.
 host_subdir = @host_subdir@
@@ -66,6 +70,7 @@ target_noncanonical:=@target_noncanonical@
 version := $(shell cat $(srcdir)/../gcc/BASE-VER)
 libsubdir := $(libdir)/gcc/$(target_noncanonical)/$(version)$(MULTISUBDIR)
 ADA_RTS_DIR=$(GCC_DIR)/ada/rts$(subst /,_,$(MULTISUBDIR))
+ADA_RTS_SUBDIR=./rts$(subst /,_,$(MULTISUBDIR))
 
 # exeext should not be used because it's the *host* exeext.  We're building
 # a *target* library, aren't we?!?  Likewise for CC.  Still, provide bogus
@@ -78,6 +83,7 @@ LIBADA_FLAGS_TO_PASS = \
         "SHELL=$(SHELL)" \
         "GNATLIBFLAGS=$(GNATLIBFLAGS) $(MULTIFLAGS)" \
         "GNATLIBCFLAGS=$(GNATLIBCFLAGS) $(MULTIFLAGS)" \
+        "GNATLIBCFLAGS_FOR_C=$(GNATLIBCFLAGS_FOR_C) $(MULTIFLAGS)" \
         "TARGET_LIBGCC2_CFLAGS=$(TARGET_LIBGCC2_CFLAGS)" \
         "THREAD_KIND=$(THREAD_KIND)" \
         "TRACE=$(TRACE)" \
@@ -91,10 +97,10 @@ LIBADA_FLAGS_TO_PASS = \
         "CFLAGS=$(CFLAGS) $(WARN_CFLAGS)"
 
 # Rules to build gnatlib.
-.PHONY: gnatlib gnatlib-plain gnatlib-sjlj gnatlib-zcx gnatlib-shared oscons
+.PHONY: gnatlib gnatlib-plain gnatlib-sjlj gnatlib-zcx gnatlib-shared osconstool
 gnatlib: @default_gnatlib_target@
 
-gnatlib-plain: oscons $(GCC_DIR)/ada/Makefile
+gnatlib-plain: osconstool $(GCC_DIR)/ada/Makefile
 	test -f stamp-libada || \
 	$(MAKE) -C $(GCC_DIR)/ada $(LIBADA_FLAGS_TO_PASS) gnatlib \
 	&& touch stamp-libada
@@ -103,7 +109,7 @@ gnatlib-plain: oscons $(GCC_DIR)/ada/Makefile
 	$(LN_S) $(ADA_RTS_DIR) adainclude
 	$(LN_S) $(ADA_RTS_DIR) adalib
 
-gnatlib-sjlj gnatlib-zcx gnatlib-shared: oscons $(GCC_DIR)/ada/Makefile
+gnatlib-sjlj gnatlib-zcx gnatlib-shared: osconstool $(GCC_DIR)/ada/Makefile
 	test -f stamp-libada || \
 	$(MAKE) -C $(GCC_DIR)/ada $(LIBADA_FLAGS_TO_PASS) $@ \
 	&& touch stamp-libada
@@ -112,8 +118,8 @@ gnatlib-sjlj gnatlib-zcx gnatlib-shared: oscons $(GCC_DIR)/ada/Makefile
 	$(LN_S) $(ADA_RTS_DIR) adainclude
 	$(LN_S) $(ADA_RTS_DIR) adalib
 
-oscons:
-	$(MAKE) -C $(GCC_DIR) $(LIBADA_FLAGS_TO_PASS) ada/s-oscons.ads
+osconstool:
+	$(MAKE) -C $(GCC_DIR)/ada $(LIBADA_FLAGS_TO_PASS) ./bldtools/oscons/xoscons
 
 install-gnatlib: $(GCC_DIR)/ada/Makefile
 	$(MAKE) -C $(GCC_DIR)/ada $(LIBADA_FLAGS_TO_PASS) install-gnatlib
@@ -139,15 +145,21 @@ html:
 # Build TAGS (none here).
 TAGS:
 
+.PHONY: check installcheck info dvi pdf html
+
 # Installation rules.
 install: install-gnatlib
 	$(MULTIDO) $(AM_MAKEFLAGS) DO=install multi-do # $(MAKE)
+
+install-strip: install
 
 install-info:
 
 install-pdf:
 
 install-html:
+
+.PHONY: install install-strip install-info install-pdf install-html
 
 # Cleaning rules.
 mostlyclean:
@@ -162,6 +174,8 @@ distclean:
 
 maintainer-clean:
 
+.PHONY: mostlyclean clean distclean maintainer-clean
+
 # Rules for rebuilding this Makefile.
 Makefile: $(srcdir)/Makefile.in config.status
 	CONFIG_FILES=$@ ; \
@@ -171,9 +185,15 @@ Makefile: $(srcdir)/Makefile.in config.status
 config.status: $(srcdir)/configure
 	$(SHELL) ./config.status --recheck
 
-$(srcdir)/configure: @MAINT@ $(srcdir)/configure.ac \
-	$(srcdir)/../config/acx.m4 $(srcdir)/../config/override.m4
-	cd $(srcdir) && autoconf
+AUTOCONF = autoconf
+configure_deps = \
+	$(srcdir)/configure.ac \
+	$(srcdir)/../config/acx.m4 \
+	$(srcdir)/../config/override.m4 \
+	$(srcdir)/../config/multi.m4
+
+$(srcdir)/configure: @MAINT@ $(configure_deps)
+	cd $(srcdir) && $(AUTOCONF)
 
 # Don't export variables to the environment, in order to not confuse
 # configure.

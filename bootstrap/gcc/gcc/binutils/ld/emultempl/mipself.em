@@ -1,5 +1,5 @@
 # This shell script emits a C file. -*- C -*-
-#   Copyright 2006, 2007 Free Software Foundation, Inc.
+#   Copyright 2004, 2006, 2007, 2008 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -27,7 +27,7 @@ fragment <<EOF
 #define is_mips_elf(bfd)				\
   (bfd_get_flavour (bfd) == bfd_target_elf_flavour	\
    && elf_tdata (bfd) != NULL				\
-   && elf_object_id (bfd) == MIPS_ELF_TDATA)
+   && elf_object_id (bfd) == MIPS_ELF_DATA)
 
 /* Fake input file for stubs.  */
 static lang_input_statement_type *stub_file;
@@ -137,6 +137,11 @@ mips_add_stub_section (const char *stub_sec_name, asection *input_section,
   const char *secname;
   lang_output_section_statement_type *os;
   struct hook_stub_info info;
+
+  /* PR 12845: If the input section has been garbage collected it will
+     not have its output section set to *ABS*.  */
+  if (bfd_is_abs_section (output_section))
+    return NULL;
 
   /* Create the stub file, if we haven't already.  */
   if (stub_file == NULL)

@@ -1,6 +1,6 @@
 // Debugging bitset implementation -*- C++ -*-
 
-// Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009
+// Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -34,35 +34,47 @@
 #include <debug/safe_sequence.h>
 #include <debug/safe_iterator.h>
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
 namespace __debug
 {
+  /// Class std::bitset with additional safety/checking/debug instrumentation.
   template<size_t _Nb>
     class bitset
-    : public _GLIBCXX_STD_D::bitset<_Nb>, 
-      public __gnu_debug::_Safe_sequence_base
+    : public _GLIBCXX_STD_C::bitset<_Nb>
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
+    , public __gnu_debug::_Safe_sequence_base
+#endif
     {
-      typedef _GLIBCXX_STD_D::bitset<_Nb> _Base;
-      typedef __gnu_debug::_Safe_sequence_base  _Safe_base;
+      typedef _GLIBCXX_STD_C::bitset<_Nb> _Base;
 
     public:
+      // In C++0x we rely on normal reference type to preserve the property
+      // of bitset to be use as a literal.
+      // TODO: Find an other solution.
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+      typedef typename _Base::reference reference;
+#else
       // bit reference:
       class reference
-      : private _Base::reference, public __gnu_debug::_Safe_iterator_base
+      : private _Base::reference
+        , public __gnu_debug::_Safe_iterator_base
       {
 	typedef typename _Base::reference _Base_ref;
 
 	friend class bitset;
 	reference();
 
-	reference(const _Base_ref& __base, bitset* __seq)
-	: _Base_ref(__base), _Safe_iterator_base(__seq, false)
+	reference(const _Base_ref& __base,
+		  bitset* __seq __attribute__((__unused__)))
+	: _Base_ref(__base)
+	, _Safe_iterator_base(__seq, false)
 	{ }
 
       public:
 	reference(const reference& __x)
-	: _Base_ref(__x), _Safe_iterator_base(__x, false)
+	: _Base_ref(__x)
+	, _Safe_iterator_base(__x, false)
 	{ }
 
 	reference&
@@ -115,11 +127,17 @@ namespace __debug
 	  return *this;
 	}
       };
+#endif
 
       // 23.3.5.1 constructors:
-      bitset() : _Base() { }
+      _GLIBCXX_CONSTEXPR bitset() : _Base() { }
 
-      bitset(unsigned long __val) : _Base(__val) { }
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+      constexpr bitset(unsigned long long __val)
+#else
+      bitset(unsigned long __val)
+#endif
+      : _Base(__val) { }
 
       template<typename _CharT, typename _Traits, typename _Alloc>
         explicit
@@ -141,7 +159,17 @@ namespace __debug
 	       _CharT __zero, _CharT __one = _CharT('1'))
 	: _Base(__str, __pos, __n, __zero, __one) { }
 
-      bitset(const _Base& __x) : _Base(__x), _Safe_base() { }
+      bitset(const _Base& __x) : _Base(__x) { }
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+      template<typename _CharT>
+        explicit
+        bitset(const _CharT* __str,
+	       typename std::basic_string<_CharT>::size_type __n
+	       = std::basic_string<_CharT>::npos,
+	       _CharT __zero = _CharT('0'), _CharT __one = _CharT('1'))
+	: _Base(__str, __n, __zero, __one) { }
+#endif
 
       // 23.3.5.2 bitset operations:
       bitset<_Nb>&
@@ -232,7 +260,11 @@ namespace __debug
       operator[](size_t __pos)
       {
 	__glibcxx_check_subscript(__pos);
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+	return _M_base()[__pos];
+#else
 	return reference(_M_base()[__pos], this);
+#endif
       }
 
       // _GLIBCXX_RESOLVE_LIB_DEFECTS
@@ -245,6 +277,9 @@ namespace __debug
       }
 
       using _Base::to_ulong;
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+      using _Base::to_ullong;
+#endif
 
       template <typename _CharT, typename _Traits, typename _Alloc>
         std::basic_string<_CharT, _Traits, _Alloc>
@@ -363,7 +398,22 @@ namespace __debug
     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
 	       const bitset<_Nb>& __x)
     { return __os << __x._M_base(); }
+
 } // namespace __debug
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+  // DR 1182.
+  /// std::hash specialization for bitset.
+  template<size_t _Nb>
+    struct hash<__debug::bitset<_Nb>>
+    : public __hash_base<size_t, __debug::bitset<_Nb>>
+    {
+      size_t
+      operator()(const __debug::bitset<_Nb>& __b) const
+      { return std::hash<_GLIBCXX_STD_C::bitset<_Nb>>()(__b._M_base()); }
+    };
+#endif
+
 } // namespace std
 
 #endif

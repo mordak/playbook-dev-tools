@@ -6,7 +6,7 @@
  *                                                                          *
  *                                  Body                                    *
  *                                                                          *
- *          Copyright (C) 1992-2009, Free Software Foundation, Inc.         *
+ *          Copyright (C) 1992-2010, Free Software Foundation, Inc.         *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -28,10 +28,10 @@
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "tm.h"
 #include "tree.h"
-#include "real.h"
-#include "rtl.h"
+#include "tm.h"
+#include "tm_p.h"
+
 #include "ada.h"
 #include "types.h"
 #include "atree.h"
@@ -127,7 +127,6 @@ get_target_long_double_size (void)
 {
   return fp_prec_to_size (WIDEST_HARDWARE_FP_SIZE);
 }
-
 
 Pos
 get_target_pointer_size (void)
@@ -229,7 +228,34 @@ get_bits_be (void)
 }
 
 Nat
-get_strict_alignment (void)
+get_target_strict_alignment (void)
 {
   return STRICT_ALIGNMENT;
+}
+
+Nat
+get_target_double_float_alignment (void)
+{
+#ifdef TARGET_ALIGN_NATURAL
+  /* This macro is only defined by the rs6000 port.  */
+  if (!TARGET_ALIGN_NATURAL
+      && (DEFAULT_ABI == ABI_AIX || DEFAULT_ABI == ABI_DARWIN))
+    return 32 / BITS_PER_UNIT;
+#endif
+  return 0;
+}
+
+Nat
+get_target_double_scalar_alignment (void)
+{
+#ifdef TARGET_ALIGN_DOUBLE
+  /* This macro is only defined by the i386 and sh ports.  */
+  if (!TARGET_ALIGN_DOUBLE
+#ifdef TARGET_64BIT
+      && !TARGET_64BIT
+#endif
+     )
+    return 32 / BITS_PER_UNIT;
+#endif
+  return 0;
 }

@@ -1,4 +1,4 @@
-/* XMLEventAllocatorImpl.java -- 
+/* XMLEventAllocatorImpl.java --
    Copyright (C) 2005,2006  Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
@@ -110,7 +110,8 @@ public class XMLEventAllocatorImpl
         for (int i = 0; i < len; i++)
           namespaces.add(new NamespaceImpl(location,
                                            reader.getNamespacePrefix(i),
-                                           reader.getNamespaceURI(i)));
+                                           reader.getNamespaceURI(i),
+                                           false));
         return new EndElementImpl(location,
                                   reader.getName(),
                                   namespaces);
@@ -158,7 +159,8 @@ public class XMLEventAllocatorImpl
         for (int i = 0; i < len; i++)
           namespaces.add(new NamespaceImpl(location,
                                            reader.getNamespacePrefix(i),
-                                           reader.getNamespaceURI(i)));
+                                           reader.getNamespaceURI(i),
+                                           false));
         len = reader.getAttributeCount();
         List attributes = new LinkedList();
         for (int i = 0; i < len; i++)
@@ -186,7 +188,7 @@ public class XMLEventAllocatorImpl
   {
     return new XMLEventAllocatorImpl();
   }
-  
+
   protected boolean isWhitespace(String text)
   {
     int len = text.length();
@@ -198,6 +200,5 @@ public class XMLEventAllocatorImpl
       }
     return true;
   }
-  
-}
 
+}

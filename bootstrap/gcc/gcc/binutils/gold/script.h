@@ -1,6 +1,6 @@
 // script.h -- handle linker scripts for gold   -*- C++ -*-
 
-// Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -45,6 +45,7 @@ class Symbol_table;
 class Layout;
 class Mapfile;
 class Input_argument;
+class Input_arguments;
 class Input_objects;
 class Input_group;
 class Input_file;
@@ -54,6 +55,9 @@ class Workqueue;
 struct Version_dependency_list;
 struct Version_expression_list;
 struct Version_tree;
+struct Version_expression;
+class Lazy_demangler;
+class Incremental_script_entry;
 
 // This class represents an expression in a linker script.
 
@@ -83,11 +87,14 @@ class Expression
   // value is defined.  If the value is absolute *RESULT_SECTION will
   // be NULL.  Note that the returned value is still an absolute
   // value; to get a section relative value the caller must subtract
-  // the section address.
+  // the section address.  If RESULT_ALIGNMENT is not NULL, this sets
+  // *RESULT_ALIGNMENT to the alignment of the value of that alignment
+  // is larger than *RESULT_ALIGNMENT; this will only be non-zero if
+  // this is an ALIGN expression.
   uint64_t
   eval_with_dot(const Symbol_table*, const Layout*, bool check_assertions,
 		uint64_t dot_value, Output_section* dot_section,
-		Output_section** result_section);
+		Output_section** result_section, uint64_t* result_alignment);
 
   // Return the value of an expression which may or may not be
   // permitted to refer to the dot symbol, depending on
@@ -96,7 +103,7 @@ class Expression
   eval_maybe_dot(const Symbol_table*, const Layout*, bool check_assertions,
 		 bool is_dot_available, uint64_t dot_value,
 		 Output_section* dot_section,
-		 Output_section** result_section);
+		 Output_section** result_section, uint64_t* result_alignment);
 
   // Print the expression to the FILE.  This is for debugging.
   virtual void
@@ -127,11 +134,31 @@ class Expression
 class Version_script_info
 {
  public:
+  // The languages which can be specified in a versionn script.
+  enum Language
+  {
+    LANGUAGE_C,		// No demangling.
+    LANGUAGE_CXX,	// C++ demangling.
+    LANGUAGE_JAVA,	// Java demangling.
+    LANGUAGE_COUNT
+  };
+
+  Version_script_info();
+
   ~Version_script_info();
 
   // Clear everything.
   void
   clear();
+
+  // Finalize the version control information.
+  void
+  finalize();
+
+  // Return whether the information is finalized.
+  bool
+  is_finalized() const
+  { return this->is_finalized_; }
 
   // Return whether any version were defined in the version script.
   bool
@@ -139,20 +166,23 @@ class Version_script_info
   { return this->version_trees_.empty(); }
 
   // If there is a version associated with SYMBOL, return true, and
-  // set *VERSION to the version.  Otherwise, return false.
+  // set *VERSION to the version, and *IS_GLOBAL to whether the symbol
+  // should be global.  Otherwise, return false.
   bool
-  get_symbol_version(const char* symbol, std::string* version) const
-  { return this->get_symbol_version_helper(symbol, true, version); }
+  get_symbol_version(const char* symbol, std::string* version,
+		     bool* is_global) const;
 
   // Return whether this symbol matches the local: section of some
   // version.
   bool
   symbol_is_local(const char* symbol) const
-  { return this->get_symbol_version_helper(symbol, false, NULL); }
+  {
+    bool is_global;
+    return (this->get_symbol_version(symbol, NULL, &is_global)
+	    && !is_global);
+  }
 
   // Return the names of versions defined in the version script.
-  // Strings are allocated out of the stringpool given in the
-  // constructor.
   std::vector<std::string>
   get_versions() const;
 
@@ -173,6 +203,15 @@ class Version_script_info
   struct Version_tree*
   allocate_version_tree();
 
+  // Build the lookup tables after all data have been read.
+  void
+  build_lookup_tables();
+
+  // Give an error if there are any unmatched names in the version
+  // script.
+  void
+  check_unmatched_names(const Symbol_table*) const;
+
   // Print contents to the FILE.  This is for debugging.
   void
   print(FILE*) const;
@@ -181,13 +220,95 @@ class Version_script_info
   void
   print_expression_list(FILE* f, const Version_expression_list*) const;
 
-  bool get_symbol_version_helper(const char* symbol,
-				 bool check_global,
-				 std::string* pversion) const;
+  bool
+  get_symbol_version_helper(const char* symbol,
+			    bool check_global,
+			    std::string* pversion) const;
 
-  std::vector<struct Version_dependency_list*> dependency_lists_;
-  std::vector<struct Version_expression_list*> expression_lists_;
-  std::vector<struct Version_tree*> version_trees_;
+  // Fast lookup information for a given language.
+
+  // We map from exact match strings to Version_tree's.  Historically
+  // version scripts sometimes have the same symbol multiple times,
+  // which is ambiguous.  We warn about that case by storing the
+  // second Version_tree we see.
+  struct Version_tree_match
+  {
+    Version_tree_match(const Version_tree* r, bool ig,
+		       const Version_expression* e)
+      : real(r), is_global(ig), expression(e), ambiguous(NULL)
+    { }
+
+    // The Version_tree that we return.
+    const Version_tree* real;
+    // True if this is a global match for the REAL member, false if it
+    // is a local match.
+    bool is_global;
+    // Point back to the Version_expression for which we created this
+    // match.
+    const Version_expression* expression;
+    // If not NULL, another Version_tree that defines the symbol.
+    const Version_tree* ambiguous;
+  };
+
+  // Map from an exact match string to a Version_tree.
+
+  typedef Unordered_map<std::string, Version_tree_match> Exact;
+
+  // Fast lookup information for a glob pattern.
+  struct Glob
+  {
+    Glob()
+      : expression(NULL), version(NULL), is_global(false)
+    { }
+
+    Glob(const Version_expression* e, const Version_tree* v, bool ig)
+      : expression(e), version(v), is_global(ig)
+    { }
+
+    // A pointer to the version expression holding the pattern to
+    // match and the language to use for demangling the symbol before
+    // doing the match.
+    const Version_expression* expression;
+    // The Version_tree we use if this pattern matches.
+    const Version_tree* version;
+    // True if this is a global symbol.
+    bool is_global;
+  };
+
+  typedef std::vector<Glob> Globs;
+
+  bool
+  unquote(std::string*) const;
+
+  void
+  add_exact_match(const std::string&, const Version_tree*, bool is_global,
+		  const Version_expression*, Exact*);
+
+  void
+  build_expression_list_lookup(const Version_expression_list*,
+			       const Version_tree*, bool);
+
+  const char*
+  get_name_to_match(const char*, int,
+		    Lazy_demangler*, Lazy_demangler*) const;
+
+  // All the version dependencies we allocate.
+  std::vector<Version_dependency_list*> dependency_lists_;
+  // All the version expressions we allocate.
+  std::vector<Version_expression_list*> expression_lists_;
+  // The list of versions.
+  std::vector<Version_tree*> version_trees_;
+  // Exact matches for global symbols, by language.
+  Exact* exact_[LANGUAGE_COUNT];
+  // A vector of glob patterns mapping to Version_trees.
+  Globs globs_;
+  // The default version to use, if there is one.  This is from a
+  // pattern of "*".
+  const Version_tree* default_version_;
+  // True if the default version is global.
+  bool default_is_global_;
+  // Whether this has been finalized.
+  bool is_finalized_;
 };
 
 // This class manages assignments to symbols.  These can appear in
@@ -199,10 +320,10 @@ class Version_script_info
 class Symbol_assignment
 {
  public:
-  Symbol_assignment(const char* name, size_t namelen, Expression* val,
-		    bool provide, bool hidden)
-    : name_(name, namelen), val_(val), provide_(provide), hidden_(hidden),
-      sym_(NULL)
+  Symbol_assignment(const char* name, size_t namelen, bool is_defsym,
+		    Expression* val, bool provide, bool hidden)
+    : name_(name, namelen), val_(val), is_defsym_(is_defsym),
+      provide_(provide), hidden_(hidden), sym_(NULL)
   { }
 
   // Add the symbol to the symbol table.
@@ -225,6 +346,10 @@ class Symbol_assignment
   set_if_absolute(Symbol_table*, const Layout*, bool is_dot_available,
 		  uint64_t dot_value);
 
+  const std::string&
+  name() const
+  { return this->name_; }
+
   // Print the assignment to the FILE.  This is for debugging.
   void
   print(FILE*) const;
@@ -245,6 +370,9 @@ class Symbol_assignment
   std::string name_;
   // Expression to assign to symbol.
   Expression* val_;
+  // True if this symbol is defined by a --defsym, false if it is
+  // defined in a linker script.
+  bool is_defsym_;
   // Whether the assignment should be provided (only set if there is
   // an undefined reference to the symbol.
   bool provide_;
@@ -297,8 +425,16 @@ class Script_options
 
   // Add a symbol to be defined.
   void
-  add_symbol_assignment(const char* name, size_t length, Expression* value,
-			bool provide, bool hidden);
+  add_symbol_assignment(const char* name, size_t length, bool is_defsym,
+			Expression* value, bool provide, bool hidden);
+
+  // Look for an assigned symbol.
+  bool
+  is_pending_assignment(const char* name);
+  
+  // Add a reference to a symbol.
+  void
+  add_symbol_reference(const char* name, size_t length);
 
   // Add an assertion.
   void
@@ -315,6 +451,32 @@ class Script_options
   // Add all symbol definitions to the symbol table.
   void
   add_symbols_to_table(Symbol_table*);
+
+  // Used to iterate over symbols which are referenced in expressions
+  // but not defined.
+  typedef Unordered_set<std::string>::const_iterator referenced_const_iterator;
+
+  referenced_const_iterator
+  referenced_begin() const
+  { return this->symbol_references_.begin(); }
+
+  referenced_const_iterator
+  referenced_end() const
+  { return this->symbol_references_.end(); }
+
+  // Return whether a symbol is referenced but not defined.
+  bool
+  is_referenced(const std::string& name) const
+  {
+    return (this->symbol_references_.find(name)
+	    != this->symbol_references_.end());
+  }
+
+  // Return whether there are any symbols which were referenced but
+  // not defined.
+  bool
+  any_unreferenced() const
+  { return !this->symbol_references_.empty(); }
 
   // Finalize the symbol values.  Also check assertions.
   void
@@ -374,6 +536,10 @@ class Script_options
   std::string entry_;
   // Symbols to set.
   Symbol_assignments symbol_assignments_;
+  // Symbols defined in an expression, for faster lookup.
+  Unordered_set<std::string> symbol_definitions_;
+  // Symbols referenced in an expression.
+  Unordered_set<std::string> symbol_references_;
   // Assertions to check.
   Assertions assertions_;
   // Version information parsed from a version script.
@@ -389,8 +555,8 @@ class Script_options
 // whether the function took over NEXT_BLOCKER.
 
 bool
-read_input_script(Workqueue*, const General_options&, Symbol_table*, Layout*,
-		  Dirsearch*, Input_objects*, Mapfile*, Input_group*,
+read_input_script(Workqueue*, Symbol_table*, Layout*, Dirsearch*, int,
+		  Input_objects*, Mapfile*, Input_group*,
 		  const Input_argument*, Input_file*,
 		  Task_token* next_blocker, bool* used_next_blocker);
 
@@ -398,7 +564,7 @@ read_input_script(Workqueue*, const General_options&, Symbol_table*, Layout*,
 // Read it as a script, and execute its contents immediately.
 
 bool
-read_commandline_script(const char* filename, Command_line*);
+read_commandline_script(const char* filename, Command_line* cmdline);
 
 // FILE was found as an argument to --version-script.  Read it as a
 // version script, and store its contents in
@@ -406,6 +572,14 @@ read_commandline_script(const char* filename, Command_line*);
 
 bool
 read_version_script(const char* filename, Command_line* cmdline);
+
+// FILENAME was found as an argument to --dynamic-list.  Read it as a
+// version script (actually, a versym_node from a version script), and
+// store its contents in DYNAMIC_LIST.
+
+bool
+read_dynamic_list(const char* filename, Command_line* cmdline,
+                  Script_options* dynamic_list);
 
 } // End namespace gold.
 

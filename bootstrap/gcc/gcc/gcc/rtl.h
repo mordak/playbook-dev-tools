@@ -1,6 +1,6 @@
 /* Register Transfer Language (RTL) definitions for GCC
    Copyright (C) 1987, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
-   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -27,8 +27,10 @@ along with GCC; see the file COPYING3.  If not see
 #include "input.h"
 #include "real.h"
 #include "vec.h"
+#include "vecir.h"
 #include "fixed-value.h"
 #include "alias.h"
+#include "hashtab.h"
 
 #undef FFS  /* Some systems predefine this symbol; don't let it interfere.  */
 #undef FLOAT /* Likewise.  */
@@ -139,13 +141,14 @@ typedef struct
 /* ALIGN and SIZE are the alignment and size of the MEM itself,
    while EXPR can describe a larger underlying object, which might have a
    stricter alignment; OFFSET is the offset of the MEM within that object.  */
-typedef struct mem_attrs GTY(())
+typedef struct GTY(()) mem_attrs
 {
   tree expr;			/* expr corresponding to MEM.  */
   rtx offset;			/* Offset from start of DECL, as CONST_INT.  */
   rtx size;			/* Size in bytes, as a CONST_INT.  */
   alias_set_type alias;		/* Memory alias set.  */
   unsigned int align;		/* Alignment of MEM in bits.  */
+  unsigned char addrspace;	/* Address space (0 for generic).  */
 } mem_attrs;
 
 /* Structure used to describe the attributes of a REG in similar way as
@@ -155,8 +158,7 @@ typedef struct mem_attrs GTY(())
    object in the low part of a 4-byte register, the OFFSET field
    will be -3 rather than 0.  */
 
-typedef struct reg_attrs GTY(())
-{
+typedef struct GTY(()) reg_attrs {
   tree decl;			/* decl corresponding to REG.  */
   HOST_WIDE_INT offset;		/* Offset from start of DECL.  */
 } reg_attrs;
@@ -173,7 +175,6 @@ union rtunion_def
   enum machine_mode rt_type;
   addr_diff_vec_flags rt_addr_diff_vec_flags;
   struct cselib_val_struct *rt_cselib;
-  struct bitmap_head_def *rt_bit;
   tree rt_tree;
   struct basic_block_def *rt_bb;
   mem_attrs *rt_mem;
@@ -185,7 +186,7 @@ typedef union rtunion_def rtunion;
 /* This structure remembers the position of a SYMBOL_REF within an
    object_block structure.  A SYMBOL_REF only provides this information
    if SYMBOL_REF_HAS_BLOCK_INFO_P is true.  */
-struct block_symbol GTY(()) {
+struct GTY(()) block_symbol {
   /* The usual SYMBOL_REF fields.  */
   rtunion GTY ((skip)) fld[3];
 
@@ -197,14 +198,9 @@ struct block_symbol GTY(()) {
   HOST_WIDE_INT offset;
 };
 
-DEF_VEC_P(rtx);
-DEF_VEC_ALLOC_P(rtx,heap);
-DEF_VEC_ALLOC_P(rtx,gc);
-
 /* Describes a group of objects that are to be placed together in such
    a way that their relative positions are known.  */
-struct object_block GTY(())
-{
+struct GTY(()) object_block {
   /* The section in which these objects should be placed.  */
   section *sect;
 
@@ -237,9 +233,8 @@ struct object_block GTY(())
 
 /* RTL expression ("rtx").  */
 
-struct rtx_def GTY((chain_next ("RTX_NEXT (&%h)"),
-		    chain_prev ("RTX_PREV (&%h)")))
-{
+struct GTY((chain_next ("RTX_NEXT (&%h)"),
+	    chain_prev ("RTX_PREV (&%h)"), variable_size)) rtx_def {
   /* The kind of expression this is.  */
   ENUM_BITFIELD(rtx_code) code: 16;
 
@@ -253,16 +248,15 @@ struct rtx_def GTY((chain_next ("RTX_NEXT (&%h)"),
      In a CODE_LABEL, part of the two-bit alternate entry field.  */
   unsigned int jump : 1;
   /* In a CODE_LABEL, part of the two-bit alternate entry field.
-     1 in a MEM if it cannot trap.  
+     1 in a MEM if it cannot trap.
      1 in a CALL_INSN logically equivalent to
        ECF_LOOPING_CONST_OR_PURE and DECL_LOOPING_CONST_OR_PURE_P. */
   unsigned int call : 1;
   /* 1 in a REG, MEM, or CONCAT if the value is set at most once, anywhere.
-     1 in a SUBREG if it references an unsigned object whose mode has been
-     from a promoted to a wider mode.
+     1 in a SUBREG used for SUBREG_PROMOTED_UNSIGNED_P.
      1 in a SYMBOL_REF if it addresses something in the per-function
      constants pool.
-     1 in a CALL_INSN logically equivalent to ECF_CONST and TREE_READONLY. 
+     1 in a CALL_INSN logically equivalent to ECF_CONST and TREE_READONLY.
      1 in a NOTE, or EXPR_LIST for a const call.
      1 in a JUMP_INSN, CALL_INSN, or INSN of an annulling branch.  */
   unsigned int unchanging : 1;
@@ -271,10 +265,12 @@ struct rtx_def GTY((chain_next ("RTX_NEXT (&%h)"),
      if it has been deleted.
      1 in a REG expression if corresponds to a variable declared by the user,
      0 for an internally generated temporary.
-     1 in a SUBREG with a negative value.
+     1 in a SUBREG used for SUBREG_PROMOTED_UNSIGNED_P.
      1 in a LABEL_REF, REG_LABEL_TARGET or REG_LABEL_OPERAND note for a
      non-local label.
-     In a SYMBOL_REF, this flag is used for machine-specific purposes.  */
+     In a SYMBOL_REF, this flag is used for machine-specific purposes.
+     In a PREFETCH, this flag indicates that it should be considered a scheduling
+     barrier.  */
   unsigned int volatil : 1;
   /* 1 in a MEM referring to a field of an aggregate.
      0 if the MEM was a variable or the result of a * operator in C;
@@ -306,8 +302,8 @@ struct rtx_def GTY((chain_next ("RTX_NEXT (&%h)"),
   unsigned frame_related : 1;
   /* 1 in a REG or PARALLEL that is the current function's return value.
      1 in a MEM if it refers to a scalar.
-     1 in a SYMBOL_REF for a weak symbol. 
-     1 in a CALL_INSN logically equivalent to ECF_PURE and DECL_PURE_P. */ 
+     1 in a SYMBOL_REF for a weak symbol.
+     1 in a CALL_INSN logically equivalent to ECF_PURE and DECL_PURE_P. */
   unsigned return_val : 1;
 
   /* The first element of the operands of this rtx.
@@ -357,7 +353,7 @@ struct rtx_def GTY((chain_next ("RTX_NEXT (&%h)"),
    for a variable number of things.  The principle use is inside
    PARALLEL expressions.  */
 
-struct rtvec_def GTY(()) {
+struct GTY((variable_size)) rtvec_def {
   int num_elem;		/* number of elements */
   rtx GTY ((length ("%h.num_elem"))) elem[1];
 };
@@ -376,6 +372,10 @@ struct rtvec_def GTY(()) {
 /* Predicate yielding nonzero iff X is an rtx for a constant integer.  */
 #define CONST_INT_P(X) (GET_CODE (X) == CONST_INT)
 
+/* Predicate yielding true iff X is an rtx for a double-int
+   or floating point constant.  */
+#define CONST_DOUBLE_P(X) (GET_CODE (X) == CONST_DOUBLE)
+
 /* Predicate yielding nonzero iff X is a label insn.  */
 #define LABEL_P(X) (GET_CODE (X) == CODE_LABEL)
 
@@ -388,9 +388,18 @@ struct rtvec_def GTY(()) {
 /* Predicate yielding nonzero iff X is an insn that cannot jump.  */
 #define NONJUMP_INSN_P(X) (GET_CODE (X) == INSN)
 
+/* Predicate yielding nonzero iff X is a debug note/insn.  */
+#define DEBUG_INSN_P(X) (GET_CODE (X) == DEBUG_INSN)
+
+/* Predicate yielding nonzero iff X is an insn that is not a debug insn.  */
+#define NONDEBUG_INSN_P(X) (INSN_P (X) && !DEBUG_INSN_P (X))
+
+/* Nonzero if DEBUG_INSN_P may possibly hold.  */
+#define MAY_HAVE_DEBUG_INSNS MAY_HAVE_DEBUG_STMTS
+
 /* Predicate yielding nonzero iff X is a real insn.  */
 #define INSN_P(X) \
-  (NONJUMP_INSN_P (X) || JUMP_P (X) || CALL_P (X))
+  (NONJUMP_INSN_P (X) || DEBUG_INSN_P (X) || JUMP_P (X) || CALL_P (X))
 
 /* Predicate yielding nonzero iff X is a note insn.  */
 #define NOTE_P(X) (GET_CODE (X) == NOTE)
@@ -696,7 +705,6 @@ extern void rtl_check_failed_flag (const char *, const_rtx, const char *,
 #define XEXP(RTX, N)	(RTL_CHECK2 (RTX, N, 'e', 'u').rt_rtx)
 #define XVEC(RTX, N)	(RTL_CHECK2 (RTX, N, 'E', 'V').rt_rtvec)
 #define XMODE(RTX, N)	(RTL_CHECK1 (RTX, N, 'M').rt_type)
-#define XBITMAP(RTX, N) (RTL_CHECK1 (RTX, N, 'b').rt_bit)
 #define XTREE(RTX, N)   (RTL_CHECK1 (RTX, N, 't').rt_tree)
 #define XBBDEF(RTX, N)	(RTL_CHECK1 (RTX, N, 'B').rt_bb)
 #define XTMPL(RTX, N)	(RTL_CHECK1 (RTX, N, 'T').rt_str)
@@ -713,7 +721,6 @@ extern void rtl_check_failed_flag (const char *, const_rtx, const char *,
 #define X0EXP(RTX, N)	   (RTL_CHECK1 (RTX, N, '0').rt_rtx)
 #define X0VEC(RTX, N)	   (RTL_CHECK1 (RTX, N, '0').rt_rtvec)
 #define X0MODE(RTX, N)	   (RTL_CHECK1 (RTX, N, '0').rt_type)
-#define X0BITMAP(RTX, N)   (RTL_CHECK1 (RTX, N, '0').rt_bit)
 #define X0TREE(RTX, N)	   (RTL_CHECK1 (RTX, N, '0').rt_tree)
 #define X0BBDEF(RTX, N)	   (RTL_CHECK1 (RTX, N, '0').rt_bb)
 #define X0ADVFLAGS(RTX, N) (RTL_CHECK1 (RTX, N, '0').rt_addr_diff_vec_flags)
@@ -731,7 +738,6 @@ extern void rtl_check_failed_flag (const char *, const_rtx, const char *,
 #define XCEXP(RTX, N, C)      (RTL_CHECKC1 (RTX, N, C).rt_rtx)
 #define XCVEC(RTX, N, C)      (RTL_CHECKC1 (RTX, N, C).rt_rtvec)
 #define XCMODE(RTX, N, C)     (RTL_CHECKC1 (RTX, N, C).rt_type)
-#define XCBITMAP(RTX, N, C)   (RTL_CHECKC1 (RTX, N, C).rt_bit)
 #define XCTREE(RTX, N, C)     (RTL_CHECKC1 (RTX, N, C).rt_tree)
 #define XCBBDEF(RTX, N, C)    (RTL_CHECKC1 (RTX, N, C).rt_bb)
 #define XCCSELIB(RTX, N, C)   (RTL_CHECKC1 (RTX, N, C).rt_cselib)
@@ -752,21 +758,30 @@ extern void rtl_check_failed_flag (const char *, const_rtx, const char *,
 #define NEXT_INSN(INSN)	XEXP (INSN, 2)
 
 #define BLOCK_FOR_INSN(INSN) XBBDEF (INSN, 3)
-#define INSN_LOCATOR(INSN) XINT (INSN, 4)
+
 /* The body of an insn.  */
-#define PATTERN(INSN)	XEXP (INSN, 5)
+#define PATTERN(INSN)	XEXP (INSN, 4)
+
+#define INSN_LOCATOR(INSN) XINT (INSN, 5)
+/* LOCATION of an RTX if relevant.  */
+#define RTL_LOCATION(X) (INSN_P (X) ? \
+			 locator_location (INSN_LOCATOR (X)) \
+			 : UNKNOWN_LOCATION)
+/* LOCATION of current INSN.  */
+#define CURR_INSN_LOCATION (locator_location (curr_insn_locator ()))
 
 /* Code number of instruction, from when it was recognized.
    -1 means this instruction has not been recognized yet.  */
 #define INSN_CODE(INSN) XINT (INSN, 6)
 
 #define RTX_FRAME_RELATED_P(RTX)					\
-  (RTL_FLAG_CHECK5("RTX_FRAME_RELATED_P", (RTX), INSN, CALL_INSN,	\
-		   JUMP_INSN, BARRIER, SET)->frame_related)
+  (RTL_FLAG_CHECK6("RTX_FRAME_RELATED_P", (RTX), DEBUG_INSN, INSN,	\
+		   CALL_INSN, JUMP_INSN, BARRIER, SET)->frame_related)
 
 /* 1 if RTX is an insn that has been deleted.  */
 #define INSN_DELETED_P(RTX)						\
-  (RTL_FLAG_CHECK6("INSN_DELETED_P", (RTX), INSN, CALL_INSN, JUMP_INSN,	\
+  (RTL_FLAG_CHECK7("INSN_DELETED_P", (RTX), DEBUG_INSN, INSN,		\
+		   CALL_INSN, JUMP_INSN,				\
 		   CODE_LABEL, BARRIER, NOTE)->volatil)
 
 /* 1 if RTX is a call to a const function.  Built from ECF_CONST and
@@ -875,16 +890,52 @@ extern const char * const reg_note_name[];
    && NOTE_KIND (INSN) == NOTE_INSN_BASIC_BLOCK)
 
 /* Variable declaration and the location of a variable.  */
-#define NOTE_VAR_LOCATION_DECL(INSN)	(XCTREE (XCEXP (INSN, 4, NOTE), \
-						 0, VAR_LOCATION))
-#define NOTE_VAR_LOCATION_LOC(INSN)	(XCEXP (XCEXP (INSN, 4, NOTE),  \
-						1, VAR_LOCATION))
+#define PAT_VAR_LOCATION_DECL(PAT) (XCTREE ((PAT), 0, VAR_LOCATION))
+#define PAT_VAR_LOCATION_LOC(PAT) (XCEXP ((PAT), 1, VAR_LOCATION))
 
 /* Initialization status of the variable in the location.  Status
    can be unknown, uninitialized or initialized.  See enumeration
    type below.  */
-#define NOTE_VAR_LOCATION_STATUS(INSN)  (XCINT (XCEXP (INSN, 4, NOTE), \
-						2, VAR_LOCATION))
+#define PAT_VAR_LOCATION_STATUS(PAT) \
+  ((enum var_init_status) (XCINT ((PAT), 2, VAR_LOCATION)))
+
+/* Accessors for a NOTE_INSN_VAR_LOCATION.  */
+#define NOTE_VAR_LOCATION_DECL(NOTE) \
+  PAT_VAR_LOCATION_DECL (NOTE_VAR_LOCATION (NOTE))
+#define NOTE_VAR_LOCATION_LOC(NOTE) \
+  PAT_VAR_LOCATION_LOC (NOTE_VAR_LOCATION (NOTE))
+#define NOTE_VAR_LOCATION_STATUS(NOTE) \
+  PAT_VAR_LOCATION_STATUS (NOTE_VAR_LOCATION (NOTE))
+
+/* The VAR_LOCATION rtx in a DEBUG_INSN.  */
+#define INSN_VAR_LOCATION(INSN) PATTERN (INSN)
+
+/* Accessors for a tree-expanded var location debug insn.  */
+#define INSN_VAR_LOCATION_DECL(INSN) \
+  PAT_VAR_LOCATION_DECL (INSN_VAR_LOCATION (INSN))
+#define INSN_VAR_LOCATION_LOC(INSN) \
+  PAT_VAR_LOCATION_LOC (INSN_VAR_LOCATION (INSN))
+#define INSN_VAR_LOCATION_STATUS(INSN) \
+  PAT_VAR_LOCATION_STATUS (INSN_VAR_LOCATION (INSN))
+
+/* Expand to the RTL that denotes an unknown variable location in a
+   DEBUG_INSN.  */
+#define gen_rtx_UNKNOWN_VAR_LOC() (gen_rtx_CLOBBER (VOIDmode, const0_rtx))
+
+/* Determine whether X is such an unknown location.  */
+#define VAR_LOC_UNKNOWN_P(X) \
+  (GET_CODE (X) == CLOBBER && XEXP ((X), 0) == const0_rtx)
+
+/* 1 if RTX is emitted after a call, but it should take effect before
+   the call returns.  */
+#define NOTE_DURING_CALL_P(RTX)				\
+  (RTL_FLAG_CHECK1("NOTE_VAR_LOCATION_DURING_CALL_P", (RTX), NOTE)->call)
+
+/* DEBUG_EXPR_DECL corresponding to a DEBUG_EXPR RTX.  */
+#define DEBUG_EXPR_TREE_DECL(RTX) XCTREE (RTX, 0, DEBUG_EXPR)
+
+/* VAR_DECL/PARM_DECL DEBUG_IMPLICIT_PTR takes address of.  */
+#define DEBUG_IMPLICIT_PTR_DECL(RTX) XCTREE (RTX, 0, DEBUG_IMPLICIT_PTR)
 
 /* Possible initialization status of a variable.   When requested
    by the user, this information is tracked and recorded in the DWARF
@@ -898,7 +949,7 @@ enum var_init_status
 
 /* Codes that appear in the NOTE_KIND field for kinds of notes
    that are not line numbers.  These codes are all negative.
-   
+
    Notice that we do not try to use zero here for any of
    the special note codes because sometimes the source line
    actually can be zero!  This happens (for example) when we
@@ -926,7 +977,7 @@ extern const char * const note_insn_name[NOTE_INSN_MAX];
 
 /* In jump.c, each label contains a count of the number
    of LABEL_REFs that point at it, so unused labels can be deleted.  */
-#define LABEL_NUSES(RTX) XCINT (RTX, 4, CODE_LABEL)
+#define LABEL_NUSES(RTX) XCINT (RTX, 5, CODE_LABEL)
 
 /* Labels carry a two-bit field composed of the ->jump and ->call
    bits.  This field indicates whether the label is an alternate
@@ -986,12 +1037,13 @@ enum label_kind
 /* Once basic blocks are found, each CODE_LABEL starts a chain that
    goes through all the LABEL_REFs that jump to that label.  The chain
    eventually winds up at the CODE_LABEL: it is circular.  */
-#define LABEL_REFS(LABEL) XCEXP (LABEL, 5, CODE_LABEL)
+#define LABEL_REFS(LABEL) XCEXP (LABEL, 4, CODE_LABEL)
 
 /* For a REG rtx, REGNO extracts the register number.  REGNO can only
    be used on RHS.  Use SET_REGNO to change the value.  */
 #define REGNO(RTX) (rhs_regno(RTX))
 #define SET_REGNO(RTX,N) (df_ref_change_reg_with_loc (REGNO(RTX), N, RTX), XCUINT (RTX, 0, REG) = N)
+#define SET_REGNO_RAW(RTX,N) (XCUINT (RTX, 0, REG) = N)
 
 /* ORIGINAL_REGNO holds the number the register originally had; for a
    pseudo register turned into a hard reg this will hold the old pseudo
@@ -1004,7 +1056,6 @@ rhs_regno (const_rtx x)
 {
   return XCUINT (x, 0, REG);
 }
-
 
 
 /* 1 if RTX is a reg or parallel that is the current function's return
@@ -1073,9 +1124,57 @@ rhs_regno (const_rtx x)
    not to use an rtx with this cost under any circumstances.  */
 #define MAX_COST INT_MAX
 
+/* A structure to hold all available cost information about an rtl
+   expression.  */
+struct full_rtx_costs
+{
+  int speed;
+  int size;
+};
+
+/* Initialize a full_rtx_costs structure C to the maximum cost.  */
+static inline void
+init_costs_to_max (struct full_rtx_costs *c)
+{
+  c->speed = MAX_COST;
+  c->size = MAX_COST;
+}
+
+/* Initialize a full_rtx_costs structure C to zero cost.  */
+static inline void
+init_costs_to_zero (struct full_rtx_costs *c)
+{
+  c->speed = 0;
+  c->size = 0;
+}
+
+/* Compare two full_rtx_costs structures A and B, returning true
+   if A < B when optimizing for speed.  */
+static inline bool
+costs_lt_p (struct full_rtx_costs *a, struct full_rtx_costs *b,
+	    bool speed)
+{
+  if (speed)
+    return (a->speed < b->speed
+	    || (a->speed == b->speed && a->size < b->size));
+  else
+    return (a->size < b->size
+	    || (a->size == b->size && a->speed < b->speed));
+}
+
+/* Increase both members of the full_rtx_costs structure C by the
+   cost of N insns.  */
+static inline void
+costs_add_n_insns (struct full_rtx_costs *c, int n)
+{
+  c->speed += COSTS_N_INSNS (n);
+  c->size += COSTS_N_INSNS (n);
+}
+
 extern void init_rtlanal (void);
 extern int rtx_cost (rtx, enum rtx_code, bool);
-extern int address_cost (rtx, enum machine_mode, bool);
+extern int address_cost (rtx, enum machine_mode, addr_space_t, bool);
+extern void get_full_rtx_cost (rtx, enum rtx_code, struct full_rtx_costs *);
 extern unsigned int subreg_lsb (const_rtx);
 extern unsigned int subreg_lsb_1 (enum machine_mode, enum machine_mode,
 				  unsigned int);
@@ -1092,6 +1191,7 @@ extern unsigned HOST_WIDE_INT nonzero_bits (const_rtx, enum machine_mode);
 extern unsigned int num_sign_bit_copies (const_rtx, enum machine_mode);
 extern bool constant_pool_constant_p (rtx);
 extern bool truncated_to_mode (enum machine_mode, const_rtx);
+extern int low_bitmask_len (enum machine_mode, unsigned HOST_WIDE_INT);
 
 
 /* 1 if RTX is a subreg containing a reg that is already known to be
@@ -1115,9 +1215,18 @@ do {									\
     _rtx->unchanging = (VAL);						\
   }									\
 } while (0)
+
+/* Valid for subregs which are SUBREG_PROMOTED_VAR_P().  In that case
+   this gives the necessary extensions:
+   0  - signed
+   1  - normal unsigned
+   -1 - pointer unsigned, which most often can be handled like unsigned
+        extension, except for generating instructions where we need to
+	emit special code (ptr_extend insns) on some architectures.  */
+
 #define SUBREG_PROMOTED_UNSIGNED_P(RTX)	\
   ((RTL_FLAG_CHECK1("SUBREG_PROMOTED_UNSIGNED_P", (RTX), SUBREG)->volatil) \
-     ? -1 : (RTX)->unchanging)
+   ? -1 : (int) (RTX)->unchanging)
 
 /* Access various components of an ASM_OPERANDS rtx.  */
 
@@ -1134,7 +1243,10 @@ do {									\
   XSTR (XCVECEXP (RTX, 4, N, ASM_OPERANDS), 0)
 #define ASM_OPERANDS_INPUT_MODE(RTX, N)  \
   GET_MODE (XCVECEXP (RTX, 4, N, ASM_OPERANDS))
-#define ASM_OPERANDS_SOURCE_LOCATION(RTX) XCUINT (RTX, 5, ASM_OPERANDS)
+#define ASM_OPERANDS_LABEL_VEC(RTX) XCVEC (RTX, 5, ASM_OPERANDS)
+#define ASM_OPERANDS_LABEL_LENGTH(RTX) XCVECLEN (RTX, 5, ASM_OPERANDS)
+#define ASM_OPERANDS_LABEL(RTX, N) XCVECEXP (RTX, 5, N, ASM_OPERANDS)
+#define ASM_OPERANDS_SOURCE_LOCATION(RTX) XCUINT (RTX, 6, ASM_OPERANDS)
 #define ASM_INPUT_SOURCE_LOCATION(RTX) XCUINT (RTX, 1, ASM_INPUT)
 
 /* 1 if RTX is a mem that is statically allocated in read-only memory.  */
@@ -1167,24 +1279,6 @@ do {									\
 #define MEM_NOTRAP_P(RTX) \
   (RTL_FLAG_CHECK1("MEM_NOTRAP_P", (RTX), MEM)->call)
 
-/* If VAL is nonzero, set MEM_IN_STRUCT_P and clear MEM_SCALAR_P in
-   RTX.  Otherwise, vice versa.  Use this macro only when you are
-   *sure* that you know that the MEM is in a structure, or is a
-   scalar.  VAL is evaluated only once.  */
-#define MEM_SET_IN_STRUCT_P(RTX, VAL)		\
-do {						\
-  if (VAL)					\
-    {						\
-      MEM_IN_STRUCT_P (RTX) = 1;		\
-      MEM_SCALAR_P (RTX) = 0;			\
-    }						\
-  else						\
-    {						\
-      MEM_IN_STRUCT_P (RTX) = 0;		\
-      MEM_SCALAR_P (RTX) = 1;			\
-    }						\
-} while (0)
-
 /* The memory attribute block.  We provide access macros for each value
    in the block and provide defaults if none specified.  */
 #define MEM_ATTRS(RTX) X0MEMATTR (RTX, 1)
@@ -1208,6 +1302,10 @@ do {						\
 /* For a MEM rtx, the offset from the start of MEM_EXPR, if known, as a
    RTX that is always a CONST_INT.  */
 #define MEM_OFFSET(RTX) (MEM_ATTRS (RTX) == 0 ? 0 : MEM_ATTRS (RTX)->offset)
+
+/* For a MEM rtx, the address space.  */
+#define MEM_ADDR_SPACE(RTX) (MEM_ATTRS (RTX) == 0 ? ADDR_SPACE_GENERIC \
+						  : MEM_ATTRS (RTX)->addrspace)
 
 /* For a MEM rtx, the size in bytes of the MEM, if known, as an RTX that
    is always a CONST_INT.  */
@@ -1255,8 +1353,9 @@ do {						\
 /* During sched, 1 if RTX is an insn that must be scheduled together
    with the preceding insn.  */
 #define SCHED_GROUP_P(RTX)						\
-  (RTL_FLAG_CHECK3("SCHED_GROUP_P", (RTX), INSN, JUMP_INSN, CALL_INSN	\
-		          )->in_struct)
+  (RTL_FLAG_CHECK4("SCHED_GROUP_P", (RTX), DEBUG_INSN, INSN,		\
+		   JUMP_INSN, CALL_INSN					\
+		   )->in_struct)
 
 /* For a SET rtx, SET_DEST is the place that is set
    and SET_SRC is the value it is set to.  */
@@ -1378,6 +1477,10 @@ do {						\
    offset within that block.  */
 #define SYMBOL_REF_BLOCK_OFFSET(RTX) (BLOCK_SYMBOL_CHECK (RTX)->offset)
 
+/* True if RTX is flagged to be a scheduling barrier.  */
+#define PREFETCH_SCHEDULE_BARRIER_P(RTX)					\
+  (RTL_FLAG_CHECK1("PREFETCH_SCHEDULE_BARRIER_P", (RTX), PREFETCH)->volatil)
+
 /* Indicate whether the machine has any sort of auto increment addressing.
    If not, we can avoid checking for REG_INC notes.  */
 
@@ -1481,28 +1584,15 @@ extern int currently_expanding_to_rtl;
 extern int ceil_log2 (unsigned HOST_WIDE_INT);
 
 /* In explow.c */
-extern void set_stack_check_libfunc (rtx);
 extern HOST_WIDE_INT trunc_int_for_mode	(HOST_WIDE_INT, enum machine_mode);
 extern rtx plus_constant (rtx, HOST_WIDE_INT);
-
-/* In emit-rtl.c */
-extern rtx gen_blockage (void);
-extern rtvec gen_rtvec (int, ...);
-extern rtx copy_insn_1 (rtx);
-extern rtx copy_insn (rtx);
-extern rtx gen_int_mode (HOST_WIDE_INT, enum machine_mode);
-extern rtx emit_copy_of_insn_after (rtx, rtx);
-extern void set_reg_attrs_from_value (rtx, rtx);
-extern void set_mem_attrs_from_reg (rtx, rtx);
-extern void set_reg_attrs_for_parm (rtx, rtx);
-extern void adjust_reg_mode (rtx, enum machine_mode);
-extern int mem_expr_equal_p (const_tree, const_tree);
 
 /* In rtl.c */
 extern rtx rtx_alloc_stat (RTX_CODE MEM_STAT_DECL);
 #define rtx_alloc(c) rtx_alloc_stat (c MEM_STAT_INFO)
 
 extern rtvec rtvec_alloc (int);
+extern rtvec shallow_copy_rtvec (rtvec);
 extern bool shared_const_p (const_rtx);
 extern rtx copy_rtx (rtx);
 extern void dump_rtx_statistics (void);
@@ -1515,6 +1605,7 @@ extern unsigned int rtx_size (const_rtx);
 extern rtx shallow_copy_rtx_stat (const_rtx MEM_STAT_DECL);
 #define shallow_copy_rtx(a) shallow_copy_rtx_stat (a MEM_STAT_INFO)
 extern int rtx_equal_p (const_rtx, const_rtx);
+extern hashval_t iterative_hash_rtx (const_rtx, hashval_t);
 
 /* In emit-rtl.c */
 extern rtvec gen_rtvec_v (int, rtx *);
@@ -1542,10 +1633,11 @@ extern unsigned int subreg_highpart_offset (enum machine_mode,
 					    enum machine_mode);
 extern int byte_lowpart_offset (enum machine_mode, enum machine_mode);
 extern rtx make_safe_from (rtx, rtx);
-extern rtx convert_memory_address (enum machine_mode, rtx);
-extern rtx get_insns (void);
+extern rtx convert_memory_address_addr_space (enum machine_mode, rtx,
+					      addr_space_t);
+#define convert_memory_address(to_mode,x) \
+	convert_memory_address_addr_space ((to_mode), (x), ADDR_SPACE_GENERIC)
 extern const char *get_insn_name (int);
-extern rtx get_last_insn (void);
 extern rtx get_last_insn_anywhere (void);
 extern rtx get_first_nonnote_insn (void);
 extern rtx get_last_nonnote_insn (void);
@@ -1553,6 +1645,8 @@ extern void start_sequence (void);
 extern void push_to_sequence (rtx);
 extern void push_to_sequence2 (rtx, rtx);
 extern void end_sequence (void);
+extern double_int rtx_to_double_int (const_rtx);
+extern rtx immed_double_int_const (double_int, enum machine_mode);
 extern rtx immed_double_const (HOST_WIDE_INT, HOST_WIDE_INT,
 			       enum machine_mode);
 
@@ -1573,7 +1667,9 @@ extern rtx simplify_subtraction (rtx);
 
 /* In function.c  */
 extern rtx assign_stack_local (enum machine_mode, HOST_WIDE_INT, int);
-extern rtx assign_stack_local_1 (enum machine_mode, HOST_WIDE_INT, int, bool);
+#define ASLK_REDUCE_ALIGN 1
+#define ASLK_RECORD_PAD 2
+extern rtx assign_stack_local_1 (enum machine_mode, HOST_WIDE_INT, int, int);
 extern rtx assign_stack_temp (enum machine_mode, HOST_WIDE_INT, int);
 extern rtx assign_stack_temp_for_type (enum machine_mode,
 				       HOST_WIDE_INT, int, tree);
@@ -1589,6 +1685,9 @@ extern rtx emit_jump_insn_before_setloc (rtx, rtx, int);
 extern rtx emit_call_insn_before (rtx, rtx);
 extern rtx emit_call_insn_before_noloc (rtx, rtx);
 extern rtx emit_call_insn_before_setloc (rtx, rtx, int);
+extern rtx emit_debug_insn_before (rtx, rtx);
+extern rtx emit_debug_insn_before_noloc (rtx, rtx);
+extern rtx emit_debug_insn_before_setloc (rtx, rtx, int);
 extern rtx emit_barrier_before (rtx);
 extern rtx emit_label_before (rtx, rtx);
 extern rtx emit_note_before (enum insn_note, rtx);
@@ -1601,10 +1700,14 @@ extern rtx emit_jump_insn_after_setloc (rtx, rtx, int);
 extern rtx emit_call_insn_after (rtx, rtx);
 extern rtx emit_call_insn_after_noloc (rtx, rtx);
 extern rtx emit_call_insn_after_setloc (rtx, rtx, int);
+extern rtx emit_debug_insn_after (rtx, rtx);
+extern rtx emit_debug_insn_after_noloc (rtx, rtx);
+extern rtx emit_debug_insn_after_setloc (rtx, rtx, int);
 extern rtx emit_barrier_after (rtx);
 extern rtx emit_label_after (rtx, rtx);
 extern rtx emit_note_after (enum insn_note, rtx);
 extern rtx emit_insn (rtx);
+extern rtx emit_debug_insn (rtx);
 extern rtx emit_jump_insn (rtx);
 extern rtx emit_call_insn (rtx);
 extern rtx emit_label (rtx);
@@ -1616,13 +1719,20 @@ extern rtx emit_clobber (rtx);
 extern rtx gen_use (rtx);
 extern rtx emit_use (rtx);
 extern rtx make_insn_raw (rtx);
+extern rtx make_debug_insn_raw (rtx);
 extern rtx make_jump_insn_raw (rtx);
 extern void add_function_usage_to (rtx, rtx);
 extern rtx last_call_insn (void);
 extern rtx previous_insn (rtx);
 extern rtx next_insn (rtx);
 extern rtx prev_nonnote_insn (rtx);
+extern rtx prev_nonnote_insn_bb (rtx);
 extern rtx next_nonnote_insn (rtx);
+extern rtx next_nonnote_insn_bb (rtx);
+extern rtx prev_nondebug_insn (rtx);
+extern rtx next_nondebug_insn (rtx);
+extern rtx prev_nonnote_nondebug_insn (rtx);
+extern rtx next_nonnote_nondebug_insn (rtx);
 extern rtx prev_real_insn (rtx);
 extern rtx next_real_insn (rtx);
 extern rtx prev_active_insn (rtx);
@@ -1691,9 +1801,12 @@ extern rtx simplify_subreg (enum machine_mode, rtx, enum machine_mode,
 			    unsigned int);
 extern rtx simplify_gen_subreg (enum machine_mode, rtx, enum machine_mode,
 				unsigned int);
+extern rtx simplify_replace_fn_rtx (rtx, const_rtx,
+				    rtx (*fn) (rtx, const_rtx, void *), void *);
 extern rtx simplify_replace_rtx (rtx, const_rtx, rtx);
 extern rtx simplify_rtx (const_rtx);
 extern rtx avoid_constant_pool_reference (rtx);
+extern rtx delegitimize_mem_from_attrs (rtx);
 extern bool mode_signbit_p (enum machine_mode, const_rtx);
 
 /* In reginfo.c  */
@@ -1759,15 +1872,24 @@ extern rtx find_reg_equal_equiv_note (const_rtx);
 extern rtx find_constant_src (const_rtx);
 extern int find_reg_fusage (const_rtx, enum rtx_code, const_rtx);
 extern int find_regno_fusage (const_rtx, enum rtx_code, unsigned int);
+extern rtx alloc_reg_note (enum reg_note, rtx, rtx);
 extern void add_reg_note (rtx, enum reg_note, rtx);
 extern void remove_note (rtx, const_rtx);
 extern void remove_reg_equal_equiv_notes (rtx);
+extern void remove_reg_equal_equiv_notes_for_regno (unsigned int);
 extern int side_effects_p (const_rtx);
 extern int volatile_refs_p (const_rtx);
 extern int volatile_insn_p (const_rtx);
 extern int may_trap_p_1 (const_rtx, unsigned);
 extern int may_trap_p (const_rtx);
 extern int may_trap_or_fault_p (const_rtx);
+extern bool can_throw_internal (const_rtx);
+extern bool can_throw_external (const_rtx);
+extern bool insn_could_throw_p (const_rtx);
+extern bool insn_nothrow_p (const_rtx);
+extern bool can_nonlocal_goto (const_rtx);
+extern void copy_reg_eh_region_note_forward (rtx, rtx, rtx);
+extern void copy_reg_eh_region_note_backward(rtx, rtx, rtx);
 extern int inequality_comparisons_p (const_rtx);
 extern rtx replace_rtx (rtx, rtx, rtx);
 extern int replace_label (rtx *, void *);
@@ -1777,6 +1899,17 @@ extern int computed_jump_p (const_rtx);
 
 typedef int (*rtx_function) (rtx *, void *);
 extern int for_each_rtx (rtx *, rtx_function, void *);
+
+/* Callback for for_each_inc_dec, to process the autoinc operation OP
+   within MEM that sets DEST to SRC + SRCOFF, or SRC if SRCOFF is
+   NULL.  The callback is passed the same opaque ARG passed to
+   for_each_inc_dec.  Return zero to continue looking for other
+   autoinc operations, -1 to skip OP's operands, and any other value
+   to interrupt the traversal and return that value to the caller of
+   for_each_inc_dec.  */
+typedef int (*for_each_inc_dec_fn) (rtx mem, rtx op, rtx dest, rtx src,
+				    rtx srcoff, void *arg);
+extern int for_each_inc_dec (rtx *, for_each_inc_dec_fn, void *arg);
 
 typedef int (*rtx_equal_p_callback_function) (const_rtx *, const_rtx *,
                                               rtx *, rtx *);
@@ -1806,6 +1939,22 @@ extern rtx canonicalize_condition (rtx, rtx, int, rtx *, rtx, int, int);
    being made.  */
 extern rtx get_condition (rtx, rtx *, int, int);
 
+/* Information about a subreg of a hard register.  */
+struct subreg_info
+{
+  /* Offset of first hard register involved in the subreg.  */
+  int offset;
+  /* Number of hard registers involved in the subreg.  */
+  int nregs;
+  /* Whether this subreg can be represented as a hard reg with the new
+     mode.  */
+  bool representable_p;
+};
+
+extern void subreg_get_info (unsigned int, enum machine_mode,
+			     unsigned int, enum machine_mode,
+			     struct subreg_info *);
+
 /* lists.c */
 
 extern void free_EXPR_LIST_list		(rtx *);
@@ -1824,21 +1973,24 @@ extern rtx remove_free_EXPR_LIST_node (rtx *);
 
 /* Initialize may_move_cost and friends for mode M.  */
 extern void init_move_cost (enum machine_mode);
-/* Allocate register info memory.  */
-extern void allocate_reg_info (void);
 /* Resize reg info.  */
-extern void resize_reg_info (void);
+extern bool resize_reg_info (void);
 /* Free up register info memory.  */
 extern void free_reg_info (void);
+extern void init_subregs_of_mode (void);
+extern void finish_subregs_of_mode (void);
 
 /* recog.c */
+extern rtx extract_asm_operands (rtx);
 extern int asm_noperands (const_rtx);
 extern const char *decode_asm_operands (rtx, rtx *, rtx **, const char **,
 					enum machine_mode *, location_t *);
 
 extern enum reg_class reg_preferred_class (int);
 extern enum reg_class reg_alternate_class (int);
-extern void setup_reg_classes (int, enum reg_class, enum reg_class);
+extern enum reg_class reg_cover_class (int);
+extern void setup_reg_classes (int, enum reg_class, enum reg_class,
+			       enum reg_class);
 
 extern void split_all_insns (void);
 extern unsigned int split_all_insns_noflow (void);
@@ -1874,6 +2026,16 @@ extern GTY(()) rtx const_tiny_rtx[3][(int) MAX_MACHINE_MODE];
 #define HARD_FRAME_POINTER_REGNUM FRAME_POINTER_REGNUM
 #endif
 
+#ifndef HARD_FRAME_POINTER_IS_FRAME_POINTER
+#define HARD_FRAME_POINTER_IS_FRAME_POINTER \
+  (HARD_FRAME_POINTER_REGNUM == FRAME_POINTER_REGNUM)
+#endif
+
+#ifndef HARD_FRAME_POINTER_IS_ARG_POINTER
+#define HARD_FRAME_POINTER_IS_ARG_POINTER \
+  (HARD_FRAME_POINTER_REGNUM == ARG_POINTER_REGNUM)
+#endif
+
 /* Index labels for global_rtl.  */
 enum global_rtl_index
 {
@@ -1887,13 +2049,13 @@ enum global_rtl_index
 #if FRAME_POINTER_REGNUM == ARG_POINTER_REGNUM
   GR_ARG_POINTER = GR_FRAME_POINTER,
 #endif
-#if HARD_FRAME_POINTER_REGNUM == FRAME_POINTER_REGNUM
+#if HARD_FRAME_POINTER_IS_FRAME_POINTER
   GR_HARD_FRAME_POINTER = GR_FRAME_POINTER,
 #else
   GR_HARD_FRAME_POINTER,
 #endif
 #if FRAME_POINTER_REGNUM != ARG_POINTER_REGNUM
-#if HARD_FRAME_POINTER_REGNUM == ARG_POINTER_REGNUM
+#if HARD_FRAME_POINTER_IS_ARG_POINTER
   GR_ARG_POINTER = GR_HARD_FRAME_POINTER,
 #else
   GR_ARG_POINTER,
@@ -1904,12 +2066,67 @@ enum global_rtl_index
   GR_VIRTUAL_STACK_DYNAMIC,
   GR_VIRTUAL_OUTGOING_ARGS,
   GR_VIRTUAL_CFA,
+  GR_VIRTUAL_PREFERRED_STACK_BOUNDARY,
 
   GR_MAX
 };
 
-/* Pointers to standard pieces of rtx are stored here.  */
-extern GTY(()) rtx global_rtl[GR_MAX];
+/* Target-dependent globals.  */
+struct GTY(()) target_rtl {
+  /* All references to the hard registers in global_rtl_index go through
+     these unique rtl objects.  On machines where the frame-pointer and
+     arg-pointer are the same register, they use the same unique object.
+
+     After register allocation, other rtl objects which used to be pseudo-regs
+     may be clobbered to refer to the frame-pointer register.
+     But references that were originally to the frame-pointer can be
+     distinguished from the others because they contain frame_pointer_rtx.
+
+     When to use frame_pointer_rtx and hard_frame_pointer_rtx is a little
+     tricky: until register elimination has taken place hard_frame_pointer_rtx
+     should be used if it is being set, and frame_pointer_rtx otherwise.  After
+     register elimination hard_frame_pointer_rtx should always be used.
+     On machines where the two registers are same (most) then these are the
+     same.  */
+  rtx x_global_rtl[GR_MAX];
+
+  /* A unique representation of (REG:Pmode PIC_OFFSET_TABLE_REGNUM).  */
+  rtx x_pic_offset_table_rtx;
+
+  /* A unique representation of (REG:Pmode RETURN_ADDRESS_POINTER_REGNUM).
+     This is used to implement __builtin_return_address for some machines;
+     see for instance the MIPS port.  */
+  rtx x_return_address_pointer_rtx;
+
+  /* Commonly used RTL for hard registers.  These objects are not
+     necessarily unique, so we allocate them separately from global_rtl.
+     They are initialized once per compilation unit, then copied into
+     regno_reg_rtx at the beginning of each function.  */
+  rtx x_initial_regno_reg_rtx[FIRST_PSEUDO_REGISTER];
+
+  /* A sample (mem:M stack_pointer_rtx) rtx for each mode M.  */
+  rtx x_top_of_stack[MAX_MACHINE_MODE];
+
+  /* Static hunks of RTL used by the aliasing code; these are treated
+     as persistent to avoid unnecessary RTL allocations.  */
+  rtx x_static_reg_base_value[FIRST_PSEUDO_REGISTER];
+};
+
+extern GTY(()) struct target_rtl default_target_rtl;
+#if SWITCHABLE_TARGET
+extern struct target_rtl *this_target_rtl;
+#else
+#define this_target_rtl (&default_target_rtl)
+#endif
+
+#define global_rtl				\
+  (this_target_rtl->x_global_rtl)
+#define pic_offset_table_rtx \
+  (this_target_rtl->x_pic_offset_table_rtx)
+#define return_address_pointer_rtx \
+  (this_target_rtl->x_return_address_pointer_rtx)
+#define top_of_stack \
+  (this_target_rtl->x_top_of_stack)
 
 /* Standard pieces of rtx, to be substituted directly into things.  */
 #define pc_rtx                  (global_rtl[GR_PC])
@@ -1922,11 +2139,6 @@ extern GTY(()) rtx global_rtl[GR_MAX];
 #define frame_pointer_rtx       (global_rtl[GR_FRAME_POINTER])
 #define hard_frame_pointer_rtx	(global_rtl[GR_HARD_FRAME_POINTER])
 #define arg_pointer_rtx		(global_rtl[GR_ARG_POINTER])
-
-extern GTY(()) rtx pic_offset_table_rtx;
-extern GTY(()) rtx static_chain_rtx;
-extern GTY(()) rtx static_chain_incoming_rtx;
-extern GTY(()) rtx return_address_pointer_rtx;
 
 /* Include the RTL generation functions.  */
 
@@ -2002,7 +2214,18 @@ extern rtx gen_rtx_MEM (enum machine_mode, rtx);
 
 #define VIRTUAL_CFA_REGNUM		((FIRST_VIRTUAL_REGISTER) + 4)
 
-#define LAST_VIRTUAL_REGISTER		((FIRST_VIRTUAL_REGISTER) + 4)
+#define LAST_VIRTUAL_POINTER_REGISTER	((FIRST_VIRTUAL_REGISTER) + 4)
+
+/* This is replaced by crtl->preferred_stack_boundary / BITS_PER_UNIT
+   when finalized.  */
+
+#define virtual_preferred_stack_boundary_rtx \
+	(global_rtl[GR_VIRTUAL_PREFERRED_STACK_BOUNDARY])
+
+#define VIRTUAL_PREFERRED_STACK_BOUNDARY_REGNUM \
+					((FIRST_VIRTUAL_REGISTER) + 5)
+
+#define LAST_VIRTUAL_REGISTER		((FIRST_VIRTUAL_REGISTER) + 5)
 
 /* Nonzero if REGNUM is a pointer into the stack frame.  */
 #define REGNO_PTR_FRAME_P(REGNUM)		\
@@ -2011,7 +2234,7 @@ extern rtx gen_rtx_MEM (enum machine_mode, rtx);
    || (REGNUM) == HARD_FRAME_POINTER_REGNUM	\
    || (REGNUM) == ARG_POINTER_REGNUM		\
    || ((REGNUM) >= FIRST_VIRTUAL_REGISTER	\
-       && (REGNUM) <= LAST_VIRTUAL_REGISTER))
+       && (REGNUM) <= LAST_VIRTUAL_POINTER_REGISTER))
 
 /* REGNUM never really appearing in the INSN stream.  */
 #define INVALID_REGNUM			(~(unsigned int) 0)
@@ -2063,6 +2286,9 @@ extern int cse_main (rtx, int);
 extern int exp_equiv_p (const_rtx, const_rtx, int, bool);
 extern unsigned hash_rtx (const_rtx x, enum machine_mode, int *, int *, bool);
 
+/* In dse.c */
+extern void check_for_inc_dec (rtx insn);
+
 /* In jump.c */
 extern int comparison_dominates_p (enum rtx_code, enum rtx_code);
 extern int condjump_p (const_rtx);
@@ -2072,6 +2298,7 @@ extern rtx pc_set (const_rtx);
 extern rtx condjump_label (const_rtx);
 extern int simplejump_p (const_rtx);
 extern int returnjump_p (rtx);
+extern int eh_returnjump_p (rtx);
 extern int onlyjump_p (const_rtx);
 extern int only_sets_cc0_p (const_rtx);
 extern int sets_cc0_p (const_rtx);
@@ -2103,12 +2330,12 @@ extern void reset_used_flags (rtx);
 extern void set_used_flags (rtx);
 extern void reorder_insns (rtx, rtx, rtx);
 extern void reorder_insns_nobb (rtx, rtx, rtx);
-extern int get_max_uid (void);
+extern int get_max_insn_count (void);
 extern int in_sequence_p (void);
 extern void force_next_line_note (void);
 extern void init_emit (void);
 extern void init_emit_regs (void);
-extern void init_emit_once (int);
+extern void init_emit_once (void);
 extern void push_topmost_sequence (void);
 extern void pop_topmost_sequence (void);
 extern void set_new_first_and_last_insn (rtx, rtx);
@@ -2116,8 +2343,6 @@ extern unsigned int unshare_all_rtl (void);
 extern void unshare_all_rtl_again (rtx);
 extern void unshare_all_rtl_in_chain (rtx);
 extern void verify_rtl_sharing (void);
-extern void set_first_insn (rtx);
-extern void set_last_insn (rtx);
 extern void link_cc0_insns (rtx);
 extern void add_insn (rtx);
 extern void add_insn_before (rtx, rtx, struct basic_block_def *);
@@ -2130,7 +2355,6 @@ extern void emit_insn_at_entry (rtx);
 extern void delete_insn_chain (rtx, rtx, bool);
 extern rtx unlink_insn_chain (rtx, rtx);
 extern rtx delete_insn_and_edges (rtx);
-extern void delete_insn_chain_and_edges (rtx, rtx);
 extern rtx gen_lowpart_SUBREG (enum machine_mode, rtx);
 extern rtx gen_const_mem (enum machine_mode, rtx);
 extern rtx gen_frame_mem (enum machine_mode, rtx);
@@ -2161,9 +2385,6 @@ extern void schedule_insns (void);
 /* In sched-ebb.c.  */
 extern void schedule_ebbs (void);
 
-/* In haifa-sched.c.  */
-extern void fix_sched_param (const char *, const char *);
-
 /* In sel-sched-dump.c.  */
 extern void sel_sched_fix_param (const char *param, const char *val);
 
@@ -2185,6 +2406,7 @@ extern int prologue_epilogue_contains (const_rtx);
 extern int sibcall_epilogue_contains (const_rtx);
 extern void mark_temp_addr_taken (rtx);
 extern void update_temp_slot_address (rtx, rtx);
+extern void maybe_copy_prologue_epilogue_insn (rtx, rtx);
 
 /* In stmt.c */
 extern void expand_null_return (void);
@@ -2209,6 +2431,7 @@ extern void expand_dec (rtx, rtx);
 
 /* In gcse.c */
 extern bool can_copy_p (enum machine_mode);
+extern bool can_assign_to_reg_without_clobbers_p (rtx);
 extern rtx fis_get_condition (rtx);
 
 /* In ira.c */
@@ -2218,8 +2441,8 @@ extern HARD_REG_SET eliminable_regset;
 extern void mark_elimination (int, int);
 
 /* In reginfo.c */
-extern int reg_classes_intersect_p (enum reg_class, enum reg_class);
-extern int reg_class_subset_p (enum reg_class, enum reg_class);
+extern int reg_classes_intersect_p (reg_class_t, reg_class_t);
+extern int reg_class_subset_p (reg_class_t, reg_class_t);
 extern void globalize_reg (int);
 extern void init_reg_modes_target (void);
 extern void init_regs (void);
@@ -2230,12 +2453,7 @@ extern void init_reg_sets (void);
 extern void regclass (rtx, int);
 extern void reg_scan (rtx, unsigned int);
 extern void fix_register (const char *, int, int);
-#ifdef HARD_CONST
-extern void cannot_change_mode_set_regs (HARD_REG_SET *,
-					 enum machine_mode, unsigned int);
-#endif
-extern bool invalid_mode_change_p (unsigned int, enum reg_class,
-				   enum machine_mode);
+extern bool invalid_mode_change_p (unsigned int, enum reg_class);
 
 /* In reorg.c */
 extern void dbr_schedule (rtx);
@@ -2261,21 +2479,11 @@ extern rtx emit_library_call_value (rtx, rtx, enum libcall_type,
 
 /* In varasm.c */
 extern void init_varasm_once (void);
-extern enum tls_model decl_default_tls_model (const_tree);
-  
-/* In rtl.c */
-extern void traverse_md_constants (int (*) (void **, void *), void *);
-struct md_constant { char *name, *value; };
+
+extern rtx make_debug_expr_from_rtl (const_rtx);
 
 /* In read-rtl.c */
-extern int read_skip_spaces (FILE *);
-extern bool read_rtx (FILE *, rtx *, int *);
-extern void copy_rtx_ptr_loc (const void *, const void *);
-extern void print_rtx_ptr_loc (const void *);
-extern const char *join_c_conditions (const char *, const char *);
-extern void print_c_condition (const char *);
-extern const char *read_rtx_filename;
-extern int read_rtx_lineno;
+extern bool read_rtx (const char *, rtx *);
 
 /* In alias.c */
 extern rtx canon_rtx (rtx);
@@ -2286,14 +2494,17 @@ extern int canon_true_dependence (const_rtx, enum machine_mode, rtx, const_rtx,
 extern int read_dependence (const_rtx, const_rtx);
 extern int anti_dependence (const_rtx, const_rtx);
 extern int output_dependence (const_rtx, const_rtx);
+extern int may_alias_p (const_rtx, const_rtx);
 extern void init_alias_target (void);
 extern void init_alias_analysis (void);
 extern void end_alias_analysis (void);
+extern void vt_equate_reg_base_value (const_rtx, const_rtx);
 extern bool memory_modified_in_insn_p (const_rtx, const_rtx);
 extern rtx find_base_term (rtx);
 extern rtx gen_hard_reg_clobber (enum machine_mode, unsigned int);
 extern rtx get_reg_known_value (unsigned int);
 extern bool get_reg_known_equiv_p (unsigned int);
+extern rtx get_reg_base_value (unsigned int);
 
 #ifdef STACK_REGS
 extern int stack_regs_mentioned (const_rtx insn);
@@ -2305,8 +2516,6 @@ extern GTY(()) rtx stack_limit_rtx;
 /* In predict.c */
 extern void invert_br_probabilities (rtx);
 extern bool expensive_function_p (int);
-/* In cfgexpand.c */
-extern void add_reg_br_prob_note (rtx last, int probability);
 
 /* In var-tracking.c */
 extern unsigned int variable_tracking_main (void);
@@ -2325,6 +2534,7 @@ extern void simplify_using_condition (rtx, rtx *, struct bitmap_head_def *);
 
 /* In final.c  */
 extern unsigned int compute_alignments (void);
+extern int asm_str_count (const char *templ);
 
 struct rtl_hooks
 {
@@ -2352,9 +2562,24 @@ extern void insn_locators_alloc (void);
 extern void insn_locators_free (void);
 extern void insn_locators_finalize (void);
 extern void set_curr_insn_source_location (location_t);
+extern location_t get_curr_insn_source_location (void);
 extern void set_curr_insn_block (tree);
+extern tree get_curr_insn_block (void);
 extern int curr_insn_locator (void);
 extern bool optimize_insn_for_size_p (void);
 extern bool optimize_insn_for_speed_p (void);
+
+/* rtl-error.c */
+extern void _fatal_insn_not_found (const_rtx, const char *, int, const char *)
+     ATTRIBUTE_NORETURN;
+extern void _fatal_insn (const char *, const_rtx, const char *, int, const char *)
+     ATTRIBUTE_NORETURN;
+
+#define fatal_insn(msgid, insn) \
+	_fatal_insn (msgid, insn, __FILE__, __LINE__, __FUNCTION__)
+#define fatal_insn_not_found(insn) \
+	_fatal_insn_not_found (insn, __FILE__, __LINE__, __FUNCTION__)
+
+
 
 #endif /* ! GCC_RTL_H */

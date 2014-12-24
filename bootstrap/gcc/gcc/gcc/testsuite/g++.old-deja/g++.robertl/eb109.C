@@ -19,8 +19,8 @@ inline istream& operator>>(istream& is, Empty& ) { return is;}
 
 
 template<class VertexType, class EdgeType>
-class Graph
-{  // { dg-message "note" } candidates
+class Graph			// { dg-message "note" } candidates
+{
   public:
     // public type interface
     typedef std::map<int, EdgeType > Successor;
@@ -66,6 +66,7 @@ int main()
 {
     // no edge weighting, therefore type Empty:
     Graph<std::string, Empty> V(true);        // { dg-error "no match" } no bool constructor
+    // { dg-message "candidate" "candidate note" { target *-*-* } 68 }
     // ReadGraph(V, "gra1.dat");
 
     // display of vertices with successors

@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -28,9 +28,6 @@
 --  a separate package so that they can more easily be customized. Calls
 --  to these subprograms are only made if Opt.Style_Check is set True.
 --  Styleg does not depends on the GNAT tree (Atree, Sinfo, ...).
-
---  For the compiler, there is also a child package Styleg.C that depends
---  on the GNAT tree.
 
 with Types; use Types;
 
@@ -63,6 +60,10 @@ package Styleg is
    --  is capitalized in an appropriate manner. Reserved is set if
    --  the attribute designator is a reserved word (access, digits,
    --  delta or range) to allow differing rules for the two cases.
+
+   procedure Check_Boolean_Operator (Node : Node_Id);
+   --  Node is a node for an AND or OR operator. Check that the usage meets
+   --  the style rules.
 
    procedure Check_Box;
    --  Called after scanning out a box to check spacing
@@ -172,10 +173,5 @@ package Styleg is
    --  lower case letters. On entry Token_Ptr points to the keyword token.
    --  This is not used for keywords appearing as attribute designators,
    --  where instead Check_Attribute_Name (True) is called.
-
-   function RM_Column_Check return Boolean;
-   pragma Inline (RM_Column_Check);
-   --  Determines whether style checking is active and the RM column check
-   --  mode is set requiring checking of RM format layout.
 
 end Styleg;

@@ -1,4 +1,4 @@
-! { dg-do run { xfail *-*-darwin[89]* *-*-freebsd* *-*-mingw* *-*-cygwin* spu-*-* } }
+! { dg-do run { xfail *-*-darwin[89]* *-*-cygwin* spu-*-* } }
 ! Test XFAILed on these platforms because the system's printf() lacks
 ! proper support for denormals.
 !
@@ -6,7 +6,7 @@
 ! wide enough and have enough precision, by checking that values can
 ! be written and read back.
 !
-! { dg-options "-mieee" { target alpha*-*-* } }
+! { dg-add-options ieee }
 
 include "default_format_1.inc"
 

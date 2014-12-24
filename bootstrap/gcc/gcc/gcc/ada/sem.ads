@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -248,17 +248,18 @@ package Sem is
    --  be available at the freeze point.
 
    In_Inlined_Body : Boolean := False;
-   --  Switch to indicate that we are analyzing and resolving an inlined
-   --  body. Type checking is disabled in this context, because types are
-   --  known to be compatible. This avoids problems with private types whose
-   --  full view is derived from private types.
+   --  Switch to indicate that we are analyzing and resolving an inlined body.
+   --  Type checking is disabled in this context, because types are known to be
+   --  compatible. This avoids problems with private types whose full view is
+   --  derived from private types.
 
    Inside_A_Generic : Boolean := False;
-   --  This flag is set if we are processing a generic specification,
-   --  generic definition, or generic body. When this flag is True the
-   --  Expander_Active flag is False to disable any code expansion (see
-   --  package Expander). Only the generic processing can modify the
-   --  status of this flag, any other client should regard it as read-only.
+   --  This flag is set if we are processing a generic specification, generic
+   --  definition, or generic body. When this flag is True the Expander_Active
+   --  flag is False to disable any code expansion (see package Expander). Only
+   --  the generic processing can modify the status of this flag, any other
+   --  client should regard it as read-only.
+   --  Probably should be called Inside_A_Generic_Template ???
 
    Inside_Freezing_Actions : Nat := 0;
    --  Flag indicating whether we are within a call to Expand_N_Freeze_Actions.
@@ -397,9 +398,9 @@ package Sem is
 
    --  The scope stack indicates the declarative regions that are currently
    --  being processed (analyzed and/or expanded). The scope stack is one of
-   --  basic visibility structures in the compiler: entities that are declared
-   --  in a scope that is currently on the scope stack are immediately visible.
-   --  (leaving aside issues of hiding and overloading).
+   --  the basic visibility structures in the compiler: entities that are
+   --  declared in a scope that is currently on the scope stack are immediately
+   --  visible (leaving aside issues of hiding and overloading).
 
    --  Initially, the scope stack only contains an entry for package Standard.
    --  When a compilation unit, subprogram unit, block or declarative region
@@ -423,12 +424,12 @@ package Sem is
    --  contiguous sections that correspond to the compilation of a given
    --  compilation unit. These sections are separated by distinct occurrences
    --  of package Standard. The currently active section of the scope stack
-   --  goes from the current scope to the first occurrence of Standard, which
-   --  is additionally marked with the flag Is_Active_Stack_Base. The basic
-   --  visibility routine (Find_Direct_Name, sem_ch8) uses this contiguous
-   --  section of the scope stack to determine whether a given entity is or
-   --  is not visible at a point. In_Open_Scopes only examines the currently
-   --  active section of the scope stack.
+   --  goes from the current scope to the first (innermost) occurrence of
+   --  Standard, which is additionally marked with the flag
+   --  Is_Active_Stack_Base. The basic visibility routine (Find_Direct_Name, in
+   --  Sem_Ch8) uses this contiguous section of the scope stack to determine
+   --  whether a given entity is or is not visible at a point. In_Open_Scopes
+   --  only examines the currently active section of the scope stack.
 
    --  Similar complications arise when processing child instances. These
    --  must be compiled in the context of parent instances, and therefore the
@@ -461,8 +462,11 @@ package Sem is
       Save_Check_Policy_List : Node_Id;
       --  Save contents of Check_Policy_List on entry to restore on exit
 
+      Save_Default_Storage_Pool : Node_Id;
+      --  Save contents of Default_Storage_Pool on entry to restore on exit
+
       Is_Transient : Boolean;
-      --  Marks Transient Scopes (See Exp_Ch7 body for details)
+      --  Marks transient scopes (see Exp_Ch7 body for details)
 
       Previous_Visibility : Boolean;
       --  Used when installing the parent(s) of the current compilation unit.
@@ -484,11 +488,11 @@ package Sem is
 
       Pending_Freeze_Actions : List_Id;
       --  Used to collect freeze entity nodes and associated actions that are
-      --  generated in a inner context but need to be analyzed outside, such as
-      --  records and initialization procedures. On exit from the scope, this
-      --  list of actions is inserted before the scope construct and analyzed
-      --  to generate the corresponding freeze processing and elaboration of
-      --  other associated actions.
+      --  generated in an inner context but need to be analyzed outside, such
+      --  as records and initialization procedures. On exit from the scope,
+      --  this list of actions is inserted before the scope construct and
+      --  analyzed to generate the corresponding freeze processing and
+      --  elaboration of other associated actions.
 
       First_Use_Clause : Node_Id;
       --  Head of list of Use_Clauses in current scope. The list is built when
@@ -533,12 +537,12 @@ package Sem is
 
    procedure Analyze (N : Node_Id);
    procedure Analyze (N : Node_Id; Suppress : Check_Id);
-   --  This is the recursive procedure which is applied to individual nodes
-   --  of the tree, starting at the top level node (compilation unit node)
-   --  and then moving down the tree in a top down traversal. It calls
-   --  individual routines with names Analyze_xxx to analyze node xxx. Each
-   --  of these routines is responsible for calling Analyze on the components
-   --  of the subtree.
+   --  This is the recursive procedure that is applied to individual nodes of
+   --  the tree, starting at the top level node (compilation unit node) and
+   --  then moving down the tree in a top down traversal. It calls individual
+   --  routines with names Analyze_xxx to analyze node xxx. Each of these
+   --  routines is responsible for calling Analyze on the components of the
+   --  subtree.
    --
    --  Note: In the case of expression components (nodes whose Nkind is in
    --  N_Subexpr), the call to Analyze does not complete the semantic analysis
@@ -577,9 +581,9 @@ package Sem is
    --  Inserts list L after node N using Nlists.Insert_List_After, and then,
    --  after this insertion is complete, analyzes all the nodes in the list,
    --  including any additional nodes generated by this analysis. If the list
-   --  is empty or be No_List, the call has no effect. If the Suppress
-   --  argument is present, then the analysis is done with the specified
-   --  check suppressed (can be All_Checks to suppress all checks).
+   --  is empty or No_List, the call has no effect. If the Suppress argument is
+   --  present, then the analysis is done with the specified check suppressed
+   --  (can be All_Checks to suppress all checks).
 
    procedure Insert_List_Before_And_Analyze
      (N : Node_Id; L : List_Id);
@@ -588,9 +592,9 @@ package Sem is
    --  Inserts list L before node N using Nlists.Insert_List_Before, and then,
    --  after this insertion is complete, analyzes all the nodes in the list,
    --  including any additional nodes generated by this analysis. If the list
-   --  is empty or be No_List, the call has no effect. If the Suppress
-   --  argument is present, then the analysis is done with the specified
-   --  check suppressed (can be All_Checks to suppress all checks).
+   --  is empty or No_List, the call has no effect. If the Suppress argument is
+   --  present, then the analysis is done with the specified check suppressed
+   --  (can be All_Checks to suppress all checks).
 
    procedure Insert_After_And_Analyze
      (N : Node_Id; M : Node_Id);
@@ -618,7 +622,7 @@ package Sem is
 
    procedure Enter_Generic_Scope (S : Entity_Id);
    --  Shall be called each time a Generic subprogram or package scope is
-   --  entered.  S is the entity of the scope.
+   --  entered. S is the entity of the scope.
    --  ??? At the moment, only called for package specs because this mechanism
    --  is only used for avoiding freezing of external references in generics
    --  and this can only be an issue if the outer generic scope is a package
@@ -626,7 +630,7 @@ package Sem is
 
    procedure Exit_Generic_Scope  (S : Entity_Id);
    --  Shall be called each time a Generic subprogram or package scope is
-   --  exited.  S is the entity of the scope.
+   --  exited. S is the entity of the scope.
    --  ??? At the moment, only called for package specs exit.
 
    function Explicit_Suppress (E : Entity_Id; C : Check_Id) return Boolean;
@@ -639,5 +643,21 @@ package Sem is
    --  as the result of a scope suppress pragma. If Checks_May_Be_Suppressed
    --  is False, then the status of the check can be determined simply by
    --  examining Scope_Checks (C), so this routine is not called in that case.
+
+   generic
+      with procedure Action (Item : Node_Id);
+   procedure Walk_Library_Items;
+   --  Primarily for use by SofCheck Inspector. Must be called after semantic
+   --  analysis (and expansion) are complete. Walks each relevant library item,
+   --  calling Action for each, in an order such that one will not run across
+   --  forward references. Each Item passed to Action is the declaration or
+   --  body of a library unit, including generics and renamings. The first item
+   --  is the N_Package_Declaration node for package Standard. Bodies are not
+   --  included, except for the main unit itself, which always comes last.
+   --
+   --  Item is never a subunit
+   --
+   --  Item is never an instantiation. Instead, the instance declaration is
+   --  passed, and (if the instantiation is the main unit), the instance body.
 
 end Sem;

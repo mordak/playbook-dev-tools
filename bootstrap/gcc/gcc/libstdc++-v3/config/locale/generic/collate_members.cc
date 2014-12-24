@@ -1,6 +1,6 @@
 // std::collate implementation details, generic version -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2009
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -32,13 +32,16 @@
 #include <locale>
 #include <cstring>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   // These are basically extensions to char_traits, and perhaps should
   // be put there instead of here.
   template<>
     int 
-    collate<char>::_M_compare(const char* __one, const char* __two) const
+    collate<char>::_M_compare(const char* __one, 
+			      const char* __two) const throw()
     { 
       int __cmp = strcoll(__one, __two);
       return (__cmp >> (8 * sizeof (int) - 2)) | (__cmp != 0);
@@ -47,14 +50,14 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   template<>
     size_t
     collate<char>::_M_transform(char* __to, const char* __from, 
-				size_t __n) const
+				size_t __n) const throw()
     { return strxfrm(__to, __from, __n); }
 
 #ifdef _GLIBCXX_USE_WCHAR_T
   template<>
     int 
     collate<wchar_t>::_M_compare(const wchar_t* __one, 
-				 const wchar_t* __two) const
+				 const wchar_t* __two) const throw()
     {
       int __cmp = wcscoll(__one, __two);
       return (__cmp >> (8 * sizeof (int) - 2)) | (__cmp != 0);
@@ -63,8 +66,9 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   template<>
     size_t
     collate<wchar_t>::_M_transform(wchar_t* __to, const wchar_t* __from,
-				   size_t __n) const
+				   size_t __n) const throw()
     { return wcsxfrm(__to, __from, __n); }
 #endif
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace

@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -38,7 +38,7 @@
  * Contains an implementation for rb_tree_.
  */
 /*
- * This implementation uses an idea from the SGI STL (using a "header" node
+ * This implementation uses an idea from the SGI STL (using a @a header node
  *    which is needed for efficient iteration).
  */
 

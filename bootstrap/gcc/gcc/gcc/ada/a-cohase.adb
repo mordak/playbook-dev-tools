@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2004-2009, Free Software Foundation, Inc.         --
+--          Copyright (C) 2004-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -101,23 +101,21 @@ package body Ada.Containers.Hashed_Sets is
    -- Local Instantiations --
    --------------------------
 
-   package HT_Ops is
-      new Hash_Tables.Generic_Operations
-       (HT_Types  => HT_Types,
-        Hash_Node => Hash_Node,
-        Next      => Next,
-        Set_Next  => Set_Next,
-        Copy_Node => Copy_Node,
-        Free      => Free);
+   package HT_Ops is new Hash_Tables.Generic_Operations
+     (HT_Types  => HT_Types,
+      Hash_Node => Hash_Node,
+      Next      => Next,
+      Set_Next  => Set_Next,
+      Copy_Node => Copy_Node,
+      Free      => Free);
 
-   package Element_Keys is
-      new Hash_Tables.Generic_Keys
-       (HT_Types  => HT_Types,
-        Next      => Next,
-        Set_Next  => Set_Next,
-        Key_Type  => Element_Type,
-        Hash      => Hash,
-        Equivalent_Keys => Equivalent_Keys);
+   package Element_Keys is new Hash_Tables.Generic_Keys
+     (HT_Types        => HT_Types,
+      Next            => Next,
+      Set_Next        => Set_Next,
+      Key_Type        => Element_Type,
+      Hash            => Hash,
+      Equivalent_Keys => Equivalent_Keys);
 
    function Is_Equal is
       new HT_Ops.Generic_Equal (Find_Equal_Key);
@@ -232,7 +230,7 @@ package body Ada.Containers.Hashed_Sets is
 
       if Container.HT.Busy > 0 then
          raise Program_Error with
-           "attempt to tamper with elements (set is busy)";
+           "attempt to tamper with cursors (set is busy)";
       end if;
 
       pragma Assert (Vet (Position), "bad cursor in Delete");
@@ -265,7 +263,7 @@ package body Ada.Containers.Hashed_Sets is
 
       if Target.HT.Busy > 0 then
          raise Program_Error with
-           "attempt to tamper with elements (set is busy)";
+           "attempt to tamper with cursors (set is busy)";
       end if;
 
       if Source.HT.Length < Target.HT.Length then
@@ -616,7 +614,7 @@ package body Ada.Containers.Hashed_Sets is
       if not Inserted then
          if Container.HT.Lock > 0 then
             raise Program_Error with
-              "attempt to tamper with cursors (set is locked)";
+              "attempt to tamper with elements (set is locked)";
          end if;
 
          Position.Node.Element := New_Item;
@@ -715,7 +713,7 @@ package body Ada.Containers.Hashed_Sets is
 
       if Target.HT.Busy > 0 then
          raise Program_Error with
-           "attempt to tamper with elements (set is busy)";
+           "attempt to tamper with cursors (set is busy)";
       end if;
 
       Tgt_Node := HT_Ops.First (Target.HT);
@@ -1061,7 +1059,7 @@ package body Ada.Containers.Hashed_Sets is
 
       if Container.HT.Lock > 0 then
          raise Program_Error with
-           "attempt to tamper with cursors (set is locked)";
+           "attempt to tamper with elements (set is locked)";
       end if;
 
       Node.Element := New_Item;
@@ -1125,7 +1123,7 @@ package body Ada.Containers.Hashed_Sets is
 
       if Target.HT.Busy > 0 then
          raise Program_Error with
-           "attempt to tamper with elements (set is busy)";
+           "attempt to tamper with cursors (set is busy)";
       end if;
 
       declare
@@ -1394,7 +1392,7 @@ package body Ada.Containers.Hashed_Sets is
 
       if Target.HT.Busy > 0 then
          raise Program_Error with
-           "attempt to tamper with elements (set is busy)";
+           "attempt to tamper with cursors (set is busy)";
       end if;
 
       declare

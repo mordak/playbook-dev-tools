@@ -6,7 +6,7 @@
  *                                                                          *
  *                              C Header File                               *
  *                                                                          *
- *          Copyright (C) 1992-2009, Free Software Foundation, Inc.         *
+ *          Copyright (C) 1992-2010, Free Software Foundation, Inc.         *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -84,7 +84,7 @@ extern Node_Id Get_Attribute_Definition_Clause (Entity_Id, char);
 
 extern void Error_Msg_N	          (Fat_Pointer, Node_Id);
 extern void Error_Msg_NE          (Fat_Pointer, Node_Id, Entity_Id);
-extern void Set_Identifier_Casing (Char *, Char *);
+extern void Set_Identifier_Casing (Char *, const Char *);
 
 /* err_vars: */
 
@@ -135,10 +135,18 @@ extern void Setup_Asm_Outputs		(Node_Id);
 /* exp_dbug:  */
 
 #define Get_Encoded_Name exp_dbug__get_encoded_name
+#define Get_External_Name exp_dbug__get_external_name
 #define Get_External_Name_With_Suffix exp_dbug__get_external_name_with_suffix
 
-extern void Get_Encoded_Name	(Entity_Id);
-extern void Get_External_Name_With_Suffix (Entity_Id, Fat_Pointer);
+extern void Get_Encoded_Name			(Entity_Id);
+extern void Get_External_Name			(Entity_Id, Boolean);
+extern void Get_External_Name_With_Suffix	(Entity_Id, Fat_Pointer);
+
+/* exp_util: */
+
+#define Is_Fully_Repped_Tagged_Type exp_util__is_fully_repped_tagged_type
+
+extern Boolean Is_Fully_Repped_Tagged_Type      (Entity_Id);
 
 /* lib: */
 
@@ -155,6 +163,7 @@ extern Boolean In_Same_Source_Unit              (Node_Id, Node_Id);
 /* opt: */
 
 #define Global_Discard_Names           opt__global_discard_names
+#define Exception_Extra_Info           opt__exception_extra_info
 #define Exception_Locations_Suppressed opt__exception_locations_suppressed
 #define Exception_Mechanism            opt__exception_mechanism
 #define Back_Annotate_Rep_Info         opt__back_annotate_rep_info
@@ -162,6 +171,7 @@ extern Boolean In_Same_Source_Unit              (Node_Id, Node_Id);
 typedef enum {Setjmp_Longjmp, Back_End_Exceptions} Exception_Mechanism_Type;
 
 extern Boolean Global_Discard_Names;
+extern Boolean Exception_Extra_Info;
 extern Boolean Exception_Locations_Suppressed;
 extern Exception_Mechanism_Type Exception_Mechanism;
 extern Boolean Back_Annotate_Rep_Info;
@@ -177,6 +187,22 @@ extern Boolean No_Exception_Handlers_Set   (void);
 extern void Check_No_Implicit_Heap_Alloc   (Node_Id);
 extern void Check_Elaboration_Code_Allowed (Node_Id);
 extern void Check_Implicit_Dynamic_Code_Allowed (Node_Id);
+
+/* sem_aux:  */
+
+#define Ancestor_Subtype               sem_aux__ancestor_subtype
+#define First_Discriminant             sem_aux__first_discriminant
+#define First_Stored_Discriminant      sem_aux__first_stored_discriminant
+#define First_Subtype                  sem_aux__first_subtype
+#define Is_By_Reference_Type           sem_aux__is_by_reference_type
+#define Is_Derived_Type                sem_aux__is_derived_type
+
+extern Entity_Id  Ancestor_Subtype             (Entity_Id);
+extern Entity_Id  First_Discriminant           (Entity_Id);
+extern Entity_Id  First_Stored_Discriminant    (Entity_Id);
+extern Entity_Id  First_Subtype                (Entity_Id);
+extern Boolean    Is_By_Reference_Type         (Entity_Id);
+extern Boolean    Is_Derived_Type              (Entity_Id);
 
 /* sem_elim: */
 

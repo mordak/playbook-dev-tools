@@ -1,6 +1,6 @@
 /* Base configuration file for all NetBSD targets.
    Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
-   2007 Free Software Foundation, Inc.
+   2007, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -158,10 +158,6 @@ along with GCC; see the file COPYING3.  If not see
 #undef TARGET_POSIX_IO
 #define TARGET_POSIX_IO
 
-/* Handle #pragma weak and #pragma pack.  */
-
-#define HANDLE_SYSV_PRAGMA 1
-
 /* Don't assume anything about the header files.  */
 #undef  NO_IMPLICIT_EXTERN_C
 #define NO_IMPLICIT_EXTERN_C    1
@@ -180,7 +176,7 @@ along with GCC; see the file COPYING3.  If not see
 
 
 /* Attempt to turn on execute permission for the stack.  This may be
-   used by INITIALIZE_TRAMPOLINE of the target needs it (that is,
+   used by TARGET_TRAMPOLINE_INIT if the target needs it (that is,
    if the target machine can change execute permissions on a page).
 
    There is no way to query the execute permission of the stack, so
@@ -224,6 +220,3 @@ __enable_execute_stack (void *addr)					\
   /* 7 == PROT_READ | PROT_WRITE | PROT_EXEC */				\
   (void) mprotect (page, end - page, 7);				\
 }
-
-/* Define this so we can compile MS code for use with WINE.  */
-#define HANDLE_PRAGMA_PACK_PUSH_POP 1

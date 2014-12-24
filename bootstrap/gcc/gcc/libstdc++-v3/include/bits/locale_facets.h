@@ -1,7 +1,7 @@
 // Locale support -*- C++ -*-
 
 // Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-// 2006, 2007, 2008, 2009
+// 2006, 2007, 2008, 2009, 2010, 2011
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -24,9 +24,9 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file locale_facets.h
+/** @file bits/locale_facets.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{locale}
  */
 
 //
@@ -49,7 +49,9 @@
 #include <ext/numeric_traits.h>
 #include <bits/streambuf_iterator.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   // NB: Don't instantiate required wchar_t facets if no wchar_t support.
 #ifdef _GLIBCXX_USE_WCHAR_T
@@ -58,29 +60,29 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 # define  _GLIBCXX_NUM_FACETS 14
 #endif
 
-  // Convert string to numeric value of type _Tv and store results.
+  // Convert string to numeric value of type _Tp and store results.
   // NB: This is specialized for all required types, there is no
   // generic definition.
-  template<typename _Tv>
+  template<typename _Tp>
     void
-    __convert_to_v(const char* __in, _Tv& __out, ios_base::iostate& __err,
-		   const __c_locale& __cloc);
+    __convert_to_v(const char*, _Tp&, ios_base::iostate&,
+		   const __c_locale&) throw();
 
   // Explicit specializations for required types.
   template<>
     void
     __convert_to_v(const char*, float&, ios_base::iostate&,
-		   const __c_locale&);
+		   const __c_locale&) throw();
 
   template<>
     void
     __convert_to_v(const char*, double&, ios_base::iostate&,
-		   const __c_locale&);
+		   const __c_locale&) throw();
 
   template<>
     void
     __convert_to_v(const char*, long double&, ios_base::iostate&,
-		   const __c_locale&);
+		   const __c_locale&) throw();
 
   // NB: __pad is a struct, rather than a function, so it can be
   // partially-specialized.
@@ -130,7 +132,6 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   // 22.2.1.1  Template class ctype
   // Include host and configuration specific ctype enums for ctype_base.
 
-  // Common base for ctype<_CharT>.
   /**
    *  @brief  Common base for ctype facet
    *
@@ -583,12 +584,12 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 		char __dfault, char* __dest) const = 0;
     };
 
-  // NB: Generic, mostly useless implementation.
   /**
-   *  @brief  Template ctype facet
+   *  @brief  Primary class template ctype facet.
+   *  @ingroup locales
    *
    *  This template class defines classification and conversion functions for
-   *  character sets.  It wraps <cctype> functionality.  Ctype gets used by
+   *  character sets.  It wraps cctype functionality.  Ctype gets used by
    *  streams for many I/O operations.
    *
    *  This template provides the protected virtual functions the developer
@@ -661,9 +662,9 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   template<typename _CharT>
     locale::id ctype<_CharT>::id;
 
-  // 22.2.1.3  ctype<char> specialization.
   /**
    *  @brief  The ctype<char> specialization.
+   *  @ingroup locales
    *
    *  This class defines classification and conversion functions for
    *  the char type.  It gets used by char streams for many I/O
@@ -1160,9 +1161,9 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     };
 
 #ifdef _GLIBCXX_USE_WCHAR_T
-  // 22.2.1.3  ctype<wchar_t> specialization
   /**
    *  @brief  The ctype<wchar_t> specialization.
+   *  @ingroup locales
    *
    *  This class defines classification and conversion functions for the
    *  wchar_t type.  It gets used by wchar_t streams for many I/O operations.
@@ -1220,7 +1221,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
     protected:
       __wmask_type
-      _M_convert_to_wmask(const mask __m) const;
+      _M_convert_to_wmask(const mask __m) const throw();
 
       /// Destructor
       virtual
@@ -1458,7 +1459,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
       // For use at construction time only.
       void
-      _M_initialize_ctype();
+      _M_initialize_ctype() throw();
     };
 #endif //_GLIBCXX_USE_WCHAR_T
 
@@ -1504,12 +1505,15 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     };
 #endif
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 // Include host and configuration specific ctype inlines.
 #include <bits/ctype_inline.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   // 22.2.2  The numeric category.
   class __num_base
@@ -1558,7 +1562,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     // num_put
     // Construct and return valid scanf format for floating point types.
     static void
-    _S_format_float(const ios_base& __io, char* __fptr, char __mod);
+    _S_format_float(const ios_base& __io, char* __fptr, char __mod) throw();
   };
 
   template<typename _CharT>
@@ -1588,12 +1592,13 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
       bool				_M_allocated;
 
-      __numpunct_cache(size_t __refs = 0) : facet(__refs),
-      _M_grouping(NULL), _M_grouping_size(0), _M_use_grouping(false),
-      _M_truename(NULL), _M_truename_size(0), _M_falsename(NULL),
-      _M_falsename_size(0), _M_decimal_point(_CharT()),
-      _M_thousands_sep(_CharT()), _M_allocated(false)
-      { }
+      __numpunct_cache(size_t __refs = 0)
+      : facet(__refs), _M_grouping(0), _M_grouping_size(0),
+	_M_use_grouping(false),
+	_M_truename(0), _M_truename_size(0), _M_falsename(0),
+	_M_falsename_size(0), _M_decimal_point(_CharT()),
+	_M_thousands_sep(_CharT()), _M_allocated(false)
+        { }
 
       ~__numpunct_cache();
 
@@ -1620,7 +1625,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     }
 
   /**
-   *  @brief  Numpunct facet.
+   *  @brief  Primary class template numpunct.
+   *  @ingroup locales
    *
    *  This facet stores several pieces of information related to printing and
    *  scanning numbers, such as the decimal point character.  It takes a
@@ -1657,7 +1663,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *  @param  refs  Refcount to pass to the base class.
        */
       explicit
-      numpunct(size_t __refs = 0) : facet(__refs), _M_data(NULL)
+      numpunct(size_t __refs = 0)
+      : facet(__refs), _M_data(0)
       { _M_initialize_numpunct(); }
 
       /**
@@ -1680,12 +1687,12 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *  This is a constructor for use by the library itself to set up new
        *  locales.
        *
-       *  @param  cloc  The "C" locale.
+       *  @param  cloc  The C locale.
        *  @param  refs  Refcount to pass to the base class.
        */
       explicit
       numpunct(__c_locale __cloc, size_t __refs = 0)
-      : facet(__refs), _M_data(NULL)
+      : facet(__refs), _M_data(0)
       { _M_initialize_numpunct(__cloc); }
 
       /**
@@ -1841,7 +1848,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
       // For use at construction time only.
       void
-      _M_initialize_numpunct(__c_locale __cloc = NULL);
+      _M_initialize_numpunct(__c_locale __cloc = 0);
     };
 
   template<typename _CharT>
@@ -1890,10 +1897,11 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       ~numpunct_byname() { }
     };
 
-_GLIBCXX_BEGIN_LDBL_NAMESPACE
+_GLIBCXX_BEGIN_NAMESPACE_LDBL
 
   /**
-   *  @brief  Facet for parsing number strings.
+   *  @brief  Primary class template num_get.
+   *  @ingroup locales
    *
    *  This facet encapsulates the code to parse and return a number
    *  from a string.  It is used by the istream numeric extraction
@@ -2231,7 +2239,8 @@ _GLIBCXX_BEGIN_LDBL_NAMESPACE
 
 
   /**
-   *  @brief  Facet for converting numbers to strings.
+   *  @brief  Primary class template num_put.
+   *  @ingroup locales
    *
    *  This facet encapsulates the code to convert a number to a string.  It is
    *  used by the ostream numeric insertion operators.
@@ -2508,7 +2517,7 @@ _GLIBCXX_BEGIN_LDBL_NAMESPACE
   template <typename _CharT, typename _OutIter>
     locale::id num_put<_CharT, _OutIter>::id;
 
-_GLIBCXX_END_LDBL_NAMESPACE
+_GLIBCXX_END_NAMESPACE_LDBL
 
   // Subclause convenience interfaces, inlines.
   // NB: These are inline because, when used in a loop, some compilers
@@ -2593,10 +2602,9 @@ _GLIBCXX_END_LDBL_NAMESPACE
     tolower(_CharT __c, const locale& __loc)
     { return use_facet<ctype<_CharT> >(__loc).tolower(__c); }
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
-#ifndef _GLIBCXX_EXPORT_TEMPLATE
 # include <bits/locale_facets.tcc>
-#endif
 
 #endif

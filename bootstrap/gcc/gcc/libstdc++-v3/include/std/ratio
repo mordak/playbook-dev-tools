@@ -1,6 +1,6 @@
 // ratio -*- C++ -*-
 
-// Copyright (C) 2008, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the 
@@ -22,7 +22,7 @@
 // see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 // <http://www.gnu.org/licenses/>.
 
-/** @file ratio
+/** @file include/ratio
  *  This is a Standard C++ Library header.
  */
 
@@ -32,7 +32,7 @@
 #pragma GCC system_header
 
 #ifndef __GXX_EXPERIMENTAL_CXX0X__
-# include <c++0x_warning.h>
+# include <bits/c++0x_warning.h>
 #else
 
 #include <type_traits>
@@ -40,13 +40,15 @@
 
 #ifdef _GLIBCXX_USE_C99_STDINT_TR1
 
-namespace std
+namespace std _GLIBCXX_VISIBILITY(default)
 {
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
   /**
    * @defgroup ratio Rational Arithmetic
    * @ingroup utilities
    *
-   * Compile time representation of fininte rational numbers.
+   * Compile time representation of finite rational numbers.
    * @{
    */
 
@@ -155,34 +157,49 @@ namespace std
 		    "out of range");
 
       // Note: sign(N) * abs(N) == N
-      static const intmax_t num =
+      static constexpr intmax_t num =
         _Num * __static_sign<_Den>::value / __static_gcd<_Num, _Den>::value;
 
-      static const intmax_t den =
+      static constexpr intmax_t den =
         __static_abs<_Den>::value / __static_gcd<_Num, _Den>::value;
+
+      typedef ratio<num, den> type;
     };
 
   template<intmax_t _Num, intmax_t _Den>
-    const intmax_t ratio<_Num, _Den>::num;
+    constexpr intmax_t ratio<_Num, _Den>::num;
 
   template<intmax_t _Num, intmax_t _Den>
-    const intmax_t ratio<_Num, _Den>::den;
+    constexpr intmax_t ratio<_Num, _Den>::den;
 
   /// ratio_add
   template<typename _R1, typename _R2>
     struct ratio_add
     {
     private:
-      static const intmax_t __gcd =
+      static constexpr intmax_t __gcd =
         __static_gcd<_R1::den, _R2::den>::value;
+      static constexpr intmax_t __n = __safe_add<
+        __safe_multiply<_R1::num, (_R2::den / __gcd)>::value,
+        __safe_multiply<_R2::num, (_R1::den / __gcd)>::value>::value;
+
+      // The new numerator may have common factors with the denominator,
+      // but they have to also be factors of __gcd.
+      static constexpr intmax_t __gcd2 = __static_gcd<__n, __gcd>::value;
       
     public:
-      typedef ratio<
-        __safe_add<
-          __safe_multiply<_R1::num, (_R2::den / __gcd)>::value,
-          __safe_multiply<_R2::num, (_R1::den / __gcd)>::value>::value,
-        __safe_multiply<_R1::den, (_R2::den / __gcd)>::value> type;
+      typedef ratio<__n / __gcd2,
+        __safe_multiply<_R1::den / __gcd2, _R2::den / __gcd>::value> type;
+
+      static constexpr intmax_t num = type::num;
+      static constexpr intmax_t den = type::den;
     };
+
+  template<typename _R1, typename _R2>
+    constexpr intmax_t ratio_add<_R1, _R2>::num;
+
+  template<typename _R1, typename _R2>
+    constexpr intmax_t ratio_add<_R1, _R2>::den;
 
   /// ratio_subtract
   template<typename _R1, typename _R2>
@@ -191,7 +208,16 @@ namespace std
       typedef typename ratio_add<
         _R1,
         ratio<-_R2::num, _R2::den>>::type type;
+
+      static constexpr intmax_t num = type::num;
+      static constexpr intmax_t den = type::den;
     };
+
+  template<typename _R1, typename _R2>
+    constexpr intmax_t ratio_subtract<_R1, _R2>::num;
+
+  template<typename _R1, typename _R2>
+    constexpr intmax_t ratio_subtract<_R1, _R2>::den;
 
   /// ratio_multiply
   template<typename _R1, typename _R2>
@@ -209,7 +235,16 @@ namespace std
                         (_R2::num / __gcd2)>::value,
         __safe_multiply<(_R1::den / __gcd2),
                         (_R2::den / __gcd1)>::value> type;
+
+      static constexpr intmax_t num = type::num;
+      static constexpr intmax_t den = type::den;
     };
+
+  template<typename _R1, typename _R2>
+    constexpr intmax_t ratio_multiply<_R1, _R2>::num;
+
+  template<typename _R1, typename _R2>
+    constexpr intmax_t ratio_multiply<_R1, _R2>::den;
 
   /// ratio_divide
   template<typename _R1, typename _R2>
@@ -220,7 +255,16 @@ namespace std
       typedef typename ratio_multiply<
         _R1,
         ratio<_R2::den, _R2::num>>::type type;
+
+      static constexpr intmax_t num = type::num;
+      static constexpr intmax_t den = type::den;
     };
+
+  template<typename _R1, typename _R2>
+    constexpr intmax_t ratio_divide<_R1, _R2>::num;
+
+  template<typename _R1, typename _R2>
+    constexpr intmax_t ratio_divide<_R1, _R2>::den;
 
   /// ratio_equal
   template<typename _R1, typename _R2>
@@ -233,26 +277,71 @@ namespace std
     struct ratio_not_equal
     : integral_constant<bool, !ratio_equal<_R1, _R2>::value>
     { };
-  
+
+  // 0 <= _Ri < 1
+  // If one is 0, conclude
+  // Otherwise, x < y iff 1/y < 1/x
   template<typename _R1, typename _R2>
-    struct __ratio_less_simple_impl
-    : integral_constant<bool,
-			(__safe_multiply<_R1::num, _R2::den>::value
-			 < __safe_multiply<_R2::num, _R1::den>::value)>
+    struct __ratio_less_impl_2;
+
+  // _Ri > 0
+  // Compare the integral parts, and remove them if they are equal
+  template<typename _R1, typename _R2, intmax_t __q1 = _R1::num / _R1::den,
+           intmax_t __q2 = _R2::num / _R2::den, bool __eq = (__q1 == __q2)>
+    struct __ratio_less_impl_1
+    : __ratio_less_impl_2<ratio<_R1::num % _R1::den, _R1::den>,
+           ratio<_R2::num % _R2::den, _R2::den> >::type
+    { }; 
+
+  template<typename _R1, typename _R2, intmax_t __q1, intmax_t __q2>
+    struct __ratio_less_impl_1<_R1, _R2, __q1, __q2, false>
+    : integral_constant<bool, (__q1 < __q2) >
     { };
 
-  // If the denominators are equal or the signs differ, we can just compare
-  // numerators, otherwise fallback to the simple cross-multiply method.
   template<typename _R1, typename _R2>
-    struct __ratio_less_impl
-    : conditional<(_R1::den == _R2::den
+    struct __ratio_less_impl_2
+    : __ratio_less_impl_1<ratio<_R2::den, _R2::num>,
+           ratio<_R1::den, _R1::num> >::type
+    { }; 
+
+  template<intmax_t __d1, typename _R2>
+    struct __ratio_less_impl_2<ratio<0, __d1>, _R2>
+    : integral_constant<bool, true>
+    { }; 
+
+  template<typename _R1, intmax_t __d2>
+    struct __ratio_less_impl_2<_R1, ratio<0, __d2> >
+    : integral_constant<bool, false>
+    { }; 
+
+  template<intmax_t __d1, intmax_t __d2>
+    struct __ratio_less_impl_2<ratio<0, __d1>, ratio<0, __d2> >
+    : integral_constant<bool, false>
+    { }; 
+
+  template<typename _R1, typename _R2,
+	   bool = (_R1::num == 0 || _R2::num == 0
 		   || (__static_sign<_R1::num>::value
 		       != __static_sign<_R2::num>::value)),
-      integral_constant<bool, (_R1::num < _R2::num)>,
-      __ratio_less_simple_impl<_R1, _R2>>::type
+	   bool = (__static_sign<_R1::num>::value == -1
+		   && __static_sign<_R2::num>::value == -1)>
+    struct __ratio_less_impl
+    : __ratio_less_impl_1<_R1, _R2>::type
+    { };
+
+  template<typename _R1, typename _R2>
+    struct __ratio_less_impl<_R1, _R2, true, false>
+    : integral_constant<bool, _R1::num < _R2::num>
+    { };
+
+  template<typename _R1, typename _R2>
+    struct __ratio_less_impl<_R1, _R2, false, true>
+    : __ratio_less_impl_1<ratio<-_R2::num, _R2::den>,
+           ratio<-_R1::num, _R1::den> >::type
     { };
 
   /// ratio_less
+  // using a continued fraction expansion
   template<typename _R1, typename _R2>
     struct ratio_less
     : __ratio_less_impl<_R1, _R2>::type
@@ -294,7 +383,8 @@ namespace std
   typedef ratio<      1000000000000000000, 1> exa;
 
   // @} group ratio
-}
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif //_GLIBCXX_USE_C99_STDINT_TR1
 

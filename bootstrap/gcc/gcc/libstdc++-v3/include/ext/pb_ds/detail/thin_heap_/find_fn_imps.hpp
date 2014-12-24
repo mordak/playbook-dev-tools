@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -46,6 +46,6 @@ top() const
   _GLIBCXX_DEBUG_ONLY(assert_valid();)
     _GLIBCXX_DEBUG_ASSERT(!base_type::empty());
 
-  _GLIBCXX_DEBUG_ASSERT(m_p_max != NULL);
+  _GLIBCXX_DEBUG_ASSERT(m_p_max != 0);
   return m_p_max->m_value;
 }

@@ -1,6 +1,6 @@
 /* DWARF2 exception handling and frame unwind runtime interface routines.
    Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006,
-   2008, 2009  Free Software Foundation, Inc.
+   2008, 2009, 2010  Free Software Foundation, Inc.
 
    This file is part of GCC.
 
@@ -356,7 +356,16 @@ extract_cie_info (const struct dwarf_cie *cie, struct _Unwind_Context *context,
       aug += 2;
     }
 
-  /* Immediately following the augmentation are the code and
+  /* After the augmentation resp. pointer for "eh" augmentation
+     follows for CIE version >= 4 address size byte and
+     segment size byte.  */
+  if (__builtin_expect (cie->version >= 4, 0))
+    {
+      if (p[0] != sizeof (void *) || p[1] != 0)
+	return NULL;
+      p += 2;
+    }
+  /* Immediately following this are the code and
      data alignment and return address column.  */
   p = read_uleb128 (p, &utmp);
   fs->code_align = (_Unwind_Word)utmp;
@@ -404,7 +413,7 @@ extract_cie_info (const struct dwarf_cie *cie, struct _Unwind_Context *context,
       else if (aug[0] == 'P')
 	{
 	  _Unwind_Ptr personality;
-	  
+
 	  p = read_encoded_value (context, *p, p + 1, &personality);
 	  fs->personality = (_Unwind_Personality_Fn) personality;
 	  aug += 1;
@@ -672,7 +681,7 @@ execute_stack_op (const unsigned char *op_ptr, const unsigned char *op_end,
 	  /* Unary operations.  */
 	  gcc_assert (stack_elt);
 	  stack_elt -= 1;
-	  
+
 	  result = stack[stack_elt];
 
 	  switch (op)
@@ -749,7 +758,7 @@ execute_stack_op (const unsigned char *op_ptr, const unsigned char *op_end,
 	    _Unwind_Word first, second;
 	    gcc_assert (stack_elt >= 2);
 	    stack_elt -= 2;
-	    
+
 	    second = stack[stack_elt];
 	    first = stack[stack_elt + 1];
 
@@ -765,7 +774,7 @@ execute_stack_op (const unsigned char *op_ptr, const unsigned char *op_end,
 		result = second - first;
 		break;
 	      case DW_OP_mod:
-		result = (_Unwind_Sword) second % (_Unwind_Sword) first;
+		result = second % first;
 		break;
 	      case DW_OP_mul:
 		result = second * first;
@@ -789,22 +798,22 @@ execute_stack_op (const unsigned char *op_ptr, const unsigned char *op_end,
 		result = second ^ first;
 		break;
 	      case DW_OP_le:
-		result = (_Unwind_Sword) first <= (_Unwind_Sword) second;
+		result = (_Unwind_Sword) second <= (_Unwind_Sword) first;
 		break;
 	      case DW_OP_ge:
-		result = (_Unwind_Sword) first >= (_Unwind_Sword) second;
+		result = (_Unwind_Sword) second >= (_Unwind_Sword) first;
 		break;
 	      case DW_OP_eq:
-		result = (_Unwind_Sword) first == (_Unwind_Sword) second;
+		result = (_Unwind_Sword) second == (_Unwind_Sword) first;
 		break;
 	      case DW_OP_lt:
-		result = (_Unwind_Sword) first < (_Unwind_Sword) second;
+		result = (_Unwind_Sword) second < (_Unwind_Sword) first;
 		break;
 	      case DW_OP_gt:
-		result = (_Unwind_Sword) first > (_Unwind_Sword) second;
+		result = (_Unwind_Sword) second > (_Unwind_Sword) first;
 		break;
 	      case DW_OP_ne:
-		result = (_Unwind_Sword) first != (_Unwind_Sword) second;
+		result = (_Unwind_Sword) second != (_Unwind_Sword) first;
 		break;
 
 	      default:
@@ -822,7 +831,7 @@ execute_stack_op (const unsigned char *op_ptr, const unsigned char *op_end,
 	case DW_OP_bra:
 	  gcc_assert (stack_elt);
 	  stack_elt -= 1;
-	  
+
 	  offset = read_2s (op_ptr);
 	  op_ptr += 2;
 	  if (stack[stack_elt] != 0)
@@ -902,7 +911,7 @@ execute_cfa_program (const unsigned char *insn_ptr,
 	case DW_CFA_set_loc:
 	  {
 	    _Unwind_Ptr pc;
-	    
+
 	    insn_ptr = read_encoded_value (context, fs->fde_encoding,
 					   insn_ptr, &pc);
 	    fs->pc = (void *) pc;
@@ -1164,7 +1173,7 @@ uw_frame_state_for (struct _Unwind_Context *context, _Unwind_FrameState *fs)
   if (fs->lsda_encoding != DW_EH_PE_omit)
     {
       _Unwind_Ptr lsda;
-      
+
       aug = read_encoded_value (context, fs->lsda_encoding, aug, &lsda);
       context->lsda = (void *) lsda;
     }
@@ -1248,7 +1257,7 @@ _Unwind_SetSpColumn (struct _Unwind_Context *context, void *cfa,
 		     _Unwind_SpTmp *tmp_sp)
 {
   int size = dwarf_reg_size_table[__builtin_dwarf_sp_column ()];
-  
+
   if (size == sizeof(_Unwind_Ptr))
     tmp_sp->ptr = (_Unwind_Ptr) cfa;
   else
@@ -1431,7 +1440,7 @@ init_dwarf_reg_size_table (void)
   __builtin_init_dwarf_reg_size_table (dwarf_reg_size_table);
 }
 
-static void
+static void __attribute__((noinline))
 uw_init_context_1 (struct _Unwind_Context *context,
 		   void *outer_cfa, void *outer_ra)
 {
@@ -1473,18 +1482,32 @@ uw_init_context_1 (struct _Unwind_Context *context,
   context->ra = __builtin_extract_return_addr (outer_ra);
 }
 
+static void _Unwind_DebugHook (void *, void *)
+  __attribute__ ((__noinline__, __used__, __noclone__));
+
+/* This function is called during unwinding.  It is intended as a hook
+   for a debugger to intercept exceptions.  CFA is the CFA of the
+   target frame.  HANDLER is the PC to which control will be
+   transferred.  */
+static void
+_Unwind_DebugHook (void *cfa __attribute__ ((__unused__)),
+		   void *handler __attribute__ ((__unused__)))
+{
+  asm ("");
+}
 
 /* Install TARGET into CURRENT so that we can return to it.  This is a
    macro because __builtin_eh_return must be invoked in the context of
    our caller.  */
 
-#define uw_install_context(CURRENT, TARGET)				 \
-  do									 \
-    {									 \
-      long offset = uw_install_context_1 ((CURRENT), (TARGET));		 \
-      void *handler = __builtin_frob_return_addr ((TARGET)->ra);	 \
-      __builtin_eh_return (offset, handler);				 \
-    }									 \
+#define uw_install_context(CURRENT, TARGET)				\
+  do									\
+    {									\
+      long offset = uw_install_context_1 ((CURRENT), (TARGET));		\
+      void *handler = __builtin_frob_return_addr ((TARGET)->ra);	\
+      _Unwind_DebugHook ((TARGET)->cfa, handler);			\
+      __builtin_eh_return (offset, handler);				\
+    }									\
   while (0)
 
 static long
@@ -1546,7 +1569,13 @@ uw_install_context_1 (struct _Unwind_Context *current,
 static inline _Unwind_Ptr
 uw_identify_context (struct _Unwind_Context *context)
 {
-  return _Unwind_GetCFA (context);
+  /* The CFA is not sufficient to disambiguate the context of a function
+     interrupted by a signal before establishing its frame and the context
+     of the signal itself.  */
+  if (STACK_GROWS_DOWNWARD)
+    return _Unwind_GetCFA (context) - _Unwind_IsSignalFrame (context);
+  else
+    return _Unwind_GetCFA (context) + _Unwind_IsSignalFrame (context);
 }
 
 

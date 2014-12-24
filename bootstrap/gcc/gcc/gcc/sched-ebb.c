@@ -1,6 +1,6 @@
 /* Instruction scheduling pass.
    Copyright (C) 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008
+   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by Michael Tiemann (tiemann@cygnus.com) Enhanced by,
    and currently maintained by, Jim Wilson (wilson@cygnus.com)
@@ -25,7 +25,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "system.h"
 #include "coretypes.h"
 #include "tm.h"
-#include "toplev.h"
+#include "diagnostic-core.h"
 #include "rtl.h"
 #include "tm_p.h"
 #include "hard-reg-set.h"
@@ -35,7 +35,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "insn-config.h"
 #include "insn-attr.h"
 #include "except.h"
-#include "toplev.h"
 #include "recog.h"
 #include "cfglayout.h"
 #include "params.h"
@@ -137,36 +136,31 @@ begin_schedule_ready (rtx insn, rtx last)
       && last != PREV_INSN (insn))
     {
       edge e;
-      edge_iterator ei;
       basic_block bb;
 
       /* An obscure special case, where we do have partially dead
 	 instruction scheduled after last control flow instruction.
 	 In this case we can create new basic block.  It is
 	 always exactly one basic block last in the sequence.  */
-      
-      FOR_EACH_EDGE (e, ei, last_bb->succs)
-	if (e->flags & EDGE_FALLTHRU)
-	  break;
 
-#ifdef ENABLE_CHECKING
-      gcc_assert (!e || !(e->flags & EDGE_COMPLEX));	    
+      e = find_fallthru_edge (last_bb->succs);
 
-      gcc_assert (BLOCK_FOR_INSN (insn) == last_bb
-		  && !IS_SPECULATION_CHECK_P (insn)
-		  && BB_HEAD (last_bb) != insn
-		  && BB_END (last_bb) == insn);
+      gcc_checking_assert (!e || !(e->flags & EDGE_COMPLEX));
+
+      gcc_checking_assert (BLOCK_FOR_INSN (insn) == last_bb
+			   && !IS_SPECULATION_CHECK_P (insn)
+			   && BB_HEAD (last_bb) != insn
+			   && BB_END (last_bb) == insn);
 
       {
 	rtx x;
 
 	x = NEXT_INSN (insn);
 	if (e)
-	  gcc_assert (NOTE_P (x) || LABEL_P (x));
+	  gcc_checking_assert (NOTE_P (x) || LABEL_P (x));
 	else
-	  gcc_assert (BARRIER_P (x));
+	  gcc_checking_assert (BARRIER_P (x));
       }
-#endif
 
       if (e)
 	{
@@ -176,7 +170,7 @@ begin_schedule_ready (rtx insn, rtx last)
       else
 	/* Create an empty unreachable block after the INSN.  */
 	bb = create_basic_block (NEXT_INSN (insn), NULL_RTX, last_bb);
-      
+
       /* split_edge () creates BB before E->DEST.  Keep in mind, that
 	 this operation extends scheduling region till the end of BB.
 	 Hence, we need to shift NEXT_TAIL, so haifa-sched.c won't go out
@@ -286,6 +280,7 @@ static struct haifa_sched_info ebb_sched_info =
   rank,
   ebb_print_insn,
   ebb_contributes_to_priority,
+  NULL, /* insn_finishes_block_p */
 
   NULL, NULL,
   NULL, NULL,
@@ -326,7 +321,7 @@ earliest_block_with_similiar_load (basic_block last_block, rtx load_insn)
     {
       rtx insn1 = DEP_PRO (back_dep);
 
-      if (DEP_TYPE (back_dep) == REG_DEP_TRUE)	
+      if (DEP_TYPE (back_dep) == REG_DEP_TRUE)
 	/* Found a DEF-USE dependence (insn1, load_insn).  */
 	{
 	  sd_iterator_def fore_sd_it;
@@ -462,8 +457,8 @@ static basic_block
 schedule_ebb (rtx head, rtx tail)
 {
   basic_block first_bb, target_bb;
-  struct deps tmp_deps;
-  
+  struct deps_desc tmp_deps;
+
   first_bb = BLOCK_FOR_INSN (head);
   last_bb = BLOCK_FOR_INSN (tail);
 
@@ -477,7 +472,7 @@ schedule_ebb (rtx head, rtx tail)
       init_deps_global ();
 
       /* Compute dependencies.  */
-      init_deps (&tmp_deps);
+      init_deps (&tmp_deps, false);
       sched_analyze (&tmp_deps, head, tail);
       free_deps (&tmp_deps);
 
@@ -490,7 +485,7 @@ schedule_ebb (rtx head, rtx tail)
     }
   else
     /* Only recovery blocks can have their dependencies already calculated,
-       and they always are single block ebbs.  */       
+       and they always are single block ebbs.  */
     gcc_assert (first_bb == last_bb);
 
   /* Set priorities.  */
@@ -515,7 +510,7 @@ schedule_ebb (rtx head, rtx tail)
 
   /* We might pack all instructions into fewer blocks,
      so we may made some of them empty.  Can't assert (b == last_bb).  */
-  
+
   /* Sanity check: verify that all region insns were scheduled.  */
   gcc_assert (sched_rgn_n_insns == rgn_n_insns);
 
@@ -587,14 +582,11 @@ schedule_ebbs (void)
       for (;;)
 	{
 	  edge e;
-	  edge_iterator ei;
 	  tail = BB_END (bb);
 	  if (bb->next_bb == EXIT_BLOCK_PTR
 	      || LABEL_P (BB_HEAD (bb->next_bb)))
 	    break;
-	  FOR_EACH_EDGE (e, ei, bb->succs)
-	    if ((e->flags & EDGE_FALLTHRU) != 0)
-	      break;
+	  e = find_fallthru_edge (bb->succs);
 	  if (! e)
 	    break;
 	  if (e->probability <= probability_cutoff)
@@ -606,9 +598,9 @@ schedule_ebbs (void)
 	 a note or two.  */
       while (head != tail)
 	{
-	  if (NOTE_P (head))
+	  if (NOTE_P (head) || DEBUG_INSN_P (head))
 	    head = NEXT_INSN (head);
-	  else if (NOTE_P (tail))
+	  else if (NOTE_P (tail) || DEBUG_INSN_P (tail))
 	    tail = PREV_INSN (tail);
 	  else if (LABEL_P (head))
 	    head = NEXT_INSN (head);
@@ -642,7 +634,7 @@ ebb_add_remove_insn (rtx insn ATTRIBUTE_UNUSED, int remove_p)
 static void
 ebb_add_block (basic_block bb, basic_block after)
 {
-  /* Recovery blocks are always bounded by BARRIERS, 
+  /* Recovery blocks are always bounded by BARRIERS,
      therefore, they always form single block EBB,
      therefore, we can use rec->index to identify such EBBs.  */
   if (after == EXIT_BLOCK_PTR)

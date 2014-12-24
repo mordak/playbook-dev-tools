@@ -1,7 +1,7 @@
 /* Definitions of target machine for GNU compiler for picoChip
-   Copyright (C) 2001, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2001, 2008, 2009, 2010 Free Software Foundation, Inc.
 
-   Contributed by picoChip Designs Ltd. (http://www.picochip.com)
+   Contributed by Picochip Ltd. (http://www.picochip.com)
    Maintained by Daniel Towner (daniel.towner@picochip.com) and
    Hariharan Sandanagobalane (hariharan@picochip.com).
 
@@ -60,19 +60,19 @@ extern enum picochip_dfa_type picochip_schedule_type;
 
 /* Translate requests for particular AEs into their respective ISA
    options. Note that byte access is enabled by default. */
-#define TARGET_OPTION_TRANSLATE_TABLE			      \
-  { "-mae=ANY",   "-mmul-type=none -mno-byte-access" },	      \
-  { "-mae=ANY2",  "-mmul-type=none -mno-byte-access" },	      \
-  { "-mae=ANY3",  "-mmul-type=none" },			      \
-  { "-mae=STAN",  "-mmul-type=none -mno-byte-access" },	      \
-  { "-mae=STAN2", "-mmul-type=mac -mno-byte-access" },	      \
-  { "-mae=STAN3", "-mmul-type=mac " },			      \
-  { "-mae=MAC",   "-mmul-type=mac -mno-byte-access" },	      \
-  { "-mae=MUL",   "-mmul-type=mul" },			      \
-  { "-mae=MEM",   "-mmul-type=mul" },			      \
-  { "-mae=MEM2",  "-mmul-type=mul" },			      \
-  { "-mae=CTRL",  "-mmul-type=mul" },			      \
-  { "-mae=CTRL2", "-mmul-type=mul" }
+#define DRIVER_SELF_SPECS					\
+  "%{mae=ANY:-mmul-type=none -mno-byte-access} %<mae=ANY",	\
+  "%{mae=ANY2:-mmul-type=none -mno-byte-access} %<mae=ANY2",	\
+  "%{mae=ANY3:-mmul-type=none} %<mae=ANY3",			\
+  "%{mae=STAN:-mmul-type=none -mno-byte-access} %<mae=STAN",	\
+  "%{mae=STAN2:-mmul-type=mac -mno-byte-access} %<mae=STAN2",	\
+  "%{mae=STAN3:-mmul-type=mac} %<mae=STAN3",			\
+  "%{mae=MAC:-mmul-type=mac -mno-byte-access} %<mae=MAC",	\
+  "%{mae=MUL:-mmul-type=mul} %<mae=MUL",			\
+  "%{mae=MEM:-mmul-type=mul} %<mae=MEM",			\
+  "%{mae=MEM2:-mmul-type=mul} %<mae=MEM2",			\
+  "%{mae=CTRL:-mmul-type=mul} %<mae=CTRL",			\
+  "%{mae=CTRL2:-mmul-type=mul} %<mae=CTRL2"
 
 /* Specify the default options, so that the multilib build doesn't
    need to provide special cases for the defaults. */
@@ -83,14 +83,6 @@ extern enum picochip_dfa_type picochip_schedule_type;
 #define TARGET_HAS_MUL_UNIT (picochip_has_mul_unit)
 #define TARGET_HAS_MAC_UNIT (picochip_has_mac_unit)
 #define TARGET_HAS_MULTIPLY (picochip_has_mac_unit || picochip_has_mul_unit)
-
-/* Allow some options to be overriden.  In particular, the 2nd
-   scheduling pass option is switched off, and a machine dependent
-   reorganisation ensures that it is run later on, after the second
-   jump optimisation. */
-#define OVERRIDE_OPTIONS picochip_override_options()
-
-#define CAN_DEBUG_WITHOUT_FP 1
 
 #define TARGET_VERSION fprintf(stderr, "(picoChip)");
 
@@ -261,7 +253,7 @@ extern enum picochip_dfa_type picochip_schedule_type;
 /* We can dynamically change the REG_ALLOC_ORDER using the following hook.
    It would be desirable to change it for leaf functions so we can put
    r12 at the end of this list.*/
-#define ORDER_REGS_FOR_LOCAL_ALLOC picochip_order_regs_for_local_alloc ()
+#define ADJUST_REG_ALLOC_ORDER picochip_order_regs_for_local_alloc ()
 
 /* How Values Fit in Registers  */
 
@@ -361,8 +353,6 @@ extern const enum reg_class picochip_regno_reg_class[FIRST_PSEUDO_REGISTER];
 
 #define REGNO_OK_FOR_INDEX_P(REGNO) 0
 
-#define PREFERRED_RELOAD_CLASS(X, CLASS) CLASS
-
 #define CLASS_MAX_NREGS(CLASS, MODE) picochip_class_max_nregs(CLASS, MODE)
 
 
@@ -391,32 +381,13 @@ extern const enum reg_class picochip_regno_reg_class[FIRST_PSEUDO_REGISTER];
 #define FRAME_POINTER_REGNUM 18
 #define ARG_POINTER_REGNUM   19
 
-/* Static chain is used to pass the local variables of the enclosing function.
-   The static chain is passed in memory. The first long-word location
-   beneath the stack pointer is used. In the presence of pretend
-   arguments, which are written into that location, this mechanism
-   complicates matters. */
-
-/* Location seen by the caller. */
-#define STATIC_CHAIN							\
-  gen_rtx_MEM (Pmode, plus_constant (stack_pointer_rtx, -2 * UNITS_PER_WORD))
-
-/* Location seen by the callee. */
-#define STATIC_CHAIN_INCOMING						\
-  gen_rtx_MEM (Pmode, plus_constant (arg_pointer_rtx, 0))
-
 /* Eliminating Frame Pointer and Arg Pointer.  The frame and argument
    pointers are eliminated wherever possible, by replacing them with
    offsets from the stack pointer. */
 
-/* We want to get rid of the frame pointer.  */
-#define FRAME_POINTER_REQUIRED 0
-
 #define ELIMINABLE_REGS 						\
   {{ARG_POINTER_REGNUM, STACK_POINTER_REGNUM},				\
    {FRAME_POINTER_REGNUM, STACK_POINTER_REGNUM}}
-
-#define CAN_ELIMINATE(FROM, TO) 1
 
 #define INITIAL_ELIMINATION_OFFSET(FROM,TO,OFFSET) \
   OFFSET = initial_elimination_offset(FROM, TO);
@@ -425,36 +396,13 @@ extern const enum reg_class picochip_regno_reg_class[FIRST_PSEUDO_REGISTER];
 
 #define PUSH_ARGS 0
 
-/* Functions don't pop their args.  */
-#define RETURN_POPS_ARGS(FNDECL, FNTYPE, STACK) 0
-
 /* Passing Arguments in Registers  */
 
 /* Store the offset of the next argument. */
 #define CUMULATIVE_ARGS unsigned
 
-/* Decide how function arguments are handled. */
-#define FUNCTION_ARG(CUM, MODE, TYPE, NAMED) \
-  picochip_function_arg (CUM, MODE, TYPE, NAMED)
-
-/* Incoming arguments are always the same as normal arguments, except
-   for a function which uses variadic arguments, in which case all
-   arguments are effectively passed on the stack. */
-#define FUNCTION_INCOMING_ARG(CUM, MODE, TYPE, NAMED) \
-  picochip_incoming_function_arg(CUM, MODE, TYPE, NAMED)
-
 #define INIT_CUMULATIVE_ARGS(CUM,FNTYPE,LIBNAME,INDIRECT,N_NAMED_ARGS) \
   ((CUM) = 0)
-
-#define FUNCTION_ARG_ADVANCE(CUM,MODE,TYPE,NAMED) \
-  (CUM) = picochip_arg_advance (CUM, MODE, TYPE, NAMED)
-
-/* Originally this used TYPE_ALIGN to determine the
-   alignment.  Unfortunately, this fails in some cases, because the
-   type is unknown (e.g., libcall's). Instead, use GET_MODE_ALIGNMENT
-   since the mode is always present. */
-#define FUNCTION_ARG_BOUNDARY(MODE,TYPE) \
-  picochip_get_function_arg_boundary(MODE)
 
 /* The first 6 registers can hold parameters.  */
 #define FUNCTION_ARG_REGNO_P(REGNO) ((REGNO) < 6)
@@ -487,29 +435,10 @@ extern const enum reg_class picochip_regno_reg_class[FIRST_PSEUDO_REGISTER];
 
 /* No trampolines.  */
 #define TRAMPOLINE_SIZE 0
-#define INITIALIZE_TRAMPOLINE(ADDR,FNADDR,CHAIN)
 
 /* Addressing Modes  */
 
-#define CONSTANT_ADDRESS_P(X) CONSTANT_P(X)
-
 #define MAX_REGS_PER_ADDRESS 1
-
-#ifdef REG_OK_STRICT
-
-#define GO_IF_LEGITIMATE_ADDRESS(MODE, X, LABEL) 			\
- if (picochip_legitimate_address_p (MODE, X, 1)) goto LABEL;
-
-#else /* REG_OK_STRICT */
-
-#define GO_IF_LEGITIMATE_ADDRESS(MODE, X, LABEL) 			\
-  if (picochip_legitimate_address_p (MODE, X, 0)) goto LABEL;
-
-#endif /* !REG_OK_STRICT */
-
-/* extern struct rtx_def *picochip_legitimize_address */
-/* 	PARAMS ((struct rtx_def *, struct rtx_def *, int)); */
-#define LEGITIMIZE_ADDRESS(X,OLDX,MODE,WIN);
 
 /* Legitimize reload address tries machine dependent means of
    reloading addresses.  There seems to be a strange error in gcc,
@@ -533,10 +462,10 @@ extern const enum reg_class picochip_regno_reg_class[FIRST_PSEUDO_REGISTER];
    correct code is generated. */
 
 #define LEGITIMIZE_RELOAD_ADDRESS(X,MODE,OPNUM,TYPE,IND_LEVELS,WIN)	     \
-if (picochip_symbol_offset(X)) { X = gen_rtx_CONST(MODE, X); }
-
-/* There are no mode dependent addresses.  */
-#define GO_IF_MODE_DEPENDENT_ADDRESS(ADDR,LABEL) do {} while (0)
+do {                                                                         \
+  if (picochip_legitimize_reload_address(&X,MODE,OPNUM,TYPE,IND_LEVELS))     \
+    goto WIN;                                                                \
+  } while(0);                                                                \
 
 /* Nonzero if the constant rtx X is a legitimate general operand.  X
    satisfies CONSTANT_P.  */
@@ -614,7 +543,7 @@ if (picochip_symbol_offset(X)) { X = gen_rtx_CONST(MODE, X); }
 
 #define ASM_FORMAT_PRIVATE_NAME(OUTPUT, NAME, LABELNO)  \
 ( (OUTPUT) = (char *) alloca (strlen ((NAME)) + 15),    \
-  sprintf ((OUTPUT), "%s___%d", (NAME), (LABELNO)))
+  sprintf ((OUTPUT), "%s___%lu", (NAME), (unsigned long)(LABELNO)))
 
 /* Macros Controlling Initialization Routines  */
 
@@ -686,7 +615,7 @@ if (picochip_symbol_offset(X)) { X = gen_rtx_CONST(MODE, X); }
 /* Assembler Commands for Alignment  */
 
 #define ASM_OUTPUT_SKIP(STREAM,BYTES) \
-  fprintf(STREAM, ".skip %u\n", BYTES);
+  fprintf(STREAM, ".skip "HOST_WIDE_INT_PRINT_UNSIGNED"\n", BYTES);
 #define ASM_OUTPUT_ALIGN(STREAM,POWER) \
   fprintf(STREAM, ".align %u\n", 1 << POWER);
 
@@ -739,6 +668,7 @@ enum picochip_builtins
   PICOCHIP_BUILTIN_HALT
 };
 
+#define NO_DOLLAR_IN_LABEL 1
 #define NO_DOT_IN_LABEL 1
 
 /* The assembler does support LEB128, despite the auto-configure test

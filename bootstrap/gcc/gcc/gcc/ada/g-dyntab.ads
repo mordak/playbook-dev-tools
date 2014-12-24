@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---                     Copyright (C) 2000-2008, AdaCore                     --
+--                     Copyright (C) 2000-2009, AdaCore                     --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -46,6 +46,8 @@
 --  Note that this interface should remain synchronized with those in
 --  GNAT.Table and the GNAT compiler source unit Table to keep as much
 --  coherency as possible between these three related units.
+
+pragma Compiler_Unit;
 
 generic
    type Table_Component_Type is private;
@@ -168,6 +170,9 @@ package GNAT.Dynamic_Tables is
    --    T.Table (T.Last) := New_Val;
    --  i.e. the table size is increased by one, and the given new item
    --  stored in the newly created table element.
+
+   procedure Append_All (T : in out Instance; New_Vals : Table_Type);
+   --  Appends all components of New_Vals
 
    procedure Set_Item
      (T     : in out Instance;

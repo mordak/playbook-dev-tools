@@ -1,3 +1,22 @@
+/* Copyright (C) 2005, 2006, 2008, 2010
+   Free Software Foundation, Inc.
+
+This file is part of GCC.
+
+GCC is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free
+Software Foundation; either version 3, or (at your option) any later
+version.
+
+GCC is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+for more details.
+
+You should have received a copy of the GNU General Public License
+along with GCC; see the file COPYING3.  If not see
+<http://www.gnu.org/licenses/>.  */
+
 #ifndef IOPARM_common_libreturn_mask
 #define IOPARM_common_libreturn_mask	3
 #define IOPARM_common_libreturn_ok	0
@@ -31,6 +50,7 @@ IOPARM (open,    encoding,	1 << 19, char1)
 IOPARM (open,    round,		1 << 20, char2)
 IOPARM (open,    sign,		1 << 21, char1)
 IOPARM (open,    asynchronous,	1 << 22, char2)
+IOPARM (open,    newunit,	1 << 23, pint4)
 IOPARM (close,   common,	0,	 common)
 IOPARM (close,   status,	1 << 7,  char1)
 IOPARM (filepos, common,	0,	 common)
@@ -66,7 +86,7 @@ IOPARM (inquire, encoding,	1 << 2,  char1)
 IOPARM (inquire, round,		1 << 3,  char2)
 IOPARM (inquire, sign,		1 << 4,  char1)
 IOPARM (inquire, pending,	1 << 5,  pint4)
-IOPARM (inquire, size,		1 << 6,  pint4)
+IOPARM (inquire, size,		1 << 6,  pintio)
 IOPARM (inquire, id,		1 << 7,  pint4)
 IOPARM (wait,    common,	0,	 common)
 IOPARM (wait,    id,		1 << 7,  pint4)

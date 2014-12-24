@@ -6,7 +6,7 @@
 --                                                                          --
 --                                B o d y                                   --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -73,9 +73,9 @@ package body Bindusg is
       Write_Line ("  -a        Automatically initialize elaboration " &
                   "procedure");
 
-      --  Line for A switch
+      --  Line for -A switch
 
-      Write_Line ("  -A        Generate binder program in Ada (default)");
+      Write_Line ("  -A        Give list of ALI files in partition");
 
       --  Line for -b switch
 
@@ -87,10 +87,6 @@ package body Bindusg is
       Write_Line ("  -c        Check only, no generation of " &
                   "binder output file");
 
-      --  Line for C switch
-
-      Write_Line ("  -C        Generate binder program in C");
-
       --  Line for -d switch
 
       Write_Line ("  -dnn[k|m] Default primary stack " &
@@ -99,7 +95,7 @@ package body Bindusg is
       --  Line for D switch
 
       Write_Line ("  -Dnn[k|m] Default secondary stack " &
-                  "size = nnn [kilo|mega] bytes");
+                  "size = nn [kilo|mega] bytes");
 
       --  Line for -e switch
 
@@ -108,7 +104,7 @@ package body Bindusg is
 
       --  Line for -E switch
 
-      Write_Line ("  -E        Store tracebacks in Exception occurrences");
+      Write_Line ("  -E        Store tracebacks in exception occurrences");
 
       --  The -f switch is voluntarily omitted, because it is obsolete
 
@@ -119,6 +115,11 @@ package body Bindusg is
       --  Line for -h switch
 
       Write_Line ("  -h        Output this usage (help) information");
+
+      --  Line for -H switch
+
+      Write_Line ("  -Hnn      Use nn bit heap where nn is 32 or 64 " &
+                  "(VMS Only)");
 
       --  Lines for -I switch
 
@@ -142,7 +143,7 @@ package body Bindusg is
 
       --  Line for -m switch
 
-      Write_Line ("  -mnnn     Limit number of detected errors " &
+      Write_Line ("  -mnnn     Limit number of detected errors/warnings " &
                   "to nnn (1-999999)");
 
       --  Line for -M switch
@@ -185,7 +186,7 @@ package body Bindusg is
       --  Line for -R switch
 
       Write_Line
-        ("  -R        List sources referenced in closure (implies -c)");
+        ("  -R        List sources referenced in closure");
 
       --  Line for -s switch
 

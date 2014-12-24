@@ -6,7 +6,7 @@
 
 #define N 256
 
-extern int a[N];
+extern int a[N+20];
 
 /* The alignment of 'pa' is unknown. 
    Yet we do know that both the read access and write access have 
@@ -59,6 +59,6 @@ main3 ()
 
 /* { dg-final { scan-tree-dump-times "vectorized 1 loops" 3 "vect" { xfail vect_no_int_add } } } */
 /* { dg-final { scan-tree-dump-times "accesses have the same alignment." 3 "vect" } } */
-/* { dg-final { scan-tree-dump-times "Alignment of access forced using peeling" 3 "vect" {target vector_alignment_reachable } } } */
-/* { dg-final { scan-tree-dump-times "Alignment of access forced using versioning" 3 "vect" {target {! vector_alignment_reachable} } } } */
+/* { dg-final { scan-tree-dump-times "Alignment of access forced using peeling" 3 "vect" {target { vector_alignment_reachable } } } } */
+/* { dg-final { scan-tree-dump-times "Alignment of access forced using versioning" 3 "vect" {target { {! vector_alignment_reachable} && {! vect_hw_misalign} } } } } */
 /* { dg-final { cleanup-tree-dump "vect" } } */

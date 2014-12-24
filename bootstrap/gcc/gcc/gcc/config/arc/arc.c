@@ -1,6 +1,6 @@
 /* Subroutines used for code generation on the Argonaut ARC cpu.
    Copyright (C) 1994, 1995, 1997, 1998, 1999, 2000, 2001, 2002, 2003,
-   2004, 2005, 2006, 2007, 2008 Free Software Foundation, Inc.
+   2004, 2005, 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -28,7 +28,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "rtl.h"
 #include "regs.h"
 #include "hard-reg-set.h"
-#include "real.h"
 #include "insn-config.h"
 #include "conditions.h"
 #include "output.h"
@@ -37,7 +36,8 @@ along with GCC; see the file COPYING3.  If not see
 #include "function.h"
 #include "expr.h"
 #include "recog.h"
-#include "toplev.h"
+#include "diagnostic-core.h"
+#include "df.h"
 #include "tm_p.h"
 #include "target.h"
 #include "target-def.h"
@@ -48,10 +48,6 @@ int arc_cpu_type;
 /* Name of mangle string to add to symbols to separate code compiled for each
    cpu (or NULL).  */
 const char *arc_mangle_cpu;
-
-/* Save the operands last given to a compare for use when we
-   generate a scc or bcc insn.  */
-rtx arc_compare_op0, arc_compare_op1;
 
 /* Name of text, data, and rodata sections used in varasm.c.  */
 const char *arc_text_section;
@@ -82,7 +78,6 @@ static bool arc_handle_option (size_t, const char *, int);
 static void record_cc_ref (rtx);
 static void arc_init_reg_tables (void);
 static int get_arc_condition_code (rtx);
-const struct attribute_spec arc_attribute_table[];
 static tree arc_handle_interrupt_attribute (tree *, tree, tree, int, bool *);
 static bool arc_assemble_integer (rtx, unsigned int, int);
 static void arc_output_function_prologue (FILE *, HOST_WIDE_INT);
@@ -98,6 +93,24 @@ static void arc_external_libcall (rtx);
 static bool arc_return_in_memory (const_tree, const_tree);
 static bool arc_pass_by_reference (CUMULATIVE_ARGS *, enum machine_mode,
 				   const_tree, bool);
+static rtx arc_function_arg (CUMULATIVE_ARGS *, enum machine_mode,
+			     const_tree, bool);
+static void arc_function_arg_advance (CUMULATIVE_ARGS *, enum machine_mode,
+				      const_tree, bool);
+static unsigned int arc_function_arg_boundary (enum machine_mode, const_tree);
+static void arc_trampoline_init (rtx, tree, rtx);
+static void arc_option_override (void);
+static void arc_conditional_register_usage (void);
+
+
+/* ARC specific attributs.  */
+
+static const struct attribute_spec arc_attribute_table[] =
+{
+  /* { name, min_len, max_len, decl_req, type_req, fn_type_req, handler } */
+  { "interrupt", 1, 1, true,  false, false, arc_handle_interrupt_attribute },
+  { NULL,        0, 0, false, false, false, NULL }
+};
 
 /* Initialize the GCC target structure.  */
 #undef TARGET_ASM_ALIGNED_HI_OP
@@ -123,15 +136,16 @@ static bool arc_pass_by_reference (CUMULATIVE_ARGS *, enum machine_mode,
 #undef TARGET_HANDLE_OPTION
 #define TARGET_HANDLE_OPTION arc_handle_option
 
+#undef TARGET_OPTION_OVERRIDE
+#define TARGET_OPTION_OVERRIDE arc_option_override
+
 #undef TARGET_RTX_COSTS
 #define TARGET_RTX_COSTS arc_rtx_costs
 #undef TARGET_ADDRESS_COST
 #define TARGET_ADDRESS_COST arc_address_cost
 
-#undef TARGET_PROMOTE_FUNCTION_ARGS
-#define TARGET_PROMOTE_FUNCTION_ARGS hook_bool_const_tree_true
-#undef TARGET_PROMOTE_FUNCTION_RETURN
-#define TARGET_PROMOTE_FUNCTION_RETURN hook_bool_const_tree_true
+#undef TARGET_PROMOTE_FUNCTION_MODE
+#define TARGET_PROMOTE_FUNCTION_MODE default_promote_function_mode_always_promote
 #undef TARGET_PROMOTE_PROTOTYPES
 #define TARGET_PROMOTE_PROTOTYPES hook_bool_const_tree_true
 
@@ -139,6 +153,12 @@ static bool arc_pass_by_reference (CUMULATIVE_ARGS *, enum machine_mode,
 #define TARGET_RETURN_IN_MEMORY arc_return_in_memory
 #undef TARGET_PASS_BY_REFERENCE
 #define TARGET_PASS_BY_REFERENCE arc_pass_by_reference
+#undef TARGET_FUNCTION_ARG
+#define TARGET_FUNCTION_ARG arc_function_arg
+#undef TARGET_FUNCTION_ARG_ADVANCE
+#define TARGET_FUNCTION_ARG_ADVANCE arc_function_arg_advance
+#undef TARGET_FUNCTION_ARG_BOUNDARY
+#define TARGET_FUNCTION_ARG_BOUNDARY arc_function_arg_boundary
 #undef TARGET_CALLEE_COPIES
 #define TARGET_CALLEE_COPIES hook_bool_CUMULATIVE_ARGS_mode_tree_bool_true
 
@@ -147,6 +167,12 @@ static bool arc_pass_by_reference (CUMULATIVE_ARGS *, enum machine_mode,
 
 #undef TARGET_EXPAND_BUILTIN_VA_START
 #define TARGET_EXPAND_BUILTIN_VA_START arc_va_start
+
+#undef TARGET_TRAMPOLINE_INIT
+#define TARGET_TRAMPOLINE_INIT arc_trampoline_init
+
+#undef TARGET_CONDITIONAL_REGISTER_USAGE
+#define TARGET_CONDITIONAL_REGISTER_USAGE arc_conditional_register_usage
 
 struct gcc_target targetm = TARGET_INITIALIZER;
 
@@ -165,10 +191,11 @@ arc_handle_option (size_t code, const char *arg, int value ATTRIBUTE_UNUSED)
     }
 }
 
-/* Called by OVERRIDE_OPTIONS to initialize various things.  */
+/* Implement TARGET_OPTION_OVERRIDE.
+   These need to be done at start up.  It's convenient to do them here.  */
 
-void
-arc_init (void)
+static void
+arc_option_override (void)
 {
   char *tmp;
   
@@ -368,13 +395,6 @@ arc_init_reg_tables (void)
    interrupt - for interrupt functions
 */
 
-const struct attribute_spec arc_attribute_table[] =
-{
-  /* { name, min_len, max_len, decl_req, type_req, fn_type_req, handler } */
-  { "interrupt", 1, 1, true,  false, false, arc_handle_interrupt_attribute },
-  { NULL,        0, 0, false, false, false, NULL }
-};
-
 /* Handle an "interrupt" attribute; arguments as in
    struct attribute_spec.handler.  */
 static tree
@@ -389,16 +409,16 @@ arc_handle_interrupt_attribute (tree *node ATTRIBUTE_UNUSED,
   if (TREE_CODE (value) != STRING_CST)
     {
       warning (OPT_Wattributes,
-	       "argument of %qs attribute is not a string constant",
-	       IDENTIFIER_POINTER (name));
+	       "argument of %qE attribute is not a string constant",
+	       name);
       *no_add_attrs = true;
     }
   else if (strcmp (TREE_STRING_POINTER (value), "ilink1")
 	   && strcmp (TREE_STRING_POINTER (value), "ilink2"))
     {
       warning (OPT_Wattributes,
-	       "argument of %qs attribute is not \"ilink1\" or \"ilink2\"",
-	       IDENTIFIER_POINTER (name));
+	       "argument of %qE attribute is not \"ilink1\" or \"ilink2\"",
+	       name);
       *no_add_attrs = true;
     }
 
@@ -729,21 +749,14 @@ proper_comparison_operator (rtx op, enum machine_mode mode ATTRIBUTE_UNUSED)
 
 /* Misc. utilities.  */
 
-/* X and Y are two things to compare using CODE.  Emit the compare insn and
-   return the rtx for the cc reg in the proper mode.  */
+/* X and Y are two things to compare using CODE.  Return the rtx
+   for the cc reg in the proper mode.  */
 
 rtx
 gen_compare_reg (enum rtx_code code, rtx x, rtx y)
 {
   enum machine_mode mode = SELECT_CC_MODE (code, x, y);
-  rtx cc_reg;
-
-  cc_reg = gen_rtx_REG (mode, 61);
-
-  emit_insn (gen_rtx_SET (VOIDmode, cc_reg,
-			  gen_rtx_COMPARE (mode, x, y)));
-
-  return cc_reg;
+  return gen_rtx_REG (mode, 61);
 }
 
 /* Return 1 if VALUE, a const_double, will fit in a limm (4 byte number).
@@ -908,7 +921,7 @@ arc_address_cost (rtx addr, bool speed ATTRIBUTE_UNUSED)
 	switch (GET_CODE (plus1))
 	  {
 	  case CONST_INT :
-	    return SMALL_INT (plus1) ? 1 : 2;
+	    return SMALL_INT (INTVAL (plus1)) ? 1 : 2;
 	  case CONST :
 	  case SYMBOL_REF :
 	  case LABEL_REF :
@@ -1513,9 +1526,10 @@ output_shift (rtx *operands)
     }
   else
     {
-      int n = INTVAL (operands[2]);
+      int n;
 
       /* If the count is negative, make it 0.  */
+      n = INTVAL (operands[2]);
       if (n < 0)
 	n = 0;
       /* If the count is too big, truncate it.
@@ -2353,3 +2367,125 @@ arc_pass_by_reference (CUMULATIVE_ARGS *ca ATTRIBUTE_UNUSED,
 
   return size > 8;
 }
+
+/* Round SIZE up to a word boundary.  */
+#define ROUND_ADVANCE(SIZE) \
+(((SIZE) + UNITS_PER_WORD - 1) / UNITS_PER_WORD)
+
+/* Round arg MODE/TYPE up to the next word boundary.  */
+#define ROUND_ADVANCE_ARG(MODE, TYPE) \
+((MODE) == BLKmode				\
+ ? ROUND_ADVANCE (int_size_in_bytes (TYPE))	\
+ : ROUND_ADVANCE (GET_MODE_SIZE (MODE)))
+
+/* Round CUM up to the necessary point for argument MODE/TYPE.  */
+#define ROUND_ADVANCE_CUM(CUM, MODE, TYPE) \
+((((MODE) == BLKmode ? TYPE_ALIGN (TYPE) : GET_MODE_BITSIZE (MODE)) \
+  > BITS_PER_WORD)	\
+ ? (((CUM) + 1) & ~1)	\
+ : (CUM))
+
+/* Return boolean indicating arg of type TYPE and mode MODE will be passed in
+   a reg.  This includes arguments that have to be passed by reference as the
+   pointer to them is passed in a reg if one is available (and that is what
+   we're given).  */
+#define PASS_IN_REG_P(CUM, MODE, TYPE) \
+((CUM) < MAX_ARC_PARM_REGS						\
+ && ((ROUND_ADVANCE_CUM ((CUM), (MODE), (TYPE))				\
+      + ROUND_ADVANCE_ARG ((MODE), (TYPE))				\
+      <= MAX_ARC_PARM_REGS)))
+
+/* Determine where to put an argument to a function.
+   Value is zero to push the argument on the stack,
+   or a hard register in which to store the argument.
+
+   MODE is the argument's machine mode.
+   TYPE is the data type of the argument (as a tree).
+    This is null for libcalls where that information may
+    not be available.
+   CUM is a variable of type CUMULATIVE_ARGS which gives info about
+    the preceding args and about the function being called.
+   NAMED is nonzero if this argument is a named parameter
+    (otherwise it is an extra parameter matching an ellipsis).  */
+/* On the ARC the first MAX_ARC_PARM_REGS args are normally in registers
+   and the rest are pushed.  */
+
+static rtx
+arc_function_arg (CUMULATIVE_ARGS *cum, enum machine_mode mode,
+		  const_tree type, bool named ATTRIBUTE_UNUSED)
+{
+  return (PASS_IN_REG_P (*cum, mode, type)
+	  ? gen_rtx_REG (mode, ROUND_ADVANCE_CUM (*cum, mode, type))
+	  : NULL_RTX);
+}
+
+/* Worker function for TARGET_FUNCTION_ARG_ADVANCE.  */
+
+static void
+arc_function_arg_advance (CUMULATIVE_ARGS *cum, enum machine_mode mode,
+			  const_tree type, bool named ATTRIBUTE_UNUSED)
+{
+  *cum = (ROUND_ADVANCE_CUM (*cum, mode, type)
+	  + ROUND_ADVANCE_ARG (mode, type));
+}
+
+/* Worker function for TARGET_FUNCTION_ARG_BOUNDARY.  */
+
+static unsigned int
+arc_function_arg_boundary (enum machine_mode mode, const_tree type)
+{
+  return (type != NULL_TREE
+	  ? TYPE_ALIGN (type)
+	  : (GET_MODE_BITSIZE (mode) <= PARM_BOUNDARY
+	     ? PARM_BOUNDARY
+	     : 2 * PARM_BOUNDARY));
+}
+
+/* Trampolines.  */
+/* ??? This doesn't work yet because GCC will use as the address of a nested
+   function the address of the trampoline.  We need to use that address
+   right shifted by 2.  It looks like we'll need PSImode after all. :-( 
+
+   ??? The above comment sounds like it's doable via
+   TARGET_TRAMPOLINE_ADJUST_ADDRESS; no PSImode needed.
+
+   On the ARC, the trampoline is quite simple as we have 32-bit immediate
+   constants.
+
+	mov r24,STATIC
+	j.nd FUNCTION
+*/
+
+static void
+arc_trampoline_init (rtx m_tramp, tree fndecl, rtx chain_value)
+{
+  rtx fnaddr = XEXP (DECL_RTL (fndecl), 0);
+  rtx mem;
+
+  mem = adjust_address (m_tramp, SImode, 0);
+  emit_move_insn (mem, GEN_INT (0x631f7c00));
+
+  mem = adjust_address (m_tramp, SImode, 4);
+  emit_move_insn (mem, chain_value);
+
+  mem = adjust_address (m_tramp, SImode, 8);
+  emit_move_insn (mem, GEN_INT (0x381f0000));
+
+  mem = adjust_address (m_tramp, SImode, 12);
+  emit_move_insn (mem, fnaddr);
+
+  emit_insn (gen_flush_icache (m_tramp));
+}
+
+/* Worker function for TARGET_CONDITIONAL_REGISTER_USAGE.  */
+
+static void
+arc_conditional_register_usage (void)
+{
+  if (PIC_OFFSET_TABLE_REGNUM != INVALID_REGNUM)
+    {
+      fixed_regs[PIC_OFFSET_TABLE_REGNUM] = 1;
+      call_used_regs[PIC_OFFSET_TABLE_REGNUM] = 1;
+    }
+}
+

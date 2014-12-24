@@ -1,6 +1,6 @@
 // Iterators -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -49,9 +49,9 @@
  * purpose.  It is provided "as is" without express or implied warranty.
  */
 
-/** @file stl_iterator.h
+/** @file bits/stl_iterator.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{iterator}
  *
  *  This file implements reverse_iterator, back_insert_iterator,
  *  front_insert_iterator, insert_iterator, __normal_iterator, and their
@@ -65,11 +65,18 @@
 #include <ext/type_traits.h>
 #include <bits/move.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
+  /**
+   * @addtogroup iterators
+   * @{
+   */
 
   // 24.4.1 Reverse iterators
   /**
-   *  "Bidirectional and random access iterators have corresponding reverse
+   *  Bidirectional and random access iterators have corresponding reverse
    *  %iterator adaptors that iterate through the data structure in the
    *  opposite direction.  They have the same signatures as the corresponding
    *  iterators.  The fundamental relation between a reverse %iterator and its
@@ -78,9 +85,9 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
    *      &*(reverse_iterator(i)) == &*(i - 1)
    *  @endcode
    *
-   *  This mapping is dictated by the fact that while there is always a
+   *  <em>This mapping is dictated by the fact that while there is always a
    *  pointer past the end of an array, there might not be a valid pointer
-   *  before the beginning of an array." [24.4.1]/1,2
+   *  before the beginning of an array.</em> [24.4.1]/1,2
    *
    *  Reverse iterators can be tricky and surprising at first.  Their
    *  semantics make sense, however, and the trickiness is a side effect of
@@ -97,14 +104,14 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     protected:
       _Iterator current;
 
-    public:
-      typedef _Iterator					       iterator_type;
-      typedef typename iterator_traits<_Iterator>::difference_type
-							       difference_type;
-      typedef typename iterator_traits<_Iterator>::reference   reference;
-      typedef typename iterator_traits<_Iterator>::pointer     pointer;
+      typedef iterator_traits<_Iterator>		__traits_type;
 
     public:
+      typedef _Iterator					iterator_type;
+      typedef typename __traits_type::difference_type	difference_type;
+      typedef typename __traits_type::pointer		pointer;
+      typedef typename __traits_type::reference		reference;
+
       /**
        *  The default constructor default-initializes member @p current.
        *  If it is a pointer, that means it is zero-initialized.
@@ -406,19 +413,26 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *                 reference-to-const T for container<T>.
        *  @return  This %iterator, for chained operations.
        *
-       *  This kind of %iterator doesn't really have a "position" in the
+       *  This kind of %iterator doesn't really have a @a position in the
        *  container (you can think of the position as being permanently at
        *  the end, if you like).  Assigning a value to the %iterator will
        *  always append the value to the end of the container.
       */
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
       back_insert_iterator&
       operator=(typename _Container::const_reference __value)
       {
 	container->push_back(__value);
 	return *this;
       }
+#else
+      back_insert_iterator&
+      operator=(const typename _Container::value_type& __value)
+      {
+	container->push_back(__value);
+	return *this;
+      }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
       back_insert_iterator&
       operator=(typename _Container::value_type&& __value)
       {
@@ -432,12 +446,12 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       operator*()
       { return *this; }
 
-      /// Simply returns *this.  (This %iterator does not "move".)
+      /// Simply returns *this.  (This %iterator does not @a move.)
       back_insert_iterator&
       operator++()
       { return *this; }
 
-      /// Simply returns *this.  (This %iterator does not "move".)
+      /// Simply returns *this.  (This %iterator does not @a move.)
       back_insert_iterator
       operator++(int)
       { return *this; }
@@ -489,19 +503,26 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *                 reference-to-const T for container<T>.
        *  @return  This %iterator, for chained operations.
        *
-       *  This kind of %iterator doesn't really have a "position" in the
+       *  This kind of %iterator doesn't really have a @a position in the
        *  container (you can think of the position as being permanently at
        *  the front, if you like).  Assigning a value to the %iterator will
        *  always prepend the value to the front of the container.
       */
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
       front_insert_iterator&
       operator=(typename _Container::const_reference __value)
       {
 	container->push_front(__value);
 	return *this;
       }
+#else
+      front_insert_iterator&
+      operator=(const typename _Container::value_type& __value)
+      {
+	container->push_front(__value);
+	return *this;
+      }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
       front_insert_iterator&
       operator=(typename _Container::value_type&& __value)
       {
@@ -515,12 +536,12 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       operator*()
       { return *this; }
 
-      /// Simply returns *this.  (This %iterator does not "move".)
+      /// Simply returns *this.  (This %iterator does not @a move.)
       front_insert_iterator&
       operator++()
       { return *this; }
 
-      /// Simply returns *this.  (This %iterator does not "move".)
+      /// Simply returns *this.  (This %iterator does not @a move.)
       front_insert_iterator
       operator++(int)
       { return *this; }
@@ -598,6 +619,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *     // vector v contains A, 1, 2, 3, and Z
        *  @endcode
       */
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
       insert_iterator&
       operator=(typename _Container::const_reference __value)
       {
@@ -605,8 +627,15 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	++iter;
 	return *this;
       }
+#else
+      insert_iterator&
+      operator=(const typename _Container::value_type& __value)
+      {
+	iter = container->insert(iter, __value);
+	++iter;
+	return *this;
+      }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
       insert_iterator&
       operator=(typename _Container::value_type&& __value)
       {
@@ -621,12 +650,12 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       operator*()
       { return *this; }
 
-      /// Simply returns *this.  (This %iterator does not "move".)
+      /// Simply returns *this.  (This %iterator does not @a move.)
       insert_iterator&
       operator++()
       { return *this; }
 
-      /// Simply returns *this.  (This %iterator does not "move".)
+      /// Simply returns *this.  (This %iterator does not @a move.)
       insert_iterator&
       operator++(int)
       { return *this; }
@@ -651,11 +680,16 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 					 typename _Container::iterator(__i));
     }
 
-_GLIBCXX_END_NAMESPACE
+  // @} group iterators
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
-  // This iterator adapter is 'normal' in the sense that it does not
+namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
+  // This iterator adapter is @a normal in the sense that it does not
   // change the semantics of any of the operators of its iterator
   // parameter.  Its primary purpose is to convert an iterator that is
   // not a class, e.g. a pointer, into an iterator that is a class.
@@ -670,17 +704,17 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
     protected:
       _Iterator _M_current;
 
-    public:
-      typedef _Iterator					     iterator_type;
-      typedef typename iterator_traits<_Iterator>::iterator_category
-                                                             iterator_category;
-      typedef typename iterator_traits<_Iterator>::value_type  value_type;
-      typedef typename iterator_traits<_Iterator>::difference_type
-                                                             difference_type;
-      typedef typename iterator_traits<_Iterator>::reference reference;
-      typedef typename iterator_traits<_Iterator>::pointer   pointer;
+      typedef iterator_traits<_Iterator>		__traits_type;
 
-      __normal_iterator() : _M_current(_Iterator()) { }
+    public:
+      typedef _Iterator					iterator_type;
+      typedef typename __traits_type::iterator_category iterator_category;
+      typedef typename __traits_type::value_type  	value_type;
+      typedef typename __traits_type::difference_type 	difference_type;
+      typedef typename __traits_type::reference 	reference;
+      typedef typename __traits_type::pointer   	pointer;
+
+      _GLIBCXX_CONSTEXPR __normal_iterator() : _M_current(_Iterator()) { }
 
       explicit
       __normal_iterator(const _Iterator& __i) : _M_current(__i) { }
@@ -863,11 +897,19 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	      __n, const __normal_iterator<_Iterator, _Container>& __i)
     { return __normal_iterator<_Iterator, _Container>(__i.base() + __n); }
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+
+  /**
+   * @addtogroup iterators
+   * @{
+   */
 
   // 24.4.3  Move iterators
   /**
@@ -884,18 +926,17 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     protected:
       _Iterator _M_current;
 
-    public:
-      typedef _Iterator                                        iterator_type;
-      typedef typename iterator_traits<_Iterator>::difference_type
-                                                               difference_type;
-      // NB: DR 680.
-      typedef _Iterator                                        pointer;
-      typedef typename iterator_traits<_Iterator>::value_type  value_type;
-      typedef typename iterator_traits<_Iterator>::iterator_category
-                                                               iterator_category;
-      typedef value_type&&                                     reference;
+      typedef iterator_traits<_Iterator>		__traits_type;
 
     public:
+      typedef _Iterator					iterator_type;
+      typedef typename __traits_type::iterator_category iterator_category;
+      typedef typename __traits_type::value_type  	value_type;
+      typedef typename __traits_type::difference_type	difference_type;
+      // NB: DR 680.
+      typedef _Iterator					pointer;
+      typedef value_type&&				reference;
+
       move_iterator()
       : _M_current() { }
 
@@ -913,7 +954,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
       reference
       operator*() const
-      { return *_M_current; }
+      { return std::move(*_M_current); }
 
       pointer
       operator->() const
@@ -973,13 +1014,22 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
       reference
       operator[](difference_type __n) const
-      { return _M_current[__n]; }
+      { return std::move(_M_current[__n]); }
     };
 
+  // Note: See __normal_iterator operators note from Gaby to understand
+  // why there are always 2 versions for most of the move_iterator
+  // operators.
   template<typename _IteratorL, typename _IteratorR>
     inline bool
     operator==(const move_iterator<_IteratorL>& __x,
 	       const move_iterator<_IteratorR>& __y)
+    { return __x.base() == __y.base(); }
+
+  template<typename _Iterator>
+    inline bool
+    operator==(const move_iterator<_Iterator>& __x,
+	       const move_iterator<_Iterator>& __y)
     { return __x.base() == __y.base(); }
 
   template<typename _IteratorL, typename _IteratorR>
@@ -988,10 +1038,22 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	       const move_iterator<_IteratorR>& __y)
     { return !(__x == __y); }
 
+  template<typename _Iterator>
+    inline bool
+    operator!=(const move_iterator<_Iterator>& __x,
+	       const move_iterator<_Iterator>& __y)
+    { return !(__x == __y); }
+
   template<typename _IteratorL, typename _IteratorR>
     inline bool
     operator<(const move_iterator<_IteratorL>& __x,
 	      const move_iterator<_IteratorR>& __y)
+    { return __x.base() < __y.base(); }
+
+  template<typename _Iterator>
+    inline bool
+    operator<(const move_iterator<_Iterator>& __x,
+	      const move_iterator<_Iterator>& __y)
     { return __x.base() < __y.base(); }
 
   template<typename _IteratorL, typename _IteratorR>
@@ -1000,10 +1062,22 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	       const move_iterator<_IteratorR>& __y)
     { return !(__y < __x); }
 
+  template<typename _Iterator>
+    inline bool
+    operator<=(const move_iterator<_Iterator>& __x,
+	       const move_iterator<_Iterator>& __y)
+    { return !(__y < __x); }
+
   template<typename _IteratorL, typename _IteratorR>
     inline bool
     operator>(const move_iterator<_IteratorL>& __x,
 	      const move_iterator<_IteratorR>& __y)
+    { return __y < __x; }
+
+  template<typename _Iterator>
+    inline bool
+    operator>(const move_iterator<_Iterator>& __x,
+	      const move_iterator<_Iterator>& __y)
     { return __y < __x; }
 
   template<typename _IteratorL, typename _IteratorR>
@@ -1012,11 +1086,24 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	       const move_iterator<_IteratorR>& __y)
     { return !(__x < __y); }
 
+  template<typename _Iterator>
+    inline bool
+    operator>=(const move_iterator<_Iterator>& __x,
+	       const move_iterator<_Iterator>& __y)
+    { return !(__x < __y); }
+
   // DR 685.
   template<typename _IteratorL, typename _IteratorR>
     inline auto
     operator-(const move_iterator<_IteratorL>& __x,
 	      const move_iterator<_IteratorR>& __y)
+    -> decltype(__x.base() - __y.base())
+    { return __x.base() - __y.base(); }
+
+  template<typename _Iterator>
+    inline auto
+    operator-(const move_iterator<_Iterator>& __x,
+	      const move_iterator<_Iterator>& __y)
     -> decltype(__x.base() - __y.base())
     { return __x.base() - __y.base(); }
 
@@ -1031,7 +1118,10 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     make_move_iterator(const _Iterator& __i)
     { return move_iterator<_Iterator>(__i); }
 
-_GLIBCXX_END_NAMESPACE
+  // @} group iterators
+
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #define _GLIBCXX_MAKE_MOVE_ITERATOR(_Iter) std::make_move_iterator(_Iter)
 #else

@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -31,9 +31,10 @@ package Exp_Ch4 is
 
    procedure Expand_N_Allocator                   (N : Node_Id);
    procedure Expand_N_And_Then                    (N : Node_Id);
+   procedure Expand_N_Case_Expression             (N : Node_Id);
    procedure Expand_N_Conditional_Expression      (N : Node_Id);
-   procedure Expand_N_In                          (N : Node_Id);
    procedure Expand_N_Explicit_Dereference        (N : Node_Id);
+   procedure Expand_N_In                          (N : Node_Id);
    procedure Expand_N_Indexed_Component           (N : Node_Id);
    procedure Expand_N_Not_In                      (N : Node_Id);
    procedure Expand_N_Null                        (N : Node_Id);
@@ -65,6 +66,7 @@ package Exp_Ch4 is
    procedure Expand_N_Op_Xor                      (N : Node_Id);
    procedure Expand_N_Or_Else                     (N : Node_Id);
    procedure Expand_N_Qualified_Expression        (N : Node_Id);
+   procedure Expand_N_Quantified_Expression       (N : Node_Id);
    procedure Expand_N_Selected_Component          (N : Node_Id);
    procedure Expand_N_Slice                       (N : Node_Id);
    procedure Expand_N_Type_Conversion             (N : Node_Id);
@@ -87,5 +89,12 @@ package Exp_Ch4 is
    --  are created in the process. This is the responsibility of the caller
    --  to insert those bodies at the right place. Nod provides the Sloc
    --  value for generated code.
+
+   function Integer_Promotion_Possible (N : Node_Id) return Boolean;
+   --  Returns true if the node is a type conversion whose operand is an
+   --  arithmetic operation on signed integers, and the base type of the
+   --  signed integer type is smaller than Standard.Integer. In such case we
+   --  have special circuitry in Expand_N_Type_Conversion to promote both of
+   --  the operands to type Integer.
 
 end Exp_Ch4;

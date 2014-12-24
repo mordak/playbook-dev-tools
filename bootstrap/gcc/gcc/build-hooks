@@ -7,15 +7,16 @@ qnx_target_version=6.5.0
 nto_target=${PWD##*-}
 host_target=${PWD##*/}
 cpu_string=`echo ${nto_target} | sed 's/nto//'`
-if [ $cpu_string = x86 ]; then
-cpu_string=i486
-fi
-if [ $cpu_string = armeabi ]; then
-nto_target=ntoarm
-cpu_string=arm
-os_variant=eabi
-fi
-tmpstring=`echo ${cpu_string}-nto-qnx${qnx_target_version}${os_variant}`
+
+case ${cpu_string} in
+	x86)		targetarch=i486;;
+	armeabi) 	targetarch=arm
+			nto_target=ntoarm
+			os_variant=eabi
+		;;
+esac 
+	
+tmpstring=`echo ${targetarch}-nto-qnx${qnx_target_version}${os_variant}`
 target=`${srcdir}/config.sub ${tmpstring}`
 basedir='/usr'
 
@@ -47,6 +48,14 @@ function hook_preconfigure {
         i[34567]86) host_cpu=x86;;
 		esac
 		basedir=${QNX_HOST:-/usr/qnx650/host/solaris/${host_cpu}/usr}
+		;;
+	darwin)
+		host_cpu=x86
+		basedir=${QNX_HOST}/usr
+		#configure_opts="${configure_opts} -disable-shared --disable-multilib"
+		#configure_opts="${configure_opts} --disable-multilib --with-gmp=${QNX_HOST}/usr --with-mpfr=${QNX_HOST}/usr --program-suffix=${gcc_version}"
+		configure_opts="${configure_opts} --disable-multilib --with-gmp=${QNX_HOST}/usr --with-mpfr=${QNX_HOST}/usr"
+		#qnxtarget=${QNX_TARGET}
 		;;
 	linux)
 		configure_opts="${configure_opts} --build=i686-pc-linux-gnu"
@@ -101,21 +110,31 @@ function hook_preconfigure {
 	configure_opts="${configure_opts} --enable-languages=c++"
 	configure_opts="${configure_opts} --enable-threads=posix"
 	configure_opts="${configure_opts} --disable-nls"
-	configure_opts="${configure_opts} --disable-libssp"
 	configure_opts="${configure_opts} --disable-tls"
 	configure_opts="${configure_opts} --disable-libstdcxx-pch"
 	configure_opts="${configure_opts} --enable-libmudflap"
+	configure_opts="${configure_opts} --enable-libgomp"
 	configure_opts="${configure_opts} --enable-__cxa_atexit"
 	configure_opts="${configure_opts} --with-gxx-include-dir=${qnxtarget}/usr/include/c++/$gcc_version"
+	configure_opts="${configure_opts} --enable-shared"
 	configure_opts="${configure_opts} --enable-multilib"
 	configure_opts="${configure_opts} --with-bugurl=http://www.qnx.com"
-	if test "${target}" = "mips-unknown-nto-qnx6.5.0"; then
-		configure_opts="${configure_opts} --disable-shared"
-		configure_opts="${configure_opts} --disable-fixed-point"
-	else
-		configure_opts="${configure_opts} --enable-shared"
-	fi
+	configure_opts="${configure_opts} --enable-gnu-indirect-function"
 
+	case ${cpu_string} in
+		mips*)
+			configure_opts="${configure_opts} --disable-shared"
+			configure_opts="${configure_opts} --disable-fixed-point"
+			;;
+		armeabi)
+			configure_opts="${configure_opts} --with-arch=armv7-a"
+			configure_opts="${configure_opts} --with-float=softfp"
+			configure_opts="${configure_opts} --with-fpu=vfpv3-d16"
+			configure_opts="${configure_opts} --with-mode=thumb"
+			;;
+		*)	;;
+	esac 
+	
 	# The cross compilation of libgcc.a and libstdc++ require system headers
 	# from the next version of Neutrino while gcc itself should be compiled
 	# against the currently released version. This symlink puts the system

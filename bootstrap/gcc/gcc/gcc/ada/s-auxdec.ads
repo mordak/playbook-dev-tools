@@ -62,6 +62,14 @@ package System.Aux_DEC is
    type Integer_64 is range -2 ** (64 - 1) .. +2 ** (64 - 1) - 1;
    for Integer_64'Size use 64;
 
+   type Integer_8_Array  is array (Integer range <>) of Integer_8;
+   type Integer_16_Array is array (Integer range <>) of Integer_16;
+   type Integer_32_Array is array (Integer range <>) of Integer_32;
+   type Integer_64_Array is array (Integer range <>) of Integer_64;
+   --  These array types are not in all versions of DEC System, and in fact it
+   --  is not quite clear why they are in some and not others, but since they
+   --  definitely appear in some versions, we include them unconditionally.
+
    type Largest_Integer is range Min_Int .. Max_Int;
 
    type AST_Handler is private;
@@ -105,6 +113,7 @@ package System.Aux_DEC is
    --  Floating point type declarations for VAX floating point data types
 
    pragma Warnings (Off);
+   --  ??? needs comment
 
    type F_Float is digits 6;
    pragma Float_Representation (VAX_Float, F_Float);

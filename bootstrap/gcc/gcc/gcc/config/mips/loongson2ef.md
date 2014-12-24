@@ -1,6 +1,6 @@
 ;; Pipeline model for ST Microelectronics Loongson-2E/2F cores.
 
-;; Copyright (C) 2008 Free Software Foundation, Inc.
+;; Copyright (C) 2008, 2010 Free Software Foundation, Inc.
 ;; Contributed by CodeSourcery.
 ;;
 ;; GCC is free software; you can redistribute it and/or modify
@@ -16,6 +16,13 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with GCC; see the file COPYING3.  If not see
 ;; <http://www.gnu.org/licenses/>.
+
+(define_c_enum "unspec" [
+  UNSPEC_LOONGSON_ALU1_TURN_ENABLED_INSN
+  UNSPEC_LOONGSON_ALU2_TURN_ENABLED_INSN
+  UNSPEC_LOONGSON_FALU1_TURN_ENABLED_INSN
+  UNSPEC_LOONGSON_FALU2_TURN_ENABLED_INSN
+])
 
 ;; Automaton for integer instructions.
 (define_automaton "ls2_alu")

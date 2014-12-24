@@ -29,13 +29,26 @@
  *                                                                          *
  ****************************************************************************/
 
-#ifdef IN_GCC
+
+#if defined(IN_RTS)
+#include "tconfig.h"
+#include "tsystem.h"
+#elif defined(IN_GCC)
 #include "config.h"
 #include "system.h"
-#else
+#endif
+
+#include <string.h>
 #include <stdio.h>
 #include <ctype.h>
+
+#include "adaint.h"
+
+#ifndef ISDIGIT
 #define ISDIGIT(c) isdigit(c)
+#endif
+
+#ifndef PARMS
 #define PARMS(ARGS) ARGS
 #endif
 
@@ -236,6 +249,21 @@ __gnat_decode (const char *coded_name, char *ada_name, int verbose)
       }
   }
 
+  /* Check for nested subprogram ending in .nnnn and strip suffix. */
+  {
+    int last = strlen (ada_name) - 1;
+
+    while (ISDIGIT (ada_name[last]) && last > 0)
+      {
+        last--;
+      }
+
+    if (ada_name[last] == '.')
+      {
+        ada_name[last] = (char) 0;
+      }
+  }
+
   /* Change all "__" to ".". */
   {
     int len = strlen (ada_name);
@@ -324,6 +352,7 @@ __gnat_decode (const char *coded_name, char *ada_name, int verbose)
     }
 }
 
+#ifdef IN_GCC
 char *
 ada_demangle (const char *coded_name)
 {
@@ -332,6 +361,7 @@ ada_demangle (const char *coded_name)
   __gnat_decode (coded_name, ada_name, 0);
   return xstrdup (ada_name);
 }
+#endif
 
 void
 get_encoding (const char *coded_name, char *encoding)

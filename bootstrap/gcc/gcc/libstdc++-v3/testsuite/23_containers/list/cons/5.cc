@@ -15,42 +15,12 @@
 // with this library; see the file COPYING3.  If not see
 // <http://www.gnu.org/licenses/>.
 
-// 23.2.2.1 list constructors, copy, and assignment
-
+#include "5.h"
 #include <list>
-#include <testsuite_hooks.h>
-
-bool test __attribute__((unused)) = true;
-
-// Copy constructor
-//
-// This test verifies the following.
-// 23.2.2.1     list(const list& x)
-// 23.2.2       reverse_iterator rbegin() 
-// 23.2.2       reverse_iterator rend()
-// 23.2.2       size_type size() const
-//
-void
-test04()
-{
-  const int A[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17};
-  const std::size_t N = sizeof(A) / sizeof(int);
-  int count;
-  std::list<int>::reverse_iterator i;
-  std::list<int> list0401(A, A + N);
-
-  std::list<int> list0402(list0401);
-  for (i = list0401.rbegin(), count = N - 1;
-       i != list0401.rend();
-       ++i, --count)
-    VERIFY(*i == A[count]);
-  VERIFY(count == -1);
-  VERIFY(list0401.size() == N);
-}
 
 int main()
 {
-  test04();
+  cons05<std::list<int> >();
   return 0;
 }
 

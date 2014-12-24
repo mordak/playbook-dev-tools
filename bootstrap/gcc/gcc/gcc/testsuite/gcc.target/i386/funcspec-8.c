@@ -1,7 +1,8 @@
 /* Test whether using target specific options, we can use the x86 builtin
    functions in functions with the appropriate function specific options.  */
 /* { dg-do compile } */
-/* { dg-options "-O2 -march=k8 -mfpmath=sse" } */
+/* { dg-skip-if "" { i?86-*-* x86_64-*-* } { "-march=*" } { "-march=k8" } } */
+/* { dg-options "-O2 -march=k8 -mno-sse3 -mfpmath=sse" } */
 
 typedef float     __m128  __attribute__ ((__vector_size__ (16), __may_alias__));
 typedef double    __m128d __attribute__ ((__vector_size__ (16), __may_alias__));
@@ -103,23 +104,23 @@ generic_insertq (__m128i a, __m128i b)
   return __builtin_ia32_insertq (a, b);			/* { dg-error "needs isa option" } */
 }
 
-#ifdef __SSE5__
-#error "-msse5 should not be set for this test"
+#ifdef __FMA4__
+#error "-mfma4 should not be set for this test"
 #endif
 
-__m128d sse5_fmaddpd (__m128d a, __m128d b, __m128d c) __attribute__((__target__("sse5")));
+__m128d fma4_fmaddpd (__m128d a, __m128d b, __m128d c) __attribute__((__target__("fma4")));
 __m128d generic_fmaddpd (__m128d a, __m128d b, __m128d c);
 
 __m128d
-sse5_fmaddpd  (__m128d a, __m128d b, __m128d c)
+fma4_fmaddpd  (__m128d a, __m128d b, __m128d c)
 {
-  return __builtin_ia32_fmaddpd (a, b, c);
+  return __builtin_ia32_vfmaddpd (a, b, c);
 }
 
 __m128d
 generic_fmaddpd  (__m128d a, __m128d b, __m128d c)
 {
-  return __builtin_ia32_fmaddpd (a, b, c);		/* { dg-error "needs isa option" } */
+  return __builtin_ia32_vfmaddpd (a, b, c);		/* { dg-error "needs isa option" } */
 }
 
 #ifdef __AES__

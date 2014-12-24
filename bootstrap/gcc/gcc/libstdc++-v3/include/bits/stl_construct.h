@@ -1,6 +1,7 @@
 // nonstandard construct and destroy functions -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
+// 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -49,22 +50,31 @@
  * purpose.  It is provided "as is" without express or implied warranty.
  */
 
-/** @file stl_construct.h
+/** @file bits/stl_construct.h
  *  This is an internal header file, included by other library headers.
- *  You should not attempt to use it directly.
+ *  Do not attempt to use it directly. @headername{memory}
  */
 
 #ifndef _STL_CONSTRUCT_H
 #define _STL_CONSTRUCT_H 1
 
 #include <new>
+#include <bits/move.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   /**
    * Constructs an object in existing memory by invoking an allocated
    * object's constructor with an initializer.
    */
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+  template<typename _T1, typename... _Args>
+    inline void
+    _Construct(_T1* __p, _Args&&... __args)
+    { ::new(static_cast<void*>(__p)) _T1(std::forward<_Args>(__args)...); }
+#else
   template<typename _T1, typename _T2>
     inline void
     _Construct(_T1* __p, const _T2& __value)
@@ -73,6 +83,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       // 402. wrong new expression in [some_]allocator::construct
       ::new(static_cast<void*>(__p)) _T1(__value);
     }
+#endif
 
   /**
    * Destroy the object pointed to by a pointer type.
@@ -90,7 +101,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
         __destroy(_ForwardIterator __first, _ForwardIterator __last)
 	{
 	  for (; __first != __last; ++__first)
-	    std::_Destroy(&*__first);
+	    std::_Destroy(std::__addressof(*__first));
 	}
     };
 
@@ -131,7 +142,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	     _Allocator& __alloc)
     {
       for (; __first != __last; ++__first)
-	__alloc.destroy(&*__first);
+	__alloc.destroy(std::__addressof(*__first));
     }
 
   template<typename _ForwardIterator, typename _Tp>
@@ -142,7 +153,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       _Destroy(__first, __last);
     }
 
-_GLIBCXX_END_NAMESPACE
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
 
 #endif /* _STL_CONSTRUCT_H */
 

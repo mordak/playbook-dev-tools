@@ -1,5 +1,3 @@
-! { dg-options "-O2 -floop-block -fdump-tree-graphite-all" } 
-
 subroutine matrix_multiply(a,b,c,n)
 
 real(8), dimension(n,n) :: a,b,c
@@ -17,6 +15,7 @@ enddo
 
 end subroutine matrix_multiply
 
-! { dg-final { scan-tree-dump-times "Loop blocked" 2 "graphite" { xfail *-*-* } } } 
-! { dg-final { cleanup-tree-dump "graphite" } } 
+! { dg-final { scan-tree-dump-times "number of SCoPs: 1" 1 "graphite" { xfail *-*-* } } }
+! { dg-final { scan-tree-dump-times "will be loop blocked" 1 "graphite" { xfail *-*-* } } }
+! { dg-final { cleanup-tree-dump "graphite" } }
 

@@ -1,6 +1,6 @@
 /* Definitions of target machine for GNU compiler, for MIPS NetBSD systems.
    Copyright (C) 1993, 1995, 1996, 1997, 1999, 2000, 2001, 2002, 2003, 2004,
-   2007 Free Software Foundation, Inc.
+   2007, 2010, 2011 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -126,10 +126,6 @@ along with GCC; see the file COPYING3.  If not see
   while (0)
 
 
-/* Clean up after the generic MIPS/ELF configuration.  */
-#undef MD_EXEC_PREFIX
-#undef MD_STARTFILE_PREFIX
-
 /* Extra specs we need.  */
 #undef SUBTARGET_EXTRA_SPECS
 #define SUBTARGET_EXTRA_SPECS						\
@@ -152,7 +148,6 @@ along with GCC; see the file COPYING3.  If not see
    %{EB:-m elf32bmip} \
    %(endian_spec) \
    %{G*} %{mips1} %{mips2} %{mips3} %{mips4} %{mips32} %{mips32r2} %{mips64} \
-   %{bestGnum} %{call_shared} %{no_archive} %{exact_version} \
    %(netbsd_link_spec)"
 
 #define NETBSD_ENTRY_POINT "__start"
@@ -168,16 +163,6 @@ along with GCC; see the file COPYING3.  If not see
 
 #undef MIPS_DEFAULT_GVALUE
 #define MIPS_DEFAULT_GVALUE 0
-
-
-/* This defines which switch letters take arguments.  -G is a MIPS
-   special.  */
-
-#undef SWITCH_TAKES_ARG
-#define SWITCH_TAKES_ARG(CHAR)						\
-  (DEFAULT_SWITCH_TAKES_ARG (CHAR)					\
-   || (CHAR) == 'R'							\
-   || (CHAR) == 'G')
 
 
 #undef ASM_FINAL_SPEC

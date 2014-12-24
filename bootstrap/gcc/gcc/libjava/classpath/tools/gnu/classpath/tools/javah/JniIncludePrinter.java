@@ -59,11 +59,13 @@ public class JniIncludePrinter
   }
 
   private void writeFields(ClassWrapper klass, JniPrintStream out)
+    throws IOException
   {
+    klass.linkSupers();
     boolean wroteAny = false;
     for (; klass != null; klass = klass.superClass)
       {
-        Iterator i = klass.fields.iterator();
+        Iterator<?> i = klass.fields.iterator();
         while (i.hasNext())
           {
             FieldNode field = (FieldNode) i.next();
@@ -73,7 +75,7 @@ public class JniIncludePrinter
             if (! (field.value instanceof Integer)
                 && ! (field.value instanceof Long))
               continue;
-            
+
             // Note that we don't want to mangle the field name.
             String name = (JniHelper.mangle(klass.name) + "_" + field.name);
             out.print("#undef ");
@@ -138,7 +140,7 @@ public class JniIncludePrinter
     out.println("#endif");
     out.println();
 
-    Iterator i = klass.methods.iterator();
+    Iterator<?> i = klass.methods.iterator();
     while (i.hasNext())
       {
         MethodNode method = (MethodNode) i.next();

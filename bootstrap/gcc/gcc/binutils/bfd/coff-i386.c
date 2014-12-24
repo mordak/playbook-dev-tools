@@ -1,6 +1,6 @@
 /* BFD back-end for Intel 386 COFF files.
    Copyright 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
-   2000, 2001, 2002, 2003, 2004, 2007, 2008
+   2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010, 2011
    Free Software Foundation, Inc.
    Written by Cygnus Support.
 
@@ -44,13 +44,13 @@
 #include "libcoff.h"
 
 static bfd_reloc_status_type coff_i386_reloc
-  PARAMS ((bfd *, arelent *, asymbol *, PTR, asection *, bfd *, char **));
+  (bfd *, arelent *, asymbol *, PTR, asection *, bfd *, char **);
 static reloc_howto_type *coff_i386_rtype_to_howto
-  PARAMS ((bfd *, asection *, struct internal_reloc *,
-	   struct coff_link_hash_entry *, struct internal_syment *,
-	   bfd_vma *));
+  (bfd *, asection *, struct internal_reloc *,
+   struct coff_link_hash_entry *, struct internal_syment *,
+   bfd_vma *);
 static reloc_howto_type *coff_i386_reloc_type_lookup
-  PARAMS ((bfd *, bfd_reloc_code_real_type));
+  (bfd *, bfd_reloc_code_real_type);
 
 #define COFF_DEFAULT_SECTION_ALIGNMENT_POWER (2)
 /* The page size is a guess based on ELF.  */
@@ -195,7 +195,8 @@ static bfd_boolean in_reloc_p (abfd, howto)
      bfd * abfd ATTRIBUTE_UNUSED;
      reloc_howto_type *howto;
 {
-  return ! howto->pc_relative && howto->type != R_IMAGEBASE;
+  return ! howto->pc_relative && howto->type != R_IMAGEBASE
+	 && howto->type != R_SECREL32;
 }
 #endif /* COFF_WITH_PE */
 
@@ -532,16 +533,16 @@ coff_i386_rtype_to_howto (abfd, sec, rel, h, sym, addendp)
 	osect_vma = h->root.u.def.section->output_section->vma;
       else
 	{
-	  asection *sec;
+	  asection *s;
 	  int i;
 
 	  /* Sigh, the only way to get the section to offset against
 	     is to find it the hard way.  */
 
-	  for (sec = abfd->sections, i = 1; i < sym->n_scnum; i++)
-	    sec = sec->next;
+	  for (s = abfd->sections, i = 1; i < sym->n_scnum; i++)
+	    s = s->next;
 
-	  osect_vma = sec->output_section->vma;
+	  osect_vma = s->output_section->vma;
 	}
 
       *addendp -= osect_vma;
@@ -660,6 +661,7 @@ const bfd_target
 #endif
   '/',				/* ar_pad_char */
   15,				/* ar_max_namelen */
+  0,				/* match priority.  */
 
   bfd_getl64, bfd_getl_signed_64, bfd_putl64,
      bfd_getl32, bfd_getl_signed_32, bfd_putl32,
@@ -669,8 +671,13 @@ const bfd_target
      bfd_getl16, bfd_getl_signed_16, bfd_putl16, /* hdrs */
 
 /* Note that we allow an object file to be treated as a core file as well.  */
-    {_bfd_dummy_target, coff_object_p, /* bfd_check_format */
-       bfd_generic_archive_p, coff_object_p},
+    /* bfd_check_format */
+#ifdef COFF_CHECK_FORMAT
+    {_bfd_dummy_target, COFF_CHECK_FORMAT,
+       bfd_generic_archive_p, COFF_CHECK_FORMAT},
+#else
+    {_bfd_dummy_target, coff_object_p, bfd_generic_archive_p, coff_object_p},
+#endif
     {bfd_false, coff_mkobject, _bfd_generic_mkarchive, /* bfd_set_format */
        bfd_false},
     {bfd_false, coff_write_object_contents, /* bfd_write_contents */

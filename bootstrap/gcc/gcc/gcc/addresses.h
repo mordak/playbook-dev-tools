@@ -1,5 +1,5 @@
 /* Inline functions to test validity of reg classes for addressing modes.
-   Copyright (C) 2006, 2007 Free Software Foundation, Inc.
+   Copyright (C) 2006, 2007, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -47,7 +47,8 @@ base_reg_class (enum machine_mode mode ATTRIBUTE_UNUSED,
    Arguments as for the REGNO_MODE_CODE_OK_FOR_BASE_P macro.  */
 
 static inline bool
-ok_for_base_p_1 (unsigned regno, enum machine_mode mode ATTRIBUTE_UNUSED,
+ok_for_base_p_1 (unsigned regno ATTRIBUTE_UNUSED,
+		 enum machine_mode mode ATTRIBUTE_UNUSED,
 		 enum rtx_code outer_code ATTRIBUTE_UNUSED,
 		 enum rtx_code index_code ATTRIBUTE_UNUSED)
 {

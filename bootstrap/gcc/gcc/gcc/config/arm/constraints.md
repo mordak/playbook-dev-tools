@@ -1,5 +1,5 @@
 ;; Constraint definitions for ARM and Thumb
-;; Copyright (C) 2006, 2007, 2008 Free Software Foundation, Inc.
+;; Copyright (C) 2006, 2007, 2008, 2010 Free Software Foundation, Inc.
 ;; Contributed by ARM Ltd.
 
 ;; This file is part of GCC.
@@ -25,14 +25,16 @@
 ;; In ARM state, 'l' is an alias for 'r'
 
 ;; The following normal constraints have been used:
-;; in ARM/Thumb-2 state: G, H, I, J, K, L, M
+;; in ARM/Thumb-2 state: G, H, I, j, J, K, L, M
 ;; in Thumb-1 state: I, J, K, L, M, N, O
 
 ;; The following multi-letter normal constraints have been used:
-;; in ARM/Thumb-2 state: Da, Db, Dc, Dn, Dl, DL, Dv
+;; in ARM/Thumb-2 state: Da, Db, Dc, Dn, Dl, DL, Dv, Dy, Di, Dz
+;; in Thumb-1 state: Pa, Pb, Pc, Pd
+;; in Thumb-2 state: Ps, Pt, Pu, Pv, Pw, Px
 
 ;; The following memory constraints have been used:
-;; in ARM/Thumb-2 state: Q, Ut, Uv, Uy, Un, Us
+;; in ARM/Thumb-2 state: Q, Ut, Uv, Uy, Un, Um, Us
 ;; in ARM state: Uq
 
 
@@ -64,6 +66,13 @@
 
 (define_register_constraint "h" "TARGET_THUMB ? HI_REGS : NO_REGS"
  "In Thumb state the core registers @code{r8}-@code{r15}.")
+
+(define_constraint "j"
+ "A constant suitable for a MOVW instruction. (ARM/Thumb-2)"
+ (and (match_test "TARGET_32BIT && arm_arch_thumb2")
+      (ior (match_code "high")
+	   (and (match_code "const_int")
+                (match_test "(ival & 0xffff0000) == 0")))))
 
 (define_register_constraint "k" "STACK_REG"
  "@internal The stack register.")
@@ -112,15 +121,13 @@
  "In Thumb-1 state a constant that is a multiple of 4 in the range 0-1020."
  (and (match_code "const_int")
       (match_test "TARGET_32BIT ? ((ival >= 0 && ival <= 32)
-				 || ((ival & (ival - 1)) == 0))
-		   : ((ival >= 0 && ival <= 1020) && ((ival & 3) == 0))")))
+				 || (((ival & (ival - 1)) & 0xFFFFFFFF) == 0))
+		   : ival >= 0 && ival <= 1020 && (ival & 3) == 0")))
 
 (define_constraint "N"
- "In ARM/Thumb-2 state a constant suitable for a MOVW instruction.
-  In Thumb-1 state a constant in the range 0-31."
+ "Thumb-1 state a constant in the range 0-31."
  (and (match_code "const_int")
-      (match_test "TARGET_32BIT ? arm_arch_thumb2 && ((ival & 0xffff0000) == 0)
-				: (ival >= 0 && ival <= 31)")))
+      (match_test "!TARGET_32BIT && (ival >= 0 && ival <= 31)")))
 
 (define_constraint "O"
  "In Thumb-1 state a constant that is a multiple of 4 in the range
@@ -128,6 +135,59 @@
  (and (match_code "const_int")
       (match_test "TARGET_THUMB1 && ival >= -508 && ival <= 508
 		   && ((ival & 3) == 0)")))
+
+(define_constraint "Pa"
+  "@internal In Thumb-1 state a constant in the range -510 to +510"
+  (and (match_code "const_int")
+       (match_test "TARGET_THUMB1 && ival >= -510 && ival <= 510
+		    && (ival > 255 || ival < -255)")))
+
+(define_constraint "Pb"
+  "@internal In Thumb-1 state a constant in the range -262 to +262"
+  (and (match_code "const_int")
+       (match_test "TARGET_THUMB1 && ival >= -262 && ival <= 262
+		    && (ival > 255 || ival < -255)")))
+
+(define_constraint "Pc"
+  "@internal In Thumb-1 state a constant that is in the range 1021 to 1275"
+  (and (match_code "const_int")
+       (match_test "TARGET_THUMB1
+  		    && ival > 1020 && ival <= 1275")))
+
+(define_constraint "Pd"
+  "@internal In Thumb-1 state a constant in the range 0 to 7"
+  (and (match_code "const_int")
+       (match_test "TARGET_THUMB1 && ival >= 0 && ival <= 7")))
+
+(define_constraint "Ps"
+  "@internal In Thumb-2 state a constant in the range -255 to +255"
+  (and (match_code "const_int")
+       (match_test "TARGET_THUMB2 && ival >= -255 && ival <= 255")))
+
+(define_constraint "Pt"
+  "@internal In Thumb-2 state a constant in the range -7 to +7"
+  (and (match_code "const_int")
+       (match_test "TARGET_THUMB2 && ival >= -7 && ival <= 7")))
+
+(define_constraint "Pu"
+  "@internal In Thumb-2 state a constant in the range +1 to +8"
+  (and (match_code "const_int")
+       (match_test "TARGET_THUMB2 && ival >= 1 && ival <= 8")))
+
+(define_constraint "Pv"
+  "@internal In Thumb-2 state a constant in the range -255 to 0"
+  (and (match_code "const_int")
+       (match_test "TARGET_THUMB2 && ival >= -255 && ival <= 0")))
+
+(define_constraint "Pw"
+  "@internal In Thumb-2 state a constant in the range -255 to -1"
+  (and (match_code "const_int")
+       (match_test "TARGET_THUMB2 && ival >= -255 && ival <= -1")))
+
+(define_constraint "Px"
+  "@internal In Thumb-2 state a constant in the range -7 to -1"
+  (and (match_code "const_int")
+       (match_test "TARGET_THUMB2 && ival >= -7 && ival <= -1")))
 
 (define_constraint "G"
  "In ARM/Thumb-2 state a valid FPA immediate constant."
@@ -138,6 +198,12 @@
  "In ARM/Thumb-2 state a valid FPA immediate constant when negated."
  (and (match_code "const_double")
       (match_test "TARGET_32BIT && neg_const_double_rtx_ok_for_fpa (op)")))
+
+(define_constraint "Dz"
+ "@internal
+  In ARM/Thumb-2 state a vector of constant zeros."
+ (and (match_code "const_vector")
+      (match_test "TARGET_NEON && op == CONST0_RTX (mode)")))
 
 (define_constraint "Da"
  "@internal
@@ -161,6 +227,13 @@
  (and (match_code "const_double,const_int,const_vector")
       (match_test "TARGET_32BIT && arm_const_double_inline_cost (op) == 4
 		   && !(optimize_size || arm_ld_sched)")))
+
+(define_constraint "Di"
+ "@internal
+  In ARM/Thumb-2 state a const_int or const_double where both the high
+  and low SImode words can be generated as immediates in 32-bit instructions."
+ (and (match_code "const_double,const_int")
+      (match_test "TARGET_32BIT && arm_const_double_by_immediates (op)")))
 
 (define_constraint "Dn"
  "@internal
@@ -189,9 +262,16 @@
 (define_constraint "Dv"
  "@internal
   In ARM/Thumb-2 state a const_double which can be used with a VFP fconsts
-  or fconstd instruction."
+  instruction."
  (and (match_code "const_double")
       (match_test "TARGET_32BIT && vfp3_const_double_rtx (op)")))
+
+(define_constraint "Dy"
+ "@internal
+  In ARM/Thumb-2 state a const_double which can be used with a VFP fconstd
+  instruction."
+ (and (match_code "const_double")
+      (match_test "TARGET_32BIT && TARGET_VFP_DOUBLE && vfp3_const_double_rtx (op)")))
 
 (define_memory_constraint "Ut"
  "@internal
@@ -214,25 +294,32 @@
 
 (define_memory_constraint "Un"
  "@internal
+  In ARM/Thumb-2 state a valid address for Neon doubleword vector
+  load/store instructions."
+ (and (match_code "mem")
+      (match_test "TARGET_32BIT && neon_vector_mem_operand (op, 0)")))
+
+(define_memory_constraint "Um"
+ "@internal
   In ARM/Thumb-2 state a valid address for Neon element and structure
   load/store instructions."
  (and (match_code "mem")
-      (match_test "TARGET_32BIT && neon_vector_mem_operand (op, FALSE)")))
+      (match_test "TARGET_32BIT && neon_vector_mem_operand (op, 2)")))
 
 (define_memory_constraint "Us"
  "@internal
   In ARM/Thumb-2 state a valid address for non-offset loads/stores of
   quad-word values in four ARM registers."
  (and (match_code "mem")
-      (match_test "TARGET_32BIT && neon_vector_mem_operand (op, TRUE)")))
+      (match_test "TARGET_32BIT && neon_vector_mem_operand (op, 1)")))
 
 (define_memory_constraint "Uq"
  "@internal
   In ARM state an address valid in ldrsb instructions."
  (and (match_code "mem")
       (match_test "TARGET_ARM
-		   && arm_legitimate_address_p (GET_MODE (op), XEXP (op, 0),
-						SIGN_EXTEND, 0)")))
+		   && arm_legitimate_address_outer_p (GET_MODE (op), XEXP (op, 0),
+						      SIGN_EXTEND, 0)")))
 
 (define_memory_constraint "Q"
  "@internal

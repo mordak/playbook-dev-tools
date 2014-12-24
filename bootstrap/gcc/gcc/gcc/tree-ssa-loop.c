@@ -1,18 +1,19 @@
 /* Loop optimizations over tree-ssa.
-   Copyright (C) 2003, 2005, 2006, 2007, 2008 Free Software Foundation, Inc.
-   
+   Copyright (C) 2003, 2005, 2006, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
+
 This file is part of GCC.
-   
+
 GCC is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
 Free Software Foundation; either version 3, or (at your option) any
 later version.
-   
+
 GCC is distributed in the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
 FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 for more details.
-   
+
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING3.  If not see
 <http://www.gnu.org/licenses/>.  */
@@ -22,12 +23,9 @@ along with GCC; see the file COPYING3.  If not see
 #include "coretypes.h"
 #include "tm.h"
 #include "tree.h"
-#include "rtl.h"
 #include "tm_p.h"
-#include "hard-reg-set.h"
 #include "basic-block.h"
 #include "output.h"
-#include "diagnostic.h"
 #include "tree-flow.h"
 #include "tree-dump.h"
 #include "tree-pass.h"
@@ -36,6 +34,8 @@ along with GCC; see the file COPYING3.  If not see
 #include "flags.h"
 #include "tree-inline.h"
 #include "tree-scalar-evolution.h"
+#include "diagnostic-core.h"
+#include "tree-vectorizer.h"
 
 /* The loop superpass.  */
 
@@ -45,7 +45,7 @@ gate_tree_loop (void)
   return flag_tree_loop_optimize != 0;
 }
 
-struct gimple_opt_pass pass_tree_loop = 
+struct gimple_opt_pass pass_tree_loop =
 {
  {
   GIMPLE_PASS,
@@ -79,8 +79,8 @@ tree_ssa_loop_init (void)
   scev_initialize ();
   return 0;
 }
-  
-struct gimple_opt_pass pass_tree_loop_init = 
+
+struct gimple_opt_pass pass_tree_loop_init =
 {
  {
   GIMPLE_PASS,
@@ -95,7 +95,7 @@ struct gimple_opt_pass pass_tree_loop_init =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_dump_func | TODO_verify_loops	/* todo_flags_finish */
+  TODO_dump_func			/* todo_flags_finish */
  }
 };
 
@@ -107,8 +107,7 @@ tree_ssa_loop_im (void)
   if (number_of_loops () <= 1)
     return 0;
 
-  tree_ssa_lim ();
-  return 0;
+  return tree_ssa_lim ();
 }
 
 static bool
@@ -117,7 +116,7 @@ gate_tree_ssa_loop_im (void)
   return flag_tree_loop_im != 0;
 }
 
-struct gimple_opt_pass pass_lim = 
+struct gimple_opt_pass pass_lim =
 {
  {
   GIMPLE_PASS,
@@ -132,7 +131,7 @@ struct gimple_opt_pass pass_lim =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_dump_func | TODO_verify_loops	/* todo_flags_finish */
+  TODO_dump_func			/* todo_flags_finish */
  }
 };
 
@@ -153,7 +152,7 @@ gate_tree_ssa_loop_unswitch (void)
   return flag_unswitch_loops != 0;
 }
 
-struct gimple_opt_pass pass_tree_unswitch = 
+struct gimple_opt_pass pass_tree_unswitch =
 {
  {
   GIMPLE_PASS,
@@ -168,8 +167,7 @@ struct gimple_opt_pass pass_tree_unswitch =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_ggc_collect | TODO_dump_func
-    | TODO_verify_loops		 	/* todo_flags_finish */
+  TODO_ggc_collect | TODO_dump_func 	/* todo_flags_finish */
  }
 };
 
@@ -181,8 +179,7 @@ run_tree_predictive_commoning (void)
   if (!current_loops)
     return 0;
 
-  tree_predictive_commoning ();
-  return 0;
+  return tree_predictive_commoning ();
 }
 
 static bool
@@ -191,7 +188,7 @@ gate_tree_predictive_commoning (void)
   return flag_predictive_commoning != 0;
 }
 
-struct gimple_opt_pass pass_predcom = 
+struct gimple_opt_pass pass_predcom =
 {
  {
   GIMPLE_PASS,
@@ -206,7 +203,7 @@ struct gimple_opt_pass pass_predcom =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_dump_func | TODO_verify_loops
+  TODO_dump_func
     | TODO_update_ssa_only_virtuals	/* todo_flags_finish */
  }
 };
@@ -242,47 +239,8 @@ struct gimple_opt_pass pass_vectorize =
   PROP_cfg | PROP_ssa,                  /* properties_required */
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
-  TODO_verify_loops,			/* todo_flags_start */
-  TODO_dump_func | TODO_update_ssa
-    | TODO_ggc_collect			/* todo_flags_finish */
- }
-};
-
-/* Loop nest optimizations.  */
-
-static unsigned int
-tree_linear_transform (void)
-{
-  if (number_of_loops () <= 1)
-    return 0;
-
-  linear_transform_loops ();
-  return 0;
-}
-
-static bool
-gate_tree_linear_transform (void)
-{
-  return flag_tree_loop_linear != 0;
-}
-
-struct gimple_opt_pass pass_linear_transform =
-{
- {
-  GIMPLE_PASS,
-  "ltrans",				/* name */
-  gate_tree_linear_transform,		/* gate */
-  tree_linear_transform,       		/* execute */
-  NULL,					/* sub */
-  NULL,					/* next */
-  0,					/* static_pass_number */
-  TV_TREE_LINEAR_TRANSFORM,  		/* tv_id */
-  PROP_cfg | PROP_ssa,			/* properties_required */
-  0,					/* properties_provided */
-  0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_dump_func | TODO_verify_loops
-    | TODO_update_ssa_only_virtuals
+  TODO_dump_func | TODO_update_ssa
     | TODO_ggc_collect			/* todo_flags_finish */
  }
 };
@@ -303,14 +261,37 @@ graphite_transforms (void)
 static bool
 gate_graphite_transforms (void)
 {
-  /* Enable -fgraphite pass if any one of the graphite optimization flags 
+  /* Enable -fgraphite pass if any one of the graphite optimization flags
      is turned on.  */
-  if (flag_loop_block || flag_loop_interchange || flag_loop_strip_mine
-      || flag_graphite_identity)
+  if (flag_loop_block
+      || flag_loop_interchange
+      || flag_loop_strip_mine
+      || flag_graphite_identity
+      || flag_loop_parallelize_all
+      || flag_loop_flatten)
     flag_graphite = 1;
 
   return flag_graphite != 0;
 }
+
+struct gimple_opt_pass pass_graphite =
+{
+ {
+  GIMPLE_PASS,
+  "graphite0",				/* name */
+  gate_graphite_transforms,		/* gate */
+  NULL,					/* execute */
+  NULL,					/* sub */
+  NULL,					/* next */
+  0,					/* static_pass_number */
+  TV_GRAPHITE,				/* tv_id */
+  PROP_cfg | PROP_ssa,			/* properties_required */
+  0,					/* properties_provided */
+  0,					/* properties_destroyed */
+  0,					/* todo_flags_start */
+  0					/* todo_flags_finish */
+ }
+};
 
 struct gimple_opt_pass pass_graphite_transforms =
 {
@@ -327,7 +308,7 @@ struct gimple_opt_pass pass_graphite_transforms =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_verify_loops			/* todo_flags_finish */
+  TODO_dump_func			/* todo_flags_finish */
  }
 };
 
@@ -400,7 +381,7 @@ struct gimple_opt_pass pass_iv_canon =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_dump_func | TODO_verify_loops	/* todo_flags_finish */
+  TODO_dump_func			/* todo_flags_finish */
  }
 };
 
@@ -433,37 +414,6 @@ struct gimple_opt_pass pass_scev_cprop =
  }
 };
 
-/* Remove empty loops.  */
-
-static unsigned int
-tree_ssa_empty_loop (void)
-{
-  if (number_of_loops () <= 1)
-    return 0;
-
-  return remove_empty_loops ();
-}
-
-struct gimple_opt_pass pass_empty_loop =
-{
- {
-  GIMPLE_PASS,
-  "empty",				/* name */
-  NULL,					/* gate */
-  tree_ssa_empty_loop,		       	/* execute */
-  NULL,					/* sub */
-  NULL,					/* next */
-  0,					/* static_pass_number */
-  TV_COMPLETE_UNROLL,	  		/* tv_id */
-  PROP_cfg | PROP_ssa,			/* properties_required */
-  0,					/* properties_provided */
-  0,					/* properties_destroyed */
-  0,					/* todo_flags_start */
-  TODO_dump_func | TODO_verify_loops 
-    | TODO_ggc_collect			/* todo_flags_finish */
- }
-};
-
 /* Record bounds on numbers of iterations of loops.  */
 
 static unsigned int
@@ -472,7 +422,7 @@ tree_ssa_loop_bounds (void)
   if (number_of_loops () <= 1)
     return 0;
 
-  estimate_numbers_of_iterations ();
+  estimate_numbers_of_iterations (true);
   scev_reset ();
   return 0;
 }
@@ -481,7 +431,7 @@ struct gimple_opt_pass pass_record_bounds =
 {
  {
   GIMPLE_PASS,
-  NULL,					/* name */
+  "*record_bounds",			/* name */
   NULL,					/* gate */
   tree_ssa_loop_bounds,		       	/* execute */
   NULL,					/* sub */
@@ -530,7 +480,7 @@ struct gimple_opt_pass pass_complete_unroll =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_dump_func | TODO_verify_loops
+  TODO_dump_func
     | TODO_ggc_collect			/* todo_flags_finish */
  }
 };
@@ -577,7 +527,8 @@ struct gimple_opt_pass pass_complete_unrolli =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_dump_func | TODO_verify_loops
+  TODO_verify_flow
+    | TODO_dump_func
     | TODO_ggc_collect 			/* todo_flags_finish */
  }
 };
@@ -616,7 +567,7 @@ struct gimple_opt_pass pass_parallelize_loops =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_dump_func | TODO_verify_loops	/* todo_flags_finish */
+  TODO_dump_func			/* todo_flags_finish */
  }
 };
 
@@ -634,7 +585,7 @@ tree_ssa_loop_prefetch (void)
 static bool
 gate_tree_ssa_loop_prefetch (void)
 {
-  return flag_prefetch_loop_arrays != 0;
+  return flag_prefetch_loop_arrays > 0;
 }
 
 struct gimple_opt_pass pass_loop_prefetch =
@@ -652,7 +603,7 @@ struct gimple_opt_pass pass_loop_prefetch =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_dump_func | TODO_verify_loops	/* todo_flags_finish */
+  TODO_dump_func			/* todo_flags_finish */
  }
 };
 
@@ -689,8 +640,7 @@ struct gimple_opt_pass pass_iv_optimize =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_dump_func | TODO_verify_loops
-  | TODO_update_ssa | TODO_ggc_collect	/* todo_flags_finish */
+  TODO_dump_func | TODO_update_ssa | TODO_ggc_collect	/* todo_flags_finish */
  }
 };
 
@@ -704,8 +654,8 @@ tree_ssa_loop_done (void)
   loop_optimizer_finalize ();
   return 0;
 }
-  
-struct gimple_opt_pass pass_tree_loop_done = 
+
+struct gimple_opt_pass pass_tree_loop_done =
 {
  {
   GIMPLE_PASS,
@@ -720,6 +670,8 @@ struct gimple_opt_pass pass_tree_loop_done =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_cleanup_cfg | TODO_dump_func	/* todo_flags_finish */
+  TODO_cleanup_cfg
+    | TODO_verify_flow
+    | TODO_dump_func			/* todo_flags_finish */
  }
 };

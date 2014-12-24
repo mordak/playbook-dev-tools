@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2008, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -49,6 +49,7 @@ package body ALI is
       'U'    => True,   -- unit
       'W'    => True,   -- with
       'L'    => True,   -- linker option
+      'N'    => True,   -- notes
       'E'    => True,   -- external
       'D'    => True,   -- dependency
       'X'    => True,   -- xref
@@ -89,14 +90,16 @@ package body ALI is
       Withs.Init;
       Sdep.Init;
       Linker_Options.Init;
+      Notes.Init;
       Xref_Section.Init;
       Xref_Entity.Init;
       Xref.Init;
       Version_Ref.Reset;
 
-      --  Add dummy zero'th item in Linker_Options for the sort function
+      --  Add dummy zero'th item in Linker_Options and Notes for sort calls
 
       Linker_Options.Increment_Last;
+      Notes.Increment_Last;
 
       --  Initialize global variables recording cumulative options in all
       --  ALI files that are read for a given processing run in gnatbind.
@@ -119,14 +122,15 @@ package body ALI is
    --------------
 
    function Scan_ALI
-     (F             : File_Name_Type;
-      T             : Text_Buffer_Ptr;
-      Ignore_ED     : Boolean;
-      Err           : Boolean;
-      Read_Xref     : Boolean := False;
-      Read_Lines    : String  := "";
-      Ignore_Lines  : String  := "X";
-      Ignore_Errors : Boolean := False) return ALI_Id
+     (F                : File_Name_Type;
+      T                : Text_Buffer_Ptr;
+      Ignore_ED        : Boolean;
+      Err              : Boolean;
+      Read_Xref        : Boolean := False;
+      Read_Lines       : String  := "";
+      Ignore_Lines     : String  := "X";
+      Ignore_Errors    : Boolean := False;
+      Directly_Scanned : Boolean := False) return ALI_Id
    is
       P         : Text_Ptr := T'First;
       Line      : Logical_Line_Number := 1;
@@ -190,7 +194,7 @@ package body ALI is
 
       function Get_Name
         (Ignore_Spaces  : Boolean := False;
-         Ignore_Special : Boolean := False)return Name_Id;
+         Ignore_Special : Boolean := False) return Name_Id;
       --  Skip blanks, then scan out a name (name is left in Name_Buffer with
       --  length in Name_Len, as well as being returned in Name_Id form).
       --  If Lower is set to True then the Name_Buffer will be converted to
@@ -204,7 +208,7 @@ package body ALI is
       --
       --    If Ignore_Special is False (normal case), the scan is terminated by
       --    a typeref bracket or an equal sign except for the special case of
-      --    an operator name starting with a double quite which is terminated
+      --    an operator name starting with a double quote which is terminated
       --    by another double quote.
       --
       --  It is an error to set both Ignore_Spaces and Ignore_Special to True.
@@ -482,10 +486,9 @@ package body ALI is
          end if;
 
          loop
-            Name_Len := Name_Len + 1;
-            Name_Buffer (Name_Len) := Getc;
+            Add_Char_To_Name_Buffer (Getc);
 
-            exit when At_End_Of_Field and not Ignore_Spaces;
+            exit when At_End_Of_Field and then not Ignore_Spaces;
 
             if not Ignore_Special then
                if Name_Buffer (1) = '"' then
@@ -533,7 +536,7 @@ package body ALI is
       begin
          Skip_Space;
 
-         --  Check if we are on a number. In the case of bas ALI files, this
+         --  Check if we are on a number. In the case of bad ALI files, this
          --  may not be true.
 
          if not (Nextc in '0' .. '9') then
@@ -545,7 +548,7 @@ package body ALI is
             V := V * 10 + (Character'Pos (Getc) - Character'Pos ('0'));
 
             exit when At_End_Of_Field;
-            exit when Nextc < '0' or Nextc > '9';
+            exit when Nextc < '0' or else Nextc > '9';
          end loop;
 
          return V;
@@ -815,6 +818,7 @@ package body ALI is
         Last_Unit                  => No_Unit_Id,
         Locking_Policy             => ' ',
         Main_Priority              => -1,
+        Main_CPU                   => -1,
         Main_Program               => None,
         No_Object                  => False,
         Normalize_Scalars          => False,
@@ -825,6 +829,7 @@ package body ALI is
         Sfile                      => No_File,
         Task_Dispatching_Policy    => ' ',
         Time_Slice_Value           => -1,
+        Allocator_In_Body          => False,
         WC_Encoding                => 'b',
         Unit_Exception_Table       => False,
         Ver                        => (others => ' '),
@@ -907,6 +912,22 @@ package body ALI is
 
                Skip_Space;
 
+               if Nextc = 'A' then
+                  P := P + 1;
+                  Checkc ('B');
+                  ALIs.Table (Id).Allocator_In_Body := True;
+               end if;
+
+               Skip_Space;
+
+               if Nextc = 'C' then
+                  P := P + 1;
+                  Checkc ('=');
+                  ALIs.Table (Id).Main_CPU := Get_Nat;
+               end if;
+
+               Skip_Space;
+
                Checkc ('W');
                Checkc ('=');
                ALIs.Table (Id).WC_Encoding := Getc;
@@ -936,8 +957,7 @@ package body ALI is
 
             Name_Len := 0;
             while not At_Eol loop
-               Name_Len := Name_Len + 1;
-               Name_Buffer (Name_Len) := Getc;
+               Add_Char_To_Name_Buffer (Getc);
             end loop;
 
             --  If -fstack-check, record that it occurred
@@ -1293,9 +1313,9 @@ package body ALI is
          else
             Skip_Space;
             No_Deps.Append ((Id, Get_Name));
+            Skip_Eol;
          end if;
 
-         Skip_Eol;
          C := Getc;
       end loop;
 
@@ -1417,6 +1437,7 @@ package body ALI is
             UL.First_Arg                := First_Arg;
             UL.Elab_Position            := 0;
             UL.SAL_Interface            := ALIs.Table (Id).SAL_Interface;
+            UL.Directly_Scanned         := Directly_Scanned;
             UL.Body_Needed_For_SAL      := False;
             UL.Elaborate_Body_Desirable := False;
             UL.Optimize_Alignment       := 'O';
@@ -1862,6 +1883,45 @@ package body ALI is
             Linker_Options.Table (Linker_Options.Last).Original_Pos :=
               Linker_Options.Last;
          end if;
+
+         --  If there are notes present, scan them
+
+         Notes_Loop : loop
+            Check_Unknown_Line;
+            exit Notes_Loop when C /= 'N';
+
+            if Ignore ('N') then
+               Skip_Line;
+
+            else
+               Checkc (' ');
+
+               Notes.Increment_Last;
+               Notes.Table (Notes.Last).Pragma_Type := Getc;
+               Notes.Table (Notes.Last).Pragma_Line := Get_Nat;
+               Checkc (':');
+               Notes.Table (Notes.Last).Pragma_Col  := Get_Nat;
+               Notes.Table (Notes.Last).Unit        := Units.Last;
+
+               if At_Eol then
+                  Notes.Table (Notes.Last).Pragma_Args := No_Name;
+
+               else
+                  Checkc (' ');
+
+                  Name_Len := 0;
+                  while not At_Eol loop
+                     Add_Char_To_Name_Buffer (Getc);
+                  end loop;
+
+                  Notes.Table (Notes.Last).Pragma_Args := Name_Enter;
+               end if;
+
+               Skip_Eol;
+            end if;
+
+            C := Getc;
+         end loop Notes_Loop;
       end loop U_Loop;
 
       --  End loop through units for one ALI file
@@ -2000,8 +2060,7 @@ package body ALI is
                if Nextc not in '0' .. '9' then
                   Name_Len := 0;
                   while not At_End_Of_Field loop
-                     Name_Len := Name_Len + 1;
-                     Name_Buffer (Name_Len) := Getc;
+                     Add_Char_To_Name_Buffer (Getc);
                   end loop;
 
                   --  Set the subunit name. Note that we use Name_Find rather
@@ -2022,8 +2081,7 @@ package body ALI is
                   Name_Len := 0;
 
                   while not At_End_Of_Field loop
-                     Name_Len := Name_Len + 1;
-                     Name_Buffer (Name_Len) := Getc;
+                     Add_Char_To_Name_Buffer (Getc);
                   end loop;
 
                   Sdep.Table (Sdep.Last).Rfile := Name_Enter;
@@ -2150,10 +2208,19 @@ package body ALI is
                --  Start of processing for Read_Refs_For_One_Entity
 
                begin
-                  XE.Line   := Get_Nat;
-                  XE.Etype  := Getc;
-                  XE.Col    := Get_Nat;
-                  XE.Lib    := (Getc = '*');
+                  XE.Line  := Get_Nat;
+                  XE.Etype := Getc;
+                  XE.Col   := Get_Nat;
+
+                  case Getc is
+                     when '*' =>
+                        XE.Visibility := Global;
+                     when '+' =>
+                        XE.Visibility := Static;
+                     when others =>
+                        XE.Visibility := Other;
+                  end case;
+
                   XE.Entity := Get_Name;
 
                   --  Handle the information about generic instantiations
@@ -2252,7 +2319,9 @@ package body ALI is
                            end;
 
                         --  Interfaces are stored in the list of references,
-                        --  although the parent type itself is stored in XE
+                        --  although the parent type itself is stored in XE.
+                        --  The first interface (when there are only
+                        --  interfaces) is stored in XE.Tref*)
 
                         elsif Ref = Tref_Derived
                           and then Typ = 'R'

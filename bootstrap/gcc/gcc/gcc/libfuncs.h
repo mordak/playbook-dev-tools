@@ -1,5 +1,5 @@
 /* Definitions for code generation pass of GNU compiler.
-   Copyright (C) 2001, 2004, 2007, 2008 Free Software Foundation, Inc.
+   Copyright (C) 2001, 2004, 2007, 2008, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -20,6 +20,8 @@ along with GCC; see the file COPYING3.  If not see
 #ifndef GCC_LIBFUNCS_H
 #define GCC_LIBFUNCS_H
 
+#include "hashtab.h"
+
 /* Enumeration of indexes into libfunc_table.  */
 enum libfunc_index
 {
@@ -30,8 +32,6 @@ enum libfunc_index
   LTI_memset,
   LTI_setbits,
 
-  LTI_unwind_resume,
-  LTI_eh_personality,
   LTI_setjmp,
   LTI_longjmp,
   LTI_unwind_sjlj_register,
@@ -47,9 +47,34 @@ enum libfunc_index
   LTI_MAX
 };
 
-/* SYMBOL_REF rtx's for the library functions that are called
-   implicitly and not via optabs.  */
-extern GTY(()) rtx libfunc_table[LTI_MAX];
+/* Information about an optab-related libfunc.  We use the same hashtable
+   for normal optabs and conversion optabs.  In the first case mode2
+   is unused.  */
+struct GTY(()) libfunc_entry {
+  size_t optab;
+  enum machine_mode mode1, mode2;
+  rtx libfunc;
+};
+
+/* Target-dependent globals.  */
+struct GTY(()) target_libfuncs {
+  /* SYMBOL_REF rtx's for the library functions that are called
+     implicitly and not via optabs.  */
+  rtx x_libfunc_table[LTI_MAX];
+
+  /* Hash table used to convert declarations into nodes.  */
+  htab_t GTY((param_is (struct libfunc_entry))) x_libfunc_hash;
+};
+
+extern GTY(()) struct target_libfuncs default_target_libfuncs;
+#if SWITCHABLE_TARGET
+extern struct target_libfuncs *this_target_libfuncs;
+#else
+#define this_target_libfuncs (&default_target_libfuncs)
+#endif
+
+#define libfunc_table \
+  (this_target_libfuncs->x_libfunc_table)
 
 /* Accessor macros for libfunc_table.  */
 
@@ -60,8 +85,6 @@ extern GTY(()) rtx libfunc_table[LTI_MAX];
 #define memset_libfunc	(libfunc_table[LTI_memset])
 #define setbits_libfunc	(libfunc_table[LTI_setbits])
 
-#define unwind_resume_libfunc	(libfunc_table[LTI_unwind_resume])
-#define eh_personality_libfunc	(libfunc_table[LTI_eh_personality])
 #define setjmp_libfunc	(libfunc_table[LTI_setjmp])
 #define longjmp_libfunc	(libfunc_table[LTI_longjmp])
 #define unwind_sjlj_register_libfunc (libfunc_table[LTI_unwind_sjlj_register])
@@ -74,5 +97,8 @@ extern GTY(()) rtx libfunc_table[LTI_MAX];
 #define synchronize_libfunc	(libfunc_table[LTI_synchronize])
 
 #define gcov_flush_libfunc	(libfunc_table[LTI_gcov_flush])
+
+/* In explow.c */
+extern void set_stack_check_libfunc (const char *);
 
 #endif /* GCC_LIBFUNCS_H */

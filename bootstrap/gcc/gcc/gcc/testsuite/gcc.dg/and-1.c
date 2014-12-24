@@ -1,9 +1,8 @@
-/* { dg-do compile { target powerpc*-*-* spu-*-* } } */
+/* { dg-do compile } */
 /* { dg-options "-O2" } */
-/* { dg-final { scan-assembler "and" } } */
+/* { dg-final { scan-assembler "and" { target powerpc*-*-* spu-*-* } } } */
 /* There should be no nand for this testcase (for either PPC or SPU). */
-/* xfail: PR tree-optimization/33512  */
-/* { dg-final { scan-assembler-not "nand" { xfail *-*-* } } } */
+/* { dg-final { scan-assembler-not "nand" { target powerpc*-*-* spu-*-* } } } */
 
 int f(int y)
 {

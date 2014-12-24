@@ -1,5 +1,5 @@
 /* Definitions of target machine for GNU compiler, for ARM with a.out
-   Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2004, 2007, 2008
+   Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2004, 2007, 2008, 2010
    Free Software Foundation, Inc.
    Contributed by Richard Earnshaw (rearnsha@armltd.co.uk).
    
@@ -163,31 +163,45 @@
   {"mvdx12", 39},				\
   {"mvdx13", 40},				\
   {"mvdx14", 41},				\
-  {"mvdx15", 42},				\
-  {"d0", 63}, {"q0", 63},			\
-  {"d1", 65},					\
-  {"d2", 67}, {"q1", 67},			\
-  {"d3", 69},					\
-  {"d4", 71}, {"q2", 71},			\
-  {"d5", 73},					\
-  {"d6", 75}, {"q3", 75},			\
-  {"d7", 77},					\
-  {"d8", 79}, {"q4", 79},			\
-  {"d9", 81},					\
-  {"d10", 83}, {"q5", 83},			\
-  {"d11", 85},					\
-  {"d12", 87}, {"q6", 87},			\
-  {"d13", 89},					\
-  {"d14", 91}, {"q7", 91},			\
-  {"d15", 93},					\
-  {"q8", 95},					\
-  {"q9", 99},					\
-  {"q10", 103},					\
-  {"q11", 107},					\
-  {"q12", 111},					\
-  {"q13", 115},					\
-  {"q14", 119},					\
-  {"q15", 123}					\
+  {"mvdx15", 42}				\
+}
+#endif
+
+#ifndef OVERLAPPING_REGISTER_NAMES
+#define OVERLAPPING_REGISTER_NAMES		\
+{						\
+  {"d0", 63, 2},				\
+  {"d1", 65, 2},				\
+  {"d2", 67, 2},				\
+  {"d3", 69, 2},				\
+  {"d4", 71, 2},				\
+  {"d5", 73, 2},				\
+  {"d6", 75, 2},				\
+  {"d7", 77, 2},				\
+  {"d8", 79, 2},				\
+  {"d9", 81, 2},				\
+  {"d10", 83, 2},				\
+  {"d11", 85, 2},				\
+  {"d12", 87, 2},				\
+  {"d13", 89, 2},				\
+  {"d14", 91, 2},				\
+  {"d15", 93, 2},				\
+  {"q0", 63, 4},				\
+  {"q1", 67, 4},				\
+  {"q2", 71, 4},				\
+  {"q3", 75, 4},				\
+  {"q4", 79, 4},				\
+  {"q5", 83, 4},				\
+  {"q6", 87, 4},				\
+  {"q7", 91, 4},				\
+  {"q8", 95, 4},				\
+  {"q9", 99, 4},				\
+  {"q10", 103, 4},				\
+  {"q11", 107, 4},				\
+  {"q12", 111, 4},				\
+  {"q13", 115, 4},				\
+  {"q14", 119, 4},				\
+  {"q15", 123, 4}				\
 }
 #endif
 
@@ -243,7 +257,30 @@
       if (TARGET_ARM)							\
 	asm_fprintf (STREAM, "\tb\t%LL%d\n", VALUE);			\
       else if (TARGET_THUMB1)						\
-	asm_fprintf (STREAM, "\t.word\t%LL%d-%LL%d\n", VALUE, REL);	\
+	{								\
+	  if (flag_pic || optimize_size)				\
+	    {								\
+	      switch (GET_MODE(body))					\
+		{							\
+		case QImode:						\
+		  asm_fprintf (STREAM, "\t.byte\t(%LL%d-%LL%d)/2\n",	\
+			       VALUE, REL);				\
+		  break;						\
+		case HImode: /* TBH */					\
+		  asm_fprintf (STREAM, "\t.2byte\t(%LL%d-%LL%d)/2\n",	\
+			       VALUE, REL);				\
+		  break;						\
+		case SImode:						\
+		  asm_fprintf (STREAM, "\t.word\t%LL%d-%LL%d\n",	\
+			       VALUE, REL);				\
+		  break;						\
+		default:						\
+		  gcc_unreachable();					\
+		}							\
+	    }								\
+	  else								\
+	    asm_fprintf (STREAM, "\t.word\t%LL%d+1\n", VALUE);		\
+	}								\
       else /* Thumb-2 */						\
 	{								\
 	  switch (GET_MODE(body))					\

@@ -1,5 +1,5 @@
 # This shell script emits a C file. -*- C -*-
-#   Copyright 2006, 2007, 2008
+#   Copyright 2006, 2007, 2008, 2009
 #   Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
@@ -71,8 +71,10 @@ avr_elf_${EMULATION_NAME}_before_allocation (void)
 
   gld${EMULATION_NAME}_before_allocation ();
 
-  /* We only need stubs for the avr6 family.  */
-  if (strcmp ("${EMULATION_NAME}","avr6"))
+  /* We only need stubs for avr6, avrxmega6, and avrxmega7. */
+  if (strcmp ("${EMULATION_NAME}","avr6") 
+      && strcmp ("${EMULATION_NAME}","avrxmega6")
+      && strcmp ("${EMULATION_NAME}","avrxmega7") )
     avr_no_stubs = TRUE;
 
   avr_elf_set_global_bfd_parameters ();
@@ -144,29 +146,24 @@ avr_elf_create_output_section_statements (void)
 /* Re-calculates the size of the stubs so that we won't waste space.  */
 
 static void
-avr_elf_finish (void)
+avr_elf_after_allocation (void)
 {
-  if (!avr_no_stubs)
+  if (!avr_no_stubs && ! RELAXATION_ENABLED)
     {
-      /* Now build the linker stubs.  */
-      if (stub_file->the_bfd->sections != NULL)
-       {
-         /* Call again the trampoline analyzer to initialize the trampoline
-            stubs with the correct symbol addresses.  Since there could have
-            been relaxation, the symbol addresses that were found during
-            first call may no longer be correct.  */
-         if (!elf32_avr_size_stubs (link_info.output_bfd, &link_info, FALSE))
-           {
-             einfo ("%X%P: can not size stub section: %E\n");
-             return;
-           }
-
-         if (!elf32_avr_build_stubs (&link_info))
-           einfo ("%X%P: can not build stubs: %E\n");
-       }
+      /* If relaxing, elf32_avr_size_stubs will be called from
+	 elf32_avr_relax_section.  */
+      if (!elf32_avr_size_stubs (link_info.output_bfd, &link_info, FALSE))
+	einfo ("%X%P: can not size stub section: %E\n");
     }
 
-  gld${EMULATION_NAME}_finish ();
+  gld${EMULATION_NAME}_after_allocation ();
+
+  /* Now build the linker stubs.  */
+  if (!avr_no_stubs)
+    {
+      if (!elf32_avr_build_stubs (&link_info))
+	einfo ("%X%P: can not build stubs: %E\n");
+    }
 }
 
 
@@ -266,5 +263,5 @@ PARSE_AND_LIST_ARGS_CASES='
 # Put these extra avr-elf routines in ld_${EMULATION_NAME}_emulation
 #
 LDEMUL_BEFORE_ALLOCATION=avr_elf_${EMULATION_NAME}_before_allocation
-LDEMUL_FINISH=avr_elf_finish
+LDEMUL_AFTER_ALLOCATION=avr_elf_after_allocation
 LDEMUL_CREATE_OUTPUT_SECTION_STATEMENTS=avr_elf_create_output_section_statements

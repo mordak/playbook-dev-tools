@@ -29,4 +29,4 @@ int test01()
   return i;
 }
 
-// { dg-error "invalid conversion" "" { target *-*-* } 27 }
+// { dg-error "cannot convert" "" { target *-*-* } 27 }
