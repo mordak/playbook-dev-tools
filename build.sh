@@ -25,12 +25,12 @@ if [ "$TASK" == "bundle" ]
 then
   cd "$ROOTDIR"
   echo "Setting up target .profile"
-  echo "export NATIVE_TOOLS=/accounts/devuser/tools" > env.sh
+  echo "export NATIVE_TOOLS=$HOME" > env.sh
   echo "QNX_TARGET=\$NATIVE_TOOLS/$TARGETNAME/qnx6" >> env.sh
   cat profile >> env.sh
   zip -u "$ZIPFILE" env.sh qconf-override.mk || true
-  #zip -u "$ZIPFILE" uninstall.sh || true
-  #TASK=deploy
+  zip -u "$ZIPFILE" uninstall.sh || true
+  TASK=deploy
 fi
 
 if [ "$TASK" == "deploy" ]
@@ -40,8 +40,8 @@ then
   echo "./bin/pwget \"$URL/pbhome.zip\""  >> pbinstall.sh
   echo "unzip pbhome.zip"                 >> pbinstall.sh
   cat profile                             >> pbinstall.sh
-  echo "---- Direct your Playbook browser to: $URL/pbinstall.sh"
-  echo "---- Save the file, then in the Playbook shell, execute: sh /accounts/1000/shared/downloads/pbinstall.sh"
+  echo "---- On your BB10 device, direct your browser to: $URL/pbinstall.sh"
+  echo "---- Save the file, then in the shell, execute: sh /accounts/1000/shared/downloads/pbinstall.sh"
   ./localserver.rb
 fi
 
