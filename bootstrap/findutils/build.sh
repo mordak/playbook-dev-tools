@@ -21,6 +21,7 @@ CONFIGURE_CMD="./configure
                 --prefix=$DESTDIR 
                 --disable-nls 
                 CC=$PBTARGETARCH-gcc
+                MAKEINFO='/usr/bin/makeinfo --force'
                 "
 
 package_init "$@"

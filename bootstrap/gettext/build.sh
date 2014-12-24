@@ -33,9 +33,9 @@ CONFIGURE_CMD="./configure
               --without-cvs 
               --without-emacs 
               CC=$PBTARGETARCH-gcc 
-              ac_cv_prog_AWK=/usr/bin/awk 
-              ac_cv_path_GREP=/usr/bin/grep 
-              ac_cv_path_SED=/usr/bin/sed
+              ac_cv_prog_AWK=`which awk`
+              ac_cv_path_GREP=`which grep` 
+              ac_cv_path_SED=`which sed`
               "
   
 package_init "$@"

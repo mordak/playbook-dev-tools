@@ -1,7 +1,8 @@
 # common functions for the build tools
 
 PBHOSTARCH=arm-unknown-nto-qnx8.0.0eabi
-PBBUILDARCH=x86_64-apple-darwin
+#PBBUILDARCH=x86_64-apple-darwin
+PBBUILDARCH=i686-linux-gnu
 PBTARGETARCH=arm-unknown-nto-qnx8.0.0eabi
 
 usage()

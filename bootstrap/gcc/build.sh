@@ -38,7 +38,7 @@ then
   cd gcc
   tar -xjf gmp-4.3.2.tar.bz2
   tar -xjf mpfr-2.4.2.tar.bz2
-  tar -xjf mpc-1.0.2.tar.gz
+  tar -xzf mpc-1.0.2.tar.gz
   mv gmp-4.3.2 gmp
   mv mpfr-2.4.2 mpfr
   mv mpc-1.0.2 mpc
@@ -59,6 +59,7 @@ CONFIGURE_CMD="$EXECDIR/gcc/configure
                    --host=$PBHOSTARCH 
                    --build=$PBBUILDARCH 
                    --target=$PBTARGETARCH 
+                   MAKEINFO='/usr/bin/makeinfo --force'
                    --srcdir=$EXECDIR/gcc 
                    --with-as=ntoarm-as 
                    --with-ld=ntoarm-ld 
