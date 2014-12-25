@@ -24,3 +24,4 @@ export MAGIC
 
 alias man='man -C "$NATIVE_TOOLS/lib/man.conf"'
 alias ls='ls --color=auto'
+export LC_CTYPE=en_US.UTF-8
