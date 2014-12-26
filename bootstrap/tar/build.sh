@@ -14,16 +14,16 @@ DISTVER="tar-1.26"
 DISTSUFFIX="tar.gz"  # so much for bootstrapping..
 DISTFILES="http://ftp.gnu.org/gnu/tar/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
+package_init "$@"
 CONFIGURE_CMD="./configure 
                 --host=$PBHOSTARCH
                 --build=$PBBUILDARCH 
                 --target=$PBTARGETARCH 
-                --prefix=$DESTDIR 
+                --prefix=$PREFIX 
                 --disable-nls 
                 CC=$PBTARGETARCH-gcc 
                 LIBS=-lsocket
                 "
-package_init "$@"
 package_fetch
 package_patch
 package_build

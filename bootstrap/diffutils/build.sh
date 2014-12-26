@@ -15,16 +15,16 @@ DISTSUFFIX="tar.gz"
 DISTFILES="http://ftp.gnu.org/gnu/diffutils/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 
+package_init "$@"
 CONFIGURE_CMD="./configure 
                 --host=$PBHOSTARCH
                 --build=$PBBUILDARCH 
                 --target=$PBTARGETARCH 
-                --prefix=$DESTDIR 
+                --prefix=$PREFIX 
                 --disable-nls 
                 CC=$PBTARGETARCH-gcc
                 "
 
-package_init "$@"
 package_fetch
 package_patch
 package_build

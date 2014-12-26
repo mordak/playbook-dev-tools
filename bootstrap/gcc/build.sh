@@ -65,11 +65,11 @@ CONFIGURE_CMD="$EXECDIR/gcc/configure
                    --with-ld=ntoarm-ld 
                    --with-sysroot=$QNX_TARGET 
                    --disable-werror 
-                   --prefix=$DESTDIR 
-                   --exec-prefix=$DESTDIR 
-                   --libdir=$DESTDIR/lib
-                   --libexecdir=$DESTDIR/lib
-                   --with-local-prefix=$DESTDIR
+                   --prefix=$PREFIX 
+                   --exec-prefix=$PREFIX 
+                   --libdir=$PREFIX/lib
+                   --libexecdir=$PREFIX/lib
+                   --with-local-prefix=$PREFIX
                    --enable-cheaders=c 
                    --enable-languages=c++ 
                    --enable-threads=posix 
@@ -79,7 +79,7 @@ CONFIGURE_CMD="$EXECDIR/gcc/configure
                    --disable-libstdcxx-pch 
                    --enable-libmudflap 
                    --enable-__cxa_atexit 
-                   --with-gxx-include-dir=$DESTDIR/$TARGETNAME/qnx6/usr/include/c++/4.6.3 
+                   --with-gxx-include-dir=$PREFIX/$TARGETNAME/qnx6/usr/include/c++/4.6.3 
                    --enable-multilib 
                    --enable-shared 
                    --enable-gnu-indirect-function 
@@ -90,15 +90,15 @@ CONFIGURE_CMD="$EXECDIR/gcc/configure
 package_build
 package_install
 
-cd "$DESTDIR/bin"
+cd "$DESTDIR/$PREFIX/bin"
 # escape pkgsrc jail
 ln -s ./gcc ./gcc.pkgsrc
 
 # these are broken
-rm -rf $DESTDIR/$TARGETNAME/qnx6/usr/include
+rm -rf $DESTDIR/$PREFIX/$TARGETNAME/qnx6/usr/include
 # sorry for clobbering, but it fixes pcre building, it also not fixed in generated native set
 sed -i.orig '/_GLIBCXX_ATOMIC_BUILTINS_4/d' $BBTOOLS/$TARGETNAME/qnx6/usr/include/c++/4.6.3/$PBTARGETARCH/bits/c++config.h
-cp $EXECDIR/ldd $DESTDIR/bin/
+cp $EXECDIR/ldd $DESTDIR/$PREFIX/bin/
   
 package_bundle
 

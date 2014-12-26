@@ -15,18 +15,18 @@ DISTSUFFIX="tar.gz"
 DISTFILES="http://ftp.ruby-lang.org/pub/ruby/1.8/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 
+package_init "$@"
 CONFIGURE_CMD="ac_cv_func_setpgrp_void=yes
                 LDSHARED='qcc -Vgcc_ntoarmv7le -shared'
                 ./configure 
                 --host=$PBHOSTARCH
                 --build=$PBBUILDARCH 
                 --target=$PBTARGETARCH 
-                --prefix=$DESTDIR 
+                --prefix=$PREFIX 
                 --disable-install-doc
                 CC='qcc -Vgcc_ntoarmv7le'                
                 "
 
-package_init "$@"
 package_fetch
 package_patch
 package_build

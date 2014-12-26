@@ -15,11 +15,12 @@ DISTSUFFIX="tar.gz"
 DISTFILES="http://ftp.gnu.org/gnu/gettext/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 
+package_init "$@"
 CONFIGURE_CMD="./configure 
               --host=$PBHOSTARCH
               --build=$PBBUILDARCH
               --target=$PBTARGETARCH
-              --prefix=$DESTDIR 
+              --prefix=$PREFIX 
               --disable-nls 
               --enable-threads=posix 
               --enable-relocatable 
@@ -38,7 +39,6 @@ CONFIGURE_CMD="./configure
               ac_cv_path_SED=`which sed`
               "
   
-package_init "$@"
 package_fetch
 package_patch
 package_build

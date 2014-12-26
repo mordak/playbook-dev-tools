@@ -9,20 +9,21 @@ set -e
 source ../../lib.sh
 TASK=fetch
 
-DISTVER="groff-1.19.2"
+DISTVER="groff-1.22.3"
 DISTSUFFIX="tar.gz"
-DISTFILES="http://ftp.gnu.org/gnu/groff/old/$DISTVER.$DISTSUFFIX"
+DISTFILES="http://ftp.gnu.org/gnu/groff/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
+package_init "$@"
 CONFIGURE_CMD="./configure 
                 --host=$PBHOSTARCH
                 --build=$PBBUILDARCH 
                 --target=$PBTARGETARCH 
-                --prefix=$DESTDIR 
+                --prefix=$PREFIX 
                 --without-x 
                 --without-gs
+                --with-doc=no
                 "
 
-package_init "$@"
 package_fetch
 package_patch 1
 package_build

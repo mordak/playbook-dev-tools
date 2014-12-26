@@ -1,13 +1,15 @@
---- groff-1.19.2/contrib/mom/Makefile.sub.orig	2005-08-11 00:18:15.000000000 -0400
-+++ groff-1.19.2/contrib/mom/Makefile.sub	2012-07-28 09:21:04.000000000 -0400
-@@ -18,8 +18,8 @@
- # Foundation, 51 Franklin St - Fifth Floor, Boston, MA 02110-1301, USA.
+--- groff-1.22.3/contrib/mom/Makefile.sub.orig	2014-12-25 22:50:25.867650309 -0500
++++ groff-1.22.3/contrib/mom/Makefile.sub	2014-12-25 22:53:39.319905273 -0500
+@@ -18,9 +18,9 @@
+ # along with this program. If not, see <http://www.gnu.org/licenses/>.
  
  # These may be overridden if cross-compiling.
 -GROFFBIN=$(top_builddir)/src/roff/groff/groff
 -GROFF_BIN_PATH=`echo $(groff_bin_dirs) | sed -e 's|  *|$(SH_SEP)|g'`
-+GROFFBIN=`which groff`
-+GROFF_BIN_PATH=`dirname $$GROFFBIN`
+-PDFMOMBIN=$(top_builddir)/src/devices/gropdf/pdfmom
++GROFFBIN=/usr/bin/groff
++GROFF_BIN_PATH=/usr/bin
++PDFMOMBIN=/usr/bin/pdfmom
  
  groff_bin_dirs=\
    $(top_builddir)/src/roff/groff \

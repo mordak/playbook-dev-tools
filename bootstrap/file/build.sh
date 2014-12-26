@@ -30,14 +30,18 @@ CONFIGURE_CMD="./configure
                 --prefix=$WORKDIR/native"
 
 package_build
+# workaround DESTDIR for the temp native install
+DESTDIR_TMP=$DESTDIR
+DESTDIR=/
 package_install
+DESTDIR=$DESTDIR_TMP
 TASK=patch
 
 CONFIGURE_CMD="./configure 
                 --host=$PBHOSTARCH 
                 --build=$PBBUILDARCH 
                 --target=$PBTARGETARCH 
-                --prefix=$DESTDIR 
+                --prefix=$PREFIX 
                 CC=$PBTARGETARCH-gcc"
                 
 MAKE_PREFIX="PATH=\"$WORKDIR/native/bin:$PATH\""                

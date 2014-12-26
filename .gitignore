@@ -10,4 +10,5 @@ pbinstall.sh
 .profile
 conf/
 pbhome/
+archive/
 env.sh

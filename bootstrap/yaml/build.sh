@@ -14,15 +14,15 @@ DISTVER="yaml-0.1.4"
 DISTSUFFIX="tar.gz"
 DISTFILES="http://pyyaml.org/download/libyaml/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
+package_init "$@"
 CONFIGURE_CMD="./configure 
                 --host=$PBHOSTARCH
                 --build=$PBBUILDARCH 
                 --target=$PBTARGETARCH 
-                --prefix=$DESTDIR 
+                --prefix=$PREFIX 
                 CC=$PBTARGETARCH-gcc
                 "
 
-package_init "$@"
 package_fetch
 package_patch
 package_build

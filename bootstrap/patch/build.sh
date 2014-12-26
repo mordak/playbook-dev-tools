@@ -10,18 +10,18 @@ set -e
 source ../../lib.sh
 TASK=fetch
 
-DISTVER="patch-2.5.9"
+DISTVER="patch-2.7.1"
 DISTSUFFIX="tar.gz"
 DISTFILES="http://ftp.gnu.org/gnu/patch/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
+package_init "$@"
 CONFIGURE_CMD="./configure 
                 --host=$PBHOSTARCH
                 --build=$PBBUILDARCH 
                 --target=$PBTARGETARCH 
-                --prefix=$DESTDIR 
+                --prefix=$PREFIX 
                 CC=$PBTARGETARCH-gcc
                 "
-package_init "$@"
 package_fetch
 package_patch
 package_build

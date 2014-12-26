@@ -25,21 +25,35 @@ if [ "$TASK" == "bundle" ]
 then
   cd "$ROOTDIR"
   echo "Setting up target .profile"
-  echo "export NATIVE_TOOLS=$HOME" > env.sh
+  echo "export NATIVE_TOOLS=\"$PREFIX\"" > env.sh
+  echo "export NATIVE_TOOLS_URL=\"$URL\"" >> env.sh
   echo "QNX_TARGET=\$NATIVE_TOOLS/$TARGETNAME/qnx6" >> env.sh
   cat profile >> env.sh
-  zip -u "$ZIPFILE" env.sh qconf-override.mk || true
-  zip -u "$ZIPFILE" uninstall.sh || true
+  ZIPFILE="$DESTDIR.zip"
+  zip -u "$ZIPFILE" env.sh qconf-override.mk pbpkgadd || true
+  zip -u "$ZIPFILE" packages/*.zip || true
   TASK=deploy
 fi
 
 if [ "$TASK" == "deploy" ]
 then
   cd "$ROOTDIR"
-  cat pbinstallhead.sh                    > pbinstall.sh
+  echo "#!/bin/sh"                        >  pbinstall.sh
+  echo "mkdir -p \"$PREFIX\""             >> pbinstall.sh
+  echo "cd \"$PREFIX\""                   >> pbinstall.sh
+  echo "export NATIVE_TOOLS=\"$PREFIX\""  >> pbinstall.sh
+  echo "export NATIVE_TOOLS_URL=\"$URL\"" >> pbinstall.sh
+  cat pbinstallhead.sh                    >> pbinstall.sh
   echo "./bin/pwget \"$URL/pbhome.zip\""  >> pbinstall.sh
   echo "unzip pbhome.zip"                 >> pbinstall.sh
-  cat profile                             >> pbinstall.sh
+  echo 'cp env.sh "$HOME/.profile"'       >> pbinstall.sh
+  echo 'cp pbpkgadd bin/'                 >> pbinstall.sh
+  echo 'for pkg in packages/*.zip'        >> pbinstall.sh
+  echo 'do'                               >> pbinstall.sh
+  echo './bin/pbpkgadd $pkg'              >> pbinstall.sh
+  echo 'done'                             >> pbinstall.sh
+  echo '. ./env.sh'                       >> pbinstall.sh
+  echo 'cd'                               >> pbinstall.sh
   echo "---- On your BB10 device, direct your browser to: $URL/pbinstall.sh"
   echo "---- Save the file, then in the shell, execute: sh /accounts/1000/shared/downloads/pbinstall.sh"
   ./localserver.rb

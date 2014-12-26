@@ -1,15 +1,16 @@
---- groff-1.19.2/doc/Makefile.in.orig	2012-07-28 08:39:19.000000000 -0400
-+++ groff-1.19.2/doc/Makefile.in	2012-07-28 09:06:55.000000000 -0400
-@@ -35,9 +35,9 @@
+--- groff-1.22.3/doc/Makefile.in.orig	2014-12-25 22:56:40.651650854 -0500
++++ groff-1.22.3/doc/Makefile.in	2014-12-25 22:59:17.090330056 -0500
+@@ -34,10 +34,9 @@
  pnmtops=@pnmtops_nosetpage@
  
  # These may be overridden if cross-compiling.
 -TROFFBIN=$(top_builddir)/src/roff/troff/troff
 -GROFFBIN=$(top_builddir)/src/roff/groff/groff
--GROFF_BIN_PATH=`echo $(groff_bin_dirs) | sed -e 's|  *|:|g'`
-+TROFFBIN=`which troff`
-+GROFFBIN=`which groff`
-+GROFF_BIN_PATH=`dirname $$GROFFBIN`
+-GROFF_BIN_PATH=`echo $(groff_bin_dirs) \
+-                | LANG=C LC_ALL=C sed -e 's|  *|:|g'`
++TROFFBIN=/usr/bin/troff
++GROFFBIN=/usr/bin/groff
++GROFF_BIN_PATH=/usr/bin
  
  # info files are distributed with the groff package, so makeinfo is
- # usually not needed (however, to build from CVS you NEED it!)
+ # usually not needed (however, to build from the repo you NEED it!)

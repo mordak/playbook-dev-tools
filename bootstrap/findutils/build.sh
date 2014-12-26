@@ -14,17 +14,17 @@ DISTVER="findutils"
 FINDUTILS_GITVER=003c8e6e3734c35c8a5d639528548181f0fada7f
 GNULIB_GITVER=372ef2a0e94ec6ee85b5fc4bab763154ec11420d
 
+package_init "$@"
 CONFIGURE_CMD="./configure 
                 --host=$PBHOSTARCH
                 --build=$PBBUILDARCH 
                 --target=$PBTARGETARCH 
-                --prefix=$DESTDIR 
+                --prefix=$PREFIX 
                 --disable-nls 
                 CC=$PBTARGETARCH-gcc
                 MAKEINFO='/usr/bin/makeinfo --force'
                 "
 
-package_init "$@"
 if [ "$TASK" == "fetch" ]
 then
   cd "$WORKROOT"

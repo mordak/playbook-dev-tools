@@ -15,10 +15,10 @@ DISTSUFFIX="tar.gz"
 DISTFILES="http://bzip.org/1.0.6/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 
+package_init "$@"
 # No configure, just make
 CONFIGURE_CMD="make CC=$PBTARGETARCH-gcc AR=$PBTARGETARCH-ar RANLIB=$PBTARGETARCH-ranlib"
 
-package_init "$@"
 package_fetch
 package_patch
 package_build
@@ -26,8 +26,8 @@ package_build
 if [ "$TASK" == "install" ]
 then
   cd "$WORKDIR"
-  make install PREFIX="$DESTDIR"
- 	cd "$DESTDIR/bin"
+  make install PREFIX="$DESTDIR/$PREFIX"
+ 	cd "$DESTDIR/$PREFIX/bin"
   ln -s -f bzgrep bzegrep
   ln -s -f bzgrep bzfgrep
   ln -s -f bzmore bzless

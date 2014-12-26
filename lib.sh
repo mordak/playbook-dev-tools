@@ -1,9 +1,10 @@
 # common functions for the build tools
 
 PBHOSTARCH=arm-unknown-nto-qnx8.0.0eabi
-#PBBUILDARCH=x86_64-apple-darwin
-PBBUILDARCH=i686-linux-gnu
+PBBUILDARCH=`gcc -dumpmachine`
 PBTARGETARCH=arm-unknown-nto-qnx8.0.0eabi
+
+DEFAULTPREFIX='/accounts/1000/shared/documents/clitools'
 
 usage()
 {
@@ -17,6 +18,7 @@ OPTIONS:
    -b      The absolute path to your BB Playbook SDK folder [/abs/path/tp/bbpb-sdk]
    -i      The IP address of this machine (will prompt if not specified)
    -l      The login you use for the QNX Foundry27 site, if you have one [user@host]
+   -p      The prefix on your BB10 device to install to (default $DEFAULTPREFIX)
    -t      The build task to perform: [ bootstrap | bundle | deploy]
    -s      The task to pass to each package [fetch | patch | build | install | bundle]
 EOF
@@ -26,13 +28,14 @@ process_args()
 {
   SUBTASKFLAG=
   SUBTASK=
-  while getopts "b:i:l:t:hs:" OPTION
+  while getopts "b:i:l:t:hs:p:" OPTION
   do
     case "$OPTION" in
       h) usage; exit 1;;
       b) echo "$OPTARG" > conf/bbtools;;
       i) echo "$OPTARG" > conf/ip;;
       l) echo "$OPTARG" > conf/login;;
+      p) echo "$OPTARG" > conf/prefix;;
       t) TASK="$OPTARG";;
       s) SUBTASK="$OPTARG"; SUBTASKFLAG="-t";;
     esac
@@ -68,6 +71,14 @@ function get_foundry_login()
   LOGIN="guest --password \"\""
   if [ -e "$ROOTDIR/conf/login" ]; then
     LOGIN=`cat "$ROOTDIR/conf/login"`
+  fi
+}
+
+function get_prefix()
+{
+  PREFIX="$DEFAULTPREFIX"
+  if [ -e "$ROOTDIR/conf/prefix" ]; then
+    PREFIX=`cat "$ROOTDIR/conf/prefix"`
   fi
 }
 
@@ -122,11 +133,14 @@ function configure_dirs()
   fi
   DESTDIR="$ROOTDIR/pbhome"
   mkdir -p "$DESTDIR"
-  ZIPFILE="$ROOTDIR/pbhome.zip"
+  ARCHIVEDIR="$ROOTDIR/archive"
+  mkdir -p "$ARCHIVEDIR"
+  PKGDIR="$ROOTDIR/packages"
+  mkdir -p "$PKGDIR"
   WORKROOT="$ROOTDIR/work"
   mkdir -p "$WORKROOT"
   BOOTSTRAPDIR="$ROOTDIR/bootstrap"
-
+  ZIPFILE="$ROOTDIR/pbhome.zip"
 }
 
 function init()
@@ -137,6 +151,7 @@ function init()
   source_bbtools
   get_foundry_login
   get_myip
+  get_prefix
 }
 
 function bootstrap()
@@ -169,18 +184,20 @@ OPTIONS:
    -t      The build task to start at: [fetch | patch | build | install | bundle]
    -i      The IP address of this machine (will prompt if not specified)
    -l      The login you use for the QNX Foundry27 site, if you have one [user@host]
+   -p      The prefix on your BB10 device to install to (default $DEFAULTPREFIX)
 EOF
 }
 
 function process_subargs()
 {
-while getopts "b:l:t:i:h" OPTION
+while getopts "b:l:t:i:hp:" OPTION
 do
   case "$OPTION" in
     h) subusage; exit 1;;
     b) echo "$OPTARG" > "$ROOTDIR/conf/bbtools";;
     i) echo "$OPTARG" > "$ROOTDIR/conf/ip";;
     l) echo "$OPTARG" > "$ROOTDIR/conf/login";;
+    p) echo "$OPTARG" > "$ROOTDIR/conf/prefix";;
     t) TASK="$OPTARG";;
   esac
 done
@@ -193,10 +210,12 @@ function package_init()
   source_bbtools
   get_foundry_login
   get_myip
+  get_prefix
 
   EXECDIR="$PWD"
   WORKDIR="$WORKROOT/$DISTVER"
   mkdir -p "$WORKDIR"
+  ZIPFILE="$PKGDIR/$DISTVER.zip"
 }
 
 function package_fetch()
@@ -205,7 +224,9 @@ if [ "$TASK" == "fetch" ]
 then
   cd "$WORKROOT"
   echo "Fetching sources"
-  curl -fkSLO $DISTFILES
+  if [ ! -f $DISTVER.$DISTSUFFIX ]; then 
+    curl -fkSLO $DISTFILES
+  fi
 
   # Unpack and organize
   echo "Unpacking"
@@ -257,7 +278,7 @@ function package_install()
 if [ "$TASK" == "install" ]
 then
   cd "$WORKDIR"
-  make install
+  make DESTDIR="$DESTDIR" install
   TASK=bundle
 fi
 }
@@ -267,8 +288,9 @@ function package_bundle()
 if [ "$TASK" == "bundle" ]
 then
   echo "Bundling"
-  cd "$DESTDIR"
+  cd "$DESTDIR/$PREFIX"
   zip -r -y -u "$ZIPFILE" * || true
+  mv "$DESTDIR" "$ARCHIVEDIR/$DISTVER"
 fi
 }
 

@@ -1,13 +1,4 @@
-#!/bin/sh
-
-cd "$HOME"
 cp "/accounts/1000/shared/downloads/pbinstall.sh" "pbinstall.sh"
-
-
-# clean up previous install
-if [ -e uninstall.sh ]; then
-  sh uninstall.sh
-fi
 
 mkdir -p bin
 
@@ -29,10 +20,10 @@ CONFFILE="etc/qnxconf/qconfig/qnx_blackberry_native_development_kit_2.1.0.xml"
 echo "<?xml version="1.0" ?>"                                     >  $CONFFILE
 echo "<qnxSystemDefinition>"                                      >> $CONFFILE
 echo "  <installation>"                                           >> $CONFFILE
-echo "    <base>$HOME</base>"                                     >> $CONFFILE
+echo "    <base>$PWD</base>"                                      >> $CONFFILE
 echo "    <name>BlackBerry Native SDK for Tablet OS 2.1.0</name>" >> $CONFFILE
-echo "    <host>$HOME</host>"                                     >> $CONFFILE
-echo "    <target>$HOME/target/qnx6</target>"                     >> $CONFFILE
+echo "    <host>$PWD</host>"                                      >> $CONFFILE
+echo "    <target>$PWD/target/qnx6</target>"                      >> $CONFFILE
 echo "  </installation>"                                          >> $CONFFILE
 echo "</qnxSystemDefinition>"                                     >> $CONFFILE
 

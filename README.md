@@ -13,7 +13,7 @@ On the playbook itself, you'll need a shell application. I used [BG Shell][bgshe
 
 ## How it works
 
-This tool will use the blackberry cross compiler to build gcc for the playbook. Then it will bundle up the gcc binaries and the playbook libs and header files and deploy them to your playbook over the air. Everything is installed in the playbook shell user's home directory, so you don't need root, and you don't even need to turn on Developer Mode.
+This tool will use the blackberry cross compiler to build gcc for the playbook. Then it will bundle up the gcc binaries and the playbook libs and header files and deploy them to your playbook over the air. You can control where things are installed with the -p (prefix) option, which defaults to /accounts/1000/shared/documents/clitools. You do not need root on the device, and don't even need to turn on developer mode. 
 
 ## Install Directions
 
@@ -23,7 +23,7 @@ Download this repository to your desktop somewhere, then unpack and cd into it. 
 
     ./build.sh -b /absolute/path/to/native/sdk/bbndk/
 
-This will use the native sdk tools to cross compile the bundled gcc targeting the playbook. Then everything will be zipped up into a .zip archive (the playbook doesn't have tar or gzip). The same thing happens for coreutils, make, grep, etc. Then a local ruby webserver will launch and you'll see a message that tells you how to get the binaries onto your playbook. You're looking for something like this:
+This will use the native sdk tools to cross compile the bundled gcc targeting the playbook. Then everything will be zipped up into a .zip archive (the playbook doesn't have tar or gzip). The same thing happens for coreutils, make, grep, etc. Then a local webserver will launch and you'll see a message that tells you how to get the binaries onto your playbook. You're looking for something like this:
 
     ---- Direct your playbook browser to: http://192.168.0.121:8888/pbinstall.sh
     ---- Save the file, then in the playbook shell, execute: sh /accounts/1000/shared/downloads/pbinstall.sh
@@ -32,9 +32,9 @@ Then you go to your playbook, and do what it says. So direct your playbook brows
 
     sh /accounts/1000/shared/downloads/pbinstall.sh
 
-And this will pull down the playbook gcc binaries, and unzip/install them into the current user's home directory. Once the pbinstall.sh script exits, a new login shell will open and gcc should be in your path. Have fun.
+And this will pull down the playbook gcc binaries, and unzip/install them. Once the pbinstall.sh script exits, a new login shell will open and gcc should be in your path. Have fun.
 
-Once you have installed everything on the playbook, you can shut down the ruby webserver on your desktop machine with ^C.
+Once you have installed everything on the playbook, you can shut down the webserver on your desktop machine with ^C.
 
 ## Tips
 
@@ -46,17 +46,11 @@ Each package is contained in its own directory, with its own build script. You c
 
     ./build.sh -t TASK
 
-where TASK is one of [fetch | patch | build | install | bundle]. The top level build.sh has a deploy task that you can use to relaunch the local ruby webserver.
+where TASK is one of [fetch | patch | build | install | bundle]. The top level build.sh has a deploy task that you can use to relaunch the local webserver.
 
 ## Uninstalling
 
-If you want to uninstall everything off of the playbook, you can run the included uninstall.sh script, which will delete all of the executables, libraries, etc that are in $HOME.
-
-    sh uninstall.sh
-
-This will leave the pbinstall.sh script, which you can then run again if you'd like to reinstall everything. Be sure to fire up the web server again: `./build.sh -t deploy`
-
-Alternately, I imagine that just unstalling the shell application from the playbook will remove everything too.
+If you want to uninstall everything, just delete the contents of the prefix directory where things were installed.
 
 ## Bugs
 
@@ -67,6 +61,8 @@ It is quite possible that some of the binaries don't work quite right, due to th
 Thanks to the folks at RIM/QNX/Foundry27 for doing the heavy lifting on porting gcc to QNX, and making their repo available for free. Building the mainline gcc for the playbook was hard, but building the Foundry27 version was pretty straightforward.
 
 Thanks to BGmot for contributions making the shared gcc build work, and the ip choosing bits.
+
+Thanks to [dukzcry][dukzcry-bb10-native-tools] for updating everything to work with the BB10 SDK, making g++ work, and polishing the on-device experience.
 
 ## Disclaimer
 
@@ -82,3 +78,4 @@ You may do whatever you like with this code, provided any copyright notices are 
 [pbdevtools]: https://developer.blackberry.com/native/download/
 [bgshell]: https://appworld.blackberry.com/webstore/content/87835/?lang=en
 [foundry27]: http://community.qnx.com/sf/sfmain/do/home
+[dukzcry-bb10-native-tools]: https://github.com/repos-holder/bb10-native-tools

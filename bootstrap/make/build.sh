@@ -14,16 +14,16 @@ DISTVER="make-3.82"
 DISTSUFFIX="tar.bz2"
 DISTFILES="http://ftp.gnu.org/gnu/make/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xjf"
+package_init "$@"
 CONFIGURE_CMD="./configure 
                 --host=$PBHOSTARCH
                 --build=$PBBUILDARCH 
                 --target=$PBTARGETARCH 
-                --prefix=$DESTDIR 
+                --prefix=$PREFIX 
                 --disable-nls 
                 CC=$PBTARGETARCH-gcc
                 "
 
-package_init "$@"
 package_fetch
 package_patch
 package_build
