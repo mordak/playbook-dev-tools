@@ -92,7 +92,7 @@ package_install
 
 cd "$DESTDIR/$PREFIX/bin"
 # escape pkgsrc jail
-ln -s ./gcc ./gcc.pkgsrc
+ln -sf ./gcc ./gcc.pkgsrc
 
 # these are broken
 rm -rf $DESTDIR/$PREFIX/$TARGETNAME/qnx6/usr/include
@@ -104,8 +104,7 @@ package_bundle
 
 # and pack up the system headers, etc
 cd "$BBTOOLS"
-zip -r -u -y "$ZIPFILE" \
-  $TARGETNAME/qnx6/armle-v7/usr/lib/liblzma.so.5 $TARGETNAME/qnx6/armle-v7/usr/lib/libnbutil.so.1 \
-  $TARGETNAME/qnx6/armle-v7/lib $TARGETNAME/qnx6/usr/include || true
+zip -r -u -y "$ZIPFILE" $TARGETNAME/qnx6/armle-v7/lib $TARGETNAME/qnx6/usr/include --exclude \*qt4\* || true
+zip -r -u -y "$ZIPFILE" $TARGETNAME/qnx6/armle-v7/usr/lib --exclude \*qt4\* || true
 
 
