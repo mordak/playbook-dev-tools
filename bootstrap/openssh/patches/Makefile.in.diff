@@ -1,0 +1,12 @@
+--- Makefile.in.orig	2015-01-03 13:09:39.888983623 -0500
++++ Makefile.in	2015-01-03 13:14:15.368983759 -0500
+@@ -86,7 +86,8 @@
+ 	ssh-pkcs11.o krl.o smult_curve25519_ref.o \
+ 	kexc25519.o kexc25519c.o poly1305.o chacha.o cipher-chachapoly.o \
+ 	ssh-ed25519.o digest-openssl.o hmac.o \
+-	sc25519.o ge25519.o fe25519.o ed25519.o verify.o hash.o blocks.o
++	sc25519.o ge25519.o fe25519.o ed25519.o verify.o hash.o blocks.o \
++	nouid_getpwuid.o
+ 
+ SSHOBJS= ssh.o readconf.o clientloop.o sshtty.o \
+ 	sshconnect.o sshconnect1.o sshconnect2.o mux.o \

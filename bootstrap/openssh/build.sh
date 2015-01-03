@@ -31,6 +31,7 @@ CONFIGURE_CMD="./configure
                 "
 package_fetch
 package_patch
+cp $EXECDIR/nouid_getpwuid.* $WORKDIR/
 package_build
 package_install
 package_bundle

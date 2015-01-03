@@ -1,0 +1,10 @@
+--- includes.h.orig	2015-01-03 12:06:43.446054484 -0500
++++ includes.h	2015-01-03 12:49:04.368983013 -0500
+@@ -176,4 +176,7 @@
+ 
+ #include "entropy.h"
+ 
++#define getpwuid(uid) nouid_getpwuid(uid)
++#include "nouid_getpwuid.h"
++
+ #endif /* INCLUDES_H */
