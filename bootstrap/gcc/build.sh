@@ -83,6 +83,7 @@ CONFIGURE_CMD="$EXECDIR/gcc/configure
                    --enable-multilib 
                    --enable-shared 
                    --enable-gnu-indirect-function 
+                   --with-arch=armv7-a --with-float=softfp --with-fpu=vfpv3-d16 --with-mode=thumb
                    CC=$PBTARGETARCH-gcc 
                    LDFLAGS='-Wl,-s ' 
                    AUTOMAKE=: AUTOCONF=: AUTOHEADER=: AUTORECONF=: ACLOCAL=:
@@ -96,8 +97,6 @@ ln -sf ./gcc ./gcc.pkgsrc
 
 # these are broken
 rm -rf $DESTDIR/$PREFIX/$TARGETNAME/qnx6/usr/include
-# sorry for clobbering, but it fixes pcre building, it also not fixed in generated native set
-sed -i.orig '/_GLIBCXX_ATOMIC_BUILTINS_4/d' $BBTOOLS/$TARGETNAME/qnx6/usr/include/c++/4.6.3/$PBTARGETARCH/bits/c++config.h
 cp $EXECDIR/ldd $DESTDIR/$PREFIX/bin/
   
 package_bundle
