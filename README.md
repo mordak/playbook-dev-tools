@@ -9,6 +9,8 @@ This is a set of scripts that will download, compile, and deploy gcc and some ot
 
 You need an install of the [Blackberry Native SDK][pbdevtools]. You're looking for the native C/C++ tools. I most recently used the 10.3.0 SDK on ubuntu to develop this repo, but it should also work on OS X without much work. In addition to the native sdk tools, you will need svn, curl, tar, gzip, bzip2 and ruby. These are either already installed or easily available everywhere, so you should be okay. On ubuntu I needed to add packages for git, subversion, curl, texinfo, autopoint, m4, autoconf, groff and ruby. On OS X, you'll need gettext, autoconf and automake packages to build findutils, and prior to building groff or man set LC_ALL=C in your shell.
 
+You may pass custom make flags by exporting MYMAKEFLAGS environment variable. For example, to considerably speedup build process you may pass the number of make workers by setting MYMAKEFLAGS="-jN", where is N is the number of parallel working make processes.
+
 On the BB10 device itself, you'll need a shell application. I used [Term48][term48], but a more widely available option is [BG Shell][bgshell].
 
 ## How it works

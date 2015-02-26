@@ -268,7 +268,8 @@ then
   #fi
   # configure
   eval $CONFIGURE_CMD
-  eval $MAKE_PREFIX make
+  eval $MAKE_PREFIX make $MYMAKEFLAGS || \
+	eval $MAKE_PREFIX make
   TASK=install
 fi
 }
