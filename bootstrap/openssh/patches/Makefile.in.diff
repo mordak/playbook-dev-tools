@@ -6,7 +6,7 @@
  	ssh-ed25519.o digest-openssl.o hmac.o \
 -	sc25519.o ge25519.o fe25519.o ed25519.o verify.o hash.o blocks.o
 +	sc25519.o ge25519.o fe25519.o ed25519.o verify.o hash.o blocks.o \
-+	nouid_getpwuid.o
++	nouid_getpwd.o
  
  SSHOBJS= ssh.o readconf.o clientloop.o sshtty.o \
  	sshconnect.o sshconnect1.o sshconnect2.o mux.o \
