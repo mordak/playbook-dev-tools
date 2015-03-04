@@ -49,7 +49,6 @@ then
   echo "export NATIVE_TOOLS=\"$PREFIX\""  >> pbinstall.sh
   echo "export NATIVE_TOOLS_URL=\"$URL\"" >> pbinstall.sh
   cat pbinstallhead.sh                    >> pbinstall.sh
-  echo "umask 022"                        >> pbinstall.sh
   echo "./bin/pwget \"$URL/pbhome.zip\""  >> pbinstall.sh
   echo "unzip pbhome.zip"                 >> pbinstall.sh
   echo 'cp pbpkgadd bin/'                 >> pbinstall.sh
