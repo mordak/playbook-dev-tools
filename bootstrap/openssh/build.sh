@@ -41,9 +41,9 @@ cat > $DESTDIR/$PREFIX/bin/sshd << EOF
 if [ ! -f "\$HOME/.ssh/id_rsa" ]; then
 ssh-keygen -f \$HOME/.ssh/id_rsa -t rsa -N ''
 mv \$HOME/.ssh/id_rsa.pub \$HOME/.ssh/authorized_keys
-echo "You need to transfer \$HOME/.ssh/id_rsa to the computer from which you need connect"
+echo "You need to transfer ~/.ssh/id_rsa to the computer from which you need connect"
 else
-$PREFIX/sbin/sshd -f/dev/null -oPasswordAuthentication=no -oStrictModes=no -oUsePrivilegeSeparation=no -oSubsystem="sftp $PREFIX/libexec/sftp-server" -oPort=2022 -oHostKey=\$HOME/.ssh/id_rsa "\$@"
+\$QNX_HOST/sbin/sshd -f/dev/null -oPasswordAuthentication=no -oStrictModes=no -oUsePrivilegeSeparation=no -oSubsystem="sftp \$QNX_HOST/libexec/sftp-server" -oPort=2022 -oHostKey=\$HOME/.ssh/id_rsa "\$@"
 fi
 EOF
 chmod +x $DESTDIR/$PREFIX/bin/sshd
