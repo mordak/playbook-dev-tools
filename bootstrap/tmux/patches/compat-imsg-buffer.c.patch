@@ -1,0 +1,13 @@
+--- compat/imsg-buffer.c.orig	2015-03-12 18:38:53.332799678 -0400
++++ compat/imsg-buffer.c	2015-03-12 18:42:29.536798949 -0400
+@@ -29,6 +29,10 @@
+ 
+ #include "tmux.h"
+ 
++#ifndef IOV_MAX
++#define IOV_MAX _XOPEN_IOV_MAX
++#endif
++
+ int	ibuf_realloc(struct ibuf *, size_t);
+ void	ibuf_enqueue(struct msgbuf *, struct ibuf *);
+ void	ibuf_dequeue(struct msgbuf *, struct ibuf *);

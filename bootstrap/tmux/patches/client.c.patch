@@ -1,0 +1,22 @@
+--- client.c.orig	2015-03-12 18:06:03.498143521 -0400
++++ client.c	2015-03-12 18:09:06.538142904 -0400
+@@ -441,7 +441,9 @@
+ 		case SIGCONT:
+ 			memset(&sigact, 0, sizeof sigact);
+ 			sigemptyset(&sigact.sa_mask);
++#ifdef SA_RESTART
+ 			sigact.sa_flags = SA_RESTART;
++#endif
+ 			sigact.sa_handler = SIG_IGN;
+ 			if (sigaction(SIGTSTP, &sigact, NULL) != 0)
+ 				fatal("sigaction failed");
+@@ -674,7 +676,9 @@
+ 
+ 			memset(&sigact, 0, sizeof sigact);
+ 			sigemptyset(&sigact.sa_mask);
++#ifdef SA_RESTART
+ 			sigact.sa_flags = SA_RESTART;
++#endif
+ 			sigact.sa_handler = SIG_DFL;
+ 			if (sigaction(SIGTSTP, &sigact, NULL) != 0)
+ 				fatal("sigaction failed");

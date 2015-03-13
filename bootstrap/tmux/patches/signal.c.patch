@@ -1,0 +1,22 @@
+--- signal.c.orig	2015-03-12 18:10:14.966142673 -0400
++++ signal.c	2015-03-12 18:10:46.146142568 -0400
+@@ -36,7 +36,9 @@
+ 
+ 	memset(&sigact, 0, sizeof sigact);
+ 	sigemptyset(&sigact.sa_mask);
++#ifdef SA_RESTART
+ 	sigact.sa_flags = SA_RESTART;
++#endif
+ 	sigact.sa_handler = SIG_IGN;
+ 	if (sigaction(SIGINT, &sigact, NULL) != 0)
+ 		fatal("sigaction failed");
+@@ -68,7 +70,9 @@
+ 
+ 	memset(&sigact, 0, sizeof sigact);
+ 	sigemptyset(&sigact.sa_mask);
++#ifdef SA_RESTART
+ 	sigact.sa_flags = SA_RESTART;
++#endif
+ 	sigact.sa_handler = SIG_DFL;
+ 	if (sigaction(SIGINT, &sigact, NULL) != 0)
+ 		fatal("sigaction failed");

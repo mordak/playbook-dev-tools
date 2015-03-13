@@ -1,0 +1,11 @@
+--- Makefile.am.orig	2015-03-12 16:18:18.778165309 -0400
++++ Makefile.am	2015-03-12 16:19:04.066165157 -0400
+@@ -87,7 +87,7 @@
+ # series won't be binary-compatible.
+ 
+ if INSTALL_LIBEVENT
+-dist_bin_SCRIPTS = event_rpcgen.py
++dist_bin_SCRIPTS = 
+ endif
+ 
+ pkgconfigdir=$(libdir)/pkgconfig
