@@ -29,7 +29,7 @@ then
   echo "export NATIVE_TOOLS_URL=\"$URL\"" >> env.sh
   echo "QNX_TARGET=\$NATIVE_TOOLS/$TARGETNAME/qnx6" >> env.sh
   cat profile >> env.sh
-  echo "umask 022"                   >  sample_profile
+  echo "umask 002"                   >  sample_profile
   echo "CLITOOLS=\"$PREFIX/env.sh\"" >> sample_profile
   echo 'if [ -e $CLITOOLS ];then'    >> sample_profile
   echo '    . $CLITOOLS'             >> sample_profile
