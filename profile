@@ -1,10 +1,9 @@
-PATH="$NATIVE_TOOLS/bin:$NATIVE_TOOLS/sbin:$NATIVE_TOOLS/usr/pkg/bin:$NATIVE_TOOLS/usr/pkg/sbin:$PATH"
+PATH="$NATIVE_TOOLS/bin:$NATIVE_TOOLS/sbin:$PATH"
 LD_LIBRARY_PATH="$NATIVE_TOOLS/lib:$LD_LIBRARY_PATH"
 #MAKEFLAGS="-I$NATIVE_TOOLS/include"
-CS_LIBPATH="$NATIVE_TOOLS/usr/pkg/lib:$CS_LIBPATH"
-MANPATH="$NATIVE_TOOLS/man:$NATIVE_TOOLS/share/man:$NATIVE_TOOLS/usr/pkg/share/man:$MANPATH"
+MANPATH="$NATIVE_TOOLS/man:$NATIVE_TOOLS/share/man:$MANPATH"
 
-export PATH LD_LIBRARY_PATH MAKEFLAGS CS_LIBPATH MANPATH
+export PATH LD_LIBRARY_PATH MAKEFLAGS MANPATH
 
 QNX_HOST="$NATIVE_TOOLS"
 #QNX_CONFIGURATION="$NATIVE_TOOLS/etc/qnxconf"
@@ -22,6 +21,20 @@ export GROFF_FONT_PATH GROFF_TMAC_PATH
 MAGIC="$NATIVE_TOOLS/share/misc/magic.mgc"
 export MAGIC
 
+# man
 alias man='man -C "$NATIVE_TOOLS/lib/man.conf"'
+# coreutils
 alias ls='ls --color=auto'
+# tmux
+#export TMPDIR=/var/tmp
+#alias tmux='tmux a || tmux'
+# fakeroot
+#export FAKEROOTUID=100
+#export FAKEROOTGID=100
+#export FAKEROOTEUID=100
+#export FAKEROOTEGID=100
+#export FAKEROOTSUID=100
+#export FAKEROOTSGID=100
+#export FAKEROOTFUID=100
+#export FAKEROOTFGID=100
 export LC_CTYPE=en_US.UTF-8
