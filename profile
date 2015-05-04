@@ -21,6 +21,20 @@ export GROFF_FONT_PATH GROFF_TMAC_PATH
 MAGIC="$NATIVE_TOOLS/share/misc/magic.mgc"
 export MAGIC
 
+# man
 alias man='man -C "$NATIVE_TOOLS/lib/man.conf"'
+# coreutils
 alias ls='ls --color=auto'
+# tmux
+#export TMPDIR=/var/tmp
+#alias tmux='tmux a || tmux'
+# fakeroot
+#export FAKEROOTUID=100
+#export FAKEROOTGID=100
+#export FAKEROOTEUID=100
+#export FAKEROOTEGID=100
+#export FAKEROOTSUID=100
+#export FAKEROOTSGID=100
+#export FAKEROOTFUID=100
+#export FAKEROOTFGID=100
 export LC_CTYPE=en_US.UTF-8
