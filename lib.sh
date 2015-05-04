@@ -157,6 +157,7 @@ function init()
 function bootstrap()
 {
   ALLPROGS="gcc coreutils diffutils grep make patch gzip bzip2 bison gettext findutils groff man file openssh"
+  #ALLPROGS="tar gdbm yaml ruby libevent tmux sqlite fakeroot"
 
   cd "$BOOTSTRAPDIR"
   for dir in $ALLPROGS
