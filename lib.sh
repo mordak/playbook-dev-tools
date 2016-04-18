@@ -88,7 +88,7 @@ function get_myip()
   if [ -e "$ROOTDIR/conf/ip" ]; then
     MYIP=`cat "$ROOTDIR/conf/ip"`
   else
-    IPS=( `ifconfig | grep "inet " | awk '{print $2}'` )
+    IPS=( `ifconfig | grep "inet " | awk '{print $2}' | tr -d addr:` )
     NUMOFIPS=${#IPS[@]}
     if [ $NUMOFIPS -gt 1 ]; then
       j=-1
