@@ -13,6 +13,8 @@ You may pass custom make flags by exporting MYMAKEFLAGS environment variable. Fo
 
 On the BB10 device itself, you'll need a shell application. I used [Term48][term48], but a more widely available option is [BG Shell][bgshell].
 
+Note that a 32 bit Ubuntu and 32 bit version of the Blackberry Native SDK are required.
+
 ## How it works
 
 This tool will use the BlackBerry cross compiler to build gcc for BB10. Then it will bundle up the gcc binaries and the BB10 libs and header files and deploy them to your device over the air. You can control where things are installed with the -p (prefix) option, which defaults to /accounts/1000/shared/documents/clitools. You do not need root on the device, and don't even need to turn on developer mode. 
