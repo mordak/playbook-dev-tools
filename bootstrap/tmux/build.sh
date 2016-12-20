@@ -12,7 +12,7 @@ TASK=fetch
 
 DISTVER="tmux-1.9a"
 DISTSUFFIX="tar.gz"
-DISTFILES="http://downloads.sourceforge.net/tmux/$DISTVER.$DISTSUFFIX"
+DISTFILES="https://github.com/tmux/tmux/releases/download/1.9a/tmux-1.9a.tar.gz"
 UNPACKCOMD="tar -xzf"
 LIBEVENT_DIR="libevent-2.0.22-stable"
 
