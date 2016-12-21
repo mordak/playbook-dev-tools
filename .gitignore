@@ -13,3 +13,4 @@ pbhome/
 archive/
 env.sh
 sample_profile
+*.cache/
