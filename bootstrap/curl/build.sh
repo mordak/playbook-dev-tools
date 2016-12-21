@@ -10,30 +10,24 @@ set -e
 source ../../lib.sh
 TASK=fetch
 
-DISTVER="tmux-1.9a"
-DISTSUFFIX="tar.gz"
-DISTFILES="https://github.com/tmux/tmux/releases/download/1.9a/tmux-1.9a.tar.gz"
-UNPACKCOMD="tar -xzf"
-LIBEVENT_DIR="libevent-2.0.22-stable"
-
+DISTVER="curl-7.51.0"
+DISTSUFFIX="tar.bz2"  # so much for bootstrapping..
+DISTFILES="http://distfiles.gentoo.org/distfiles/$DISTVER.$DISTSUFFIX"
+UNPACKCOMD="tar -xf"
 package_init "$@"
-# we must have build libevent first - see CFLAGS and LDFLAGS below
 CONFIGURE_CMD="./configure 
                 --host=$PBHOSTARCH
                 --build=$PBBUILDARCH 
                 --target=$PBTARGETARCH 
                 --prefix=$PREFIX 
-                --enable-static
+                --disable-nls 
                 CC=$PBTARGETARCH-gcc 
-                CFLAGS=\"-I$PWD -I$ARCHIVEDIR/$LIBEVENT_DIR/$PREFIX/include\"
-                LDFLAGS=\"-L$ARCHIVEDIR/$LIBEVENT_DIR/$PREFIX/lib\"
-                PKG_CONFIG_PATH=\"$ARCHIVEDIR/$LIBEVENT_DIR/$PREFIX/lib/pkgconfig/\"
-                LIBEVENT_LIBS=\"-levent -lsocket\"
+                LIBS=-lsocket
                 "
-
 package_fetch
 package_patch
 package_build
 package_install
 package_bundle
+
 

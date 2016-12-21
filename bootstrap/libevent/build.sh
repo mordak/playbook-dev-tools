@@ -12,7 +12,7 @@ TASK=fetch
 
 DISTVER="libevent-2.0.22-stable"
 DISTSUFFIX="tar.gz"
-DISTFILES="http://sourceforge.net/projects/levent/files/libevent/libevent-2.0/$DISTVER.$DISTSUFFIX"
+DISTFILES="http://distfiles.gentoo.org/distfiles/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 
 package_init "$@"
