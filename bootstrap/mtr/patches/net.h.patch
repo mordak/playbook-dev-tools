@@ -1,0 +1,10 @@
+--- net.h.orig	2017-01-08 20:41:13.516666672 +0900
++++ net.h	2017-01-08 20:42:04.173333340 +0900
+@@ -21,6 +21,7 @@
+ #include <arpa/inet.h>
+ #include <netinet/in.h>
+ #include <sys/socket.h>
++#include <sys/select.h>
+ #ifdef ENABLE_IPV6
+ #include <netinet/ip6.h>
+ #include <netinet/icmp6.h>

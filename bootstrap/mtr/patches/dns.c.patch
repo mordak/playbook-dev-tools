@@ -1,0 +1,11 @@
+--- dns.c.orig	2017-01-08 20:39:27.313333340 +0900
++++ dns.c	2017-01-08 20:39:48.400000005 +0900
+@@ -28,7 +28,7 @@
+ #include <sys/time.h>
+ #include <sys/select.h>
+ #include <sys/stat.h>
+-#include <sys/errno.h>
++#include <errno.h>
+ #include <sys/socket.h>
+ #include <netinet/in.h>
+ #include <arpa/inet.h>
