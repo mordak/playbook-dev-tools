@@ -12,7 +12,7 @@ TASK=fetch
 
 DISTVER="curl-7.51.0"
 DISTSUFFIX="tar.bz2"  # so much for bootstrapping..
-DISTFILES="http://distfiles.gentoo.org/distfiles/$DISTVER.$DISTSUFFIX"
+DISTFILES="https://curl.haxx.se/download/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xf"
 package_init "$@"
 CONFIGURE_CMD="./configure 

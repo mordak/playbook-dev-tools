@@ -10,7 +10,7 @@ set -e
 source ../../lib.sh
 TASK=fetch
 
-DISTVER="openssh-7.1p1"
+DISTVER="openssh-7.1p2"
 DISTSUFFIX="tar.gz"
 DISTFILES="http://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
