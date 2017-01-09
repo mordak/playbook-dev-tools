@@ -1,10 +1,6 @@
 BB10 Native Tools (née playbook-dev-tools)
 ==================
 
-## Note for `coreutils`
-
-Due to some `texinfo` issues, `coreutils` shippped here will fail to generate the docs (refer to issue [#13](https://github.com/mordak/playbook-dev-tools/issues/13)). Several solutions are available in the discussion.
-
 ## What's this
 
 This is a set of scripts that will download, compile, and deploy gcc and some other tools to a BB10 device. No rooting required.
