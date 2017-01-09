@@ -1,13 +1,17 @@
 BB10 Native Tools (née playbook-dev-tools)
 ==================
 
+## Note for `coreutils`
+
+Due to some `texinfo` issues, `coreutils` shippped here will fail to generate the docs (refer to issue [#13](https://github.com/mordak/playbook-dev-tools/issues/13)). Several solutions are available in the discussion.
+
 ## What's this
 
 This is a set of scripts that will download, compile, and deploy gcc and some other tools to a BB10 device. No rooting required.
 
 ## What you need
 
-You need an install of the [Blackberry Native SDK][pbdevtools]. You're looking for the native C/C++ tools. I most recently used the 10.3.0 SDK on ubuntu to develop this repo, but it should also work on OS X without much work. In addition to the native sdk tools, you will need svn, curl, tar, gzip, bzip2 and ruby. These are either already installed or easily available everywhere, so you should be okay. On ubuntu I needed to add packages for git, subversion, curl, texinfo, autopoint, m4, autoconf, groff and ruby. Note that since the BlackBerry SDK is 32 bit (even the 64 bit linux one) you may have trouble getting it working under a 64 bit linux distro. It might be simpler to just use a 32 bit distro and the 32 bit version of the Blackberry Native SDK. On OS X, you'll need gettext, autoconf and automake packages to build findutils, and prior to building groff or man set LC_ALL=C in your shell.
+You need an install of the [Blackberry Native SDK][pbdevtools]. You're looking for the native C/C++ tools. I most recently used the 10.3.0 SDK on ubuntu to develop this repo, but it should also work on OS X without much work. In addition to the native sdk tools, you will need svn, curl, tar, gzip, bzip2 and ruby. These are either already installed or easily available everywhere, so you should be okay. On ubuntu I needed to add packages for git, subversion, curl, texinfo, autopoint, m4, autoconf, groff and ruby. On OS X, you'll need gettext, autoconf and automake packages to build findutils, and prior to building groff or man set LC_ALL=C in your shell.
 
 You may pass custom make flags by exporting MYMAKEFLAGS environment variable. For example, to considerably speedup build process you may pass the number of make workers by setting MYMAKEFLAGS="-jN", where is N is the number of parallel working make processes.
 
@@ -16,6 +20,12 @@ On the BB10 device itself, you'll need a shell application. I used [Term48][term
 ## How it works
 
 This tool will use the BlackBerry cross compiler to build gcc for BB10. Then it will bundle up the gcc binaries and the BB10 libs and header files and deploy them to your device over the air. You can control where things are installed with the -p (prefix) option, which defaults to /accounts/1000/shared/documents/clitools. You do not need root on the device, and don't even need to turn on developer mode. 
+
+## Note for x86_64 users
+
+Note that since the BlackBerry SDK is 32 bit (even the 64 bit linux one) you may have trouble getting it working under a 64 bit linux distro. It might be simpler to just use a 32 bit distro and the 32 bit version of the Blackberry Native SDK. 
+
+If you still want to use a 64 bit desktop system for the build, you will probably need some multilib support. You may run into problems when `build.sh`tries to source the SDK. Add missing `lib32`'s according to your need.
 
 ## Install Directions
 
