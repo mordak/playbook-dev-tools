@@ -21,7 +21,7 @@ This tool will use the BlackBerry cross compiler to build gcc for BB10. Then it 
 
 Note that since the BlackBerry SDK is 32 bit (even the 64 bit linux one) you may have trouble getting it working under a 64 bit linux distro. It might be simpler to just use a 32 bit distro and the 32 bit version of the Blackberry Native SDK. 
 
-If you still want to use a 64 bit desktop system for the build, you will probably need some multilib support. You may run into problems when `build.sh`tries to source the SDK. Add missing `lib32`'s according to your need.
+If you still want to use a 64 bit desktop system for the build, you will probably need some multilib support. You may run into problems when `build.sh` tries to source the SDK. Add missing `lib32`'s according to your need.
 
 ## Install Directions
 
