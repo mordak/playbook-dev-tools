@@ -10,10 +10,10 @@ set -e
 source ../../lib.sh
 TASK=fetch
 
-DISTVER="coreutils-8.13"
-DISTSUFFIX="tar.gz"
+DISTVER="coreutils-8.29"
+DISTSUFFIX="tar.xz"
 DISTFILES="http://ftp.gnu.org/gnu/coreutils/$DISTVER.$DISTSUFFIX"
-UNPACKCOMD="tar -xzf"
+UNPACKCOMD="xz -cd | tar -xzf"
 
 package_init "$@"
 CONFIGURE_CMD="./configure 
