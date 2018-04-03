@@ -22,7 +22,6 @@ CONFIGURE_CMD="./configure
                 --prefix=$PREFIX 
                 --disable-nls 
                 CC=$PBTARGETARCH-gcc 
-                LIBS=-lsocket
                 "
 package_fetch
 package_patch
