@@ -10,7 +10,7 @@ set -e
 source ../../lib.sh
 TASK=build
 
-DISTVER="gcc"
+source ./vars.sh
 
 package_init "$@"
 

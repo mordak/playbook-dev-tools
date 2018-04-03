@@ -164,6 +164,13 @@ function bootstrap()
   do
     if [ -d "$dir" ] && [ -e "$dir/build.sh" ]
     then
+	[ -f "$dir/vars.sh" ] && {
+		. $dir/vars.sh
+		[ -f ../packages/$DISTVER.zip ] && {
+			echo "Warning: skipping build of $DISTVER (file packages/$DISTVER.zip already exists) "
+			continue;
+		}
+	}
       echo "Building $dir"
       cd "$dir"
       ./build.sh $SUBTASKFLAG $SUBTASK
