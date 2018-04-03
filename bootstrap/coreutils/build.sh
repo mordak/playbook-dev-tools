@@ -13,7 +13,7 @@ TASK=fetch
 DISTVER="coreutils-8.29"
 DISTSUFFIX="tar.xz"
 DISTFILES="http://ftp.gnu.org/gnu/coreutils/$DISTVER.$DISTSUFFIX"
-UNPACKCOMD="xz -cd | tar -xzf"
+UNPACKCOMD="tar -Jxf "
 
 package_init "$@"
 CONFIGURE_CMD="./configure 
