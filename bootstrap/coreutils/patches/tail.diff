@@ -1,0 +1,10 @@
+--- src/tail.c	2017-12-11 02:13:18.000000000 +0100
++++ src/tail.c	2018-04-04 01:53:59.000000000 +0200
+@@ -57,7 +57,6 @@
+ 
+ /* inotify needs to know if a file is local.  */
+ # include "fs.h"
+-# include "fs-is-local.h"
+ # if HAVE_SYS_STATFS_H
+ #  include <sys/statfs.h>
+ # elif HAVE_SYS_VFS_H

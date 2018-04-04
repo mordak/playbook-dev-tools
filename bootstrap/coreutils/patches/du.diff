@@ -1,0 +1,119 @@
+--- src/du.c	2017-09-20 03:17:21.000000000 +0200
++++ src/du.c	2018-04-04 01:32:07.000000000 +0200
+@@ -421,64 +421,6 @@
+   fflush (stdout);
+ }
+ 
+-/* Fill the di_mnt set with local mount point dev/ino pairs.  */
+-
+-static void
+-fill_mount_table (void)
+-{
+-  struct mount_entry *mnt_ent = read_file_system_list (false);
+-  while (mnt_ent)
+-    {
+-      struct mount_entry *mnt_free;
+-      if (!mnt_ent->me_remote && !mnt_ent->me_dummy)
+-        {
+-          struct stat buf;
+-          if (!stat (mnt_ent->me_mountdir, &buf))
+-            hash_ins (di_mnt, buf.st_ino, buf.st_dev);
+-          else
+-            {
+-              /* Ignore stat failure.  False positives are too common.
+-                 E.g., "Permission denied" on /run/user/<name>/gvfs.  */
+-            }
+-        }
+-
+-      mnt_free = mnt_ent;
+-      mnt_ent = mnt_ent->me_next;
+-      free_mount_entry (mnt_free);
+-    }
+-}
+-
+-/* This function checks whether any of the directories in the cycle that
+-   fts detected is a mount point.  */
+-
+-static bool
+-mount_point_in_fts_cycle (FTSENT const *ent)
+-{
+-  FTSENT const *cycle_ent = ent->fts_cycle;
+-
+-  if (!di_mnt)
+-    {
+-      /* Initialize the set of dev,inode pairs.  */
+-      di_mnt = di_set_alloc ();
+-      if (!di_mnt)
+-        xalloc_die ();
+-
+-      fill_mount_table ();
+-    }
+-
+-  while (ent && ent != cycle_ent)
+-    {
+-      if (di_set_lookup (di_mnt, ent->fts_statp->st_dev,
+-                         ent->fts_statp->st_ino) > 0)
+-        {
+-          return true;
+-        }
+-      ent = ent->fts_parent;
+-    }
+-
+-  return false;
+-}
+-
+ /* This function is called once for every file system object that fts
+    encounters.  fts does a depth-first traversal.  This function knows
+    that and accumulates per-directory totals based on changes in
+@@ -533,15 +475,6 @@
+               return false;
+             }
+ 
+-          /* The --one-file-system (-x) option cannot exclude anything
+-             specified on the command-line.  By definition, it can exclude
+-             a file or directory only when its device number is different
+-             from that of its just-processed parent directory, and du does
+-             not process the parent of a command-line argument.  */
+-          if (fts->fts_options & FTS_XDEV
+-              && FTS_ROOTLEVEL < ent->fts_level
+-              && fts->fts_dev != sb->st_dev)
+-            excluded = true;
+         }
+ 
+       if (excluded
+@@ -573,15 +506,6 @@
+           ok = false;
+           break;
+ 
+-        case FTS_DC:
+-          /* If not following symlinks and not a (bind) mount point.  */
+-          if (cycle_warning_required (fts, ent)
+-              && ! mount_point_in_fts_cycle (ent))
+-            {
+-              emit_cycle_warning (file);
+-              return false;
+-            }
+-          return true;
+         }
+     }
+ 
+@@ -755,7 +679,7 @@
+   while (true)
+     {
+       int oi = -1;
+-      int c = getopt_long (argc, argv, "0abd:chHklmst:xB:DLPSX:",
++      int c = getopt_long (argc, argv, "0abd:chHklmst:B:DLPSX:",
+                            long_options, &oi);
+       if (c == -1)
+         break;
+@@ -850,10 +774,6 @@
+           }
+           break;
+ 
+-        case 'x':
+-          bit_flags |= FTS_XDEV;
+-          break;
+-
+         case 'B':
+           {
+             enum strtol_error e = human_options (optarg, &human_output_opts,
