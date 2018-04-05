@@ -8,10 +8,9 @@
 
 set -e
 source ../../lib.sh
+source ./vars.sh
 TASK=fetch
 
-DISTVER="diffutils-3.2"
-DISTSUFFIX="tar.gz"
 DISTFILES="http://ftp.gnu.org/gnu/diffutils/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 

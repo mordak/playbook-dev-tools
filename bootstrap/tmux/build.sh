@@ -8,10 +8,9 @@
 
 set -e
 source ../../lib.sh
+source ./vars.sh
 TASK=fetch
 
-DISTVER="tmux-1.9a"
-DISTSUFFIX="tar.gz"
 DISTFILES="https://github.com/tmux/tmux/releases/download/1.9a/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 LIBEVENT_DIR="libevent-2.0.22-stable"

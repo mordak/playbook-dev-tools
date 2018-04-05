@@ -8,10 +8,9 @@
 
 set -e
 source ../../lib.sh
+source ./vars.sh
 TASK=fetch
 
-DISTVER="patch-2.7.1"
-DISTSUFFIX="tar.gz"
 DISTFILES="http://ftp.gnu.org/gnu/patch/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 package_init "$@"

@@ -7,10 +7,9 @@
 
 set -e
 source ../../lib.sh
+source ./vars.sh
 TASK=fetch
 
-DISTVER="groff-1.22.3"
-DISTSUFFIX="tar.gz"
 DISTFILES="http://ftp.gnu.org/gnu/groff/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 package_init "$@"

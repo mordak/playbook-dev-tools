@@ -8,10 +8,9 @@
 
 set -e
 source ../../lib.sh
+source ./vars.sh
 TASK=fetch
 
-DISTVER="coreutils-8.29"
-DISTSUFFIX="tar.xz"
 DISTFILES="http://ftp.gnu.org/gnu/coreutils/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xJf "
 

@@ -8,9 +8,9 @@
 
 set -e
 source ../../lib.sh
+source ./vars.sh
 TASK=fetch
 
-DISTVER="findutils"
 FINDUTILS_GITVER=003c8e6e3734c35c8a5d639528548181f0fada7f
 GNULIB_GITVER=372ef2a0e94ec6ee85b5fc4bab763154ec11420d
 

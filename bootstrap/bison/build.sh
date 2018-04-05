@@ -7,10 +7,9 @@
 
 set -e
 source ../../lib.sh
+source ./vars.sh
 TASK=fetch
 
-DISTVER="bison-2.5.1"
-DISTSUFFIX="tar.gz"  
 DISTFILES="http://ftp.gnu.org/gnu/bison/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 

@@ -8,10 +8,9 @@
 
 set -e
 source ../../lib.sh
+source ./vars.sh
 TASK=fetch
 
-DISTVER="gettext-0.18.1.1"
-DISTSUFFIX="tar.gz"
 DISTFILES="http://ftp.gnu.org/gnu/gettext/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 

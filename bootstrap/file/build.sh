@@ -8,6 +8,7 @@
 
 set -e
 source ../../lib.sh
+source ./vars.sh
 TASK=fetch
 
 # file doesn't like to cross compile versions that differ from the 
@@ -17,8 +18,6 @@ TASK=fetch
 # Need to auto-detect the installed version for cross compiling.
 # Also add $HOME/share/misc/magic.mgc to installed .profile MAGIC
 
-DISTVER="file-5.11"
-DISTSUFFIX="tar.gz"
 DISTFILES="ftp://ftp.astron.com/pub/file/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 

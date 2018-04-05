@@ -8,10 +8,9 @@
 
 set -e
 source ../../lib.sh
+source ./vars.sh
 TASK=fetch
 
-DISTVER="curl-7.51.0"
-DISTSUFFIX="tar.bz2"  # so much for bootstrapping..
 DISTFILES="https://curl.haxx.se/download/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xf"
 package_init "$@"

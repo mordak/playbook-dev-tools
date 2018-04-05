@@ -8,10 +8,9 @@
 
 set -e
 source ../../lib.sh
+source ./vars.sh
 TASK=fetch
 
-DISTVER="man-1.6g"
-DISTSUFFIX="tar.gz"
 DISTFILES="http://ibiblio.org/pub/Linux/apps/doctools/man/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 

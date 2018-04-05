@@ -8,9 +8,8 @@
 
 set -e
 source ../../lib.sh
+source ./vars.sh
 TASK=fetch
-
-DISTVER="fakeroot"
 
 package_init "$@"
 CONFIGURE_CMD="./configure 

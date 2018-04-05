@@ -8,10 +8,9 @@
 
 set -e
 source ../../lib.sh
+source ./vars.sh
 TASK=fetch
 
-DISTVER="make-3.82"
-DISTSUFFIX="tar.bz2"
 DISTFILES="http://ftp.gnu.org/gnu/make/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xjf"
 package_init "$@"

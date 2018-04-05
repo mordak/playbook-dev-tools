@@ -8,10 +8,9 @@
 
 set -e
 source ../../lib.sh
+source ./vars.sh
 TASK=fetch
 
-DISTVER="libevent-2.0.22-stable"
-DISTSUFFIX="tar.gz"
 DISTFILES="https://github.com/libevent/libevent/releases/download/release-2.0.22-stable/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 

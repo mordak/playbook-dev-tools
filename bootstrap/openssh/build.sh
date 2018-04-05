@@ -8,10 +8,9 @@
 
 set -e
 source ../../lib.sh
+source ./vars.sh
 TASK=fetch
 
-DISTVER="openssh-7.1p2"
-DISTSUFFIX="tar.gz"
 DISTFILES="http://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 package_init "$@"

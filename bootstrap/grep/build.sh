@@ -8,11 +8,10 @@
 
 set -e
 source ../../lib.sh
+source ./vars.sh
 TASK=fetch
 
 
-DISTVER="grep-2.9"
-DISTSUFFIX="tar.gz"
 DISTFILES="http://ftp.gnu.org/gnu/grep/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 TASK=fetch
