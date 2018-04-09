@@ -1,0 +1,2 @@
+DISTVER="libmpg123-bb10"
+DISTSUFFIX="git"
