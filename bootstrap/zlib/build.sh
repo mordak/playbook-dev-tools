@@ -4,6 +4,9 @@
 #
 # You may do whatever you like with this code, provided the above
 # copyright notice and this paragraph are preserved.
+#
+# Olivier Kaloudoff <olivier.kaloudoff@gmail.com>, 2018
+#
 
 set -e
 source ../../lib.sh
