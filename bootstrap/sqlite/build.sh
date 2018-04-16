@@ -20,6 +20,7 @@ CONFIGURE_CMD="./configure
                 --target=$PBTARGETARCH 
                 --prefix=$PREFIX 
                 CC=$PBTARGETARCH-gcc 
+		CFLAGS=-O3
                 "
 package_fetch
 package_patch
