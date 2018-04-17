@@ -23,6 +23,7 @@ CONFIGURE_CMD="./configure
                 --prefix=$PREFIX 
                 --disable-nls 
                 CC=$PBTARGETARCH-gcc 
+		CFLAGS=-O3
                 "
 package_fetch
 package_patch
