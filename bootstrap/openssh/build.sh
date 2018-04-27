@@ -26,7 +26,7 @@ CONFIGURE_CMD="./configure
                 --disable-strip
                 CC=$PBTARGETARCH-gcc 
                 AR=$PBTARGETARCH-ar 
-                CFLAGS="-I$PWD"
+                CFLAGS=\"-I$PWD -O3\"
                 "
 package_fetch
 package_patch
