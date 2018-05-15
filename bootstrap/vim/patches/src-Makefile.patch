@@ -1,0 +1,11 @@
+--- src/Makefile.orig	2018-05-16 00:04:10.343299971 +1000
++++ src/Makefile	2018-05-16 00:04:23.099299971 +1000
+@@ -1136,7 +1136,7 @@
+ 
+ ### Program to run on installed binary.  Use the second one to disable strip.
+ #STRIP = strip
+-#STRIP = /bin/true
++STRIP = /bin/true
+ 
+ ### Permissions for binaries  {{{1
+ BINMOD = 755
