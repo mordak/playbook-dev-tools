@@ -1,0 +1,13 @@
+--- src/main.c.orig	2018-05-15 23:53:34.734277000 +1000
++++ src/main.c	2018-05-15 23:53:47.200507000 +1000
+@@ -903,10 +903,6 @@
+     eval_init();	/* init global variables */
+ #endif
+
+-#ifdef __QNXNTO__
+-    qnx_init();		/* PhAttach() for clipboard, (and gui) */
+-#endif
+-
+ #ifdef MAC_OS_CLASSIC
+     /* Prepare for possibly starting GUI sometime */
+     /* Macintosh needs this before any memory is allocated. */
