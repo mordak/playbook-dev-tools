@@ -1,0 +1,11 @@
+--- randutils.c.orig	2018-05-16 16:59:25.392053730 +1000
++++ randutils.c	2018-05-16 16:59:51.156053730 +1000
+@@ -13,8 +13,6 @@
+ #include <string.h>
+ #include <sys/time.h>
+ 
+-#include <sys/syscall.h>
+-
+ #include "randutils.h"
+ 
+ #ifdef HAVE_TLS
