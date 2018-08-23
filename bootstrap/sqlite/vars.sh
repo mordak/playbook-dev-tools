@@ -1,2 +1,2 @@
-DISTVER="sqlite-autoconf-3080704"
+DISTVER="sqlite-autoconf-3240000"
 DISTSUFFIX="tar.gz"

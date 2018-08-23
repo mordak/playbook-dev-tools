@@ -11,10 +11,11 @@ source ../../lib.sh
 source ./vars.sh
 TASK=fetch
 
-DISTFILES="https://sqlite.org/2014/$DISTVER.$DISTSUFFIX"
+DISTFILES="https://sqlite.org/2018/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 package_init "$@"
-CONFIGURE_CMD="./configure 
+CONFIGURE_CMD="LIBUUID_DIR=\"$ARCHIVEDIR/libuuid-1.0.3/$PREFIX\"
+		./configure 
                 --host=$PBHOSTARCH
                 --build=$PBBUILDARCH 
                 --target=$PBTARGETARCH 
