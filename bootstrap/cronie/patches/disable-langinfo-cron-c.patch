@@ -1,0 +1,1354 @@
+--- cronie-1.5.2.orig/src/misc.c	2017-09-14 13:53:21.000000000 +0200
++++ cronie-1.5.2/src/cron.c	2018-09-03 13:11:58.000000000 +0200
+@@ -19,768 +19,699 @@
+  * OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+  */
+ 
+-/* vix 26jan87 [RCS has the rest of the log]
+- * vix 30dec86 [written]
++/*
++ * Modified 2010/09/12 by Colin Dean, Durham University IT Service,
++ * to add clustering support.
+  */
+ 
+ #include "config.h"
+ 
+-#include "globals.h"
++#define	MAIN_PROGRAM
+ 
+-#include <ctype.h>
+ #include <errno.h>
++#include <pwd.h>
+ #include <signal.h>
+-#include <stdarg.h>
+-#include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+ #include <sys/stat.h>
++#include <sys/types.h>
++#include <sys/wait.h>
++#include <unistd.h>
++#include <sys/time.h>
+ 
+-#if defined(SYSLOG)
+-# include <syslog.h>
+-#endif
+-
+-#ifdef WITH_AUDIT
+-# include <libaudit.h>
++#ifdef WITH_INOTIFY
++# include <sys/inotify.h>
+ #endif
+ 
+-#ifdef HAVE_FCNTL_H	/* fcntl(2) */
+-# include <fcntl.h>
+-#endif
+-#ifdef HAVE_UNISTD_H	/* lockf(3) */
+-# include <unistd.h>
+-#endif
+-#ifdef HAVE_FLOCK	/* flock(2) */
+-# include <sys/file.h>
++#ifdef HAVE_SYS_FCNTL_H
++# include <sys/fcntl.h>
+ #endif
+ 
++#include "cronie_common.h"
+ #include "funcs.h"
+-#include "macros.h"
++#include "globals.h"
+ #include "pathnames.h"
+ 
+-#if defined(SYSLOG) && defined(LOG_FILE)
+-# undef LOG_FILE
+-#endif
+-
+-#if defined(LOG_DAEMON) && !defined(LOG_CRON)
+-# define LOG_CRON LOG_DAEMON
+-#endif
+-
+-#ifndef FACILITY
+-# define FACILITY LOG_CRON
+-#endif
+-
+-static int LogFD = ERR;
+-
+-#if defined(SYSLOG)
+-static int syslog_open = FALSE;
++#if defined WITH_INOTIFY
++int inotify_enabled;
++#else
++# define inotify_enabled 0
+ #endif
+ 
+-#if defined(HAVE_FLOCK)
+-# define trylock_file(fd)      flock((fd), LOCK_EX|LOCK_NB)
+-#elif defined(HAVE_FCNTL) && defined(F_SETLK)
+-static int trylock_file(int fd) {
+-	struct flock fl;
++enum timejump { negative, small, medium, large };
+ 
+-	memset(&fl, '\0', sizeof (fl));
+-	fl.l_type = F_WRLCK;
+-	fl.l_whence = SEEK_SET;
+-	fl.l_start = 0;
+-	fl.l_len = 0;
++static void usage(void) ATTRIBUTE_NORETURN,
++run_reboot_jobs(cron_db *),
++find_jobs(int, cron_db *, int, int, long),
++set_time(int),
++cron_sleep(int, cron_db *),
++sigchld_handler(int),
++sighup_handler(int),
++sigchld_reaper(void), sigintterm_handler(int), parse_args(int c, char *v[]);
++
++static volatile sig_atomic_t got_sighup, got_sigchld, got_sigintterm;
++static int timeRunning, virtualTime, clockTime;
++static long GMToff;
++static int DisableInotify;
+ 
+-	return fcntl(fd, F_SETLK, &fl);
+-}
+-#elif defined(HAVE_LOCKF)
+-# define trylock_file(fd)      lockf((fd), F_TLOCK, 0)
+-#endif
++#if defined WITH_INOTIFY
+ 
+ /*
+- * glue_strings is the overflow-safe equivalent of
+- *		sprintf(buffer, "%s%c%s", a, separator, b);
+- *
+- * returns 1 on success, 0 on failure.  'buffer' MUST NOT be used if
+- * glue_strings fails.
++ * Note that inotify isn't safe to use with clustering, as changes made
++ * to a shared filesystem on one system cannot be relied on to be notified
++ * on another system, so use of inotify is disabled at runtime if run with
++ * clustering enabled.
+  */
+-int
+-glue_strings(char *buffer, size_t buffer_size, const char *a, const char *b,
+-	char separator) {
+-	char *buf;
+-	char *buf_end;
+-
+-	if (buffer_size <= 0)
+-		return (0);
+-	buf_end = buffer + buffer_size;
+-	buf = buffer;
+-
+-	for ( /* nothing */ ; buf < buf_end && *a != '\0'; buf++, a++)
+-		*buf = *a;
+-	if (buf == buf_end)
+-		return (0);
+-	if (separator != '/' || buf == buffer || buf[-1] != '/')
+-		*buf++ = separator;
+-	if (buf == buf_end)
+-		return (0);
+-	for ( /* nothing */ ; buf < buf_end && *b != '\0'; buf++, b++)
+-		*buf = *b;
+-	if (buf == buf_end)
+-		return (0);
+-	*buf = '\0';
+-	return (1);
+-}
+-
+-int strcmp_until(const char *left, const char *right, char until) {
+-	while (*left && *left != until && *left == *right) {
+-		left++;
+-		right++;
+-	}
+-
+-	if ((*left == '\0' || *left == until) && (*right == '\0' ||
+-			*right == until)) {
+-		return (0);
+-	}
+-	return (*left - *right);
+-}
+ 
+-/* strdtb(s) - delete trailing blanks in string 's' and return new length
+- */
+-size_t strdtb(char *s) {
+-	char *x = s;
+-
+-	/* scan forward to the null
+-	 */
+-	while (*x)
+-		x++;
++# if defined ENABLE_SYSCRONTAB
++# 	define NUM_WATCHES 3
+ 
+-	/* scan backward to either the first character before the string,
+-	 * or the last non-blank in the string, whichever comes first.
+-	 */
+-	do {
+-		x--;
+-	} while (x >= s && isspace((unsigned char) *x));
++int wd[NUM_WATCHES];
++const char *watchpaths[NUM_WATCHES] = {SPOOL_DIR, SYS_CROND_DIR, SYSCRONTAB};
++# else
++#	define NUM_WATCHES 2
++int wd[NUM_WATCHES];
++const char *watchpaths[NUM_WATCHES] = {SPOOL_DIR, SYS_CROND_DIR};
++# endif
+ 
+-	/* one character beyond where we stopped above is where the null
+-	 * goes.
+-	 */
+-	*++x = '\0';
++static void reset_watches(void) {
++	size_t i;
+ 
+-	/* the difference between the position of the null character and
+-	 * the position of the first character of the string is the length.
+-	 */
+-	return ((size_t)(x - s));
++	for (i = 0; i < sizeof (wd) / sizeof (wd[0]); ++i) {
++		wd[i] = -2;
++	}
+ }
+ 
+-int set_debug_flags(const char *flags) {
+-	/* debug flags are of the form    flag[,flag ...]
+-	 *
+-	 * if an error occurs, print a message to stdout and return FALSE.
+-	 * otherwise return TRUE after setting ERROR_FLAGS.
+-	 */
+-
+-#if !DEBUGGING
+-
+-	printf("this program was compiled without debugging enabled\n");
+-	return (FALSE);
++void set_cron_unwatched(int fd) {
++	size_t i;
+ 
+-#else /* DEBUGGING */
+-
+-	const char *pc = flags;
+-
+-	DebugFlags = 0;
+-
+-	while (*pc) {
+-		const char **test;
+-		int mask;
+-
+-		/* try to find debug flag name in our list.
+-		 */
+-		for (test = DebugFlagNames, mask = 1;
+-			*test != NULL && strcmp_until(*test, pc, ','); test++, mask <<= 1) ;
+-
+-		if (!*test) {
+-			fprintf(stderr, "unrecognized debug flag <%s> <%s>\n", flags, pc);
+-			return (FALSE);
++	for (i = 0; i < sizeof (wd) / sizeof (wd[0]); ++i) {
++		if (wd[i] > 0) {
++			inotify_rm_watch(fd, wd[i]);
++			wd[i] = -1;
+ 		}
++	}
++}
+ 
+-		DebugFlags |= mask;
++void set_cron_watched(int fd) {
++	pid_t pid = getpid();
++	size_t i;
+ 
+-		/* skip to the next flag
+-		 */
+-		while (*pc && *pc != ',')
+-			pc++;
+-		if (*pc == ',')
+-			pc++;
++	if (fd < 0) {
++		inotify_enabled = 0;
++		return;
+ 	}
+ 
+-	if (DebugFlags) {
+-		int flag;
+-
+-		fprintf(stderr, "debug flags enabled:");
++	for (i = 0; i < sizeof (wd) / sizeof (wd[0]); ++i) {
++		int w;
+ 
+-		for (flag = 0; DebugFlagNames[flag]; flag++)
+-			if (DebugFlags & (1 << flag))
+-				fprintf(stderr, " %s", DebugFlagNames[flag]);
+-		fprintf(stderr, "\n");
++		w = inotify_add_watch(fd, watchpaths[i],
++			IN_CREATE | IN_CLOSE_WRITE | IN_ATTRIB | IN_MODIFY | IN_MOVED_TO |
++			IN_MOVED_FROM | IN_MOVE_SELF | IN_DELETE | IN_DELETE_SELF);
++		if (w < 0 && errno != ENOENT) {
++			if (wd[i] != -1) {
++				log_it("CRON", pid, "This directory or file can't be watched",
++					watchpaths[i], errno);
++				log_it("CRON", pid, "INFO", "running without inotify support",
++					0);
++			}
++			inotify_enabled = 0;
++			set_cron_unwatched(fd);
++			return;
++		}
++		wd[i] = w;
+ 	}
+ 
+-	return (TRUE);
++	if (!inotify_enabled) {
++		log_it("CRON", pid, "INFO", "running with inotify support", 0);
++	}
+ 
+-#endif /* DEBUGGING */
++	inotify_enabled = 1;
+ }
++#endif
+ 
+-void set_cron_uid(void) {
+-#if defined(BSD) || defined(POSIX)
+-	if (seteuid(ROOT_UID) < OK) {
+-		perror("seteuid");
+-		exit(ERROR_EXIT);
++static void handle_signals(cron_db * database) {
++	if (got_sighup) {
++		got_sighup = 0;
++#if defined WITH_INOTIFY
++		/* watches must be reinstated on reload */
++		if (inotify_enabled && (EnableClustering != 1)) {
++			set_cron_unwatched(database->ifd);
++			reset_watches();
++			inotify_enabled = 0;
++		}
++#endif
++		database->mtime = (time_t) 0;
++		log_close();
+ 	}
+-#else
+-	if (setuid(ROOT_UID) < OK) {
+-		perror("setuid");
+-		exit(ERROR_EXIT);
++
++	if (got_sigchld) {
++		got_sigchld = 0;
++		sigchld_reaper();
+ 	}
+-#endif
+ }
+ 
+-void check_spool_dir(void) {
+-	struct stat sb;
+-#ifdef CRON_GROUP
+-	struct group *grp = NULL;
++static void usage(void) {
++	const char **dflags;
+ 
+-	grp = getgrnam(CRON_GROUP);
+-#endif
+-	/* check SPOOL_DIR existence
+-	 */
+-	if (stat(SPOOL_DIR, &sb) < OK && errno == ENOENT) {
+-		perror(SPOOL_DIR);
+-		if (OK == mkdir(SPOOL_DIR, 0700)) {
+-			fprintf(stderr, "%s: created\n", SPOOL_DIR);
+-			if (stat(SPOOL_DIR, &sb) < OK) {
+-				perror("stat retry");
+-				exit(ERROR_EXIT);
+-			}
+-		}
+-		else {
+-			fprintf(stderr, "%s: ", SPOOL_DIR);
+-			perror("mkdir");
+-			exit(ERROR_EXIT);
+-		}
+-	}
+-	if (!S_ISDIR(sb.st_mode)) {
+-		fprintf(stderr, "'%s' is not a directory, bailing out.\n", SPOOL_DIR);
+-		exit(ERROR_EXIT);
+-	}
+-#ifdef CRON_GROUP
+-	if (grp != NULL) {
+-		if (sb.st_gid != grp->gr_gid)
+-			if (chown(SPOOL_DIR, -1, grp->gr_gid) == -1) {
+-				fprintf(stderr, "chown %s failed: %s\n", SPOOL_DIR,
+-					strerror(errno));
+-				exit(ERROR_EXIT);
+-			}
+-		if (sb.st_mode != 01730)
+-			if (chmod(SPOOL_DIR, 01730) == -1) {
+-				fprintf(stderr, "chmod 01730 %s failed: %s\n", SPOOL_DIR,
+-					strerror(errno));
+-				exit(ERROR_EXIT);
+-			}
+-	}
+-#endif
++	fprintf(stderr, "Usage:\n");
++	fprintf(stderr, " %s [options]\n", ProgramName);
++	fprintf(stderr, "\n");
++	fprintf(stderr, "Options:\n");
++	fprintf(stderr, " -h         print this message \n");
++	fprintf(stderr, " -i         deamon runs without inotify support\n");
++	fprintf(stderr, " -m <comm>  off, or specify preferred client for sending mails\n");
++	fprintf(stderr, " -n         run in foreground\n");
++	fprintf(stderr, " -p         permit any crontab\n");
++	fprintf(stderr, " -P         use PATH=\"%s\"\n", _PATH_DEFPATH);
++	fprintf(stderr, " -c         enable clustering support\n");
++	fprintf(stderr, " -s         log into syslog instead of sending mails\n");
++	fprintf(stderr, " -V         print version and exit\n");
++	fprintf(stderr, " -x <flag>  print debug information\n");
++	fprintf(stderr, "\n");
++	fprintf(stderr, "Debugging flags are: ");
++	for (dflags = DebugFlagNames; *dflags; dflags++)
++		fprintf(stderr, "%s%s", *dflags, dflags[1] ? "," : "\n");
++	exit(ERROR_EXIT);
+ }
+ 
+-/* acquire_daemonlock() - write our PID into /etc/cron.pid, unless
+- *	another daemon is already running, which we detect here.
+- *
+- * note: main() calls us twice; once before forking, once after.
+- *	we maintain static storage of the file pointer so that we
+- *	can rewrite our PID into _PATH_CRON_PID after the fork.
+- */
+-void acquire_daemonlock(int closeflag) {
+-	static int fd = -1;
+-	char buf[3 * MAX_FNAME];
+-	const char *pidfile;
+-	char *ep;
+-	long otherpid = -1;
+-	ssize_t num, len;
++int main(int argc, char *argv[]) {
++	struct sigaction sact;
++	cron_db database;
++	int fd;
++	char *cs;
+ 	pid_t pid = getpid();
++	long oldGMToff;
++	struct timeval tv;
++	struct timezone tz;
++	char buf[256];
+ 
+-	if (closeflag) {
+-		/* close stashed fd for child so we don't leak it. */
+-		if (fd != -1) {
+-			close(fd);
+-			fd = -1;
+-		}
+-		/* and restore default sig handlers so we don't remove pid file if killed */
+-		signal(SIGINT,SIG_DFL);
+-		signal(SIGTERM,SIG_DFL);
+-		return;
++	if ((ProgramName=strrchr(argv[0], '/')) == NULL) {
++		ProgramName = argv[0];
+ 	}
+-
+-	if (NoFork == 1)
+-		return; //move along, nothing to do here...
+-
+-	if (fd == -1) {
+-		pidfile = _PATH_CRON_PID;
+-		/* Initial mode is 0600 to prevent flock() race/DoS. */
+-		if ((fd = open(pidfile, O_RDWR | O_CREAT, 0600)) == -1) {
+-			int save_errno = errno;
+-			sprintf(buf, "can't open or create %s", pidfile);
+-			fprintf(stderr, "%s: %s: %s\n", ProgramName, buf,
+-				strerror(save_errno));
+-			log_it("CRON", pid, "DEATH", buf, save_errno);
+-			exit(ERROR_EXIT);
+-		}
+-
+-		if (trylock_file(fd) < OK) {
+-			int save_errno = errno;
+-
+-			memset(buf, 0, sizeof (buf));
+-			if ((num = read(fd, buf, sizeof (buf) - 1)) > 0 &&
+-				(otherpid = strtol(buf, &ep, 10)) > 0 &&
+-				ep != buf && *ep == '\n' && otherpid != LONG_MAX) {
+-				snprintf(buf, sizeof (buf),
+-					"can't lock %s, otherpid may be %ld", pidfile, otherpid);
+-			}
+-			else {
+-				snprintf(buf, sizeof (buf),
+-					"can't lock %s, otherpid unknown", pidfile);
+-			}
+-			fprintf(stderr, "%s: %s: %s\n", ProgramName, buf,
+-				strerror(save_errno));
+-			log_it("CRON", pid, "DEATH", buf, save_errno);
+-			exit(ERROR_EXIT);
+-		}
+-		(void) fchmod(fd, 0644);
+-		(void) fcntl(fd, F_SETFD, 1);
+-	}
+-#if !defined(HAVE_FLOCK)
+ 	else {
+-		/* Racy but better than nothing, just hope the parent exits */
+-		sleep(0);
+-		trylock_file(fd);	
++		++ProgramName;
+ 	}
+-#endif
+ 
+-	sprintf(buf, "%ld\n", (long) pid);
+-	(void) lseek(fd, (off_t) 0, SEEK_SET);
+-	len = (ssize_t)strlen(buf);
+-	if ((num = write(fd, buf, (size_t)len)) != len)
+-		log_it("CRON", pid, "ERROR", "write() failed", errno);
+-	else {
+-		if (ftruncate(fd, num) == -1)
+-			log_it("CRON", pid, "ERROR", "ftruncate() failed", errno);
+-	}
++	MailCmd[0] = '\0';
++	cron_default_mail_charset[0] = '\0';
+ 
+-	/* abandon fd even though the file is open. we need to keep
+-	 * it open and locked, but we don't need the handles elsewhere.
+-	 */
+-}
++#if defined(BSD)
++	setlinebuf(stdout);
++	setlinebuf(stderr);
++#endif
+ 
+-/* get_char(file) : like getc() but increment LineNumber on newlines
+- */
+-int get_char(FILE * file) {
+-	int ch;
++	SyslogOutput = 0;
++	NoFork = 0;
++	ChangePath = 1;
++	parse_args(argc, argv);
+ 
+-	ch = getc(file);
+-	if (ch == '\n')
+-		Set_LineNum(LineNumber + 1)
+-	return (ch);
+-}
+-
+-/* unget_char(ch, file) : like ungetc but do LineNumber processing
+- */
+-void unget_char(int ch, FILE * file) {
+-	ungetc(ch, file);
+-	if (ch == '\n')
+-		Set_LineNum(LineNumber - 1)
+-}
++	memset((char *) &sact, 0, sizeof sact);
++	sigemptyset(&sact.sa_mask);
++	sact.sa_flags = 0;
++#ifdef SA_RESTART
++	sact.sa_flags |= SA_RESTART;
++#endif
++	sact.sa_handler = sigchld_handler;
++	(void) sigaction(SIGCHLD, &sact, NULL);
++	sact.sa_handler = sighup_handler;
++	(void) sigaction(SIGHUP, &sact, NULL);
++	sact.sa_handler = sigintterm_handler;
++	(void) sigaction(SIGINT, &sact, NULL);
++	(void) sigaction(SIGTERM, &sact, NULL);
+ 
+-/* get_string(str, max, file, termstr) : like fgets() but
+- *      (1) has terminator string which should include \n
+- *      (2) will always leave room for the null
+- *      (3) uses get_char() so LineNumber will be accurate
+- *      (4) returns EOF or terminating character, whichever
+- */
+-int get_string(char *string, int size, FILE * file, const char *terms) {
+-	int ch;
++	acquire_daemonlock(0);
++	set_cron_uid();
++	check_spool_dir();
+ 
+-	while (EOF != (ch = get_char(file)) && !strchr(terms, ch)) {
+-		if (size > 1) {
+-			*string++ = (char) ch;
+-			size--;
++	if (ChangePath) {
++		if (setenv("PATH", _PATH_DEFPATH, 1) < 0) {
++			log_it("CRON", pid, "DEATH", "can't setenv PATH",
++				errno);
++			exit(1);
+ 		}
+ 	}
+ 
+-	if (size > 0)
+-		*string = '\0';
+-
+-	return (ch);
+-}
++ 	strcpy(cron_default_mail_charset, "US-ASCII");
+ 
+-/* skip_comments(file) : read past comment (if any)
+- */
+-void skip_comments(FILE * file) {
+-	int ch;
++	/* if there are no debug flags turned on, fork as a daemon should.
++	 */
++	if (DebugFlags) {
++#if DEBUGGING
++		(void) fprintf(stderr, "[%ld] cron started\n", (long) getpid());
++#endif
++	}
++	else if (NoFork == 0) {
++		switch (fork()) {
++		case -1:
++			log_it("CRON", pid, "DEATH", "can't fork", errno);
++			exit(0);
++			break;
++		case 0:
++			/* child process */
++			(void) setsid();
++			if ((fd = open(_PATH_DEVNULL, O_RDWR, 0)) >= 0) {
++				(void) dup2(fd, STDIN);
++				(void) dup2(fd, STDOUT);
++				(void) dup2(fd, STDERR);
++				if (fd != STDERR)
++					(void) close(fd);
++			}
++			break;
++		default:
++			/* parent process should just die */
++			_exit(0);
++		}
++	}
+ 
+-	while (EOF != (ch = get_char(file))) {
+-		/* ch is now the first character of a line.
+-		 */
+-		while (ch == ' ' || ch == '\t')
+-			ch = get_char(file);
++	log_it("CRON", getpid(), "STARTUP", PACKAGE_VERSION, 0);
+ 
+-		if (ch == EOF)
+-			break;
++	if (!SyslogOutput && MailCmd[0] == '\0' && access("/usr/sbin/sendmail", X_OK) != 0) {
++		SyslogOutput=1;
++		log_it("CRON", pid, "INFO","Syslog will be used instead of sendmail.", 0);
++	}
+ 
+-		/* ch is now the first non-blank character of a line.
+-		 */
++	pid = getpid();
+ 
+-		if (ch != '\n' && ch != '#')
+-			break;
++	/* obtain a random scaling factor for RANDOM_DELAY */
++	if (gettimeofday(&tv, &tz) != 0)
++		tv.tv_usec = 0;
++	srandom((unsigned int)(pid + tv.tv_usec));
++	RandomScale = (double)random() / (double)RAND_MAX;
++	snprintf(buf, sizeof(buf), "RANDOM_DELAY will be scaled with factor %d%% if used.", (int)(RandomScale*100));
++	log_it("CRON", pid, "INFO", buf, 0);
+ 
+-		/* ch must be a newline or comment as first non-blank
+-		 * character on a line.
+-		 */
++	acquire_daemonlock(0);
++	database.head = NULL;
++	database.tail = NULL;
++	database.mtime = (time_t) 0;
+ 
+-		while (ch != '\n' && ch != EOF)
+-			ch = get_char(file);
++	load_database(&database);
+ 
+-		/* ch is now the newline of a line which we're going to
+-		 * ignore.
+-		 */
++	fd = -1;
++#if defined WITH_INOTIFY
++	if (DisableInotify || EnableClustering) {
++		log_it("CRON", getpid(), "No inotify - daemon runs with -i or -c option", 
++			"", 0);
++	}
++	else {
++		reset_watches();
++		database.ifd = fd = inotify_init();
++		fcntl(fd, F_SETFD, FD_CLOEXEC);
++		if (fd < 0)
++			log_it("CRON", pid, "INFO", "Inotify init failed", errno);
++		set_cron_watched(fd);
+ 	}
+-	if (ch != EOF)
+-		unget_char(ch, file);
+-}
+-
+-/* int in_file(const char *string, FILE *file, int error)
+- *	return TRUE if one of the lines in file matches string exactly,
+- *	FALSE if no lines match, and error on error.
+- */
+-static int in_file(const char *string, FILE * file, int error) {
+-	char line[MAX_TEMPSTR];
+-	char *endp;
+-
+-	if (fseek(file, 0L, SEEK_SET))
+-		return (error);
+-	while (fgets(line, MAX_TEMPSTR, file)) {
+-		if (line[0] != '\0') {
+-			endp = &line[strlen(line) - 1];
+-			if (*endp != '\n')
+-				return (error);
+-			*endp = '\0';
+-			if (0 == strcmp(line, string))
+-				return (TRUE);
+-		}
+-	}
+-	if (ferror(file))
+-		return (error);
+-	return (FALSE);
+-}
+-
+-/* int allowed(const char *username, const char *allow_file, const char *deny_file)
+- *	returns TRUE if (allow_file exists and user is listed)
+- *	or (deny_file exists and user is NOT listed).
+- *	root is always allowed.
+- */
+-int allowed(const char *username, const char *allow_file,
+-	const char *deny_file) {
+-	FILE *fp;
+-	int isallowed;
+-	char buf[128];
+-
+-	if (getuid() == 0)
+-		return TRUE;
+-	isallowed = FALSE;
+-	if ((fp = fopen(allow_file, "r")) != NULL) {
+-		isallowed = in_file(username, fp, FALSE);
+-		fclose(fp);
+-		if ((getuid() == 0) && (!isallowed)) {
+-			snprintf(buf, sizeof (buf),
+-				"root used -u for user %s not in cron.allow", username);
+-			log_it("crontab", getpid(), "warning", buf, 0);
+-			isallowed = TRUE;
+-		}
+-	}
+-	else if ((fp = fopen(deny_file, "r")) != NULL) {
+-		isallowed = !in_file(username, fp, FALSE);
+-		fclose(fp);
+-		if ((getuid() == 0) && (!isallowed)) {
+-			snprintf(buf, sizeof (buf),
+-				"root used -u for user %s in cron.deny", username);
+-			log_it("crontab", getpid(), "warning", buf, 0);
+-			isallowed = TRUE;
+-		}
+-	}
+-#ifdef WITH_AUDIT
+-	if (isallowed == FALSE) {
+-		int audit_fd = audit_open();
+-		audit_log_user_message(audit_fd, AUDIT_USER_START, "cron deny",
+-			NULL, NULL, NULL, 0);
+-		close(audit_fd);
+-	}
+-#endif
+-	return (isallowed);
+-}
+-
+-void log_it(const char *username, PID_T xpid, const char *event,
+-	const char *detail, int err) {
+-#if defined(LOG_FILE) || DEBUGGING
+-	PID_T pid = xpid;
+-#endif
+-#if defined(LOG_FILE)
+-	char *msg;
+-	TIME_T now = time((TIME_T) 0);
+-	struct tm *t = localtime(&now);
+-	int msg_size;
+ #endif
+ 
+-#if defined(LOG_FILE)
+-	/* we assume that MAX_TEMPSTR will hold the date, time, &punctuation.
++	set_time(TRUE);
++	run_reboot_jobs(&database);
++	timeRunning = virtualTime = clockTime;
++	oldGMToff = GMToff;
++
++	/*
++	 * Too many clocks, not enough time (Al. Einstein)
++	 * These clocks are in minutes since the epoch, adjusted for timezone.
++	 * virtualTime: is the time it *would* be if we woke up
++	 * promptly and nobody ever changed the clock. It is
++	 * monotonically increasing... unless a timejump happens.
++	 * At the top of the loop, all jobs for 'virtualTime' have run.
++	 * timeRunning: is the time we last awakened.
++	 * clockTime: is the time when set_time was last called.
+ 	 */
+-	msg = malloc(msg_size = (strlen(username)
+-			+ strlen(event)
+-			+ strlen(detail)
+-			+ MAX_TEMPSTR)
+-		);
+-	if (msg == NULL) {	/* damn, out of mem and we did not test that before... */
+-		fprintf(stderr, "%s: Run OUT OF MEMORY while %s\n",
+-			ProgramName, __FUNCTION__);
+-		return;
+-	}
+-	if (LogFD < OK) {
+-		LogFD = open(LOG_FILE, O_WRONLY | O_APPEND | O_CREAT, 0600);
+-		if (LogFD < OK) {
+-			fprintf(stderr, "%s: can't open log file\n", ProgramName);
+-			perror(LOG_FILE);
++	while (!got_sigintterm) {
++		int timeDiff;
++		enum timejump wakeupKind;
++
++		/* ... wait for the time (in minutes) to change ... */
++		do {
++			cron_sleep(timeRunning + 1, &database);
++			set_time(FALSE);
++		} while (!got_sigintterm && clockTime == timeRunning);
++		if (got_sigintterm)
++			break;
++		timeRunning = clockTime;
++
++		/*
++		 * Calculate how the current time differs from our virtual
++		 * clock.  Classify the change into one of 4 cases.
++		 */
++		timeDiff = timeRunning - virtualTime;
++		check_orphans(&database);
++#if defined WITH_INOTIFY
++		if (inotify_enabled) {
++			check_inotify_database(&database);
+ 		}
+ 		else {
+-			(void) fcntl(LogFD, F_SETFD, 1);
++			if (load_database(&database) && (EnableClustering != 1))
++				/* try reinstating the watches */
++				set_cron_watched(fd);
+ 		}
+-	}
++#else
++		load_database(&database);
++#endif
+ 
+-	/* we have to snprintf() it because fprintf() doesn't always write
+-	 * everything out in one chunk and this has to be atomically appended
+-	 * to the log file.
+-	 */
+-	snprintf(msg, msg_size,
+-		"%s (%02d/%02d-%02d:%02d:%02d-%d) %s (%s)%s%s\n", username,
+-		t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec, pid,
+-		event, detail, err != 0 ? ": " : "", err != 0 ? strerror(err) : "");
++		/* shortcut for the most common case */
++		if (timeDiff == 1) {
++			virtualTime = timeRunning;
++			oldGMToff = GMToff;
++			find_jobs(virtualTime, &database, TRUE, TRUE, oldGMToff);
++		}
++		else {
++			if (timeDiff > (3 * MINUTE_COUNT) || timeDiff < -(3 * MINUTE_COUNT))
++				wakeupKind = large;
++			else if (timeDiff > 5)
++				wakeupKind = medium;
++			else if (timeDiff > 0)
++				wakeupKind = small;
++			else
++				wakeupKind = negative;
++
++			switch (wakeupKind) {
++			case small:
++				/*
++				 * case 1: timeDiff is a small positive number
++				 * (wokeup late) run jobs for each virtual
++				 * minute until caught up.
++				 */
++				Debug(DSCH, ("[%ld], normal case %d minutes to go\n",
++						(long) pid, timeDiff));
++				do {
++					if (job_runqueue())
++						sleep(10);
++					virtualTime++;
++					if (virtualTime >= timeRunning)
++						/* always run also the other timezone jobs in the last step */
++						oldGMToff = GMToff;
++					find_jobs(virtualTime, &database, TRUE, TRUE, oldGMToff);
++				} while (virtualTime < timeRunning);
++				break;
++
++			case medium:
++				/*
++				 * case 2: timeDiff is a medium-sized positive
++				 * number, for example because we went to DST
++				 * run wildcard jobs once, then run any
++				 * fixed-time jobs that would otherwise be
++				 * skipped if we use up our minute (possible,
++				 * if there are a lot of jobs to run) go
++				 * around the loop again so that wildcard jobs
++				 * have a chance to run, and we do our
++				 * housekeeping.
++				 */
++				Debug(DSCH, ("[%ld], DST begins %d minutes to go\n",
++						(long) pid, timeDiff));
++				/* run wildcard jobs for current minute */
++				find_jobs(timeRunning, &database, TRUE, FALSE, GMToff);
++
++				/* run fixed-time jobs for each minute missed */
++				do {
++					if (job_runqueue())
++						sleep(10);
++					virtualTime++;
++					if (virtualTime >= timeRunning) 
++						/* always run also the other timezone jobs in the last step */
++						oldGMToff = GMToff;
++					find_jobs(virtualTime, &database, FALSE, TRUE, oldGMToff);
++					set_time(FALSE);
++				} while (virtualTime < timeRunning && clockTime == timeRunning);
++				break;
++
++			case negative:
++				/*
++				 * case 3: timeDiff is a small or medium-sized
++				 * negative num, eg. because of DST ending.
++				 * Just run the wildcard jobs. The fixed-time
++				 * jobs probably have already run, and should
++				 * not be repeated.  Virtual time does not
++				 * change until we are caught up.
++				 */
++				Debug(DSCH, ("[%ld], DST ends %d minutes to go\n",
++						(long) pid, timeDiff));
++				find_jobs(timeRunning, &database, TRUE, FALSE, GMToff);
++				break;
++			default:
++				/*
++				 * other: time has changed a *lot*,
++				 * jump virtual time, and run everything
++				 */
++				Debug(DSCH, ("[%ld], clock jumped\n", (long) pid));
++				virtualTime = timeRunning;
++				oldGMToff = GMToff;
++				find_jobs(timeRunning, &database, TRUE, TRUE, GMToff);
++			}
++		}
+ 
+-	/* we have to run strlen() because sprintf() returns (char*) on old BSD
+-	 */
+-	if (LogFD < OK || write(LogFD, msg, strlen(msg)) < OK) {
+-		if (LogFD >= OK)
+-			perror(LOG_FILE);
+-		fprintf(stderr, "%s: can't write to log file\n", ProgramName);
+-		write(STDERR, msg, strlen(msg));
+-	}
++		/* Jobs to be run (if any) are loaded; clear the queue. */
++		job_runqueue();
+ 
+-	free(msg);
+-#endif /*LOG_FILE */
+-
+-#if defined(SYSLOG)
+-	if (!syslog_open) {
+-# ifdef LOG_DAEMON
+-		openlog(ProgramName, LOG_PID, FACILITY);
+-# else
+-		openlog(ProgramName, LOG_PID);
+-# endif
+-		syslog_open = TRUE;	/* assume openlog success */
++		handle_signals(&database);
+ 	}
+ 
+-	syslog(err != 0 ? LOG_ERR : LOG_INFO,
+-		"(%s) %s (%s)%s%s", username, event, detail,
+-		err != 0 ? ": " : "", err != 0 ? strerror(err) : "");
++#if defined WITH_INOTIFY
++	if (inotify_enabled && (EnableClustering != 1))
++		set_cron_unwatched(fd);
+ 
+-
+-#endif	 /*SYSLOG*/
+-#if DEBUGGING
+-	if (DebugFlags) {
+-		fprintf(stderr, "log_it: (%s %ld) %s (%s)%s%s\n",
+-			username, (long) pid, event, detail,
+-			err != 0 ? ": " : "", err != 0 ? strerror(err) : "");
+-	}
++	if (fd >= 0 && close(fd) < 0)
++		log_it("CRON", pid, "INFO", "Inotify close failed", errno);
+ #endif
+-}
+ 
+-void log_close(void) {
+-	if (LogFD != ERR) {
+-		close(LogFD);
+-		LogFD = ERR;
+-	}
+-#if defined(SYSLOG)
+-	closelog();
+-	syslog_open = FALSE;
+-#endif	 /*SYSLOG*/
+-}
++	log_it("CRON", pid, "INFO", "Shutting down", 0);
+ 
+-/* char *first_word(const char *s, const char *t)
+- *	return pointer to first word
+- * parameters:
+- *	s - string we want the first word of
+- *	t - terminators, implicitly including \0
+- * warnings:
+- *	(1) this routine is fairly slow
+- *	(2) it returns a pointer to static storage
+- */
+-char *first_word(const char *s, const char *t) {
+-	static char retbuf[2][MAX_TEMPSTR + 1];	/* sure wish C had GC */
+-	static int retsel = 0;
+-	char *rb, *rp;
+-
+-	/* select a return buffer */
+-	retsel = 1 - retsel;
+-	rb = &retbuf[retsel][0];
+-	rp = rb;
+-
+-	/* skip any leading terminators */
+-	while (*s && (NULL != strchr(t, *s))) {
+-		s++;
+-	}
+-
+-	/* copy until next terminator or full buffer */
+-	while (*s && (NULL == strchr(t, *s)) && (rp < &rb[MAX_TEMPSTR])) {
+-		*rp++ = *s++;
+-	}
++	(void) unlink(_PATH_CRON_PID);
+ 
+-	/* finish the return-string and return it */
+-	*rp = '\0';
+-	return (rb);
++	return 0;
+ }
+ 
+-/* warning:
+- *	heavily ascii-dependent.
+- */
+-static void mkprint(char *dst, unsigned char *src, size_t len) {
+-/*
+- * XXX
+- * We know this routine can't overflow the dst buffer because mkprints()
+- * allocated enough space for the worst case.
+-*/
+-	while (len-- > 0) {
+-		unsigned char ch = *src++;
++static void run_reboot_jobs(cron_db * db) {
++	user *u;
++	entry *e;
++	int reboot;
++	pid_t pid = getpid();
+ 
+-		if (ch < ' ') {	/* control character */
+-			*dst++ = '^';
+-			*dst++ = (char)(ch + '@');
+-		}
+-		else if (ch < 0177) {	/* printable */
+-			*dst++ = (char)ch;
+-		}
+-		else if (ch == 0177) {	/* delete/rubout */
+-			*dst++ = '^';
+-			*dst++ = '?';
+-		}
+-		else {	/* parity character */
+-			sprintf(dst, "\\%03o", ch);
+-			dst += 4;
++	/* lock exist - skip reboot jobs */
++	if (access(REBOOT_LOCK, F_OK) == 0) {
++		log_it("CRON", pid, "INFO",
++			"@reboot jobs will be run at computer's startup.", 0);
++		return;
++	}
++	/* lock doesn't exist - create lock, run reboot jobs */
++	if ((reboot = creat(REBOOT_LOCK, S_IRUSR & S_IWUSR)) < 0)
++		log_it("CRON", pid, "INFO", "Can't create lock for reboot jobs.",
++			errno);
++	else
++		close(reboot);
++
++	for (u = db->head; u != NULL; u = u->next) {
++		for (e = u->crontab; e != NULL; e = e->next) {
++			if (e->flags & WHEN_REBOOT)
++				job_add(e, u);
++		}
++	}
++	(void) job_runqueue();
++}
++
++static void find_jobs(int vtime, cron_db * db, int doWild, int doNonWild, long vGMToff) {
++	char *orig_tz, *job_tz;
++	struct tm *tm;
++	int minute, hour, dom, month, dow;
++	user *u;
++	entry *e;
++
++	/* The support for the job-specific timezones is not perfect. There will
++	 * be jobs missed or run twice during the DST change in the job timezone.
++	 * It is recommended not to schedule any jobs during the hour when
++	 * the DST changes happen if job-specific timezones are used.
++	 *
++	 * Make 0-based values out of tm values so we can use them as indicies
++	 */
++#define maketime(tz1, tz2) do { \
++	char *t = tz1; \
++	if (t != NULL && *t != '\0') { \
++		setenv("TZ", t, 1); \
++		tm = localtime(&virtualGMTSecond); \
++	} else { if ((tz2) != NULL) \
++			setenv("TZ", (tz2), 1); \
++		else \
++			unsetenv("TZ"); \
++		tm = gmtime(&virtualSecond); \
++	} \
++	minute = tm->tm_min -FIRST_MINUTE; \
++	hour = tm->tm_hour -FIRST_HOUR; \
++	dom = tm->tm_mday -FIRST_DOM; \
++	month = tm->tm_mon +1 /* 0..11 -> 1..12 */ -FIRST_MONTH; \
++	dow = tm->tm_wday -FIRST_DOW; \
++	} while (0)
++
++	orig_tz = getenv("TZ");
++
++	/* the dom/dow situation is odd.  '* * 1,15 * Sun' will run on the
++	 * first and fifteenth AND every Sunday;  '* * * * Sun' will run *only*
++	 * on Sundays;  '* * 1,15 * *' will run *only* the 1st and 15th.  this
++	 * is why we keep 'e->dow_star' and 'e->dom_star'.  yes, it's bizarre.
++	 * like many bizarre things, it's the standard.
++	 */
++	for (u = db->head; u != NULL; u = u->next) {
++		for (e = u->crontab; e != NULL; e = e->next) {
++			time_t virtualSecond = (time_t)(vtime - e->delay) * (time_t)SECONDS_PER_MINUTE;
++			time_t virtualGMTSecond = virtualSecond - vGMToff;
++			job_tz = env_get("CRON_TZ", e->envp);
++			maketime(job_tz, orig_tz);
++
++			/* here we test whether time is NOW */
++			if (bit_test(e->minute, minute) &&
++				bit_test(e->hour, hour) &&
++				bit_test(e->month, month) &&
++				(((e->flags & DOM_STAR) || (e->flags & DOW_STAR))
++					? (bit_test(e->dow, dow) && bit_test(e->dom, dom))
++						: (bit_test(e->dow, dow) || bit_test(e->dom, dom))
++				)
++			) {
++				if (job_tz != NULL && vGMToff != GMToff)
++					/* do not try to run the jobs from different timezones
++					 * during the DST switch of the default timezone.
++					 */
++					continue;
++
++				if ((doNonWild &&
++						!(e->flags & (MIN_STAR | HR_STAR))) ||
++					(doWild && (e->flags & (MIN_STAR | HR_STAR))))
++					job_add(e, u);	/*will add job, if it isn't in queue already for NOW. */
++			}
+ 		}
+ 	}
+-	*dst = '\0';
++	if (orig_tz != NULL)
++		setenv("TZ", orig_tz, 1);
++	else
++		unsetenv("TZ");
+ }
+ 
+-/* warning:
+- *	returns a pointer to malloc'd storage, you must call free yourself.
+- */
+-char *mkprints(unsigned char *src, size_t len) {
+-	char *dst = malloc(len * 4 + 1);
+-
+-	if (dst)
+-		mkprint(dst, src, len);
+-
+-	return (dst);
++/*
++ * Set StartTime and clockTime to the current time.
++ * These are used for computing what time it really is right now.
++ * Note that clockTime is a unix wallclock time converted to minutes.
++ */
++static void set_time(int initialize) {
++	struct tm tm;
++	static int isdst;
++
++	StartTime = time(NULL);
++
++	/* We adjust the time to GMT so we can catch DST changes. */
++	tm = *localtime(&StartTime);
++	if (initialize || tm.tm_isdst != isdst) {
++		isdst = tm.tm_isdst;
++		GMToff = get_gmtoff(&StartTime, &tm);
++		Debug(DSCH, ("[%ld] GMToff=%ld\n", (long) getpid(), (long) GMToff));
++	}
++	clockTime = (int)((StartTime + GMToff) / (time_t) SECONDS_PER_MINUTE);
+ }
+ 
+-#ifdef MAIL_DATE
+-/* Sat, 27 Feb 1993 11:44:51 -0800 (CST)
+- * 1234567890123456789012345678901234567
++/*
++ * Try to just hit the next minute.
+  */
+-char *arpadate(time_t *clock) {
+-	time_t t = clock ? *clock : time((TIME_T) 0);
+-	struct tm tm = *localtime(&t);
+-	long gmtoff = get_gmtoff(&t, &tm);
+-	int hours = gmtoff / SECONDS_PER_HOUR;
+-	int minutes =
+-			(gmtoff - (hours * SECONDS_PER_HOUR)) / SECONDS_PER_MINUTE;
+-	static char ret[64];	/* zone name might be >3 chars */
+-
+-	(void) sprintf(ret, "%s, %2d %s %2d %02d:%02d:%02d %.2d%.2d (%s)",
+-		DowNames[tm.tm_wday],
+-		tm.tm_mday,
+-		MonthNames[tm.tm_mon],
+-		tm.tm_year + 1900,
+-		tm.tm_hour, tm.tm_min, tm.tm_sec, hours, minutes, TZONE(tm));
+-	return (ret);
+-}
+-#endif /*MAIL_DATE */
+-
+-#ifdef HAVE_SAVED_UIDS
+-static uid_t save_euid;
+-static gid_t save_egid;
++static void cron_sleep(int target, cron_db * db) {
++	time_t t1, t2;
++	int seconds_to_wait;
++
++	t1 = time(NULL) + GMToff;
++	seconds_to_wait = (int) (target * SECONDS_PER_MINUTE - t1) + 1;
++	Debug(DSCH, ("[%ld] Target time=%ld, sec-to-wait=%d\n",
++			(long) getpid(), (long) target * SECONDS_PER_MINUTE,
++			seconds_to_wait));
++
++	while (seconds_to_wait > 0 && seconds_to_wait < 65) {
++		sleep((unsigned int) seconds_to_wait);
++
++		if (got_sigintterm)
++			return;
++
++		/*
++		 * Check to see if we were interrupted by a signal.
++		 * If so, service the signal(s) then continue sleeping
++		 * where we left off.
++		 */
++		handle_signals(db);
+ 
+-int swap_uids(void) {
+-	save_egid = getegid();
+-	save_euid = geteuid();
+-	return ((setegid(getgid()) || seteuid(getuid()))? -1 : 0);
++		t2 = time(NULL) + GMToff;
++		seconds_to_wait -= (int) (t2 - t1);
++		t1 = t2;
++	}
+ }
+ 
+-int swap_uids_back(void) {
+-	return ((setegid(save_egid) || seteuid(save_euid)) ? -1 : 0);
++static void sighup_handler(int x) {
++	got_sighup = 1;
+ }
+ 
+-#else /*HAVE_SAVED_UIDS */
+-
+-int swap_uids(void) {
+-	return ((setregid(getegid(), getgid())
+-			|| setreuid(geteuid(), getuid())) ? -1 : 0);
++static void sigchld_handler(int x) {
++	got_sigchld = 1;
+ }
+ 
+-int swap_uids_back(void) {
+-	return (swap_uids());
++static void sigintterm_handler(int x) {
++	got_sigintterm = 1;
+ }
+-#endif /*HAVE_SAVED_UIDS */
+ 
+-size_t strlens(const char *last, ...) {
+-	va_list ap;
+-	size_t ret = 0;
+-	const char *str;
++static void sigchld_reaper(void) {
++	WAIT_T waiter;
++	PID_T pid;
+ 
+-	va_start(ap, last);
+-	for (str = last; str != NULL; str = va_arg(ap, const char *))
+-		     ret += strlen(str);
+-	va_end(ap);
+-	return (ret);
++	do {
++		pid = waitpid(-1, &waiter, WNOHANG);
++		switch (pid) {
++		case -1:
++			if (errno == EINTR)
++				continue;
++			Debug(DPROC, ("[%ld] sigchld...no children\n", (long) getpid()));
++			break;
++		case 0:
++			Debug(DPROC, ("[%ld] sigchld...no dead kids\n", (long) getpid()));
++			break;
++		default:
++			Debug(DPROC,
++				("[%ld] sigchld...pid #%ld died, stat=%d\n",
++					(long) getpid(), (long) pid, WEXITSTATUS(waiter)));
++			break;
++		}
++	} while (pid > 0);
+ }
+ 
+-/* Return the offset from GMT in seconds (algorithm taken from sendmail).
+- *
+- * warning:
+- *	clobbers the static storage space used by localtime() and gmtime().
+- *	If the local pointer is non-NULL it *must* point to a local copy.
+- */
+-#ifndef HAVE_STRUCT_TM_TM_GMTOFF
+-long get_gmtoff(time_t * clock, struct tm *local) {
+-	struct tm gmt;
+-	long offset;
+-
+-	gmt = *gmtime(clock);
+-	if (local == NULL)
+-		local = localtime(clock);
+-
+-	offset = (local->tm_sec - gmt.tm_sec) +
+-		((local->tm_min - gmt.tm_min) * 60) +
+-		((local->tm_hour - gmt.tm_hour) * 3600);
+-
+-	/* Timezone may cause year rollover to happen on a different day. */
+-	if (local->tm_year < gmt.tm_year)
+-		offset -= 24 * 3600;
+-	else if (local->tm_year > gmt.tm_year)
+-		offset += 24 * 3600;
+-	else if (local->tm_yday < gmt.tm_yday)
+-		offset -= 24 * 3600;
+-	else if (local->tm_yday > gmt.tm_yday)
+-		offset += 24 * 3600;
++static void parse_args(int argc, char *argv[]) {
++	int argch;
+ 
+-	return (offset);
++	while (-1 != (argch = getopt(argc, argv, "hnpsiPx:m:cV"))) {
++		switch (argch) {
++			case 'x':
++				if (!set_debug_flags(optarg))
++					usage();
++				break;
++			case 'n':
++				NoFork = 1;
++				break;
++			case 'p':
++				PermitAnyCrontab = 1;
++				break;
++			case 's':
++				SyslogOutput = 1;
++				break;
++			case 'i':
++				DisableInotify = 1;
++				break;
++			case 'P':
++				ChangePath = 0;
++				break;
++			case 'm':
++				strncpy(MailCmd, optarg, MAX_COMMAND);
++				break;
++			case 'c':
++				EnableClustering = 1;
++				break;
++			case 'V':
++				puts(PACKAGE_STRING);
++				exit(EXIT_SUCCESS);
++			case 'h':
++			default:
++				usage();
++				break;
++		}
++	}
+ }
+-#endif /* HAVE_STRUCT_TM_TM_GMTOFF */
