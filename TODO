@@ -1,0 +1,3 @@
+
+- add lynx text browser
+- add mplayer support (depends on availability of audio library on bb10 )
