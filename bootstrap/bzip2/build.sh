@@ -12,7 +12,7 @@ TASK=fetch
 
 DISTVER="bzip2-1.0.6"
 DISTSUFFIX="tar.gz"
-DISTFILES="https://svwh.dl.sourceforge.net/project/bzip2/$DISTVER.$DISTSUFFIX"
+DISTFILES="https://sourceware.org/pub/bzip2/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 
 package_init "$@"
