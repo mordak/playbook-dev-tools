@@ -12,7 +12,7 @@ TASK=fetch
 
 DISTVER="bzip2-1.0.6"
 DISTSUFFIX="tar.gz"
-DISTFILES="http://bzip.org/1.0.6/$DISTVER.$DISTSUFFIX"
+DISTFILES="https://sourceware.org/pub/bzip2/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 
 package_init "$@"
