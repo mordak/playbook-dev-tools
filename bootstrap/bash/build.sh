@@ -8,7 +8,10 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+
+DISTVER="bash-4.1"
+DISTSUFFIX="tar.gz"  # so much for bootstrapping..
+
 TASK=fetch
 
 DISTFILES="http://ftp.gnu.org/gnu/bash/$DISTVER.$DISTSUFFIX"
