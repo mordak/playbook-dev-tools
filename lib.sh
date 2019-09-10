@@ -1,4 +1,13 @@
+
 # common functions for the build tools
+
+# This code Copyright 2012 Todd Mortimer <todd.mortimer@gmail.com>
+#
+# You may do whatever you like with this code, provided the above
+# copyright notice and this paragraph are preserved.
+#
+# Olivier Kaloudoff <olivier.kaloudoff@gmail.com>, 2018
+
 
 PBHOSTARCH=arm-unknown-nto-qnx8.0.0eabi
 PBBUILDARCH=`gcc -dumpmachine`
@@ -41,6 +50,19 @@ process_args()
     esac
   done
 
+}
+
+function check_required_binaries()
+{
+	I=0
+	while [ -z != ${BUILD_DEP_BINS[$I]} ];
+	do
+		type ${BUILD_DEP_BINS[$I]} || { 
+			echo "Fatal: binary ${BUILD_DEP_BINS[$I]} not found. Required for build"
+			exit 1
+		}
+		let I=$(($I+1))
+	done
 }
 
 function source_bbtools()
