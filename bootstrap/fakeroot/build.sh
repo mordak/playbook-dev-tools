@@ -26,7 +26,7 @@ if [ "$TASK" == "fetch" ]
 then
   cd "$WORKROOT"
   rm -rf fakeroot
-  git clone git://github.com/repos-holder/bb10-fakeroot fakeroot
+  git clone git://github.com/repos-holder/bb10-fakeroot fakeroot --depth 1
   TASK=patch
 fi
 package_patch

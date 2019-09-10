@@ -30,12 +30,12 @@ then
   cd "$WORKROOT"
   # delete old version
   rm -rf "$DISTVER"
-  git clone git://git.sv.gnu.org/findutils $DISTVER
+  git clone git://git.sv.gnu.org/findutils $DISTVER --depth 1
   cd $DISTVER
   git checkout $FINDUTILS_GITVER
   cd "$WORKDIR"
   rm -rf gnulib
-  git clone git://git.savannah.gnu.org/gnulib.git gnulib-git
+  git clone git://git.savannah.gnu.org/gnulib.git gnulib-git --depth 1
   cd gnulib-git
   git checkout $GNULIB_GITVER
   cd ..
