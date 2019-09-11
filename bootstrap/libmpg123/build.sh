@@ -11,7 +11,9 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="libmpg123-bb10"
+DISTSUFFIX="git"
+
 TASK=fetch
 
 DISTFILES="https://github.com/berryamin/$DISTVER.$DISTSUFFIX"
@@ -31,7 +33,7 @@ if [ "$TASK" == "fetch" ]
 then
   cd "$WORKROOT"
   rm -rf fakeroot
-  git clone $DISTFILES
+  git clone $DISTFILES --depth 1
   cd $DISTVER
   chmod 755 ./configure-bb10 ./configure
   TASK=patch
