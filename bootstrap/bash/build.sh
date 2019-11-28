@@ -8,16 +8,15 @@
 
 set -e
 source ../../lib.sh
-
-DISTVER="bash-4.1"
-DISTSUFFIX="tar.gz"  # so much for bootstrapping..
+DISTVER="bash-5.0"
+DISTSUFFIX="tar.gz"
 
 TASK=fetch
 
 DISTFILES="http://ftp.gnu.org/gnu/bash/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xf"
 package_init "$@"
-CONFIGURE_CMD="./configure 
+CONFIGURE_CMD="autoconf; ./configure 
                 --host=$PBHOSTARCH
                 --build=$PBBUILDARCH 
                 --target=$PBTARGETARCH 

@@ -1,0 +1,11 @@
+--- configure.ac.orig	2019-11-28 23:27:19.000000000 +0100
++++ configure.ac	2019-11-28 23:30:33.000000000 +0100
+@@ -1113,7 +1113,7 @@
+ 		*)	AC_DEFINE(PGRP_PIPE) ;;
+ 		esac ;;
+ netbsd*|openbsd*)	LOCAL_CFLAGS="-DDEV_FD_STAT_BROKEN" ;;
+-*qnx[[67]]*)	LOCAL_LIBS="-lncurses" ;;
++*qnx[[678]]*)	LOCAL_LIBS="-lncurses" ;;
+ *qnx*)		LOCAL_CFLAGS="-Dqnx -F -3s" LOCAL_LDFLAGS="-3s" LOCAL_LIBS="-lunix -lncurses" ;;
+ powerux*)	LOCAL_LIBS="-lgen" ;;
+ cygwin*)	LOCAL_CFLAGS=-DRECYCLES_PIDS ;;
