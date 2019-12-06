@@ -35,11 +35,7 @@ I am not a gcc hacker by any stretch, so there may be better ways to do all of t
 
 ## License
 
-You may do whatever you like with this code, provided any copyright notices are preserved. If you are from RIM/QNX, please feel free to make this work irrelevant by making playbook dev tools available through your developer channel. This will save me significant work, and you will certainly do a better job.
+You may do whatever you like with this code, provided any copyright notices are preserved.
 
-
-[pbdevtools]: https://developer.blackberry.com/native/download/
-[bgshell]: https://appworld.blackberry.com/webstore/content/87835/?lang=en
 [term48]: https://github.com/mordak/Term48
-[foundry27]: http://community.qnx.com/sf/sfmain/do/home
-[dukzcry-bb10-native-tools]: https://github.com/repos-holder/bb10-native-tools
+[playbook-dev-tools]: https://github.com/mordak/playbook-dev-tools
