@@ -3,7 +3,8 @@ BERRYMUCH software repository for BlackBerry 10
 
 ## What's this
 
-This is a set of scripts that will download, compile, and deploy gcc and some other tools to a BB10 device. No rooting required.
+This is a set of scripts that will download, compile, and deploy gcc and some other tools to a BB10 device.
+No rooting required.
 Berrymuch project is a fork of playbook-dev-tools.
 The goals of the project are
  - enable easy distribution of bb10, cli based software and libraries
@@ -14,6 +15,7 @@ Every good idea and contribution is more than welcome !
 
 ## Roadmap
 
+- document "supported platforms for compilation"
 - organize development model
 - evaluate how we can integrate "pkgsrc" and it's huge software base
 
