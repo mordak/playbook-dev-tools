@@ -8,9 +8,9 @@
 
 set -e
 source ../../lib.sh
+DISTVER="gcc"
 TASK=build
 
-source ./vars.sh
 
 package_init "$@"
 
@@ -105,5 +105,4 @@ package_bundle
 cd "$BBTOOLS"
 zip -r -u -y "$ZIPFILE" $TARGETNAME/qnx6/armle-v7/lib $TARGETNAME/qnx6/usr/include --exclude \*qt4\* || true
 zip -r -u -y "$ZIPFILE" $TARGETNAME/qnx6/armle-v7/usr/lib --exclude \*qt4\* || true
-
 

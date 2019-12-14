@@ -11,7 +11,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="xz-5.2.3"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
 

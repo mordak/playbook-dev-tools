@@ -2,7 +2,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="task-2.4.2"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
 DISTFILES="https://taskwarrior.org/download/$DISTVER.$DISTSUFFIX"

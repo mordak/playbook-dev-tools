@@ -1,1 +1,0 @@
-DISTVER="fakeroot"

@@ -8,7 +8,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="tar-1.26"
+DISTSUFFIX="tar.gz"  # so much for bootstrapping..
 TASK=fetch
 
 DISTFILES="http://ftp.gnu.org/gnu/tar/$DISTVER.$DISTSUFFIX"

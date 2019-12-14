@@ -8,7 +8,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="gzip-1.5"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
 DISTFILES="http://ftp.gnu.org/gnu/gzip/$DISTVER.$DISTSUFFIX"

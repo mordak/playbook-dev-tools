@@ -10,7 +10,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="jansson-2.11"
+DISTSUFFIX="tar.gz"  # so much for bootstrapping..
 TASK=fetch
 
 DISTFILES="http://www.digip.org/jansson/releases/$DISTVER.$DISTSUFFIX"

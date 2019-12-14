@@ -8,7 +8,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="vim-8.0"
+DISTSUFFIX="tar.bz2"
 TASK=fetch
 
 DISTFILES="ftp://ftp.vim.org/pub/vim/unix/$DISTVER.$DISTSUFFIX"

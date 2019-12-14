@@ -10,7 +10,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="gdb-7.12"
+DISTSUFFIX="tar.xz"
 TASK=fetch
 
 DISTFILES="http://ftp.gnu.org/gnu/gdb/$DISTVER.$DISTSUFFIX"

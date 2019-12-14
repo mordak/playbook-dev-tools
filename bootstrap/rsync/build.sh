@@ -8,7 +8,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="rsync-3.1.3"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
 

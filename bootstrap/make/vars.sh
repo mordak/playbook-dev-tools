@@ -1,2 +1,0 @@
-DISTVER="make-3.82"
-DISTSUFFIX="tar.bz2"

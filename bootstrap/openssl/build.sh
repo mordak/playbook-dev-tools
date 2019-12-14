@@ -13,7 +13,8 @@ set -x
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="openssl-1.0.2o"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
 DISTFILES="https://www.openssl.org/source/$DISTVER.$DISTSUFFIX"

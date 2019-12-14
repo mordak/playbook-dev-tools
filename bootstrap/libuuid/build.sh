@@ -2,7 +2,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="libuuid-1.0.3"
+DISTSUFFIX="tar.gz"  # so much for bootstrapping..
 TASK=fetch
 
 DISTFILES="https://tenet.dl.sourceforge.net/project/libuuid/$DISTVER.$DISTSUFFIX"

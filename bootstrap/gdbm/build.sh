@@ -8,7 +8,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="gdbm-1.9.1"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
 DISTFILES="http://ftp.gnu.org/gnu/gdbm/$DISTVER.$DISTSUFFIX"

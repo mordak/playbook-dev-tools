@@ -7,7 +7,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="groff-1.22.3"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
 DISTFILES="http://ftp.gnu.org/gnu/groff/$DISTVER.$DISTSUFFIX"

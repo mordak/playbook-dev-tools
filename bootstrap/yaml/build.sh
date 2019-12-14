@@ -8,7 +8,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="yaml-0.1.4"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
 DISTFILES="http://pyyaml.org/download/libyaml/$DISTVER.$DISTSUFFIX"

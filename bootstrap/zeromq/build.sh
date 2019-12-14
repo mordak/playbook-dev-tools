@@ -8,7 +8,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="zeromq-4.2.3"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
 DISTFILES="https://github.com/zeromq/libzmq/releases/download/v4.2.3/$DISTVER.$DISTSUFFIX"

@@ -10,7 +10,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="zlib-1.2.11"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
 DISTFILES="https://zlib.net/$DISTVER.$DISTSUFFIX"

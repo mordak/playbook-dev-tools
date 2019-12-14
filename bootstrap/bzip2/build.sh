@@ -8,7 +8,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="bzip2-1.0.6"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
 DISTFILES="https://sourceware.org/pub/bzip2/$DISTVER.$DISTSUFFIX"

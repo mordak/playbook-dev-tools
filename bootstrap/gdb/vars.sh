@@ -1,2 +1,0 @@
-DISTVER="gdb-7.12"
-DISTSUFFIX="tar.xz"

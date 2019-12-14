@@ -8,7 +8,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="file-5.11"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
 # file doesn't like to cross compile versions that differ from the 

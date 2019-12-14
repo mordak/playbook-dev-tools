@@ -8,7 +8,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="openssh-7.1p2"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
 DISTFILES="http://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/$DISTVER.$DISTSUFFIX"

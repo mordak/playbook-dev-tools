@@ -8,7 +8,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="sqlite-autoconf-3240000"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
 DISTFILES="https://sqlite.org/2018/$DISTVER.$DISTSUFFIX"

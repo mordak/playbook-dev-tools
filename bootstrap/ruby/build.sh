@@ -8,7 +8,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="ruby-1.8.7-p371"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
 DISTFILES="http://ftp.ruby-lang.org/pub/ruby/1.8/$DISTVER.$DISTSUFFIX"

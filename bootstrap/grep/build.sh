@@ -8,7 +8,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="grep-2.9"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
 

@@ -8,7 +8,7 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="fakeroot"
 TASK=fetch
 
 package_init "$@"

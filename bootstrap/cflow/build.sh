@@ -11,7 +11,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="cflow-1.5"
+DISTSUFFIX="tar.xz"
 TASK=fetch
 
 

@@ -8,7 +8,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="tmux-1.9a"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
 DISTFILES="https://github.com/tmux/tmux/releases/download/1.9a/$DISTVER.$DISTSUFFIX"
