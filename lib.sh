@@ -57,7 +57,7 @@ function check_required_binaries()
 	I=0
 	while [ -z != ${BUILD_DEP_BINS[$I]} ];
 	do
-		type ${BUILD_DEP_BINS[$I]} || { 
+		type ${BUILD_DEP_BINS[$I]} || {
 			echo "Fatal: binary ${BUILD_DEP_BINS[$I]} not found. Required for build"
 			exit 1
 		}
@@ -178,8 +178,8 @@ function init()
 
 function bootstrap()
 {
-  ALLPROGS="gcc coreutils diffutils grep make patch gzip bzip2 bison gettext findutils groff man file openssh"
-  #ALLPROGS="tar gdbm yaml ruby libevent tmux sqlite fakeroot"
+  ALLPROGS="bash bc bison bzip2 cflow coreutils curl diffutils ed fakeroot file gcc gdb gdbm gettext git grep groff gzip jansson libevent libmpg123 libuuid m4 make man openssh openssl patch rsync sqlite tar taskwarrior tmux vim xz yaml zeromq zlib"
+  BROKEN="cronie findutils git ruby"
 
   cd "$BOOTSTRAPDIR"
   for dir in $ALLPROGS
@@ -254,7 +254,7 @@ if [ "$TASK" == "fetch" ]
 then
   cd "$WORKROOT"
   echo "Fetching sources"
-  if [ ! -f $DISTVER.$DISTSUFFIX ]; then 
+  if [ ! -f $DISTVER.$DISTSUFFIX ]; then
     curl -fkSLO $DISTFILES
   fi
 

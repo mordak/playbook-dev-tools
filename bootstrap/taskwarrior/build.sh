@@ -18,6 +18,7 @@ CONFIGURE_CMD="PBTARGETARCH=\"$PBTARGETARCH\"
               LIBUUID_DIR=\"$ARCHIVEDIR/libuuid-1.0.3/$PREFIX\"
               cmake \
               -DCMAKE_TOOLCHAIN_FILE=\"$EXECDIR/bb10.toolchain.cmake\" \
+              -DCMAKE_INSTALL_PREFIX=\"$PREFIX\" \
               -DENABLE_SYNC=OFF \
               -DCMAKE_BUILD_TYPE=release ."
 
