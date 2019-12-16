@@ -8,20 +8,21 @@
 
 set -e
 source ../../lib.sh
-DISTVER="tar-1.26"
+DISTVER="tar-1.32"
 DISTSUFFIX="tar.gz"  # so much for bootstrapping..
 TASK=fetch
 
 DISTFILES="http://ftp.gnu.org/gnu/tar/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 package_init "$@"
-CONFIGURE_CMD="./configure 
+CONFIGURE_CMD="./configure
                 --host=$PBHOSTARCH
-                --build=$PBBUILDARCH 
-                --target=$PBTARGETARCH 
-                --prefix=$PREFIX 
-                --disable-nls 
-                CC=$PBTARGETARCH-gcc 
+                --build=$PBBUILDARCH
+                --target=$PBTARGETARCH
+                --prefix=$PREFIX
+                --disable-nls
+                CC=$PBTARGETARCH-gcc
+                LIBS=-lsocket
                 "
 package_fetch
 package_patch

@@ -1,0 +1,11 @@
+--- src/list.c.orig	2019-12-16 10:17:09.204917708 +1100
++++ src/list.c	2019-12-16 10:21:01.500917708 +1100
+@@ -682,7 +682,7 @@
+ 	case BLKTYPE:
+ 	case CHRTYPE:
+ 	  stat_info->stat.st_rdev =
+-	    makedev (MAJOR_FROM_HEADER (header->header.devmajor),
++	    makedev (0, MAJOR_FROM_HEADER (header->header.devmajor),
+ 		     MINOR_FROM_HEADER (header->header.devminor));
+ 	  break;
+ 
