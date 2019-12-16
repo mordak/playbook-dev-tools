@@ -1,0 +1,11 @@
+--- configure.sh.orig	2019-12-17 02:07:35.937896077 +1100
++++ configure.sh	2019-12-17 02:08:04.021896077 +1100
+@@ -5671,7 +5671,7 @@
+ else
+ 
+ if test "$cross_compiling" = yes; then :
+-  rsync_cv_MAKEDEV_TAKES_3_ARGS=no
++  rsync_cv_MAKEDEV_TAKES_3_ARGS=yes
+ else
+   cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+ /* end confdefs.h.  */

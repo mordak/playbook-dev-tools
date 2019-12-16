@@ -1,0 +1,13 @@
+--- lib/sysacls.c.orig	2019-12-17 02:14:07.173896077 +1100
++++ lib/sysacls.c	2019-12-17 02:15:34.761896077 +1100
+@@ -87,9 +87,7 @@
+ }
+ #endif
+
+-#if defined(HAVE_ACL_GET_PERM_NP)
+-#define acl_get_perm(p, b) acl_get_perm_np(p, b)
+-#endif
++ int acl_get_perm(p, b) { return 1; }
+
+ int sys_acl_get_info(SMB_ACL_ENTRY_T entry, SMB_ACL_TAG_T *tag_type_p, uint32 *bits_p, id_t *u_g_id_p)
+ {
