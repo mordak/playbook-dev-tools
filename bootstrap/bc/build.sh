@@ -21,13 +21,16 @@ CONFIGURE_CMD="./configure
                 --target=$PBTARGETARCH
                 --prefix=$PREFIX
                 --disable-nls
+                --with-readline
                 CC=$PBTARGETARCH-gcc"
 
 package_fetch
 package_patch
+
+cp $EXECDIR/libmath.h $WORKDIR/bc/libmath.h
+
 package_build
 package_install
-
 package_bundle
 
 
