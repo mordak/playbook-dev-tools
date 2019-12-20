@@ -1,8 +1,0 @@
-## Infra
-
-- lib.sh, build.sh: add support for additional parameter, to build only a specific package
-
-## Packages
-
-- Web browser, e.g. lynx, links, brow.sh
-- Audio player, e.g. mplayer, cmus, mpd
