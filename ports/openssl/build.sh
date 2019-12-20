@@ -48,7 +48,7 @@ then
   cp libssl.so.1.0.0 "$DESTDIR/$PREFIX/lib"
   cp libcrypto.so.1.0.0 "$DESTDIR/$PREFIX/lib"
 
-  # Is it something we can avoid?
+  # Override the BB Native SDK-provided SSL libs
   cd "$DESTDIR/$PREFIX/lib"
   ln -s libssl.so.1.0.0 libssl.so.2
   ln -s libcrypto.so.1.0.0 libcrypto.so.2
