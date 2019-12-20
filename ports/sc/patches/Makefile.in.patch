@@ -1,0 +1,9 @@
+--- Makefile.in.orig	2019-12-21 08:06:26.567066651 +1100
++++ Makefile.in	2019-12-21 08:07:10.757149051 +1100
+@@ -20,7 +20,7 @@
+ # packaging this with an O/S, for example, you'll probably want to change
+ # this to /usr.  Otherwise, /usr/local is probably more appropriate, unless
+ # you're replacing the vendor-supplied version.
+-prefix=/usr/local
++prefix=${DESTDIR}/${PREFIX}
+

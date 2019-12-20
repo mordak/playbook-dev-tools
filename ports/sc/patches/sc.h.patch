@@ -1,0 +1,13 @@
+--- sc.h.orig	2019-12-21 08:17:30.510901164 +1100
++++ sc.h	2019-12-21 08:19:33.954901164 +1100
+@@ -14,6 +14,10 @@
+ #include <stdio.h>
+ #endif
+ 
++#ifdef __QNXNTO__
++#include <sys/types.h>
++#endif
++
+ #define CLEAR_LINE error("%s", "") /* suppress warning on NetBSD curses */
+ #define	ATBL(tbl, row, col)	(*(tbl + row) + (col))
+ 
