@@ -19,12 +19,19 @@ TASK=fetch
 
 DISTFILES="https://www.openssl.org/source/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
+
 package_init "$@"
+
 CONFIGURE_CMD="
-		./Configure -DNO_SYSLOG -lsocket
-                --prefix=$PREFIX
-		QNX6 os/compiler:arm-unknown-nto-qnx8.0.0eabi-gcc
-                "
+        ./Configure
+        QNX6:arm-unknown-nto-qnx8.0.0eabi-gcc
+        --prefix=$PREFIX
+        shared
+        -DNO_SYSLOG
+        -DHAVE_DLFCN_H
+        -DDSO_DLFCN
+        -lsocket
+        "
 package_fetch
 package_patch
 package_build
@@ -33,11 +40,20 @@ package_build
 if [ "$TASK" == "install" ]
 then
   cd "$WORKDIR"
-  make INSTALL_PREFIX=$DESTDIR install
-        cd "$DESTDIR/$PREFIX/bin"
+
+  # Don't install docs
+  make INSTALL_PREFIX=$DESTDIR install_sw
+
+  # OpenSSL skips those nicely
+  cp libssl.so.1.0.0 "$DESTDIR/$PREFIX/lib"
+  cp libcrypto.so.1.0.0 "$DESTDIR/$PREFIX/lib"
+
+  # Is it something we can avoid?
+  cd "$DESTDIR/$PREFIX/lib"
+  ln -s libssl.so.1.0.0 libssl.so.2
+  ln -s libcrypto.so.1.0.0 libcrypto.so.2
+
   TASK=bundle
 fi
 
-
-#package_install
 package_bundle
