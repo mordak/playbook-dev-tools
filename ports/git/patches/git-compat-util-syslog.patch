@@ -1,0 +1,12 @@
+--- git-2.24.1/git-compat-util.h.orig	2019-12-19 19:27:33.926003000 +1100
++++ git-2.24.1/git-compat-util.h	2019-12-19 19:28:24.670003000 +1100
+@@ -188,7 +188,9 @@
+ #include <assert.h>
+ #include <regex.h>
+ #include <utime.h>
++#ifndef __QNXNTO__
+ #include <syslog.h>
++#endif
+ #if !defined(NO_POLL_H)
+ #include <poll.h>
+ #elif !defined(NO_SYS_POLL_H)
