@@ -23,17 +23,21 @@ if [ "$TASK" == "bundle" ]
 then
   cd "$ROOTDIR"
   echo "Setting up target env"
-  echo "export NATIVE_TOOLS=\"$PREFIX\"" > env.sh
+  echo "NATIVE_TOOLS=\"$PREFIX\""                   >  env.sh
   echo "QNX_TARGET=\$NATIVE_TOOLS/$TARGETNAME/qnx6" >> env.sh
-  cat profile >> env.sh
-  echo "umask 002"                   >  sample_profile
-  echo "CLITOOLS=\"$PREFIX/env.sh\"" >> sample_profile
-  echo 'if [ -e $CLITOOLS ];then'    >> sample_profile
-  echo '    . $CLITOOLS'             >> sample_profile
-  echo 'fi'                          >> sample_profile
+  echo "export NATIVE_TOOLS QNX_TARGET"             >> env.sh
+  cat env_footer.sh                                 >> env.sh
+
+  echo "umask 002"                       >  sample_profile
+  echo "CLITOOLS_ENV=\"$PREFIX/env.sh\"" >> sample_profile
+  echo 'if [ -e $CLITOOLS_ENV ];then'    >> sample_profile
+  echo '    . $CLITOOLS_ENV'             >> sample_profile
+  echo 'fi'                              >> sample_profile
+
   ZIPFILE="$DESTDIR.zip"
   zip -u "$ZIPFILE" env.sh qconf-override.mk pbpkgadd sample_profile || true
   zip -u "$ZIPFILE" packages/*.zip || true
+
   TASK=deploy
 fi
 
@@ -51,6 +55,7 @@ then
   echo 'done'                                                                   >> install.sh
   echo '. ./env.sh'                                                             >> install.sh
   cat install_footer.sh                                                         >> install.sh
+
   echo "---- You can now download clitools.zip and install.sh to your device from http://thismachine:8888"
   python3 -m http.server 8888
 fi

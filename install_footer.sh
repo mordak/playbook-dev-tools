@@ -1,3 +1,4 @@
+
 if [ ! -e "$HOME/.profile" ]; then
   cp "$PWD/sample_profile" "$HOME/.profile"
 else
