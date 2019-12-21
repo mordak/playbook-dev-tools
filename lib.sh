@@ -148,8 +148,8 @@ function init()
 
 function build_all()
 {
-  ALLPORTS="bash bc bison bzip2 cflow coreutils diffutils ed fakeroot file gcc gdb gdbm gettext grep groff gzip jansson libevent libmpg123 libuuid m4 make man openssh openssl ca-certificates curl git patch rsync sc sqlite tar taskwarrior tmux vim xz yaml zeromq zlib"
-  BROKEN="cronie findutils"
+  ALLPORTS="bash bc bison bzip2 cflow coreutils cronie diffutils ed fakeroot file gcc gdb gdbm gettext grep groff gzip jansson libevent libmpg123 libuuid m4 make man openssh openssl ca-certificates curl git patch rsync sc sqlite tar taskwarrior tmux vim xz yaml zeromq zlib"
+  BROKEN="findutils"
 
   cd "$PORTSDIR"
   for dir in $ALLPORTS
