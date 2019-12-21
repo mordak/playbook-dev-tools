@@ -10,9 +10,9 @@ set -e
 source ../../lib.sh
 TASK=fetch
 
-DISTVER="cronie-1.5.5"
+DISTVER="cronie-1.5.2"
 DISTSUFFIX="tar.gz"
-DISTFILES="https://github.com/cronie-crond/cronie/releases/download/cronie-1.5.5/$DISTVER.$DISTSUFFIX"
+DISTFILES="https://github.com/cronie-crond/cronie/releases/download/cronie-1.5.2/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 package_init "$@"
 CONFIGURE_CMD="./configure
