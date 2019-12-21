@@ -32,7 +32,7 @@ The project is standing on the shoulders of giants including [playbook-dev-tools
 
   ```
   cd /accounts/1000/shared/documents
-  ./install.sh
+  sh install.sh
   ```
 * Restart your terminal app and enjoy Berrymuch!
 
@@ -44,7 +44,7 @@ The project is standing on the shoulders of giants including [playbook-dev-tools
   ```
   sudo apt install git subversion curl texinfo autopoint m4 autoconf groff lunzip
   ```
-* Clone this repository and run `./build.sh`
+* Clone this repository and run `./build.sh` - it will prompt you to set a path to the SDK on the first run
 * Follow the instructions at the end of the build process
 
 ## Disclaimer
