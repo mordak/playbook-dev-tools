@@ -38,3 +38,5 @@ alias ls='ls --color=auto'
 
 # locale
 export LC_CTYPE=en_US.UTF-8
+
+echo "Berrymuch v0.2\n"

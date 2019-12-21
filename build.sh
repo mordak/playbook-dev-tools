@@ -49,11 +49,11 @@ then
   echo "mv clitools.zip \"$PREFIX\""                                            >> install.sh
   echo "cd \"$PREFIX\""                                                         >> install.sh
   echo "unzip clitools.zip"                                                     >> install.sh
+  echo '. ./env.sh'                                                             >> install.sh
   echo 'for pkg in packages/*.zip'                                              >> install.sh
   echo 'do'                                                                     >> install.sh
   echo './pbpkgadd $pkg'                                                        >> install.sh
   echo 'done'                                                                   >> install.sh
-  echo '. ./env.sh'                                                             >> install.sh
   cat install_footer.sh                                                         >> install.sh
 
   echo "---- You can now download clitools.zip and install.sh to your device from http://thismachine:8888"
