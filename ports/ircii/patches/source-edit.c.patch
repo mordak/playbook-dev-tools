@@ -1,0 +1,16 @@
+--- source/edit.c.orig	2019-12-24 01:43:05.012335817 +1100
++++ source/edit.c	2019-12-24 01:45:14.976335817 +1100
+@@ -3799,11 +3799,11 @@
+ }
+ 
+ /*
+- * timer_timeout:  Called from irc_io to help create the timeout
++ * timer_timeout2:  Called from irc_io to help create the timeout
+  * part of the call to select.
+  */
+ void
+-timer_timeout(struct timeval *tv)
++timer_timeout2(struct timeval *tv)
+ {
+ 	struct timeval current;
+ 

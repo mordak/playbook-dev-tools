@@ -1,0 +1,11 @@
+--- source/irc.c.orig	2019-12-24 01:43:07.436335817 +1100
++++ source/irc.c	2019-12-24 01:45:37.672335817 +1100
+@@ -811,7 +811,7 @@
+ 			}
+ 		set_dcc_bits(&rd, &wd);
+ 		term_check_refresh();
+-		timer_timeout(&timer);
++		timer_timeout2(&timer);
+ 		if (timer.tv_sec <= timeptr->tv_sec)
+ 			timeptr = &timer;
+ 		if ((hold_over = unhold_windows()) != 0)
