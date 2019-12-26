@@ -21,6 +21,7 @@ CONFIGURE_CMD="./configure
                 --build=$PBBUILDARCH
                 --target=$PBTARGETARCH
                 --prefix=$PREFIX
+		--localstatedir=/var/tmp
                 CC=$PBTARGETARCH-gcc
                 "
 
