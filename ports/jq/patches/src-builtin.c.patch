@@ -1,0 +1,11 @@
+--- src/builtin.c.orig	2019-12-27 11:29:10.720019558 +1100
++++ src/builtin.c	2019-12-27 11:29:20.866686283 +1100
+@@ -1,7 +1,7 @@
+ #define _BSD_SOURCE
+ #define _GNU_SOURCE
+ #ifndef __sun__
+-# define _XOPEN_SOURCE
++# define _XOPEN_SOURCE 600
+ # define _XOPEN_SOURCE_EXTENDED 1
+ #else
+ # define _XPG6
