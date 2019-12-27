@@ -1,0 +1,15 @@
+--- configure.orig	2019-12-27 14:46:22.506759431 +1100
++++ configure	2019-12-27 14:47:12.360093056 +1100
+@@ -32869,12 +32869,6 @@
+     esac
+   fi
+ 
+-  if test -z "$ac_list_mounted_fs"; then
+-    as_fn_error $? "could not determine how to read list of mounted file systems" "$LINENO" 5
+-    # FIXME -- no need to abort building the whole package
+-    # Can't build mountlist.c or anything that needs its functions
+-  fi
+-
+   if test $ac_list_mounted_fs = found; then
+     gl_cv_list_mounted_fs=yes
+   else

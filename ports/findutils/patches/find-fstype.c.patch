@@ -1,0 +1,83 @@
+--- find/fstype.c.orig	2019-12-27 15:07:53.480100519 +1100
++++ find/fstype.c	2019-12-27 15:39:17.636778448 +1100
+@@ -66,12 +66,6 @@
+ static void
+ free_file_system_list (struct mount_entry *p)
+ {
+-  while (p)
+-    {
+-      struct mount_entry *pnext = p->me_next;
+-      free_mount_entry (p);
+-      p = pnext;
+-    }
+ }
+ 
+ 
+@@ -113,23 +107,7 @@
+ static struct mount_entry *
+ get_file_system_list (bool need_fs_type)
+ {
+-  /* Local cache for the mount list.  */
+-  static struct mount_entry *mount_list = NULL;
+-
+-  /* Remember if the list contains the ME_TYPE members.  */
+-  static bool has_fstype = false;
+-
+-  if (mount_list && ! has_fstype && need_fs_type)
+-    {
+-      free_file_system_list (mount_list);
+-      mount_list = NULL;
+-    }
+-  if (! mount_list)
+-    {
+-      mount_list = read_file_system_list(need_fs_type);
+-      has_fstype = need_fs_type;
+-    }
+-  return mount_list;
++  return NULL;
+ }
+ 
+ /* Return a static string naming the type of file system that the file PATH,
+@@ -274,41 +252,5 @@
+ dev_t *
+ get_mounted_devices (size_t *n)
+ {
+-  size_t alloc_size = 0u;
+-  size_t used = 0u;
+-  struct mount_entry *entries, *entry;
+-  dev_t *result = NULL;
+-
+-  /* Ignore read_file_system_list () not returning a valid list
+-   * because on some system this is always called at startup,
+-   * and find should only exit fatally if it needs to use the
+-   * result of this operation.   If we can't get the fs list
+-   * but we never need the information, there is no need to fail.
+-   */
+-  for (entry = entries = read_file_system_list (false);
+-       entry;
+-       entry = entry->me_next)
+-    {
+-      void *p = extendbuf (result, sizeof(dev_t)*(used+1), &alloc_size);
+-      if (p)
+-	{
+-	  result = p;
+-	  if (0 == set_fstype_devno (entry))
+-	    {
+-	      result[used] = entry->me_dev;
+-	      ++used;
+-	    }
+-	}
+-      else
+-	{
+-	  free (result);
+-	  result = NULL;
+-	}
+-    }
+-  free_file_system_list (entries);
+-  if (result)
+-    {
+-      *n = used;
+-    }
+-  return result;
++  return NULL;
+ }
