@@ -29,7 +29,7 @@ fi
 
 if [ "$TASK" == "install" ]
 then
-  CERTDIR="$DESTDIR/$PREFIX/etc/tls"
+  CERTDIR="$DESTDIR/$PREFIX/ssl"
   mkdir -p "$CERTDIR"
 
   cp "$WORKDIR/$DISTVER.$DISTSUFFIX" "$CERTDIR/cert.pem"

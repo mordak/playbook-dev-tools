@@ -25,8 +25,8 @@ CONFIGURE_CMD="./configure
                 --prefix=$PREFIX
                 --disable-nls
                 --with-ssl=\"$ARCHIVEDIR/$OPENSSL_DIR/$PREFIX\"
-                --with-ca-bundle=\"$PREFIX/etc/tls/cert.pem\"
-                --with-ca-path=\"$PREFIX/etc/tls/certs\"
+                --with-ca-bundle=\"$PREFIX/ssl/cert.pem\"
+                --with-ca-path=\"$PREFIX/ssl/certs\"
                 CC=$PBTARGETARCH-gcc
                 LIBS=-lsocket
                 "
