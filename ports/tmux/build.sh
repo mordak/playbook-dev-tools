@@ -25,9 +25,8 @@ CONFIGURE_CMD="./configure
                 --prefix=$PREFIX 
                 --enable-static
                 CC=$PBTARGETARCH-gcc 
-                CFLAGS=\"-I$PWD -I$ARCHIVEDIR/$LIBEVENT_DIR/$PREFIX/include\"
                 LDFLAGS=\"-L$ARCHIVEDIR/$LIBEVENT_DIR/$PREFIX/lib\"
-                PKG_CONFIG_PATH=\"$ARCHIVEDIR/$LIBEVENT_DIR/$PREFIX/lib/pkgconfig/\"
+                LIBEVENT_CFLAGS=\"-I$PWD -I$ARCHIVEDIR/$LIBEVENT_DIR/$PREFIX/include\"
                 LIBEVENT_LIBS=\"-levent -lsocket\"
                 "
 

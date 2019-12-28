@@ -38,11 +38,11 @@ The project is standing on the shoulders of giants including [playbook-dev-tools
 
 ### Developer
 
-* Get an OS supported by the BlackBerry Native SDK (we recommend [32-bit Ubuntu 16.04](http://releases.ubuntu.com/16.04/ubuntu-16.04.6-desktop-i386.iso))
+* Get an OS supported by the BlackBerry Native SDK (we recommend [32-bit Ubuntu 18.04](http://archive.ubuntu.com/ubuntu/dists/bionic-updates/main/installer-i386/current/images/netboot/) - use `mini.iso`)
 * Install the [BlackBerry Native SDK](https://developer.blackberry.com/native/download/)
 * Install a few other packages:
   ```
-  sudo apt install git subversion curl texinfo autopoint m4 autoconf groff lunzip
+  sudo apt install git subversion curl texinfo autopoint m4 autoconf groff lunzip gettext cmake
   ```
 * Clone this repository and run `./build.sh` - it will prompt you to set a path to the SDK on the first run
 * Follow the instructions at the end of the build process
