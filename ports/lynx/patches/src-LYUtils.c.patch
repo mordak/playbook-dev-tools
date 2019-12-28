@@ -1,0 +1,12 @@
+--- src/LYUtils.c.orig	2019-12-28 07:32:06.329403430 +1100
++++ src/LYUtils.c	2019-12-28 07:32:28.157902687 +1100
+@@ -101,8 +101,8 @@
+ #include <lib$routines.h>
+ #endif /* VMS */
+ 
+-#ifdef HAVE_UTMP
+ #include <pwd.h>
++#ifdef HAVE_UTMP
+ #ifdef UTMPX_FOR_UTMP
+ #include <utmpx.h>
+ #define utmp utmpx
