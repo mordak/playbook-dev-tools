@@ -1,5 +1,7 @@
 # Berrymuch OS
 
+<img src="https://user-images.githubusercontent.com/58649917/71549878-2a45fc00-2a19-11ea-8db8-10c92f3700ec.png"/>
+
 Berrymuch is a user friendly Unix software distribution and a compilation toolchain for the BlackBerry 10 devices.
 
 > If you are into vim, git, taskwarrior or sc and wish you could run them on BB10 you've come to the right place.
@@ -15,12 +17,12 @@ The project is standing on the shoulders of giants including [playbook-dev-tools
 ## Current status
 
 * GCC 4.6.3 and a variety of libraries are available
-* Some useful everyday apps (e.g. vim) have been cross-compiled and packaged 
+* Some useful everyday apps (see [ports](https://github.com/BerryFarm/berrymuch/tree/master/ports)) have been cross-compiled and packaged
 
 ## Roadmap
 
-- Infrastructure for native-compiled apps (ports-like system)
-  * Potentially leveraging the pkgsrc development
+- Package management with dependencies
+- More exciting ports (see the current [Wishlist](https://github.com/BerryFarm/berrymuch/wiki/Wishlist))
 
 ## Installation
 
@@ -59,8 +61,4 @@ You may do whatever you like with this code, provided any copyright notices are 
 
 ## See also
 
-* [term48](https://github.com/mordak/Term48)
-* [playbook-dev-tools](https://github.com/mordak/playbook-dev-tools)
-* https://forums.crackberry.com/blackberry-10-os-f269/blackberry-10-hacks-unix-tinkerers-961115/
-* https://forums.crackberry.com/bb-10-developers-hangout-f276/ffmpeg-wget-binaries-1115693/
-
+* [Useful links](https://github.com/BerryFarm/berrymuch/wiki/Useful-links)
