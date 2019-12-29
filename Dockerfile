@@ -37,7 +37,7 @@ WORKDIR /root/bbndk
 ENV DISPLAY=:1
 RUN Xvfb :1 & ./sdkinstall --install 10.3.1.995  
 
-RUN echo "source /root/bbndk/bbndk-env_10.3.1.995.sh" >> /root/.bashrc
+RUN echo "source /root/bbndk/bbndk-env_10_3_1_995.sh" >> /root/.bashrc
 RUN echo "export LC_ALL=C" >> /root/.bashrc
 
 RUN apt-get -q update
