@@ -28,7 +28,7 @@ OPTIONS:
    -i      The IP address of this machine (will prompt if not specified)
    -l      The login you use for the QNX Foundry27 site, if you have one [user@host]
    -p      The prefix on your BB10 device to install to (default $DEFAULTPREFIX)
-   -t      The build task to perform: [ build_all | bundle | deploy]
+   -t      The build task to perform: [ build | build_and_deploy | bundle | deploy]
    -s      The task to pass to each package [fetch | patch | build | install | bundle]
 EOF
 }
