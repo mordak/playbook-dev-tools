@@ -24,7 +24,7 @@ RUN apt-get -yq install \
     libxtst6 \
     net-tools \
     lzip \
-    g++
+    g++ 
 
 WORKDIR /root
 
@@ -43,3 +43,9 @@ RUN echo "export LC_ALL=C" >> /root/.bashrc
 RUN apt-get -q update
 RUN apt-get -yq install eclipse
 RUN apt-get -yq install gtk-chtheme ubuntu-mate-themes fonts-roboto
+
+RUN apt-get -yq install \
+    gettext \
+    build-essential \
+    cmake
+
