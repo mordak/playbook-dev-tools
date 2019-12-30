@@ -13,7 +13,12 @@ TASK=build_all
 
 init "$@"
 
-if [ "$TASK" == "build_all" ]
+if [ "$TASK" == "build" ]
+then
+  build_all
+fi
+
+if [ "$TASK" == "build_and_deploy" ]
 then
   build_all
   TASK=bundle
