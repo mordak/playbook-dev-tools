@@ -49,3 +49,4 @@ RUN apt-get -yq install \
     build-essential \
     cmake
 
+RUN chmod -R 777 /root
