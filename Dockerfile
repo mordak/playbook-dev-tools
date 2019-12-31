@@ -47,7 +47,6 @@ RUN apt-get -yq install gtk-chtheme ubuntu-mate-themes fonts-roboto
 RUN apt-get -yq install \
     gettext \
     build-essential \
-    cmake \
-    uuid-dev
+    cmake 
 
 RUN chmod -R 777 /root
