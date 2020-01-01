@@ -16,11 +16,7 @@ UNPACKCOMD="tar -xf"
 
 package_init "$@"
 CONFIGURE_CMD="./configure
-                --host=$PBHOSTARCH
-                --build=$PBBUILDARCH
-                --target=$PBTARGETARCH
                 --prefix=$PREFIX
-                --disable-nls
                 CC=$PBTARGETARCH-gcc"
 
 package_fetch
