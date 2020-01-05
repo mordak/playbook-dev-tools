@@ -40,7 +40,7 @@ then
   cd "$WORKROOT"
   # delete old version
   rm -rf "$DISTVER"
-  git clone --recursive $DISTFILES $DISTVER
+  git clone --recursive $DISTFILES $DISTVER --depth 1
   cd $DISTVER
   git checkout $GITVER
   cd "$WORKDIR"
