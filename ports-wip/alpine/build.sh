@@ -34,7 +34,7 @@ then
   cd "$WORKROOT"
   # delete old version
   rm -rf "$DISTVER"
-  git clone --recursive http://repo.or.cz/alpine.git
+  git clone --recursive http://repo.or.cz/alpine.git --depth 1
   cd $DISTVER
   git checkout $GITVER
   cd "$WORKDIR"
