@@ -4,47 +4,8 @@
  	listbox.$(OBJEXT) llist.$(OBJEXT) note.$(OBJEXT) \
  	notify.$(OBJEXT) pcal.$(OBJEXT) queue.$(OBJEXT) \
  	recur.$(OBJEXT) sha1.$(OBJEXT) sigs.$(OBJEXT) \
--	strings.$(OBJEXT) todo.$(OBJEXT) langinfo.$(OBJEXT) ui-calendar.$(OBJEXT) \
-+	strings.$(OBJEXT) todo.$(OBJEXT) ui-calendar.$(OBJEXT) \
++	strings.$(OBJEXT) todo.$(OBJEXT) langinfo.$(OBJEXT) ui-calendar.$(OBJEXT) \
+-	strings.$(OBJEXT) todo.$(OBJEXT) ui-calendar.$(OBJEXT) \
  	ui-day.$(OBJEXT) ui-todo.$(OBJEXT) utf8.$(OBJEXT) \
  	utils.$(OBJEXT) vars.$(OBJEXT) vector.$(OBJEXT) wins.$(OBJEXT) \
  	mem.$(OBJEXT) dmon.$(OBJEXT)
-@@ -126,11 +126,11 @@
- AM_V_GEN = $(am__v_GEN_@AM_V@)
- am__v_GEN_ = $(am__v_GEN_@AM_DEFAULT_V@)
- am__v_GEN_0 = @echo "  GEN     " $@;
--am__v_GEN_1 =
-+am__v_GEN_1 = 
- AM_V_at = $(am__v_at_@AM_V@)
- am__v_at_ = $(am__v_at_@AM_DEFAULT_V@)
- am__v_at_0 = @
--am__v_at_1 =
-+am__v_at_1 = 
- DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
- depcomp = $(SHELL) $(top_srcdir)/depcomp
- am__maybe_remake_depfiles = depfiles
-@@ -154,13 +154,13 @@
- AM_V_CC = $(am__v_CC_@AM_V@)
- am__v_CC_ = $(am__v_CC_@AM_DEFAULT_V@)
- am__v_CC_0 = @echo "  CC      " $@;
--am__v_CC_1 =
-+am__v_CC_1 = 
- CCLD = $(CC)
- LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
- AM_V_CCLD = $(am__v_CCLD_@AM_V@)
- am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
- am__v_CCLD_0 = @echo "  CCLD    " $@;
--am__v_CCLD_1 =
-+am__v_CCLD_1 = 
- SOURCES = $(calcurse_SOURCES)
- DIST_SOURCES = $(calcurse_SOURCES)
- am__can_run_installinfo = \
-@@ -421,7 +421,7 @@
- clean-binPROGRAMS:
- 	-test -z "$(bin_PROGRAMS)" || rm -f $(bin_PROGRAMS)
- 
--calcurse$(EXEEXT): $(calcurse_OBJECTS) $(calcurse_DEPENDENCIES) $(EXTRA_calcurse_DEPENDENCIES)
-+calcurse$(EXEEXT): $(calcurse_OBJECTS) $(calcurse_DEPENDENCIES) $(EXTRA_calcurse_DEPENDENCIES) 
- 	@rm -f calcurse$(EXEEXT)
- 	$(AM_V_CCLD)$(LINK) $(calcurse_OBJECTS) $(calcurse_LDADD) $(LIBS)
- 
