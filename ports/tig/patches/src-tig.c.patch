@@ -1,0 +1,12 @@
+diff --git a/src/tig.c b/src/tig.c
+index 25b9c20..03609d8 100644
+--- src/tig.c
++++ src/tig.c
+@@ -821,7 +821,6 @@ main(int argc, const char *argv[])
+ #endif
+
+ 	if (setlocale(LC_ALL, "")) {
+-		codeset = nl_langinfo(CODESET);
+ 	}
+
+ 	die_if_failed(handle_git_prefix(), "Failed to handle GIT_PREFIX");

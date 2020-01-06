@@ -1,0 +1,12 @@
+diff --git a/include/tig/tig.h b/include/tig/tig.h
+index a3d856e..916b164 100644
+--- include/tig/tig.h
++++ include/tig/tig.h
+@@ -59,7 +59,6 @@
+ #include <regex.h>
+
+ #include <locale.h>
+-#include <langinfo.h>
+ #include <iconv.h>
+
+ #ifdef HAVE_EXECINFO_H
