@@ -9,30 +9,25 @@
 #
 
 # Erlang as a pre-requisite for CouchDB
+#
+# Fixme: we want a package with "erlang",
+# 	 but DISTVER is "otp_src_..."
 
 set -e
 source ../../lib.sh
-DISTVER="erlang"
-DISTSUFFIX="git"
+#DISTVER="erlang"
+DISTVER="otp_src_22.2"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
-DISTFILES="https://github.com/berryamin/$DISTVER.$DISTSUFFIX"
+DISTFILES="http://erlang.org/download/$DISTVER.$DISTSUFFIX"
 MYMAKEFLAGS="CC=$PBTARGETARCH-gcc"
 
 package_init "$@"
 # No configure, just make
 
-if [ "$TASK" == "fetch" ]
-then
-  cd "$WORKROOT"
-  rm -rf fakeroot
-  git clone $DISTFILES
-  cd lib-nixtla-audio
-  git checkout bb10
-  TASK=build
-fi
-
-#package_patch
+package_fetch
+package_patch
 package_build
 package_install
 package_bundle
