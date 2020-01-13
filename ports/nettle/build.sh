@@ -8,7 +8,8 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
+DISTVER="nettle-3.5"
+DISTSUFFIX="tar.gz"
 TASK=fetch
 
 DISTFILES="https://ftp.gnu.org/gnu/nettle/$DISTVER.$DISTSUFFIX"
