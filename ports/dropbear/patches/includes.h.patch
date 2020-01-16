@@ -1,0 +1,27 @@
+--- includes.h.orig	2020-01-14 07:16:06.047292428 +1100
++++ includes.h	2020-01-14 13:57:00.438386820 +1100
+@@ -50,7 +50,6 @@
+ #include <string.h>
+ #include <termios.h>
+ #include <unistd.h>
+-#include <syslog.h>
+ #include <netdb.h>
+ #include <ctype.h>
+ #include <stdarg.h>
+@@ -155,6 +154,16 @@
+ typedef u_int32_t uint32_t;
+ #endif /* HAVE_UINT32_T */
+ 
++#ifndef DISABLE_SYSLOG
++#include <syslog.h>
++#else
++#define LOG_NOTICE 0
++#define LOG_INFO 1
++#define LOG_WARNING 2
++#define LOG_ERR 3
++#define LOG_DEBUG 4
++#endif 
++
+ #ifndef SIZE_T_MAX
+ #define SIZE_T_MAX ULONG_MAX
+ #endif /* SIZE_T_MAX */
