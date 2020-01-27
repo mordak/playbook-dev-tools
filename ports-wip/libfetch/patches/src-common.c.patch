@@ -1,0 +1,14 @@
+--- src/common.c.orig	2020-01-27 20:28:54.592783350 +1100
++++ src/common.c	2020-01-27 20:29:12.649615277 +1100
+@@ -74,6 +74,11 @@
+ #pragma clang diagnostic ignored "-Wformat-nonliteral"
+ #endif
+ 
++#ifndef SOCK_NONBLOCK
++#include <fcntl.h>
++# define SOCK_NONBLOCK O_NONBLOCK
++#endif
++
+ /*** Local data **************************************************************/
+ 
+ /*
