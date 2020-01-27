@@ -16,13 +16,20 @@ TASK=fetch
 
 DISTFILES="https://github.com/NetBSDfr/$DISTVER.$DISTSUFFIX"
 #UNPACKCOMD="tar -xJf"
+
+LIBFETCH_DIR="libfetch-xbps-2.0"
+OPENSSL_DIR="openssl-1.0.2t"
+
 package_init "$@"
+
 CONFIGURE_CMD=" ./configure
-		CFLAGS=\"-I. -O3\"
+                CFLAGS=\"-I$ARCHIVEDIR/$LIBFETCH_DIR/$PREFIX/include -I$ARCHIVEDIR/$OPENSSL_DIR/$PREFIX/include\"
+                LDFLAGS=\"-L$ARCHIVEDIR/$LIBFETCH_DIR/$PREFIX/lib -L$ARCHIVEDIR/$OPENSSL_DIR/$PREFIX/lib\"
+                LIBS=\"-lsocket -lssl -lcrypto\"
                 --host=$PBHOSTARCH
                 --build=$PBBUILDARCH
                 --target=$PBTARGETARCH
-	 	--prefix=$PREFIX"
+                --prefix=$PREFIX"
 
 if [ "$TASK" == "fetch" ]
 then
