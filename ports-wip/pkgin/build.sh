@@ -71,10 +71,9 @@ if [ "$TASK" == "install" ]
 then
   cd "$WORKDIR"
 
-  rm install-sh
-
-  bmake INSTALL_DIR="install -d" \
-    BINOWN="101421000" BINGRP="1000_shared" \
+  bmake INSTALL_DIR="install -d" INSTALL_FILE="install" STRIPFLAG="" \
+    BINOWN="$(whoami)" BINGRP="$(whoami)" \
+    MANOWN="$(whoami)" MANGRP="$(whoami)" \
     DESTDIR="$DESTDIR" install
 
   TASK=bundle
