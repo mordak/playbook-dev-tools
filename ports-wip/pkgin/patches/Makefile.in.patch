@@ -1,0 +1,27 @@
+--- Makefile.in.orig	2020-01-31 00:47:05.225179211 +1100
++++ Makefile.in	2020-01-31 00:48:08.031907193 +1100
+@@ -107,12 +107,12 @@
+ afterinstall:	configinstall
+ 
+ beforeinstall:
+-	${INSTALL_DIR} -o ${BINOWN} -g ${BINGRP} -m 755 ${DESTDIR}${BINDIR}
+-	${INSTALL_DIR} -o ${BINOWN} -g ${BINGRP} -m 755			\
++	${INSTALL_DIR} ${DESTDIR}${BINDIR}
++	${INSTALL_DIR} \
+ 		${DESTDIR}${PKG_SYSCONFDIR}/pkgin
+ .if !defined(PKGMANDIR) # not installed via pkgsrc
+ .	for _mandir in cat1 html1 man1
+-		${INSTALL_DIR} -o ${BINOWN} -g ${BINGRP} -m 755		\
++		${INSTALL_DIR} \
+ 			${DESTDIR}${MANDIR}/${_mandir}
+ .	endfor
+ .endif
+@@ -120,7 +120,7 @@
+ install:
+ .for _conf in repositories.conf preferred.conf
+ 	test -f ${DESTDIR}${PKG_SYSCONFDIR}/pkgin/${_conf} ||		\
+-		${INSTALL_FILE} -o ${BINOWN} -g ${BINGRP} -m 644	\
++		${INSTALL_FILE} \
+ 			${_conf}
+ 		${DESTDIR}${PKG_SYSCONFDIR}/pkgin/${_conf}
+ .endfor

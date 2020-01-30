@@ -21,7 +21,15 @@ package_patch
 if [ "$TASK" == "build" ]
 then
   cp $EXECDIR/Makefile $WORKDIR/Makefile
+  cp -R $EXECDIR/compat $WORKDIR/
+
   cd "$WORKDIR"
+
+  # we are building without OpenSSL because libfetch requires version 1.1
+  # TODO: patch it up like in https://github.com/php/php-src/pull/2521
+  #OPENSSL_DIR="openssl-1.0.2t"
+  #CFLAGS="-I$ARCHIVEDIR/$OPENSSL_DIR/$PREFIX/include"
+  #LDFLAGS="-L$ARCHIVEDIR/$OPENSSL_DIR/$PREFIX/lib"
 
   eval "CC=$PBTARGETARCH-gcc" make
 

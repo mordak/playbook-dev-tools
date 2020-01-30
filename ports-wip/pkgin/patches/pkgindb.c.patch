@@ -1,0 +1,20 @@
+--- pkgindb.c.orig	2020-01-31 00:26:01.664942293 +1100
++++ pkgindb.c	2020-01-31 00:26:17.121647929 +1100
+@@ -320,7 +320,7 @@
+ 	sqlite3_finalize(stmt);
+ 
+ 	/* Databases matched pkgdb, we're up-to-date */
+-	if (db_mtime == st->st_mtime && db_ntime == st->pkgin_nanotime)
++	if (db_mtime == st->st_mtime && db_ntime == 0)
+ 		return 0;
+ 
+ 	/* We're not up to date, request a refresh. */
+@@ -344,7 +344,7 @@
+ 	if (sqlite3_bind_int64(stmt, 1, st->st_mtime) != SQLITE_OK)
+ 		pkgindb_sqlfail();
+ 
+-	if (sqlite3_bind_int64(stmt, 2, st->pkgin_nanotime) != SQLITE_OK)
++	if (sqlite3_bind_int64(stmt, 2, 0) != SQLITE_OK)
+ 		pkgindb_sqlfail();
+ 
+ 	if (sqlite3_step(stmt) != SQLITE_DONE)

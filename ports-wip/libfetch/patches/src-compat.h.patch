@@ -1,0 +1,22 @@
+--- src/compat.h.orig	2020-01-28 21:34:09.027857197 +1100
++++ src/compat.h	2020-01-28 21:34:56.954179410 +1100
+@@ -5,6 +5,8 @@
+ #include <sys/types.h>
+ #include <stdarg.h>
+ 
++#include "../compat/asprintf.h"
++
+ #if HAVE_VISIBILITY
+ #define HIDDEN __attribute__ ((visibility("hidden")))
+ #else
+@@ -23,10 +25,6 @@
+ char HIDDEN *strcasestr(const char *, const char *);
+ #endif
+ 
+-#ifndef HAVE_VASPRINTF
+-int HIDDEN vasprintf(char **, const char *, va_list);
+-#endif
+-
+ #ifndef HAVE_HUMANIZE_HUMBER
+ #define HN_DECIMAL              0x01
+ #define HN_NOSPACE              0x02

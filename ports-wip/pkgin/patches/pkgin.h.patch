@@ -1,0 +1,11 @@
+--- pkgin.h.orig	2020-01-31 00:20:30.429680272 +1100
++++ pkgin.h	2020-01-31 00:20:49.378562284 +1100
+@@ -37,6 +37,8 @@
+ #include <sys/queue.h>
+ #endif
+ 
++#include <sys/stat.h>
++
+ #include <archive.h>
+ #include <archive_entry.h>
+ #include <fetch.h>
