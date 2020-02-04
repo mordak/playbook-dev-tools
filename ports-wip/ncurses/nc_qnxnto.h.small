@@ -1,0 +1,4 @@
+#undef wcwidth
+#define wcwidth(ucs) _nc_wcwidth(ucs)
+extern int _nc_wcwidth(wchar_t);
+

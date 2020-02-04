@@ -1,0 +1,15 @@
+--- c++/internal.h.orig	2020-01-01 08:16:09.682284585 +1100
++++ c++/internal.h	2020-01-01 08:25:52.341820768 +1100
+@@ -51,7 +51,12 @@
+ 
+ #ifndef _QNX_SOURCE
+ #include <stdlib.h>
++#endif
++
+ #include <string.h>
++
++#ifdef _QNX_SOURCE
++#include <nc_qnxnto.h>
+ #endif
+ 
+ #ifndef CTRL
