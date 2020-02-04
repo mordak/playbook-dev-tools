@@ -7,34 +7,36 @@
 set -e
 source ../../lib.sh
 
-DISTVER="libnbcompat-debian-20180822-5"
+DISTVER="libnbcompat-20180822"
 DISTSUFFIX="tar.gz"
-TASK=fetch
+DISTFILE="libnbcompat_20180822.orig.$DISTSUFFIX"
+DISTFILES="http://deb.debian.org/debian/pool/main/libn/libnbcompat/$DISTFILE"
 
-DISTFILES="https://codeload.github.com/jgoerzen/libnbcompat/tar.gz/debian/20180822-5"
 UNPACKCOMD="tar -zxf"
+
+TASK=fetch
+package_init "$@"
 
 CONFIGURE_CMD=" ./configure
                 --host=$PBHOSTARCH
                 --build=$PBBUILDARCH
                 --target=$PBTARGETARCH
                 --prefix=$PREFIX
+                --enable-db
                 CC=$PBTARGETARCH-gcc
                 "
-
-package_init "$@"
 
 if [ "$TASK" == "fetch" ]
 then
   cd "$WORKROOT"
   echo "Fetching sources"
   if [ ! -f $DISTVER.$DISTSUFFIX ]; then
-    curl $DISTFILES -o $DISTVER.$DISTSUFFIX
+    curl -fkSLO $DISTFILES
   fi
 
   # Unpack and organize
   echo "Unpacking"
-  $UNPACKCOMD $DISTVER.$DISTSUFFIX $UNPACKSUFFIX
+  $UNPACKCOMD $DISTFILE $UNPACKSUFFIX
   TASK=patch
 fi
 
@@ -52,7 +54,7 @@ fi
 if [ "$TASK" == "install" ]
 then
   cd "$WORKDIR"
-  bmake DESTDIR="$DESTDIR/$PREFIX" install
+  bmake DESTDIR="$DESTDIR" install
   TASK=bundle
 fi
 

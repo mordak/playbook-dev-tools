@@ -1,0 +1,10 @@
+--- Makefile.in.orig	2020-02-01 23:02:47.089249306 +1100
++++ Makefile.in	2020-02-01 23:02:58.333749002 +1100
+@@ -25,6 +25,7 @@
+ 		nbcompat/assert.h \
+ 		nbcompat/cdefs.h \
+ 		nbcompat/ctype.h \
++		nbcompat/db.h \
+ 		nbcompat/dirent.h \
+ 		nbcompat/endian.h \
+ 		nbcompat/err.h \
