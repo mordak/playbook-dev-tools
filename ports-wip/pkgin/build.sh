@@ -22,6 +22,9 @@ OPENSSL_DIR="openssl-1.0.2t"
 SQLITE_DIR="sqlite-autoconf-3240000"
 LIBNBCOMPAT_DIR="libnbcompat-20180822"
 
+BUILD_DEP_BINS=(bmake)
+check_required_binaries
+
 TASK=fetch
 package_init "$@"
 
