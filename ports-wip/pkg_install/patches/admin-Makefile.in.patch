@@ -1,0 +1,11 @@
+--- admin/Makefile.in.orig	2020-02-02 20:35:09.889289160 +1100
++++ admin/Makefile.in	2020-02-02 20:35:21.209838014 +1100
+@@ -30,7 +30,7 @@
+ CPPFLAGS=	@CPPFLAGS@ -I. -I$(srcdir) -I../lib
+ 
+ .if empty(BOOTSTRAP)
+-LIBS=		-linstall -lnetpgpverify -larchive -lbz2 -lz -lfetch
++LIBS=		-linstall -lnbcompat -larchive -lbz2 -lz -lfetch
+ .if !empty(SSL_SUPPORT)
+ LIBS+=		-lssl -lcrypto
+ CPPFLAGS+=	-DHAVE_SSL

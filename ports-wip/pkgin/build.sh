@@ -20,7 +20,7 @@ DISTFILES="https://github.com/NetBSDfr/$DISTVER.$DISTSUFFIX"
 LIBFETCH_DIR="libfetch-xbps-2.0"
 OPENSSL_DIR="openssl-1.0.2t"
 SQLITE_DIR="sqlite-autoconf-3240000"
-LIBNBCOMPAT_DIR="libnbcompat-debian-20180822-5"
+LIBNBCOMPAT_DIR="libnbcompat-20180822"
 
 TASK=fetch
 package_init "$@"
@@ -63,7 +63,7 @@ then
   cd "$WORKROOT/$DISTVER"
   eval $CONFIGURE_CMD
 
-  bmake
+  bmake VARBASE=\"$PREFIX/var\"
   TASK=install
 fi
 

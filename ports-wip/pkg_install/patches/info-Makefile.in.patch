@@ -1,0 +1,11 @@
+--- info/Makefile.in.orig	2020-02-02 20:50:39.036900844 +1100
++++ info/Makefile.in	2020-02-02 20:50:46.725254982 +1100
+@@ -22,7 +22,7 @@
+ LDFLAGS=	@LDFLAGS@ -L../lib
+ 
+ .if empty(BOOTSTRAP)
+-LIBS=		-linstall -lnetpgpverify -larchive -lbz2 -lz -lfetch @LIBS@
++LIBS=		-linstall -lnbcompat -larchive -lbz2 -lz -lfetch @LIBS@
+ .if !empty(SSL_SUPPORT)
+ LIBS+=		-lssl -lcrypto
+ .endif

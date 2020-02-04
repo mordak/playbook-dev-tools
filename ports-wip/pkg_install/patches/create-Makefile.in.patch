@@ -1,0 +1,11 @@
+--- create/Makefile.in.orig	2020-02-02 20:36:20.252689243 +1100
++++ create/Makefile.in	2020-02-02 20:36:26.612995313 +1100
+@@ -28,7 +28,7 @@
+ OBJS=		main.o perform.o pl.o util.o build.o
+ 
+ .if empty(BOOTSTRAP)
+-LIBS=		-linstall -lnetpgpverify -larchive -lbz2 -lz -lfetch @LIBS@
++LIBS=		-linstall -lnbcompat -larchive -lbz2 -lz -lfetch @LIBS@
+ .if !empty(SSL_SUPPORT)
+ LIBS+=		-lssl -lcrypto
+ .endif
