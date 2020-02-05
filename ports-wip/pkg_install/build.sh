@@ -25,6 +25,7 @@ CONFIGURE_CMD=" ./configure
                 --target=$PBTARGETARCH
                 --prefix=$PREFIX
                 --enable-db
+                 --with-pkgdbdir=\"$PREFIX/var/db/pkg\"
                 CFLAGS=\"-I$ARCHIVEDIR/$LIBFETCH_DIR/$PREFIX/include\
                   -I$ARCHIVEDIR/$LIBNBCOMPAT_DIR/$PREFIX/include\"
                 LDFLAGS=\"-L$ARCHIVEDIR/$LIBFETCH_DIR/$PREFIX/lib\
@@ -63,7 +64,9 @@ if [ "$TASK" == "install" ]
 then
   cd "$WORKROOT/$DISTVER"
 
-  bmake DESTDIR="$DESTDIR/$PREFIX" install
+  bmake DESTDIR="$DESTDIR" install
+  mkdir -p $DESTDIR/$PREFIX/var/db/pkg
+
   TASK=bundle
 fi
 

@@ -79,6 +79,8 @@ then
     MANOWN="$(whoami)" MANGRP="$(whoami)" \
     DESTDIR="$DESTDIR" install
 
+  mkdir -p $DESTDIR/$PREFIX/var/db/pkgin
+
   TASK=bundle
 fi
 
