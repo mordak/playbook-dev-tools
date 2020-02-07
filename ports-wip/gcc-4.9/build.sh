@@ -10,7 +10,7 @@ set -e
 source ../../lib.sh
 TASK=build
 
-DISTVER="gcc"
+DISTVER="gcc-4.9"
 
 package_init "$@"
 
@@ -55,7 +55,7 @@ then
   TASK=build
 fi
 
-CONFIGURE_CMD="$EXECDIR/gcc/configure 
+CONFIGURE_CMD="$WORKDIR/gcc/configure 
                    --host=$PBHOSTARCH 
                    --build=$PBBUILDARCH 
                    --target=$PBTARGETARCH 
