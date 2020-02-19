@@ -6,11 +6,11 @@
 
 set -e
 source ../../lib.sh
-DISTVER="libfetch-xbps-2.0"
+DISTVER="libfetch-bmuch-0.4"
 DISTSUFFIX="tar.gz"
 TASK=fetch
 
-DISTFILES="https://github.com/BerryFarm/libfetch/releases/download/xbps-2.0/$DISTVER.$DISTSUFFIX"
+DISTFILES="https://github.com/BerryFarm/libfetch/releases/download/bmuch-0.4/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xf"
 
 package_init "$@"
@@ -20,9 +20,6 @@ package_patch
 
 if [ "$TASK" == "build" ]
 then
-  cp $EXECDIR/Makefile $WORKDIR/Makefile
-  cp -R $EXECDIR/compat $WORKDIR/
-
   cd "$WORKDIR"
 
   # we are building without OpenSSL because libfetch requires version 1.1
