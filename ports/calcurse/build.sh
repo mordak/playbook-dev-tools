@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# This code Copyright 2012 Todd Mortimer <todd.mortimer@gmail.com>
+# This code Copyright 2020 LxMx Foundation
 #
 # You may do whatever you like with this code, provided the above
 # copyright notice and this paragraph are preserved.
@@ -26,8 +26,8 @@ CONFIGURE_CMD="./configure
 package_fetch
 package_patch
 
-cp $EXECDIR/*.h $WORKDIR/src
-cp $EXECDIR/*.c $WORKDIR/src
+cp $EXECDIR/langinfo/*.h $WORKDIR/src
+cp $EXECDIR/langinfo/*.c $WORKDIR/src
 
 package_build
 package_install
