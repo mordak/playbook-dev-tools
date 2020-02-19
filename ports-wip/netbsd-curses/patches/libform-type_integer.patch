@@ -1,0 +1,10 @@
+--- libform/type_integer.c.orig	2020-02-13 00:01:19.311897960 +1100
++++ libform/type_integer.c	2020-02-13 00:02:17.142493187 +1100
+@@ -37,6 +37,7 @@
+ #include <ctype.h>
+ #include "form.h"
+ #include "internals.h"
++#include "../compat/asprintf.h"
+ 
+ /*
+  * The integer type handling.

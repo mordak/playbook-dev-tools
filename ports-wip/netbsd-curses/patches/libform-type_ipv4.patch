@@ -1,0 +1,10 @@
+--- libform/type_ipv4.c.orig	2020-02-13 00:01:03.007165474 +1100
++++ libform/type_ipv4.c	2020-02-13 00:01:55.377516950 +1100
+@@ -39,6 +39,7 @@
+ #include <limits.h>
+ #include "form.h"
+ #include "internals.h"
++#include "../compat/asprintf.h"
+ 
+ /*
+  * The IP v4 address type handling.

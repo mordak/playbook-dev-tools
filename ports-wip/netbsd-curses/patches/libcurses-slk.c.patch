@@ -1,0 +1,10 @@
+--- libcurses/slk.c.orig	2020-02-12 23:45:08.748226592 +1100
++++ libcurses/slk.c	2020-02-12 23:47:14.357698254 +1100
+@@ -43,6 +43,7 @@
+ #include <wctype.h>
+ #endif
+ 
++#include "wcwidth.h"
+ #include "curses.h"
+ #include "curses_private.h"
+ 

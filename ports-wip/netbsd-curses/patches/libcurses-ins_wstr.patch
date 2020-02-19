@@ -1,0 +1,10 @@
+--- libcurses/ins_wstr.c.orig	2020-02-12 23:45:19.676702398 +1100
++++ libcurses/ins_wstr.c	2020-02-12 23:48:01.895770534 +1100
+@@ -40,6 +40,7 @@
+ #include <string.h>
+ #include <stdlib.h>
+ 
++#include "wcwidth.h"
+ #include "curses.h"
+ #include "curses_private.h"
+ 

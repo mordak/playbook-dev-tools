@@ -1,0 +1,10 @@
+--- libcurses/pause.c.orig	2020-02-12 23:58:07.151239177 +1100
++++ libcurses/pause.c	2019-04-02 14:08:01.000000000 +1100
+@@ -37,7 +37,6 @@
+ #include <sys/time.h>
+ #include <time.h>
+ 
+-#include "../compat/asprintf.h"
+ #include "curses.h"
+ #include "curses_private.h"
+ 

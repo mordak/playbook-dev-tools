@@ -1,0 +1,10 @@
+--- libform/field.c.orig	2020-02-13 00:01:25.232163835 +1100
++++ libform/field.c	2020-02-13 00:02:30.143076040 +1100
+@@ -37,6 +37,7 @@
+ #include <stdarg.h>
+ #include <form.h>
+ #include "internals.h"
++#include "../compat/asprintf.h"
+ 
+ extern FORM _formi_default_form;
+ 

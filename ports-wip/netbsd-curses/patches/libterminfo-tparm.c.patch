@@ -1,0 +1,15 @@
+--- libterminfo/tparm.c.orig	2020-02-12 23:29:04.274660755 +1100
++++ libterminfo/tparm.c	2020-02-12 23:29:09.390877134 +1100
+@@ -40,6 +40,12 @@
+ #include <term_private.h>
+ #include <term.h>
+ 
++#undef  MIN
++#define MIN(a, b)  (((a) < (b)) ? (a) : (b))
++
++#undef  MAX
++#define MAX(a, b)  (((a) > (b)) ? (a) : (b))
++
+ #define LONG_STR_MAX ((CHAR_BIT * sizeof(long)) / 3)
+ #define BUFINC 128	/* Size to increament the terminal buffer by */
+ 

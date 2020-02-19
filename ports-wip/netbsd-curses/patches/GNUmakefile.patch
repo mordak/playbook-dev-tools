@@ -1,0 +1,42 @@
+--- GNUmakefile.orig	2020-02-12 23:52:07.850828075 +1100
++++ GNUmakefile	2020-02-13 00:10:57.001685510 +1100
+@@ -90,7 +90,9 @@
+ 	printw.c putchar.c refresh.c resize.c scanw.c screen.c scroll.c \
+ 	scrollok.c setterm.c standout.c timeout.c toucholap.c touchwin.c \
+ 	tstp.c tty.c unctrl.c underscore.c immedok.c syncok.c ripoffline.c \
+-	slk.c
++	slk.c wcwidth.c
++
++COMPAT_SRCS_=asprintf.h
+ 
+ 
+ ifndef DISABLE_WCHAR
+@@ -110,6 +112,10 @@
+ CU_LOBJS=$(CU_SRCS:.c=.lo)
+ CU_MAN =$(sort $(wildcard libcurses/*.3))
+ 
++COMPAT_SRCS=$(patsubst %,compat/%,$(COMPAT_SRCS_))
++COMPAT_INCS=compat/asprintf.h
++COMPAT_OBJS=$(COMPAT_SRCS:.c=.o)
++
+ PA_SRCS_ = _deck.c above.c below.c bottom.c del.c getuser.c hidden.c
+ PA_SRCS_+= hide.c move.c new.c replace.c setuser.c show.c top.c
+ PA_SRCS_+= update.c window.c
+@@ -343,7 +349,7 @@
+ 	rm -f $(NBPERF_OBJS) $(TOOL_NBPERF) $(TIC_OBJS) $(TIC_HOBJS) \
+ 	      $(TOOL_TTIC) $(TOOL_TIC) $(CLEANFILES) $(TI_LIBA) \
+ 	      $(CU_LIBA) $(TI_OBJS) $(CU_OBJS) $(CU_LOBJS) $(TI_LOBJS) \
+-	      $(CU_LIBSO) $(TI_LIBSO) \
++	      $(COMPAT_OBJS) $(CU_LIBSO) $(TI_LIBSO) \
+ 	      $(PA_LIBA) $(PA_LIBSO) $(PA_OBJS) $(PA_LOBJS) \
+ 	      $(ME_LIBA) $(ME_LIBSO) $(ME_OBJS) $(ME_LOBJS) \
+ 	      $(FO_LIBA) $(FO_LIBSO) $(FO_OBJS) $(FO_LOBJS) \
+@@ -414,7 +420,7 @@
+ 
+ ifeq ($(ALLPIC),1)
+ 
+-$(CU_LOBJS): $(CU_OBJS)
++$(CU_LOBJS): $(CU_OBJS) $(COMPAT_OBJS)
+ libcurses/%.lo: libcurses/%.o
+ 	$(LN) -sf $(notdir $<) $@
+ 

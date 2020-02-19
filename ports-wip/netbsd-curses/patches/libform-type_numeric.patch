@@ -1,0 +1,10 @@
+--- libform/type_numeric.c.orig	2020-02-13 00:01:14.335674378 +1100
++++ libform/type_numeric.c	2020-02-13 00:02:07.898078612 +1100
+@@ -37,6 +37,7 @@
+ #include <ctype.h>
+ #include "form.h"
+ #include "internals.h"
++#include "../compat/asprintf.h"
+ 
+ /*
+  * The numeric type handling.

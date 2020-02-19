@@ -1,0 +1,10 @@
+--- libcurses/refresh.c.orig	2020-02-12 23:45:50.934063552 +1100
++++ libcurses/refresh.c	2020-02-12 23:48:17.592454942 +1100
+@@ -36,6 +36,7 @@
+ #include <stdlib.h>
+ #include <string.h>
+ 
++#include "wcwidth.h"
+ #include "curses.h"
+ #include "curses_private.h"
+ 

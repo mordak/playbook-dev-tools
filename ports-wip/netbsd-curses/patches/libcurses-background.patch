@@ -1,0 +1,10 @@
+--- libcurses/background.c.orig	2020-02-12 23:51:35.345322824 +1100
++++ libcurses/background.c	2020-02-12 23:51:44.569750422 +1100
+@@ -33,6 +33,7 @@
+ #include <netbsd_sys/cdefs.h>
+ 
+ #include <stdlib.h>
++#include "wcwidth.h"
+ #include "curses.h"
+ #include "curses_private.h"
+ 

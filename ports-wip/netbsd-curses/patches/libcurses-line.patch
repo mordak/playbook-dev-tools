@@ -1,0 +1,10 @@
+--- libcurses/line.c.orig	2020-02-12 23:45:26.252988742 +1100
++++ libcurses/line.c	2020-02-12 23:53:25.162391929 +1100
+@@ -34,6 +34,7 @@
+ 
+ #include <string.h>
+ 
++#include "wcwidth.h"
+ #include "curses.h"
+ #include "curses_private.h"
+ 

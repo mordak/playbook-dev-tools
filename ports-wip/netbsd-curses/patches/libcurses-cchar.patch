@@ -1,0 +1,10 @@
+--- libcurses/cchar.c.orig	2020-02-12 23:45:42.765707819 +1100
++++ libcurses/cchar.c	2020-02-12 23:48:10.664152848 +1100
+@@ -39,6 +39,7 @@
+ 
+ #include <string.h>
+ 
++#include "wcwidth.h"
+ #include "curses.h"
+ #include "curses_private.h"
+ 

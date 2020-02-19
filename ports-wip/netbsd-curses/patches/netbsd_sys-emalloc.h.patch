@@ -1,0 +1,10 @@
+--- netbsd_sys/emalloc.h.orig	2020-02-12 23:58:50.217185119 +1100
++++ netbsd_sys/emalloc.h	2020-02-12 23:59:20.834566542 +1100
+@@ -9,6 +9,7 @@
+ #include <stdio.h>
+ #include <stdarg.h>
+ #include <string.h>
++#include "../compat/asprintf.h"
+ 
+ static void mallerr(void) {
+ 	dprintf(2, "error: out of memory\n");

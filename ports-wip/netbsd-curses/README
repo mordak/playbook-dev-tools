@@ -1,0 +1,6 @@
+## Status
+
+* Need to patch `open_memstream` Linux-ism introduced in https://github.com/sabotage-linux/netbsd-curses/commit/31f12fd8b4e3e7af4e585cdab1271c72dd5ce79d.
+  * `funopen2` it replaces isn't available in QNX either
+* The only feasible replacement seems to be using `tmpfile`
+  * There is a `fmem_open` wrapper using it: https://github.com/Snaipe/fmem/blob/master/src/fmem-tmpfile.c
