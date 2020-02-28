@@ -8,7 +8,6 @@
 
 set -e
 source ../../lib.sh
-source ./vars.sh
 TASK=fetch
 
 DISTFILES="http://www.cpan.org/src/5.0/$DISTVER.$DISTSUFFIX"
