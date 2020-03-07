@@ -1,0 +1,7 @@
+
+NOTES
+- imported from https://github.com/BerryFarm/pkgsrc/devel/bmake
+
+TODO
+- use git-clone-subset to clone from pkgsrc/devel/bmake to $WORKDIR
+
