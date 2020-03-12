@@ -9,6 +9,9 @@
 set -e
 source ../../lib.sh
 
+BUILD_DEP_BINS=(cmake)
+check_required_binaries
+
 DISTVER="cAudio"
 DISTSUFFIX="git"
 DISTFILES="https://github.com/berryamin/cAudio.git"
