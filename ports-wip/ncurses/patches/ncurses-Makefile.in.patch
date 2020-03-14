@@ -1,5 +1,5 @@
---- ncurses/Makefile.in.orig	2018-01-16 06:28:45.000000000 +1100
-+++ ncurses/Makefile.in	2020-01-14 15:00:16.234352720 +1100
+--- a/ncurses/Makefile.in.orig	2018-01-16 06:28:45.000000000 +1100
++++ b/ncurses/Makefile.in	2020-01-14 15:00:16.234352720 +1100
 @@ -183,6 +183,7 @@
  	$(INCDIR)/term_entry.h \
  	$(INCDIR)/nc_tparm.h \

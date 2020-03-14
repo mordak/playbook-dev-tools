@@ -27,7 +27,7 @@ CONFIGURE_CMD="cf_cv_wcwidth_graphics=no ./configure
                 CC=$PBTARGETARCH-gcc"
 
 package_fetch
-package_patch
+package_patch 1
 
 cp $EXECDIR/nc_qnxnto.h $WORKDIR/include
 

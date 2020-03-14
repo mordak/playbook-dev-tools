@@ -1,10 +1,12 @@
---- c++/Makefile.in.orig	2020-01-14 14:51:43.154035389 +1100
-+++ c++/Makefile.in	2016-05-22 09:26:12.000000000 +1000
-@@ -187,7 +187,6 @@
+diff --git a/c++/Makefile.in b/c++/Makefile.in
+index 6406799..f9460fe 100644
+--- a/c++/Makefile.in
++++ b/c++/Makefile.in
+@@ -187,6 +187,7 @@ realclean :: distclean
  internal_h	= $(srcdir)/internal.h \
  		  $(INCDIR)/ncurses_cfg.h \
  		  $(INCDIR)/nc_mingw.h \
--		  $(INCDIR)/nc_qnxnto.h \
++		  $(INCDIR)/nc_qnxnto.h \
  		  $(INCDIR)/nc_string.h
  
  etip_h		= etip.h \

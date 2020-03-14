@@ -1,0 +1,15 @@
+Compilation fails with
+
+make[1]: Entering directory '/root/berrymuch/work/ncurses-6.1/test'
+arm-unknown-nto-qnx8.0.0eabi-gcc -O2 --param max-inline-insns-single=1200  -o background ../obj_s/background.o  -I. -I. -I../test -DHAVE_CONFIG_H -DDATA_DIR=\"/accounts/1000/shared/documents/clitools/share\" -I. -I../include -D_QNX_SOURCE -D_XOPEN_SOURCE=500 -D_FILE_OFFSET_BITS=64  -DNDEBUG -O2 --param max-inline-insns-single=1200  -fPIC -DPIC  `echo "-L../lib -lformw -lmenuw -lpanelw -lncursesw   " | sed -e 's/-lform.*-lpanel[^ ]*//'`  -lm
+../lib/libncursesw.so: undefined reference to `wcwidth'
+../lib/libncursesw.so: undefined reference to `tsearch'
+../lib/libncursesw.so: undefined reference to `tfind'
+../lib/libncursesw.so: undefined reference to `tdelete'
+collect2: ld returned 1 exit status
+Makefile:264: recipe for target 'background' failed
+make[1]: *** [background] Error 1
+make[1]: Leaving directory '/root/berrymuch/work/ncurses-6.1/test'
+Makefile:113: recipe for target 'all' failed
+make: *** [all] Error 2
+

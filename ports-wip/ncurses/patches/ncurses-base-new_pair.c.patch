@@ -1,5 +1,5 @@
---- ncurses/base/new_pair.c.orig	2020-01-14 15:21:03.341367454 +1100
-+++ ncurses/base/new_pair.c	2020-01-14 15:21:19.306024986 +1100
+--- a/ncurses/base/new_pair.c.orig	2020-01-14 15:21:03.341367454 +1100
++++ b/ncurses/base/new_pair.c	2020-01-14 15:21:19.306024986 +1100
 @@ -56,9 +56,9 @@
  #undef ENTRY
  #define ENTRY my_ENTRY
