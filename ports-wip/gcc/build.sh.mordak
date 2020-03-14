@@ -33,19 +33,26 @@ CONFIGURE_CMD="$EXECDIR/gcc/configure
                    --with-as=ntoarm-as 
                    --with-ld=ntoarm-ld 
                    --with-sysroot=$QNX_TARGET 
+                   --disable-werror 
                    --prefix=$PREFIX 
                    --exec-prefix=$PREFIX 
                    --libdir=$PREFIX/lib
                    --libexecdir=$PREFIX/lib
                    --with-local-prefix=$PREFIX
+                   --enable-cheaders=c 
                    --enable-languages=c++ 
                    --enable-threads=posix 
+                   --disable-nls 
+                   --disable-libssp 
                    --disable-tls 
+                   --disable-libstdcxx-pch 
+                   --enable-libmudflap 
                    --enable-__cxa_atexit 
                    --with-gxx-include-dir=$PREFIX/$TARGETNAME/qnx6/usr/include/c++/4.6.3 
                    --enable-multilib 
                    --enable-shared 
                    --enable-gnu-indirect-function 
+                   --with-arch=armv7-a --with-float=softfp --with-fpu=vfpv3-d16 --with-mode=thumb
                    CC=$PBTARGETARCH-gcc 
                    LDFLAGS='-Wl,-s ' 
                    AUTOMAKE=: AUTOCONF=: AUTOHEADER=: AUTORECONF=: ACLOCAL=:

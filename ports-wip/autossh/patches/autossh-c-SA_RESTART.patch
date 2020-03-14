@@ -1,0 +1,13 @@
+diff --git a/autossh.c b/autossh.c
+index 82e5b47..a02c89d 100644
+--- a/autossh.c
++++ b/autossh.c
+@@ -1196,7 +1196,7 @@ set_sig_handlers(void)
+ 	sigaction(SIGUSR2, &act, NULL);
+ 	sigaction(SIGCHLD, &act, NULL);
+ 
+-	act.sa_flags |= SA_RESTART;
++	//act.sa_flags |= SA_RESTART;
+ 	sigaction(SIGALRM, &act, NULL);
+ 
+ 	act.sa_handler = SIG_IGN;

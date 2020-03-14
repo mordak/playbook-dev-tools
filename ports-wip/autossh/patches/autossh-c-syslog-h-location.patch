@@ -1,0 +1,13 @@
+diff --git a/autossh.c b/autossh.c
+index e2e3b84..82e5b47 100644
+--- a/autossh.c
++++ b/autossh.c
+@@ -49,7 +49,7 @@ typedef int32_t socklen_t;
+ #include <sys/wait.h>
+ #include <setjmp.h>
+ #include <stdarg.h>
+-#include <syslog.h>
++#include "syslog.h"
+ #include <time.h>
+ #include <errno.h>
+ 

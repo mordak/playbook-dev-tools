@@ -1,0 +1,24 @@
+
+Need to solve this issue:
+
+root@52cdf4582094:~/berrymuch/work/autossh-1.4g# make
+arm-unknown-nto-qnx8.0.0eabi-gcc -g -O2 -Wall -DVER=\"1.4g\" -DSSH_PATH=\"/usr/bin/ssh\"   -c -o autossh.o autossh.c
+autossh.c: In function 'doerrlog':
+autossh.c:1799:4: warning: implicit declaration of function 'vsyslog' [-Wimplicit-function-declaration]
+arm-unknown-nto-qnx8.0.0eabi-gcc   -o autossh autossh.o -lsocket
+autossh.o: In function `add_arg':
+/root/berrymuch/work/autossh-1.4g/autossh.c:528: undefined reference to `rpl_malloc'
+/root/berrymuch/work/autossh-1.4g/autossh.c:524: undefined reference to `rpl_realloc'
+collect2: ld returned 1 exit status
+Makefile:35: recipe for target 'autossh' failed
+make: *** [autossh] Error 1
+root@52cdf4582094:~/berrymuch/work/autossh-1.4g#
+
+Hint there
+
+https://www.linuxquestions.org/questions/linux-software-2/undefined-reference-to-%60rpl_malloc%27-587256/
+
+
+This one might be interesting as well about SA_RESTART
+
+https://www.postgresql.org/message-id/25171C9D43848A4A9FFF65373179D8025AC11675%40ITSUSRAGMDGD05.jnj.com
