@@ -8,13 +8,13 @@
 
 set -e
 source ../../lib.sh
-DISTVER="grep-2.9"
-DISTSUFFIX="tar.gz"
+DISTVER="grep-3.4"
+DISTSUFFIX="tar.xz"
 TASK=fetch
 
 
 DISTFILES="http://ftp.gnu.org/gnu/grep/$DISTVER.$DISTSUFFIX"
-UNPACKCOMD="tar -xzf"
+UNPACKCOMD="tar -xJf"
 TASK=fetch
 package_init "$@"
 CONFIGURE_CMD="./configure 
