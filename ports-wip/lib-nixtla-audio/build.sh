@@ -24,10 +24,11 @@ package_init "$@"
 if [ "$TASK" == "fetch" ]
 then
   cd "$WORKROOT"
-  rm -rf fakeroot
-  git clone $DISTFILES
-  cd lib-nixtla-audio
-  git checkout bb10
+  ls -d $DISTVER/Makefile || {
+  	git clone $DISTFILES
+  	cd lib-nixtla-audio
+	git checkout bb10
+  } 
   TASK=build
 fi
 
