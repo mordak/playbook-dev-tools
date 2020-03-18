@@ -1,0 +1,3 @@
+USAGE
+
+ to use autossh on bb10, you might need to set the AUTOSSH_PATH variable to ~/bin/ssh or whatever suits your local configuration.
