@@ -245,6 +245,7 @@ then
   if [ -e "$EXECDIR/patches" ]; then
     for apatch in $EXECDIR/patches/*
     do
+      echo $apatch | egrep -q .disabled$ && continue
       patch -p$PATCHLEVEL < $apatch
     done
   fi
