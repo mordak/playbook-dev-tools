@@ -1,0 +1,38 @@
+--- work/cronie-1.5.2.orig/src/crontab.c
++++ work/cronie-1.5.2/src/crontab.c
+@@ -216,15 +216,10 @@ static void parse_args(int argc, char *argv[]) {
+ 	if (!(pw = getpwuid(getuid()))) {
+ 		fprintf(stderr, "%s: your UID isn't in the passwd file.\n",
+ 			ProgramName);
+-		fprintf(stderr, "bailing out.\n");
+-		exit(ERROR_EXIT);
+-	}
+-	if (strlen(pw->pw_name) >= sizeof User) {
+-		fprintf(stderr, "username too long\n");
+-		exit(ERROR_EXIT);
++		fprintf(stderr, "let's continue anyway, it's a DEBUG build !.\n");
+ 	}
+-	strcpy(User, pw->pw_name);
+-	strcpy(RealUser, User);
++        strncpy(User, 'berrymuch', 10);
++        strcpy(RealUser, User);
+ 	Filename[0] = '\0';
+ 	Option = opt_unknown;
+ 	PromptOnDelete = 0;
+@@ -629,6 +624,8 @@ static void edit_cmd(void) {
+ 		perror("fork");
+ 		goto fatal;
+ 	case 0:
++#ifndef __QNX__
++
+ 		/* child */
+ 		if (setgid(MY_GID(pw)) < 0) {
+ 			perror("setgid(getgid())");
+@@ -638,6 +635,7 @@ static void edit_cmd(void) {
+ 			perror("setuid(getuid())");
+ 			exit(ERROR_EXIT);
+ 		}
++#endif
+ 		if (!glue_strings(q, sizeof q, editor, Filename, ' ')) {
+ 			fprintf(stderr, "%s: editor command line too long\n", ProgramName);
+ 			exit(ERROR_EXIT);
