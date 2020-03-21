@@ -1,0 +1,16 @@
+--- work/cronie-1.5.2.orig/src/cron.c
++++ work/cronie-1.5.2/src/cron.c
+@@ -260,9 +260,10 @@ int main(int argc, char *argv[]) {
+ 	 */
+ 	setlocale(LC_ALL, "");	/* set locale to system defaults or to
+ 							 * that specified by any  LC_* env vars */
+-	if ((cs = nl_langinfo(CODESET)) != NULL)
+-		strncpy(cron_default_mail_charset, cs, MAX_ENVSTR-1);
+-	else
++	/* if ((cs = nl_langinfo(CODESET)) != NULL)
++ 	 *	strncpy(cron_default_mail_charset, cs, MAX_ENVSTR-1);
++	 * else
++	 */
+ 		strcpy(cron_default_mail_charset, "US-ASCII");
+ 
+ 	/* if there are no debug flags turned on, fork as a daemon should.
