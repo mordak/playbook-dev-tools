@@ -18,7 +18,9 @@ TASK=fetch
 DISTFILES="https://github.com/berryamin/$DISTVER.$DISTSUFFIX"
 
 #CONFIGURE_CMD=""
-MYMAKEFLAGS="CC=$PBTARGETARCH-gcc"
+MYMAKEFLAGS="   CC=$PBTARGETARCH-gcc 
+		CPPFLAGS=\"-I. -Iinclude\"
+		"
 
 package_init "$@"
 # No configure, just make
@@ -27,7 +29,7 @@ if [ "$TASK" == "fetch" ]
 then
   cd "$WORKROOT"
   rm -rf fakeroot
-  git clone $DISTFILES
+  git clone $DISTFILES --depth 1
   cd tinyoal
 
   git clone https://github.com/berryamin/bss-util.git

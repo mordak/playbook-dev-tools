@@ -1,0 +1,37 @@
+
+
+TinyOAL requires at least GCC 4.8.1, as ISO C++ 2011 standard support is required
+
+BB10-NDK provides GCC 4.6.3 and 4.8.3
+
+How do we enable 4.8.3 ?
+
+
+*******************************************************************************************************************
+C++11 Support in GCC
+GCC 4.8.1 was the first feature-complete implementation of the 2011 C++ standard, previously known as C++0x.
+
+This mode can be selected with the -std=c++11 command-line flag, or -std=gnu++11 to enable GNU extensions as well.
+*******************************************************************************************************************
+
+
+
+kalou@d2c1742184ee:~/work/tinyoal$ make  CPPFLAGS="-I. -Iinclude"
+make -f tinyoal.mk
+make[1]: Entering directory '/berrymuch/work/tinyoal'
+g++  -I. -Iinclude  -c TinyOAL/WaveFunctions.cpp -o bin/obj/cxx/TinyOAL/WaveFunctions.o
+In file included from /usr/include/c++/5/array:35:0,
+                 from ./bss-util/bss_util.h:30,
+                 from ./bss-util/Hash.h:8,
+                 from include/tinyoal/AudioResource.h:8,
+                 from TinyOAL/WaveFunctions.h:10,
+                 from TinyOAL/WaveFunctions.cpp:25:
+/usr/include/c++/5/bits/c++0x_warning.h:32:2: error: #error This file requires compiler and library support for the ISO C++ 2011 standard. This support must be enabled
+with the -std=c++11 or -std=gnu++11 compiler options.
+ #error This file requires compiler and library support \
+  ^
+TinyOAL/WaveFunctions.cpp:28:22: fatal error: AL/alext.h: No such file or directory
+compilation terminated.
+
+
+
