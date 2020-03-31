@@ -12,7 +12,7 @@ source ../../lib.sh
 BUILD_DEP_BINS=(msgfmt)
 check_required_binaries
 
-DISTVER="git-2.24.1"
+DISTVER="git-2.26.0"
 DISTSUFFIX="tar.xz"
 DISTFILES="https://mirrors.edge.kernel.org/pub/software/scm/git/$DISTVER.$DISTSUFFIX"
 
@@ -36,6 +36,7 @@ CONFIGURE_CMD="./configure
                 ac_cv_fread_reads_directories=no
                 ac_cv_header_libintl_h=no
                 ac_cv_snprintf_returns_bogus=no
+		ac_cv_iconv_omits_bom=yes
                 CURLDIR=\"$ARCHIVEDIR/$CURL_DIR/$PREFIX\"
                 CURL_LDFLAGS=\"-lcurl\"
                 CURL_CONFIG=\"$EXECDIR/curl-config.sh\"
