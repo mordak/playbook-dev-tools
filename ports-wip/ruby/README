@@ -1,0 +1,19 @@
+
+http://blade.nagaokaut.ac.jp/cgi-bin/vframe.rb/ruby/ruby-dev/27680?27566-29176
+
+io.o: In function `rb_io_binmode':
+io.c:(.text+0x7d74): undefined reference to `setmode'
+thread.o: In function `rb_fd_init_copy':
+thread.c:(.text+0x8c64): undefined reference to `howmany'
+thread.o: In function `rb_fd_zero':
+thread.c:(.text+0x8d02): undefined reference to `howmany'
+thread.o: In function `rb_fd_resize':
+thread.c:(.text+0x8d3a): undefined reference to `howmany'
+thread.c:(.text+0x8d50): undefined reference to `howmany'
+thread.o: In function `rb_fd_copy':
+thread.c:(.text+0x8eea): undefined reference to `howmany'
+thread.o:thread.c:(.text+0x8f4c): more undefined references to `howmany' follow
+collect2: ld returned 1 exit status
+Makefile:269: recipe for target 'miniruby' failed
+make: *** [miniruby] Error 1
+

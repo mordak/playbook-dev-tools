@@ -9,29 +9,29 @@
 
 set -e
 source ../../lib.sh
-DISTVER="ruby-1.8.7-p371"
-DISTSUFFIX="tar.gz"
-TASK=fetch
 
 DISTVER="ruby-2.5.1"
+DISTVER="ruby-2.7.1"
 DISTSUFFIX="tar.gz"
 DEPENDS="libevent"
+LIB_EVENT2_DIR="libevent-2.0.22-stable"
 BUILD_DEP_BINS=()
 #check_required_binaries
 
-DISTFILES="https://cache.ruby-lang.org/pub/ruby/2.5/$DISTVER.$DISTSUFFIX"
+DISTFILES="https://cache.ruby-lang.org/pub/ruby/2.7/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
 PATCHLEVEL=1
 TASK=fetch
 package_init "$@"
 CONFIGURE_CMD="autoconf; ./configure 
+		--enable-threads=posix
                 --host=$PBHOSTARCH
                 --build=$PBBUILDARCH 
                 --target=$PBTARGETARCH 
                 --prefix=$PREFIX 
                 CC=$PBTARGETARCH-gcc
-		CFLAGS=\"-fPIC -I../unpacked/include/event\"
-		LDFLAGS=\"-L../unpacked/lib -lsocket -levent2\"
+		CFLAGS=\"-fPIC -I$ARCHIVEDIR/$LIB_EVENT2_DIR/$PREFIX/include\"
+		LDFLAGS=\"-L$ARCHIVEDIR/$LIB_EVENT2_DIR/$PREFIX/lib -lsocket -levent\"
                 "
 
 package_fetch
