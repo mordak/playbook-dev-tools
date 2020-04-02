@@ -9,12 +9,11 @@
 set -e
 source ../../lib.sh
 
-DISTVER="tgl"
-DEPENDS="libevent openssl jansson"
-DEPENDS_PKGS="libevent-2.0.22-stable.zip readline-7.0.zip"
+DISTVER="telegram-cli"
+DEPENDS="libevent openssl jansson readline"
 TASK=fetch
 
-TG_GITVER=1.3.1
+#TG_GITVER=1.3.1
 
 package_init "$@"
 CONFIGURE_CMD="./configure 
@@ -34,10 +33,9 @@ then
   cd "$WORKROOT"
   # delete old version
   rm -rf "$DISTVER"
-#  git clone git://git.sv.gnu.org/findutils $DISTVER
-  git clone --recursive https://github.com/vysheng/tg.git $DISTVER
+  git clone --recursive https://github.com/kenorb-contrib/tg.git $DISTVER
   cd $DISTVER
-  git checkout $TG_GITVER
+  #git checkout $TG_GITVER
   cd "$WORKDIR"
   TASK=patch
 fi
@@ -54,22 +52,6 @@ then
   #  make clean || true
   #  make distclean || true
   #fi
-
-  for zipfile in $DEPENDS_PKGS
-   do
-	D=$WORKROOT/$(echo $zipfile | sed 's/.zip//g')
-	[ -d $D ] && continue
-
-	mkdir $D || exit 1
-	echo 
-	echo DEBUG unzip $PKGDIR/$zipfile -d $WORKROOT/$D
-	echo 
-	read P
-	echo 
-	unzip $PKGDIR/$zipfile -d $D
-	echo 
-	read P
-   done
 
   # configure
   eval $CONFIGURE_CMD
