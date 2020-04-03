@@ -21,7 +21,6 @@ CONFIGURE_CMD="./configure
                 --target=$PBTARGETARCH
                 --prefix=$PREFIX
                 --disable-nls
-                --with-readline
                 CC=$PBTARGETARCH-gcc"
 
 package_fetch
