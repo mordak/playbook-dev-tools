@@ -25,6 +25,7 @@ CONFIGURE_CMD="./configure
                 --disable-nls 
                 CC=$PBTARGETARCH-gcc 
 		CFLAGS=-O3
+		LDFLAGS=-lm
                 "
 package_fetch
 package_patch
