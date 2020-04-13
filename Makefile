@@ -28,7 +28,7 @@ shell: .additions
 	docker commit add1 $(MY_IMG_BASE):0.2
 	docker run -it --name add2 $(MY_IMG_BASE):0.2 /usr/sbin/useradd -M $(shell whoami) --uid $(shell id -u) --gid $(shell id -g) -d /berrymuch
 	docker commit add2 $(MY_IMG_BASE):0.3
-	docker run -it --name add3 $(MY_IMG_BASE):0.3 bash -c "apt-get update ; apt-get -yq install vim lua5.2 libc6-dev zlib1g-dev zlib1g zlib1g-dbg zip"
+	docker run -it --name add3 $(MY_IMG_BASE):0.3 bash -c "apt-get update ; apt-get -yq install vim lua5.2 libc6-dev zlib1g-dev zlib1g zlib1g-dbg zip pkg-config"
 	docker commit add3 $(MY_IMG_BASE):$(MY_IMG_VER)
 
 	touch .additions
