@@ -19,6 +19,10 @@ The project is standing on the shoulders of giants including [playbook-dev-tools
 * GCC 4.6.3 and a variety of libraries are available
 * Some useful everyday apps (see [ports](https://github.com/BerryFarm/berrymuch/tree/master/ports)) have been cross-compiled and packaged
 
+## Contact
+
+* Reach us at ( http://t.me/berryfarm_org )
+
 ## Roadmap
 
 - Package management with dependencies
