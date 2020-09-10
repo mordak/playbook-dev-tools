@@ -1,0 +1,28 @@
+https://github.com/R4stl1n/cAudio/blob/master/CMake/Packages/FindOpenAL.cmake
+
+/root/bbndk/target_10_3_1_995/qnx6/usr/include/AL
+
+
+# Get path, convert backslashes as ${ENV_${var}}
+getenv_path(OPENAL_HOME)
+
+/root/bbndk/target_10_3_1_995/qnx6/armle-v7/usr/lib/libOpenAL.so
+
+root@80e10e999fad:~/berrymuch/work/cAudio# cmake . -DCAUDIO_DEPENDENCIES_DIR=$QNX_TARGET/armle-v7/usr/include/AL
+root@80e10e999fad:~/berrymuch/work/cAudio# cmake . -DCAUDIO_DEPENDENCIES_DIR=$QNX_TARGET/armle-v7/usr/include
+
+kalou@f9ad4c502e91:~/ports-wip/caudio$ cd - ; grep OPENAL CMake*
+/berrymuch/work/cAudio
+grep: CMake: Is a directory
+CMakeCache.txt:OPENAL_INCLUDE_DIR:PATH=OPENAL_INCLUDE_DIR-NOTFOUND
+CMakeCache.txt:OPENAL_LIBRARY_DBG:FILEPATH=/root/bbndk/target_10_3_1_995/qnx6/armle-v7/usr/lib/libOpenAL.so
+CMakeCache.txt:OPENAL_LIBRARY_REL:FILEPATH=/root/bbndk/target_10_3_1_995/qnx6/armle-v7/usr/lib/libOpenAL.so
+CMakeCache.txt://ADVANCED property for variable: OPENAL_INCLUDE_DIR
+CMakeCache.txt:OPENAL_INCLUDE_DIR-ADVANCED:INTERNAL=1
+
+
+
+32 vs 64 bits build
+
+You are now all set to generate the project of your choice. CMake defaults to unix makefiles but you can specify another with the -G switch. Run cmake ../ -DCAUDIO_DEPENDENCIES_DIR=../Dependencies/ for a 32bit build or cmake ../ -DCAUDIO_DEPENDENCIES_DIR=../Dependencies64/ for a 64bit build.
+
