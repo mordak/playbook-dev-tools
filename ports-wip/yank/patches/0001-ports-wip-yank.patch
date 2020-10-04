@@ -1,0 +1,25 @@
+From e7c4a42cd961c191654ba0ab588444b95aa76966 Mon Sep 17 00:00:00 2001
+From: Olivier Kaloudoff <kaloudov@yandex.com>
+Date: Sun, 4 Oct 2020 21:15:58 +0200
+Subject: [PATCH] ports-wip/yank  install step: prevent stripping binary
+
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index e4059ec..cbad3e6 100644
+--- a/Makefile
++++ b/Makefile
+@@ -8,7 +8,7 @@ MANPREFIX=	${PREFIX}/share/man
+ PROG=	yank
+ OBJS=	yank.o
+ 
+-INSTALL_PROGRAM=	install -s -m 0755
++INSTALL_PROGRAM=	install -m 0755
+ INSTALL_MAN=		install -m 0644
+ 
+ CFLAGS+=	-pedantic -Wall -Wextra
+-- 
+2.26.2
+
