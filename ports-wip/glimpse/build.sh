@@ -47,7 +47,7 @@ then
     curl -fkSLO $DISTFILES
   fi
 
-  #mv glimpse_4.18.7.orig.$DISTSUFFIX $DISTVER.$DISTSUFFIX
+  mv glimpse_4.18.7.orig.$DISTSUFFIX $DISTVER.$DISTSUFFIX
 
   # Unpack and organize
   echo "Unpacking"
