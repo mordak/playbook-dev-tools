@@ -1,0 +1,11 @@
+--- Makefile	2020-10-14 19:52:07.207397425 +0200
++++ Makefile.new	2020-10-14 19:51:46.955474176 +0200
+@@ -88,7 +88,7 @@
+ 	[ -d $(BINDIR) ] || mkdir $(BINDIR)
+ 	[ -d $(LIBDIR) ] || mkdir $(LIBDIR)
+ 	for d in $(SUBDIRS) ; do \
+-		( cd $$d; $(MAKE) ); \
++		( cd $$d; $(MAKE) CC=$(CC) ) ; \
+ 	done
+ 
+ # Check target

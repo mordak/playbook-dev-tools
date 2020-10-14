@@ -9,10 +9,12 @@ set -x
 
 set -e
 source ../../lib.sh
-#DISTVER="glimpse_4.18.7.orig"
 DISTVER="glimpse-4.18.7"
 DISTSUFFIX="tar.gz"
 TASK=fetch
+
+# we must have build libfl (flex) first - see CFLAGS and LEXLIB below
+LIBFL_DIR="flex-2.6.4"
 
 DISTFILES="http://deb.debian.org/debian/pool/main/g/glimpse/glimpse_4.18.7.orig.$DISTSUFFIX"
 UNPACKCOMD="tar -xzf"
@@ -35,6 +37,8 @@ CONFIGURE_CMD="./configure
 		--with-fpu=vfpv3-d16
 		--with-mode=thumb
                 CC=$PBTARGETARCH-gcc
+                LEXLIB=\"-L$ARCHIVEDIR/$LIBFL_DIR/$PREFIX/lib\ -lfl\"
+                CFLAGS=\"-I$PWD -I$ARCHIVEDIR/$LIBFL_DIR/$PREFIX/include\"
 		"
 
 MYMAKEFLAGS="DESTDIR=$ARCHIVEDIR"
@@ -52,11 +56,33 @@ then
   # Unpack and organize
   echo "Unpacking"
   $UNPACKCOMD $DISTVER.$DISTSUFFIX $UNPACKSUFFIX
-  TASK=patch
+  TASK=build
 fi
 
-package_patch
-package_build
+
+if [ "$TASK" == "build" ]
+then
+
+  cd "$WORKDIR"
+
+  eval $CONFIGURE_CMD
+
+  echo "Patching .. (post-configure)"
+  if [ -e "$EXECDIR/patches" ]; then
+    for apatch in $EXECDIR/patches/*
+    do
+      patch -p0 < $apatch
+    done
+  fi
+
+  echo "Building"
+  cd "$WORKDIR"
+  eval $MAKE_PREFIX make $MYMAKEFLAGS || \
+  eval $MAKE_PREFIX make
+  TASK=install
+fi
+
+
 package_install
 package_bundle
 
