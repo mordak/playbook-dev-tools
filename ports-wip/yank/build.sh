@@ -21,6 +21,8 @@ MYMAKEFLAGS="   CC=$PBTARGETARCH-gcc
 		CPPFLAGS=\"-I. -Iinclude\"
 		"
 
+MAKEPREFIX=$PREFIX
+
 package_init "$@"
 # No configure, just make
 
@@ -43,6 +45,9 @@ fi
 
 #package_patch
 package_build
+
+DESTDIR="$ROOTDIR"
 package_install
+
 package_bundle
 
