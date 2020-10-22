@@ -1,0 +1,12 @@
+diff -Naur tinyoal.git/tinyoal.mk tinyoal/tinyoal.mk
+--- tinyoal.git/tinyoal.mk	2020-10-22 16:18:25.687919761 +0200
++++ tinyoal/tinyoal.mk	2020-10-22 16:21:10.851490762 +0200
+@@ -8,7 +8,7 @@
+ LIBRARY_DIRS := 
+ LIBRARIES := rt
+ 
+-CPPFLAGS += -fPIC -D TINYOAL_EXPORTS -Wall -Wno-attributes -Wno-unknown-pragmas -Wno-reorder -Wno-missing-braces -Wno-unused-function -std=c++17 
++CPPFLAGS += -fPIC -D TINYOAL_EXPORTS -Wall -Wno-attributes -Wno-unknown-pragmas -Wno-reorder -Wno-missing-braces -Wno-unused-function -std=c++11
+ LDFLAGS += -shared
+ 
+ include base.mk

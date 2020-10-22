@@ -32,18 +32,16 @@ then
   git clone $DISTFILES --depth 1
   cd tinyoal
 
-  git clone https://github.com/berryamin/bss-util.git
-  mv bss-util bss-util.git
-  cd bss-util.git
-  git checkout v0.5.0
+  git clone https://github.com/berryamin/bss-util.git 
+  cd bss-util
+  git checkout v0.5.2
   cd ..
+  mv bss-util/include/bss-util include
 
-  mv bss-util.git/include/bss-util .
-  #git checkout bb10
-  TASK=build
+  TASK=patch
 fi
 
-#package_patch
+package_patch 1
 package_build
 package_install
 package_bundle
