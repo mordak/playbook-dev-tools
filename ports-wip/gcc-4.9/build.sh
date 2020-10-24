@@ -8,7 +8,7 @@
 
 set -e
 source ../../lib.sh
-TASK=build
+TASK=fetch
 
 DISTVER="gcc-4.9"
 
@@ -17,33 +17,17 @@ package_init "$@"
 if [ "$TASK" == "fetch" ]
 then
   cd "$EXECDIR"
-  # move aside previous downloads
-  mv gcc gcc-old || true
   # fetch
-  echo "Fetching gcc sources"
-  svn checkout --username $LOGIN http://community.qnx.com/svn/repos/core-dev-tools/tools/binutils/branches/binutils-2.22
-  mv binutils-2.22 binutils
-  svn checkout --username $LOGIN http://community.qnx.com/svn/repos/core-dev-tools/tools/gcc/branches/gcc_4_9_ndk_branch
-  mv gcc_4_9_ndk_branch gcc
-  curl -O http://ftp.gnu.org/gnu/gmp/gmp-4.3.2.tar.bz2
-  curl -O http://ftp.gnu.org/gnu/mpfr/mpfr-3.1.6.tar.bz2
-  curl -O http://ftp.gnu.org/gnu/mpc/mpc-1.0.3.tar.gz
+  echo "Fetching gcc sources if not already present"
+pwd
+  ls -d gcc 2>/dev/null 2>&1 || \
+{
+  git clone https://github.com/berryfarm/gcc gcc.tmp --single-branch -b gcc-4.9
+  mv gcc.tmp/gcc .
+  rm -rf gcc.tmp
+}
 
-  # Unpack and organize
-  echo "Unpacking"
-  mv binutils gcc/
-  mv gmp-4.3.2.tar.bz2 gcc/
-  mv mpfr-3.1.6.tar.bz2 gcc/
-  mv mpc-1.0.3.tar.gz gcc/
-  cd gcc
-  tar -xjf gmp-4.3.2.tar.bz2
-  tar -xjf mpfr-3.1.6.tar.bz2
-  tar -xzf mpc-1.0.3.tar.gz
-  mv gmp-4.3.2 gmp
-  mv mpfr-3.1.6 mpfr
-  mv mpc-1.0.3 mpc
-
-  TASK=patch
+  TASK=build
 fi
 
 if [ "$TASK" == "patch" ]
@@ -55,12 +39,12 @@ then
   TASK=build
 fi
 
-CONFIGURE_CMD="$WORKDIR/gcc/configure 
+CONFIGURE_CMD="$EXECDIR/gcc/configure 
                    --host=$PBHOSTARCH 
                    --build=$PBBUILDARCH 
                    --target=$PBTARGETARCH 
                    MAKEINFO='/usr/bin/makeinfo --force'
-                   --srcdir=$WORKDIR/gcc 
+                   --srcdir=$EXECDIR/gcc 
                    --with-as=ntoarm-as 
                    --with-ld=ntoarm-ld 
                    --with-sysroot=$QNX_TARGET 
@@ -84,7 +68,8 @@ CONFIGURE_CMD="$WORKDIR/gcc/configure
                    --enable-shared 
                    --enable-gnu-indirect-function 
                    --with-arch=armv7-a --with-float=softfp --with-fpu=vfpv3-d16 --with-mode=thumb
-                   CC=$PBTARGETARCH-gcc 
+                   CC=$PBTARGETARCH-gcc-4.8.3
+		   CXX=$PBTARGETARCH-gcc-4.8.3
                    LDFLAGS='-Wl,-s ' 
                    AUTOMAKE=: AUTOCONF=: AUTOHEADER=: AUTORECONF=: ACLOCAL=:
                    "
