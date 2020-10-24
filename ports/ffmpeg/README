@@ -1,3 +1,17 @@
+
+**********************************************
+ - ffmpeg 4.2.2 vs 4.3.1 performance on bb10
+**********************************************
+
+Seems that 4.3.1 is much slower than 4.2.2 on bb10
+Please give feedback on the github project or telegram chanel !
+
+
+***********
+ OLD NOTES
+***********
+
+
 A Few ressources to start looking at ffmpeg compilation for bb10
 
 
