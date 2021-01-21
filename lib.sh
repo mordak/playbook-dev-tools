@@ -155,13 +155,12 @@ function build_all()
   for dir in $ALLPORTS
   do
     if [ -d "$dir" ] && [ -e "$dir/build.sh" ]; then
-      [ -f "$dir/vars.sh" ] && {
-        . $dir/vars.sh
-        [ -f ../packages/$DISTVER.zip ] && {
-          echo "Warning: skipping build of $DISTVER (file packages/$DISTVER.zip already exists) "
-          continue;
-        }
-      }
+       eval $(egrep ^DISTVER "$dir/build.sh" )
+       echo DISTVER=$DISTVER $(ls ../packages/$DISTVER.zip)
+       [ -f ../packages/$DISTVER.zip ] && {
+         echo "Warning: skipping build of $DISTVER (file packages/$DISTVER.zip already exists) "
+         continue;
+       }
       echo "Building $dir"
       cd "$dir"
       ./build.sh $SUBTASKFLAG $SUBTASK
