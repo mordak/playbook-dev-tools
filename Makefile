@@ -1,4 +1,4 @@
-build:
+build: .useradd
 	docker run -t -v "${PWD}":/berrymuch -u $(shell id -u):$(shell id -g) yamsergey/bb10-ndk:0.6.1 /bin/bash -c 'cd /berrymuch; ./build.sh -b /root/bbndk -t build'
 
 shell: .useradd
