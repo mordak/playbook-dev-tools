@@ -9,7 +9,7 @@ set -x
 
 set -e
 source ../../lib.sh
-DISTVER="ffmpeg-4.3.1"
+DISTVER="ffmpeg-4.2.2"
 DISTSUFFIX="tar.bz2"
 TASK=fetch
 
