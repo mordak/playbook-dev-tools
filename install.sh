@@ -1,5 +1,5 @@
 #!/bin/sh
-D=/accounts/1000/shared/documents/clitools
+D=/accounts/1000/shared/misc/clitools
 mkdir -p $D;
 mv clitools.zip $D
 cd $D

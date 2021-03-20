@@ -45,7 +45,7 @@ if [ "$TASK" == "bundle" ]
 then
 	echo "Zipping and copying to packages"
 	echo $ROOTDIR
-	cd $WORKROOT/$DISTVER/nto-armv7/accounts/1000/shared/documents/clitools
+	cd $WORKROOT/$DISTVER/nto-armv7/accounts/1000/shared/misc/clitools 
 	zip -yr $DISTVER.zip .
 	mv $DISTVER.zip $ROOTDIR/packages
 
