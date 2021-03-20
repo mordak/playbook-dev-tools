@@ -1,4 +1,4 @@
-NATIVE_TOOLS="/accounts/1000/shared/documents/clitools"
+NATIVE_TOOLS="/accounts/1000/shared/misc/clitools"
 QNX_TARGET=$NATIVE_TOOLS/target_10_3_1_995/qnx6
 export NATIVE_TOOLS QNX_TARGET
 

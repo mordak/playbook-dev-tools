@@ -13,7 +13,7 @@ PBHOSTARCH=arm-unknown-nto-qnx8.0.0eabi
 PBBUILDARCH=`gcc -dumpmachine`
 PBTARGETARCH=arm-unknown-nto-qnx8.0.0eabi
 
-DEFAULTPREFIX='/accounts/1000/shared/documents/clitools'
+DEFAULTPREFIX='/accounts/1000/shared/misc/clitools'
 
 usage()
 {
