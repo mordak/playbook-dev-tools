@@ -1,0 +1,16 @@
+*********************
+ Preparing a release
+*********************
+
+The following assets are part of Berrymuch release
+
+berrymuch-0.x.tar.gz : tar.gz archive of all source code
+berrymuch-0.x.zip    : zip archive of all source code
+clitools.zip         : all packages + various files/scripts
+
+			packages/*zip
+
+			env.sh
+			qconf-override.mk
+			pbpkgadd
+			sample_profile
