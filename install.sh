@@ -3,6 +3,7 @@ D=/accounts/1000/shared/documents/clitools
 mkdir -p $D;
 mv clitools.zip $D
 cd $D
+touch .nomedia .noindex
 unzip clitools.zip
 . ./env.sh
 for pkg in packages/*.zip
