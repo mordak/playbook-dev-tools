@@ -1,4 +1,18 @@
 #!/bin/sh
+
+# versions up to 0.4 were slowing down the device (see #54)
+D=/accounts/1000/shared/documents/clitools
+if [ -d $D ]; then
+   echo
+   echo "previous version of Berrymuch (<0.5) has been detected"
+   echo "please remove the previous installation by typing"
+   echo
+   echo "  rm -rf /accounts/1000/shared/documents/clitools"
+   echo "  $0"
+   echo
+   exit 0
+fi
+   
 D=/accounts/1000/shared/misc/clitools
 mkdir -p $D;
 mv clitools.zip $D
