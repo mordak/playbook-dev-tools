@@ -12,7 +12,3 @@ shell: .useradd
 	docker commit yam_useradd yamsergey/bb10-ndk:0.6.2
 
 	touch .useradd
-
-shell: .useradd
-	docker run -it -v /Big:/Big -v "${PWD}":/berrymuch -u $(shell id -u):$(shell id -g) yamsergey/bb10-ndk:0.6.2 /bin/bash
-
