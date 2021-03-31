@@ -1,0 +1,47 @@
+<----------This tutorial assumes that you are using a linux distro----------->
+
+1. Setting up BlackBerry sdk-
+	First download momentics from this site-
+	"https://developer.blackberry.com/native/download/"
+	Then execute the momentics.run file and it will extract it's files in the current directory.
+	Go to the bbndk directory and execute the qde file and
+	it will start up momentics and it will try to download the latest sdk but it will fail because of server error.
+	Just skip it and install the sdk by going to help > update api levels in the toolbar.
+	After installing the latest sdk, you will find many clitools in bbndk/host_10_3_1_12/ directory.
+
+2. Generating a Debug Token-
+
+   	Use this form to obtain your bbidtoken.csk file: https://developer.blackberry.com/codesigning/
+   	Copy bbidtoken.csk to signing/bbidtoken.csk
+
+	In signing/bbpass, fill in:
+            CNNAME: the Common Name for your signing cert (usually your name)
+            KEYSTOREPASS: CSK password you entered in step 1 signup in the upper link
+            BBPIN: target device's PIN (you can find in settings>about>hardware)
+            BBPASS: target device's password
+	Run make in signing/Makefile to request and deploy the token to your device.
+
+	Important: any symbols need to be escaped according to bash / Makefile rules
+	e.g. backslashes before symbols \! and double dollar signs \$$.
+
+3. Compiling and signing-
+
+	After doing the upper steps you will get a author.p12 and a debugtoken.bar.
+	Copy them both to the ~/.rim folder (for linux).
+	Setup your BB development environment by going to your bbndk folder and issuing this command-
+	$ source bbndk-env_10_1_995.sh
+
+	After that go to your project directory and  use blackberry-nativepackager to compile and sign the code at the same time. An example would be-
+	$ blackberry-nativepackager -sign -storepass <keystorepass> -package <package_name.bar> bar-descriptor.xml
+
+	You can use this command for printing help screen and it also works for every bbndk cli tools-
+	$ blackberry-nativepackager --help
+
+4. Useful Sites-
+	"https://developer.blackberry.com/native/documentation/dev/tools/package_and_deploy_app.html"
+	"https://developer.blackberry.com/enterprise/signing_blackberry_apps.html"
+	"https://developer.blackberry.com/playbook/air/documentation/ww_air_testing/Create_a_debug_token_CMD_ms_1968147_11.html"
+
+
+5. Credit-
+	Credits to mordak for creating Term48 and for writing the process of generating a Debug Token.
