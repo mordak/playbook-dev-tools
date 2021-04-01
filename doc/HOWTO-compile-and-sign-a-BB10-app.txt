@@ -4,7 +4,7 @@
 	First download momentics from this site-
 	"https://developer.blackberry.com/native/download/"
 	Then execute the momentics.run file and it will extract it's files in the current directory.
-	Go to the bbndk directory and execute the qde file and
+	Go to the bbndk directory was just created and execute the qde file and
 	it will start up momentics and it will try to download the latest sdk but it will fail because of server error.
 	Just skip it and install the sdk by going to help > update api levels in the toolbar.
 	After installing the latest sdk, you will find many clitools in bbndk/host_10_3_1_12/ directory.
@@ -14,7 +14,7 @@
    	Use this form to obtain your bbidtoken.csk file: https://developer.blackberry.com/codesigning/
    	Copy bbidtoken.csk to signing/bbidtoken.csk
 
-	In signing/bbpass, fill in:
+	In Term48/signing/bbpass, fill in:
             CNNAME: the Common Name for your signing cert (usually your name)
             KEYSTOREPASS: CSK password you entered in step 1 signup in the upper link
             BBPIN: target device's PIN (you can find in settings>about>hardware)
@@ -26,15 +26,15 @@
 
 3. Compiling and signing-
 
-	After doing the upper steps you will get a author.p12 and a debugtoken.bar.
-	Copy them both to the ~/.rim folder (for linux).
-	Setup your BB development environment by going to your bbndk folder and issuing this command-
+	After doing the upper steps you will get a bbidtoken.csk, author.p12 and a debugtoken.bar .
+	Copy them both to your $HOME/.rim directory (for linux).
+	Setup your BB development environment by going to your bbndk directory and issuing this command-
 	$ source bbndk-env_10_1_995.sh
 
 	After that go to your project directory and  use blackberry-nativepackager to compile and sign the code at the same time. An example would be-
 	$ blackberry-nativepackager -sign -storepass <keystorepass> -package <package_name.bar> bar-descriptor.xml
 
-	You can use this command for printing help screen and it also works for every bbndk cli tools-
+	You can use this command for printing the help screen and the --help option will also works for every bbndk cli tools-
 	$ blackberry-nativepackager --help
 
 4. Useful Sites-
