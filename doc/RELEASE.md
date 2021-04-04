@@ -10,3 +10,5 @@ The following assets are part of Berrymuch release
 	- pbpkgadd
 	- sample_profile
 
+* berrymuch-0.x.tar.gz : tar.gz archive of all source code
+* berrymuch-0.x.zip    : zip archive of all source code
