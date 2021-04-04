@@ -14,8 +14,6 @@ archive/
 env.sh
 sample_profile
 *.cache/
-Makefile
-.useradd
 .bash*
 .ssh
 .vim*
