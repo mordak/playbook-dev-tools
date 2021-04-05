@@ -2,7 +2,7 @@ build: .useradd
 	docker run -t -v "${PWD}":/berrymuch -u $(shell id -u):$(shell id -g) yamsergey/bb10-ndk:0.6.1 /bin/bash -c 'cd /berrymuch; ./build.sh -b /root/bbndk -t build'
 
 shell: .useradd
-	docker run -it -v "${PWD}":/berrymuch -u $(shell id -u):$(shell id -g) yamsergey/bb10-ndk:0.6.1 /bin/bash
+	docker run -it -v "${PWD}":/berrymuch -u $(shell id -u):$(shell id -g) yamsergey/bb10-ndk:0.6.2 /bin/bash
 
 .useradd:
 	-@docker rm /yamsergey/bb10-ndk:0.6.1 /yam_useradd /yam_groupadd 2> /dev/null
