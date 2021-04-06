@@ -13,7 +13,7 @@ set -x
 
 set -e
 source ../../lib.sh
-DISTVER="openssl-1.0.2t"
+DISTVER="openssl-1.0.2u"
 DISTSUFFIX="tar.gz"
 TASK=fetch
 

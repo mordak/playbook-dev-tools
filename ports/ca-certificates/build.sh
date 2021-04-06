@@ -8,12 +8,12 @@
 set -e
 source ../../lib.sh
 
-DISTVER="cacert-2019-11-27"
+DISTVER="cacert"
 DISTSUFFIX="pem"
 
 TASK=fetch
 
-DISTFILES="https://curl.haxx.se/ca/$DISTVER.$DISTSUFFIX"
+DISTFILES="https://curl.se/ca/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xf"
 
 package_init "$@"

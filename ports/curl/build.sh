@@ -8,7 +8,7 @@
 
 set -e
 source ../../lib.sh
-DISTVER="curl-7.67.0"
+DISTVER="curl-7.76.0"
 DISTSUFFIX="tar.bz2"
 TASK=fetch
 
@@ -16,7 +16,7 @@ DISTFILES="https://curl.haxx.se/download/$DISTVER.$DISTSUFFIX"
 UNPACKCOMD="tar -xf"
 package_init "$@"
 
-OPENSSL_DIR="openssl-1.0.2t"
+OPENSSL_DIR="openssl-1.0.2u"
 
 CONFIGURE_CMD="./configure
                 --host=$PBHOSTARCH

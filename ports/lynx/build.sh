@@ -16,7 +16,7 @@ DISTFILES="https://invisible-mirror.net/archives/lynx/tarballs/$DISTVER.$DISTSUF
 UNPACKCOMD="tar -xf"
 package_init "$@"
 
-OPENSSL_DIR="openssl-1.0.2t"
+OPENSSL_DIR="openssl-1.0.2u"
 
 CONFIGURE_CMD="./configure
                 --host=$PBHOSTARCH
