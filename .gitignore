@@ -6,7 +6,6 @@ work/
 *.tar.gz
 *.tar.bz2
 *.zip
-install.sh
 .profile
 conf/
 clitools/

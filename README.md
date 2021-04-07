@@ -37,7 +37,7 @@ The project is standing on the shoulders of giants including [playbook-dev-tools
 * Install a terminal app (we recommend [term48](https://appworld.blackberry.com/webstore/content/26272878/?lang=en)) and run:
 
   ```
-  cd /accounts/1000/shared/documents
+  cd /accounts/1000/shared/misc/clitools
   sh install.sh
   ```
 * Restart your terminal app and enjoy Berrymuch!

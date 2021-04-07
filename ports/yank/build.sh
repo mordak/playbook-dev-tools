@@ -19,6 +19,7 @@ GITTAG=v1.2.0
 #CONFIGURE_CMD=""
 MYMAKEFLAGS="   CC=$PBTARGETARCH-gcc 
 		CPPFLAGS=\"-I. -Iinclude\"
+		YANKCMD=clipboard
 		"
 
 MAKEPREFIX=$PREFIX
@@ -40,13 +41,14 @@ then
   git config --global user.name "Git Patcher"
   ls $EXECDIR/patches | xargs -n 1 -I__ git am $EXECDIR/patches/__
 
+  cp $EXECDIR/clipboard $WORKDIR
+
   TASK=build
 fi
 
 #package_patch
 package_build
 
-DESTDIR="$ROOTDIR"
 package_install
 
 package_bundle
