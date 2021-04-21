@@ -1,0 +1,70 @@
+#!/bin/sh
+
+#
+# Control a media player via the terminal.
+# may require some specific permissions. 
+# known to work with Term49
+#
+
+exec 3<> /pps/services/multimedia/mediacontroller/control
+
+case $1 in
+
+"") # request that the active player be maximized
+	echo "msg::app_maximize" >&3
+	;;
+v|vol|volume)
+	opt=v
+	;;
+p) # play or pause accordingly
+	echo "msg::m_playpause" >&3
+	;;
+pl|play) # play
+	echo "msg::m_play" >&3
+	;;
+pa|pause) # pause
+	echo "msg::m_pause" >&3
+	;;
+s|stop) # stop
+	echo "msg::m_stop" >&3
+	;;
+n|next) # jump to the start of the next track
+	echo "msg::m_next" >&3
+	;;
+pr|previous) # jump to the start of the current track or to the previous track
+	echo "msg::m_previous" >&3
+	;;
+f|ff|fast-forward) # enter fast-forward mode
+	echo "msg::m_fforward" >&3
+	;;
+r|re|rewind) # enter rewind mode
+	echo "msg::m_rewind" >&3
+	;;
+*)
+	echo "Error: an unknown option provided!" >&2
+	exit 1
+	;;
+
+esac
+
+case $opt:$2 in
+
+v:) # display a toast notification
+	echo "msg::v_update" >&3
+	;;
+v:i|v:in|v:increase) # increase the volume level by one step
+	echo "msg::v_up" >&3
+	;;
+v:d|v:de|v:decrease) # decrease the volume level by one step
+	echo "msg::v_down" >&3
+	;;
+v:[0-9]|v:[1-9][0-9]|v:100) # set the volume level to a given percent
+	echo "msg::v_set\ndat::$2" >&3
+	;;
+v:*)
+	echo "Error: an unknown parameter provided!" >&2
+	exit 1
+	;;
+
+esac
+

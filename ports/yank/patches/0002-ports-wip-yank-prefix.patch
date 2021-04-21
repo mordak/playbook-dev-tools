@@ -1,0 +1,11 @@
+--- yank.orig/Makefile	2021-04-21 12:04:02.931848364 +0200
++++ yank/Makefile	2021-04-21 12:04:18.107984394 +0200
+@@ -2,7 +2,7 @@
+ 
+ YANKCMD=	xsel
+ 
+-PREFIX=		/usr/local
++PREFIX=		/accounts/1000/shared/misc/clitools
+ MANPREFIX=	${PREFIX}/share/man
+ 
+ PROG=	yank

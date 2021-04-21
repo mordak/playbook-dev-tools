@@ -8,6 +8,7 @@
 
 
 set -e
+set -x
 source ../../lib.sh
 DISTVER="yank"
 DISTSUFFIX="git"
@@ -37,16 +38,16 @@ then
   git checkout $GITTAG
 
   # "dirty patching via git"
-  git config --global user.email "patcher@berrymuch.org"
-  git config --global user.name "Git Patcher"
-  ls $EXECDIR/patches | xargs -n 1 -I__ git am $EXECDIR/patches/__
+  #git config --global user.email "patcher@berrymuch.org"
+  #git config --global user.name "Git Patcher"
+  #ls $EXECDIR/patches | xargs -n 1 -I__ git am $EXECDIR/patches/__
 
   cp $EXECDIR/clipboard $WORKDIR
 
-  TASK=build
+  TASK=patch
 fi
 
-#package_patch
+package_patch 1
 package_build
 
 package_install
