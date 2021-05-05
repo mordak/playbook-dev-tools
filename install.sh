@@ -3,14 +3,23 @@
 # versions up to 0.4 were slowing down the device (see #54)
 D=/accounts/1000/shared/documents/clitools
 if [ -d $D ]; then
-   echo
-   echo "previous version of Berrymuch (<0.5) has been detected"
-   echo "please remove the previous installation by typing"
-   echo
-   echo "  rm -rf /accounts/1000/shared/documents/clitools"
-   echo "  $0"
-   echo
-   exit 0
+ if [ "x$1" == "x-f" ]; then
+    echo 
+    echo "skipping check of previous Berrymuch version (<0.5)"
+    echo 
+ else
+    echo
+    echo "previous version of Berrymuch (<0.5) has been detected"
+    echo "please remove the previous installation by typing"
+    echo
+    echo "  rm -rf /accounts/1000/shared/documents/clitools"
+    echo "  $0"
+    echo 
+    echo "if you want to bypass this check, use install -f"
+    echo 
+    echo
+    exit 0
+ fi
 fi
    
 D=/accounts/1000/shared/misc/clitools
