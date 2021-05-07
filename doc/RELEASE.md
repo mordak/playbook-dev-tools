@@ -1,4 +1,5 @@
-# Preparing a release
+
+******* Preparing a release
 
 The following assets are part of Berrymuch release
 
@@ -12,3 +13,12 @@ The following assets are part of Berrymuch release
 
 * berrymuch-0.x.tar.gz : tar.gz archive of all source code
 * berrymuch-0.x.zip    : zip archive of all source code
+
+
+******* WARNING
+
+be sure to check/modify the Berrymuch version in env.sh !
+
+$ grep Berr env.sh 
+echo "Berrymuch v0.5\n"
+
