@@ -32,7 +32,6 @@ CONFIGURE_CMD="./configure-bb10
 if [ "$TASK" == "fetch" ]
 then
   cd "$WORKROOT"
-  rm -rf fakeroot
   git clone $DISTFILES --depth 1
   cd $DISTVER
   chmod 755 ./configure-bb10 ./configure

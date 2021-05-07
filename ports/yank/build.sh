@@ -31,7 +31,6 @@ package_init "$@"
 if [ "$TASK" == "fetch" ]
 then
   cd "$WORKROOT"
-  rm -rf fakeroot
   git clone $DISTFILES --depth 1
   cd $DISTVER
   git fetch --tags
