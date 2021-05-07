@@ -40,13 +40,18 @@ then
 fi
 
 package_patch 1
+
+cd $WORKDIR
+sed -i "s#/usr/games#$PREFIX/lib/nbsdgames#" config.h
 package_build
 
 
 if [ "$TASK" == "install" ]
 then
   cd "$WORKDIR"
-  /usr/bin/make GAMES_DIR=$DESTDIR/$PREFIX SCORES_DIR=$DESTDIR/$PREFIX install
+  mkdir -p $DESTDIR/$PREFIX/bin
+  mkdir -p $DESTDIR/$PREFIX/lib/nbsdgames
+  /usr/bin/make GAMES_DIR=$DESTDIR/$PREFIX/bin SCORES_DIR=$DESTDIR/$PREFIX/lib/nbsdgames install
   TASK=bundle
 fi
 
