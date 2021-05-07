@@ -1,0 +1,16 @@
+diff --git a/configure b/configure
+index 857ce4e..48dc4ab 100755
+--- a/configure
++++ b/configure
+@@ -158,7 +158,10 @@ set -u
+ # Enable tracing, will end up in config.log.
+ set -x
+ 
+-if (LDFLAGS=-lcurses check_curses); then
++if (LDFLAGS=-lncurses check_curses); then
++	HAVE_CURSES=1
++	LDFLAGS="${LDFLAGS} -lncurses"
++elif (LDFLAGS=-lcurses check_curses); then
+ 	HAVE_CURSES=1
+ 	LDFLAGS="${LDFLAGS} -lcurses"
+ elif (LDFLAGS=-lncursesw check_curses); then
