@@ -14,11 +14,13 @@ if [ "$TASK" == "fetch" ]
 then
   cp $EXECDIR/Makefile $WORKDIR
   cp -r $EXECDIR/bin $WORKDIR
+  cp -r $EXECDIR/src $WORKDIR
   chmod 755 $WORKDIR/bin/*
   cd $WORKDIR
-  TASK=install
+  TASK=build
 fi
 
+package_build
 package_install
 package_bundle
 
