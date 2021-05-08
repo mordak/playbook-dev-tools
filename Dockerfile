@@ -1,4 +1,4 @@
-FROM i386/ubuntu:16.04
+FROM i386/ubuntu:18.04
 
 RUN export DEBIAN_FRONTEND=noninteractive
 RUN apt-get -q update
