@@ -36,11 +36,6 @@ then
   git fetch --tags
   git checkout $GITTAG
 
-  # "dirty patching via git"
-  #git config --global user.email "patcher@berrymuch.org"
-  #git config --global user.name "Git Patcher"
-  #ls $EXECDIR/patches | xargs -n 1 -I__ git am $EXECDIR/patches/__
-
   cp $EXECDIR/clipboard $WORKDIR
 
   TASK=patch
