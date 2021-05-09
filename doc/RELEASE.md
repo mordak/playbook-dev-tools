@@ -14,6 +14,13 @@ The following assets are part of Berrymuch release
 * berrymuch-0.x.tar.gz : tar.gz archive of all source code
 * berrymuch-0.x.zip    : zip archive of all source code
 
+******* Steps
+
+* update version in env.sh and install.sh
+* rm -rf clitools/* archive/* packages/* work/*
+* build assets on a Docker enabled host (make)
+* upload the assets to github via the "Releases" page
+
 
 ******* WARNING
 
