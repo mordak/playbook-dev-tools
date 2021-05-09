@@ -148,7 +148,7 @@ function init()
 
 function build_all()
 {
-  ALLPORTS="bash bc bison bzip2 cflow coreutils cronie diffutils ed fakeroot file findutils gcc gdbm gettext grep groff gzip ircii jansson libevent libmpg123 libuuid m4 make man oniguruma jq openssh openssl ca-certificates curl git lynx patch rsync sc sqlite tar nettle taskwarrior tig tmux vim wget xz yaml youtube-dl zeromq zlib ansiweather tig dropbear calcurse git lua bc jansson ffmpeg hexedit flex contrib"
+  ALLPORTS="bash bc bison bzip2 cflow coreutils cronie diffutils ed fakeroot file findutils gcc gdbm gettext grep groff gzip ircii jansson libevent libmpg123 libuuid m4 make man oniguruma jq openssh openssl ca-certificates curl git lynx patch rsync sc sqlite tar taskwarrior tig tmux vim wget xz yaml youtube-dl zeromq zlib ansiweather tig nettle dropbear calcurse git lua bc jansson ffmpeg hexedit flex yank contrib"
   BROKEN="gdb"
 
   cd "$PORTSDIR"
